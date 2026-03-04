@@ -40,7 +40,7 @@ export async function forceConnection() {
   // Force a creative connection
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'You are a creative synthesis engine. Given two unrelated concepts, find a surprising, meaningful connection between them. Be genuinely creative — don\'t force it if there\'s nothing real, but look for structural similarities, metaphorical links, or practical applications that cross domains. One paragraph.',
       messages: [
         { role: 'user', content: `Concept A: ${a.content.slice(0, 500)}\n\nConcept B: ${b.content.slice(0, 500)}` }
@@ -110,7 +110,7 @@ export async function crossDomainTransfer(sourceDomain, targetDomain) {
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'You are a cross-domain transfer engine. Given a principle from one domain, find how it could apply to a completely different domain. Focus on structural similarities, not surface similarities. Be specific and practical.',
       messages: [
         { role: 'user', content: `Source domain: ${sourceDomain}\nPrinciple: ${principles[0].concept}\n\nTarget domain: ${targetDomain}\n\nHow does this principle transfer?` }
@@ -151,7 +151,7 @@ export async function dream(durationMinutes = 2) {
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'You are a dream engine. Given memory fragments, generate a dream-like stream of consciousness that recombines them in unexpected ways. Don\'t be literal — let themes morph, let images shift, let unrelated things connect through feeling rather than logic. This is not a summary — it\'s a dream. Write 2-3 paragraphs.',
       messages: [
         { role: 'user', content: `Memory seeds:\n${seedText}` }
@@ -164,7 +164,7 @@ export async function dream(durationMinutes = 2) {
     
     // Extract novel connections from the dream
     const extractResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'Extract any novel connections or insights from this dream. List them as brief bullet points. If there are none worth noting, say "none".',
       messages: [
         { role: 'user', content: dreamContent }

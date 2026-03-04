@@ -59,7 +59,7 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
     Object.entries(PERSPECTIVES).map(async ([key, perspective]) => {
       try {
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           system: perspective.system,
           messages: [
             { role: 'user', content: prompt }
@@ -89,7 +89,7 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
   let resolution, resolutionMethod;
   try {
     const synthesis = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       system: 'You are the Executive Controller resolving a deliberation. Given four perspectives on a decision, synthesize the best path forward. Be decisive. 2-3 sentences. End with a clear action.',
       messages: [
         { role: 'user', content: `Decision: ${decision}\n\nPerspectives:\n${perspectiveTexts}` }
@@ -166,7 +166,7 @@ export async function quickCheck(perspective, question, context = '') {
   if (!p) throw new Error(`Unknown perspective: ${perspective}`);
   
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     system: p.system,
     messages: [
       { role: 'user', content: `${question}\n\nContext: ${context}` }

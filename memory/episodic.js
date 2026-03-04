@@ -1,8 +1,15 @@
 // OCA Episodic Memory — raw experiences
 import { pool, emit } from '../event-bus.js';
 import OpenAI from 'openai';
+import { readFileSync } from 'fs';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const apiKey = process.env.OPENAI_API_KEY || (() => {
+  try {
+    const envFile = readFileSync('/Users/quinnodonnell/.openclaw/workspace/oneiro-core/.env', 'utf-8');
+    return envFile.match(/OPENAI_API_KEY="?([^"\n]+)"?/)?.[1];
+  } catch { return undefined; }
+})();
+const openai = new OpenAI({ apiKey });
 
 async function getEmbedding(text) {
   const resp = await openai.embeddings.create({
