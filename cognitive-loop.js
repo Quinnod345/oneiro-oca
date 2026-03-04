@@ -4,6 +4,7 @@
 import { pool, emit, on } from './event-bus.js';
 import oca from './index.js';
 import prospective from './memory/prospective.js';
+import swiftSensory from './sensory/swift-bridge.js';
 import { execSync, exec } from 'child_process';
 import { readFileSync, existsSync, appendFileSync } from 'fs';
 
@@ -224,6 +225,15 @@ async function start() {
   console.log('[oca] initializing...');
   
   await oca.init();
+  
+  // Start Swift sensory binary
+  await swiftSensory.ensureTable();
+  const swiftStarted = await swiftSensory.start();
+  if (swiftStarted) {
+    console.log('[oca] Swift sensory cortex online');
+  } else {
+    console.log('[oca] Swift sensory not available, using Node.js fallback');
+  }
   
   // Store boot experience
   await oca.experience('system', 'Cognitive architecture booted. All layers online.', {
