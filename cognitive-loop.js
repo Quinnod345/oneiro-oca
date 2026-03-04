@@ -3,10 +3,12 @@
 // Replaces mind.js ponder cycle with grounded, hypothesis-driven cognition
 import { pool, emit, on } from './event-bus.js';
 import oca from './index.js';
+import prospective from './memory/prospective.js';
 import { execSync, exec } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, appendFileSync } from 'fs';
 
 const MAX_WORKING_MEMORY = 7;
+let previousPresence = 'unknown';
 
 const MIN_CYCLE_MS = 5000;   // min 5s between cycles
 const MAX_CYCLE_MS = 60000;  // max 60s between cycles
@@ -116,6 +118,31 @@ async function think() {
         await oca.layers.hypothesis.test(h.id, `Quinn is in ${visual.frontApp}`).catch(() => {});
       }
     }
+  }
+  
+  // 6.5 PROSPECTIVE MEMORY — check for triggered intentions
+  try {
+    const prospectiveState = {
+      frontApp: visual.frontApp,
+      idleSeconds: activity.idleSeconds,
+      presence: activity.presence,
+      previousPresence,
+      battery: intero.battery.level,
+      runningApps: visual.runningApps || []
+    };
+    previousPresence = activity.presence;
+    
+    const triggered = await prospective.check(prospectiveState);
+    for (const t of triggered) {
+      console.log(`[oca] 🔔 PROSPECTIVE TRIGGERED: "${t.intention}" (priority: ${t.priority})`);
+      await oca.layers.executive.addToWorkspace('intention', {
+        intention: t.intention,
+        context: t.context,
+        id: t.id
+      }, 'prospective_memory', t.priority);
+    }
+  } catch (e) {
+    if (cycleCount <= 2) console.error('[oca] prospective check error:', e.message);
   }
   
   // 7. DREAM — creative synthesis during low activity
