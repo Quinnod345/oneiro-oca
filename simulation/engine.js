@@ -47,7 +47,7 @@ export async function getEntity(domain, entity) {
 export async function simulate(description, initialState, actionSequence, { purpose = 'decision' } = {}) {
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-4-20250514',
       system: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
 
 You MUST respond in valid JSON only, no other text:

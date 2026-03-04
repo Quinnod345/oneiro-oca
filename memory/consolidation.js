@@ -37,7 +37,7 @@ export async function consolidate() {
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6-20250514',
+      model: 'claude-sonnet-4-20250514',
       system: `You are a memory consolidation engine. Given a list of episodic memories, extract:
 1. PRINCIPLES: General knowledge/rules that can be abstracted (e.g., "Quinn prefers direct communication")
 2. PROCEDURES: Repeated action patterns that could become automatic skills (e.g., "when seeing error X, do Y")
