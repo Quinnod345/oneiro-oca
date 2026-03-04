@@ -112,7 +112,7 @@ function estimateInteractionQuality(message) {
   if (/haha|lol|😂|🙌|❤️/i.test(message)) return 0.6;
   // Negative signals
   if (/wrong|bad|stop|no|don't|annoying|frustrated/i.test(message)) return -0.3;
-  if (/??|!!!|wtf/i.test(message)) return -0.4;
+  if (/\?\?|!!!|wtf/i.test(message)) return -0.4;
   // Neutral
   return 0.3;
 }
