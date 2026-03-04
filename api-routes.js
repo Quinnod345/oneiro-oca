@@ -359,6 +359,20 @@ ocaRouter.post('/oca/intend/complete', async (req, res) => {
 });
 
 // ============================================================
+// EVALUATION
+// ============================================================
+
+ocaRouter.get('/oca/crm', async (req, res) => {
+  try {
+    const crm = await import('./evaluation/chinese-room-meter.js');
+    const result = await crm.default.compute();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // CONSOLIDATION
 // ============================================================
 
