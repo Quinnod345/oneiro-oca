@@ -111,16 +111,17 @@ export function processInteroception(battery, cpuUtil, memoryPressure, thermal) 
   if (battery < 0.2) {
     state.excitement *= 0.8;
     state.curiosity *= 0.9;
-    state.fear += 0.1; // low battery anxiety
+    state.fear += 0.05; // low battery anxiety (mild)
   }
-  // High cognitive load increases frustration
-  if (state.cognitive_load > 0.8) {
-    state.frustration += 0.1;
+  // High cognitive load increases frustration — but only genuinely high load
+  // Normal OCA operation sits at ~0.6-0.8, so only >0.9 is "stressed"
+  if (state.cognitive_load > 0.9) {
+    state.frustration += 0.02; // gentle, not 0.1 — avoids runaway frustration
   }
   // Thermal stress
   if (thermal > 0.9) {
-    state.frustration += 0.15;
-    state.satisfaction *= 0.9;
+    state.frustration += 0.05;
+    state.satisfaction *= 0.95;
   }
   state.fear = clamp(state.fear);
   state.frustration = clamp(state.frustration);
