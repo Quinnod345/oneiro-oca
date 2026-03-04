@@ -12,11 +12,12 @@ import deliberation from './deliberation/engine.js';
 import simulation from './simulation/engine.js';
 import creative from './creative/engine.js';
 import sensory from './sensory/perception.js';
+import executive from './executive/engine.js';
 
 export const layers = {
   emotion, hypothesis, episodic, semantic, procedural,
   consolidation, metacognition, deliberation, simulation,
-  creative, sensory
+  creative, sensory, executive
 };
 
 // ============================================================
