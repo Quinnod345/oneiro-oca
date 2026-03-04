@@ -320,6 +320,45 @@ ocaRouter.post('/oca/motor/open', async (req, res) => {
 });
 
 // ============================================================
+// PROSPECTIVE MEMORY
+// ============================================================
+
+// Create an intention
+ocaRouter.post('/oca/intend', async (req, res) => {
+  try {
+    const { intention, triggerType, triggerSpec, priority = 0.5, context = null, expiresAt = null } = req.body;
+    if (!intention || !triggerType || !triggerSpec) return res.status(400).json({ error: 'intention, triggerType, triggerSpec required' });
+    const result = await oca.layers.prospective.intend(intention, triggerType, triggerSpec, { priority, context, expiresAt });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get pending intentions
+ocaRouter.get('/oca/intentions', async (req, res) => {
+  try {
+    const pending = await oca.layers.prospective.getPending();
+    const triggered = await oca.layers.prospective.getTriggered();
+    res.json({ pending, triggered });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Complete an intention
+ocaRouter.post('/oca/intend/complete', async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    await oca.layers.prospective.complete(id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // CONSOLIDATION
 // ============================================================
 
