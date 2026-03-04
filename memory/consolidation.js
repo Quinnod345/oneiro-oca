@@ -5,9 +5,9 @@ import { pool } from '../event-bus.js';
 import episodic from './episodic.js';
 import semantic from './semantic.js';
 import procedural from './procedural.js';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Run a full consolidation cycle
 export async function consolidate() {
@@ -36,30 +36,27 @@ export async function consolidate() {
   ).join('\n');
   
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: `You are a memory consolidation engine. Given a list of episodic memories, extract:
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: `You are a memory consolidation engine. Given a list of episodic memories, extract:
 1. PRINCIPLES: General knowledge/rules that can be abstracted (e.g., "Quinn prefers direct communication")
 2. PROCEDURES: Repeated action patterns that could become automatic skills (e.g., "when seeing error X, do Y")
 3. CONNECTIONS: Causal links between events (e.g., "high typing speed correlates with frustration")
 
-Respond in JSON:
+You MUST respond in valid JSON only, no other text:
 {
   "principles": [{"concept": "...", "category": "...", "evidence_episodes": [ids], "confidence": 0.0-1.0}],
   "procedures": [{"trigger": {...}, "actions": [...], "domain": "..."}],
   "connections": [{"cause": "...", "effect": "...", "mechanism": "...", "confidence": 0.0-1.0}]
-}`
-      }, {
-        role: 'user',
-        content: episodeSummaries
-      }],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
+}`,
+      messages: [
+        { role: 'user', content: episodeSummaries }
+      ],
+      temperature: 0.3,
+      max_tokens: 1024
     });
     
-    const extracted = JSON.parse(response.choices[0].message.content);
+    const extracted = JSON.parse(response.content[0].text);
     
     // 3. ABSTRACT: Create semantic memories from principles
     if (extracted.principles) {

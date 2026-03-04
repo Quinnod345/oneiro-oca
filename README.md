@@ -27,14 +27,15 @@ OCA is designed to run on hardware you already own. Here's the realistic cost br
 | **Hardware** | $0 | Runs on any Mac with Apple Silicon (M1+). Your existing MacBook. |
 | **PostgreSQL + pgvector** | $0 | Local install via Homebrew |
 | **OpenAI Embeddings** | ~$0.02/day | text-embedding-3-small for memory encoding (~500 embeddings/day) |
-| **OpenAI GPT-4o-mini** | ~$0.10-0.50/day | Consolidation, deliberation, creative synthesis, hypothesis testing |
+| **Claude Sonnet 4.6** | ~$0.15-0.75/day | Consolidation, deliberation, creative synthesis, world simulation |
 | **OpenClaw / LLM API** | Varies | Your existing Anthropic/OpenAI subscription for the main reasoning |
-| **Total** | **~$0.15-0.60/day** | $5-18/month on top of your existing AI subscription |
+| **Total** | **~$0.20-0.80/day** | $6-24/month on top of your existing AI subscription |
 
-The architecture is designed to be cheap. Emotional computation, sensory perception, motor control, memory retrieval, and the cognitive loop are all local — no API calls. Only consolidation, deliberation, creative synthesis, and embedding generation hit external APIs.
+The architecture is designed to be cheap. Emotional computation, sensory perception, motor control, memory retrieval, and the cognitive loop are all local — no API calls. Only consolidation, deliberation, creative synthesis, and embedding generation hit external APIs. The cognitive layers use **Claude Sonnet 4.6** for all reasoning tasks and **OpenAI text-embedding-3-small** for vector embeddings (Anthropic has no embeddings API).
 
 **To reduce costs further:**
 - Use local embeddings (Ollama + nomic-embed) instead of OpenAI — drops embedding cost to $0
+- Use Claude Haiku instead of Sonnet for routine deliberation/consolidation
 - Reduce deliberation frequency (only for high-stakes decisions)
 - Increase cognitive cycle interval during idle periods (already automatic)
 
