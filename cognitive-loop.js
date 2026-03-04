@@ -6,6 +6,8 @@ import oca from './index.js';
 import { execSync, exec } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 
+const MAX_WORKING_MEMORY = 7;
+
 const MIN_CYCLE_MS = 5000;   // min 5s between cycles
 const MAX_CYCLE_MS = 60000;  // max 60s between cycles
 let cycleInterval = 10000;   // start at 10s
@@ -45,78 +47,146 @@ function getUserActivity() {
   }
 }
 
+// Track state across cycles
+let lastFrontApp = null;
+let dreamCooldown = 0;
+
 // Main cognitive cycle
 async function think() {
   const t0 = Date.now();
   
-  // 1. SENSE — gather current state
-  const intero = getInteroception();
+  // 1. SENSE — full perception
+  const perception = oca.sense();
+  const intero = perception.interoceptive;
   const activity = getUserActivity();
+  const visual = perception.visual;
   
-  // 2. FEEL — update interoceptive emotions
-  oca.layers.emotion.processInteroception(intero.battery, intero.cpu, intero.memory, intero.thermal);
+  // 2. BODY OWNERSHIP — negotiate based on activity
+  await oca.layers.executive.negotiateOwnership(activity.idleSeconds);
+  const mode = oca.layers.executive.determineMode(
+    activity.presence, 
+    oca.layers.emotion.getState(),
+    (await oca.layers.executive.getActiveGoals()).length
+  );
+  
+  // 3. FEEL — process all sensory channels into emotion
+  oca.layers.emotion.processInteroception(
+    intero.battery.level, intero.cpu.utilization, intero.memory.pressure, 
+    intero.thermal.throttling ? 1 : 0
+  );
   oca.layers.emotion.processIdle(activity.idleSeconds / 60);
   
-  // 3. THINK — run cognitive cycle
-  const result = await oca.cycle();
+  // App switch = novelty = mild curiosity
+  if (visual.frontApp !== lastFrontApp && lastFrontApp) {
+    oca.layers.emotion.processInformationGain(0.3);
+  }
+  lastFrontApp = visual.frontApp;
   
-  // 4. HYPOTHESIZE — form predictions about current state
+  // 4. THINK — core cognitive cycle
+  const result = await oca.cycle();
   const emotionState = oca.layers.emotion.getState();
   const effects = oca.layers.emotion.getCognitiveEffects();
   
-  // Auto-form hypotheses from observations
-  if (activity.presence === 'present' && emotionState.curiosity > 0.3) {
-    // We're curious and Quinn is here — form a social hypothesis
+  // 5. WORKSPACE — update working memory with current focus
+  await oca.layers.executive.decayWorkspace(0.02);
+  await oca.layers.executive.addToWorkspace(
+    'perception', 
+    { app: visual.frontApp, presence: activity.presence, battery: intero.battery.level },
+    'sensory',
+    0.3
+  ).catch(() => {});
+  
+  // 6. HYPOTHESIZE — form predictions from observations
+  if (effects.exploration_vs_exploitation > 0 && activity.presence !== 'away') {
     const pending = await oca.layers.hypothesis.getPendingTests(3);
-    if (pending.length < 5) { // don't overload
-      // What is Quinn doing? Predict and learn.
+    if (pending.length < 10) {
       await oca.layers.hypothesis.form(
         'social',
-        `Quinn is currently using ${activity.frontApp}`,
-        `Quinn will continue using ${activity.frontApp} for the next 5 minutes`,
-        { 
-          confidence: 0.6, 
-          testType: 'passive_observation',
-          deadline: new Date(Date.now() + 5 * 60000).toISOString()
-        }
-      ).catch(() => {}); // duplicates are fine, just skip
+        `Quinn is using ${visual.frontApp} — predicting continued use`,
+        `Quinn will still be in ${visual.frontApp} in 5 minutes`,
+        { confidence: 0.6, testType: 'passive_observation', deadline: new Date(Date.now() + 5 * 60000).toISOString() }
+      ).catch(() => {});
+    }
+    
+    // Test expired hypotheses against current state
+    const expired = await oca.layers.hypothesis.expireOverdue();
+    for (const h of expired.slice(0, 3)) {
+      // Check if prediction was right
+      if (h.claim?.includes(visual.frontApp)) {
+        await oca.layers.hypothesis.test(h.id, `Quinn is in ${visual.frontApp}`).catch(() => {});
+      }
     }
   }
   
-  // 5. REMEMBER — store this cycle as experience
-  if (result.cycle % 5 === 0) { // not every cycle, every 5th
-    await oca.experience('cognitive_cycle', 
-      `Cycle ${result.cycle}: ${activity.presence} user (${activity.frontApp}), ` +
-      `emotion valence=${emotionState.valence.toFixed(2)}, ` +
-      `battery=${(intero.battery*100).toFixed(0)}%, ` +
-      `cpu=${(intero.cpu*100).toFixed(0)}%`,
+  // 7. DREAM — creative synthesis during low activity
+  dreamCooldown = Math.max(0, dreamCooldown - 1);
+  if (mode === 'consolidating' && emotionState.creative_hunger > 0.3 && dreamCooldown <= 0) {
+    console.log('[oca] entering dream state...');
+    const dream = await oca.create('dream').catch(() => null);
+    if (dream) {
+      console.log(`[oca] dreamed: ${dream.novelConnections?.length || 0} novel connections`);
+      dreamCooldown = 20; // wait 20 cycles before dreaming again
+    }
+  }
+  
+  // 8. CONSOLIDATE — during quiet periods
+  if (result.cycle % 100 === 0 && mode !== 'alert') {
+    console.log('[oca] running memory consolidation...');
+    await oca.layers.consolidation.consolidate().catch(e => 
+      console.error('[oca] consolidation error:', e.message)
+    );
+  }
+  
+  // 9. REMEMBER — store significant cycles
+  const isSignificant = 
+    result.cycle % 5 === 0 ||
+    emotionState.arousal > 0.6 ||
+    (result.meta && !result.meta.healthy);
+    
+  if (isSignificant) {
+    await oca.experience('cognitive_cycle',
+      `Cycle ${result.cycle} [${mode}]: ${activity.presence} (${visual.frontApp}), ` +
+      `v=${emotionState.valence.toFixed(2)} a=${emotionState.arousal.toFixed(2)}, ` +
+      `battery=${(intero.battery.level*100).toFixed(0)}%${intero.battery.charging ? '⚡' : ''}, ` +
+      `${visual.runningApps?.length || 0} apps`,
       {
-        activeApp: activity.frontApp,
+        activeApp: visual.frontApp,
         userPresence: activity.presence,
-        interoceptive: intero,
-        importanceScore: 0.2 // routine cycles are low importance
+        interoceptive: { battery: intero.battery.level, cpu: intero.cpu.utilization },
+        audioState: perception.audio,
+        importanceScore: emotionState.arousal > 0.5 ? 0.5 : 0.2
       }
     ).catch(e => console.error('[loop] experience store failed:', e.message));
   }
   
-  // 6. ADAPT CYCLE SPEED
-  // More activity = faster thinking. Bored = slower.
-  if (activity.presence === 'present') {
-    cycleInterval = Math.max(MIN_CYCLE_MS, 10000 - effects.sensory_sampling_rate * 3000);
-  } else if (activity.presence === 'idle') {
-    cycleInterval = 30000;
-  } else {
-    cycleInterval = MAX_CYCLE_MS;
+  // 10. ADAPT CYCLE SPEED based on mode + emotion
+  switch (mode) {
+    case 'alert':
+      cycleInterval = Math.max(MIN_CYCLE_MS, 8000 - effects.sensory_sampling_rate * 2000);
+      break;
+    case 'working':
+      cycleInterval = 15000;
+      break;
+    case 'consolidating':
+      cycleInterval = 30000;
+      break;
+    case 'dormant':
+      cycleInterval = MAX_CYCLE_MS;
+      break;
+    default:
+      cycleInterval = 15000;
   }
   
-  // Log
+  // Log every 10th cycle or significant events
   const elapsed = Date.now() - t0;
-  if (result.cycle % 10 === 0) {
+  if (result.cycle % 10 === 0 || elapsed > 5000) {
+    const workspace = await oca.layers.executive.getWorkspace();
     console.log(
-      `[oca] cycle ${result.cycle} | ${elapsed}ms | ` +
-      `${activity.presence} (${activity.frontApp}) | ` +
+      `[oca] c${result.cycle} | ${elapsed}ms | ${mode} | ` +
+      `${activity.presence}/${visual.frontApp} | ` +
       `v=${emotionState.valence.toFixed(2)} a=${emotionState.arousal.toFixed(2)} | ` +
-      `next in ${(cycleInterval/1000).toFixed(0)}s`
+      `wm=${workspace.length}/${MAX_WORKING_MEMORY} | ` +
+      `next ${(cycleInterval/1000).toFixed(0)}s`
     );
   }
 }
