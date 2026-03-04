@@ -1,8 +1,10 @@
 // OCA Creative Synthesis — dream states, novel connections, Lovelace layer
 import { pool, emit } from '../event-bus.js';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function getEmbedding(text) {
   const resp = await openai.embeddings.create({ model: 'text-embedding-3-small', input: text.slice(0, 8000) });
@@ -37,20 +39,17 @@ export async function forceConnection() {
   
   // Force a creative connection
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: `You are a creative synthesis engine. Given two unrelated concepts, find a surprising, meaningful connection between them. Be genuinely creative — don't force it if there's nothing real, but look for structural similarities, metaphorical links, or practical applications that cross domains. One paragraph.`
-      }, {
-        role: 'user',
-        content: `Concept A: ${a.content.slice(0, 500)}\n\nConcept B: ${b.content.slice(0, 500)}`
-      }],
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: 'You are a creative synthesis engine. Given two unrelated concepts, find a surprising, meaningful connection between them. Be genuinely creative — don\'t force it if there\'s nothing real, but look for structural similarities, metaphorical links, or practical applications that cross domains. One paragraph.',
+      messages: [
+        { role: 'user', content: `Concept A: ${a.content.slice(0, 500)}\n\nConcept B: ${b.content.slice(0, 500)}` }
+      ],
       temperature: 0.9,
       max_tokens: 200
     });
     
-    const connection = response.choices[0].message.content;
+    const connection = response.content[0].text;
     
     // Evaluate novelty
     const connEmb = await getEmbedding(connection);
@@ -110,20 +109,17 @@ export async function crossDomainTransfer(sourceDomain, targetDomain) {
   if (principles.length === 0) return null;
   
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: `You are a cross-domain transfer engine. Given a principle from one domain, find how it could apply to a completely different domain. Focus on structural similarities, not surface similarities. Be specific and practical.`
-      }, {
-        role: 'user',
-        content: `Source domain: ${sourceDomain}\nPrinciple: ${principles[0].concept}\n\nTarget domain: ${targetDomain}\n\nHow does this principle transfer?`
-      }],
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: 'You are a cross-domain transfer engine. Given a principle from one domain, find how it could apply to a completely different domain. Focus on structural similarities, not surface similarities. Be specific and practical.',
+      messages: [
+        { role: 'user', content: `Source domain: ${sourceDomain}\nPrinciple: ${principles[0].concept}\n\nTarget domain: ${targetDomain}\n\nHow does this principle transfer?` }
+      ],
       temperature: 0.7,
       max_tokens: 200
     });
     
-    const transfer = response.choices[0].message.content;
+    const transfer = response.content[0].text;
     
     const { rows: [artifact] } = await pool.query(
       `INSERT INTO creative_artifacts 
@@ -154,36 +150,30 @@ export async function dream(durationMinutes = 2) {
   const seedText = seeds.map(s => s.content.slice(0, 200)).join('\n---\n');
   
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: `You are a dream engine. Given memory fragments, generate a dream-like stream of consciousness that recombines them in unexpected ways. Don't be literal — let themes morph, let images shift, let unrelated things connect through feeling rather than logic. This is not a summary — it's a dream. Write 2-3 paragraphs.`
-      }, {
-        role: 'user',
-        content: `Memory seeds:\n${seedText}`
-      }],
-      temperature: 1.0, // maximum creativity
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: 'You are a dream engine. Given memory fragments, generate a dream-like stream of consciousness that recombines them in unexpected ways. Don\'t be literal — let themes morph, let images shift, let unrelated things connect through feeling rather than logic. This is not a summary — it\'s a dream. Write 2-3 paragraphs.',
+      messages: [
+        { role: 'user', content: `Memory seeds:\n${seedText}` }
+      ],
+      temperature: 1.0,
       max_tokens: 400
     });
     
-    const dreamContent = response.choices[0].message.content;
+    const dreamContent = response.content[0].text;
     
     // Extract novel connections from the dream
-    const extractResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: 'Extract any novel connections or insights from this dream. List them as brief bullet points. If there are none worth noting, say "none".'
-      }, {
-        role: 'user',
-        content: dreamContent
-      }],
+    const extractResponse = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: 'Extract any novel connections or insights from this dream. List them as brief bullet points. If there are none worth noting, say "none".',
+      messages: [
+        { role: 'user', content: dreamContent }
+      ],
       temperature: 0.3,
       max_tokens: 200
     });
     
-    const connectionsRaw = extractResponse.choices[0].message.content;
+    const connectionsRaw = extractResponse.content[0].text;
     const hasNovel = !connectionsRaw.toLowerCase().includes('none');
     const connections = hasNovel ? connectionsRaw.split('\n').filter(l => l.trim().startsWith('-')).map(l => l.trim().slice(2)) : [];
     

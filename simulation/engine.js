@@ -1,8 +1,10 @@
 // OCA World Simulation — forward models and counterfactual reasoning
 import { pool, emit } from '../event-bus.js';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Update or create a world model entity
 export async function updateEntity(domain, entity, newState, { confidence = 0.5, transitionRule = null } = {}) {
@@ -44,29 +46,25 @@ export async function getEntity(domain, entity) {
 // Simulate forward: given current state + action, predict next state
 export async function simulate(description, initialState, actionSequence, { purpose = 'decision' } = {}) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'system',
-        content: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
 
-Respond in JSON:
+You MUST respond in valid JSON only, no other text:
 {
   "predicted_states": [{"step": 1, "state": "...", "confidence": 0.0-1.0}],
   "branch_points": [{"step": N, "description": "where outcomes diverge", "alternatives": ["...", "..."]}],
   "risks": ["..."],
   "expected_outcome": "..."
-}`
-      }, {
-        role: 'user',
-        content: `Initial state: ${JSON.stringify(initialState)}\n\nActions: ${JSON.stringify(actionSequence)}\n\nPurpose: ${purpose}\n\nDescription: ${description}`
-      }],
-      response_format: { type: 'json_object' },
+}`,
+      messages: [
+        { role: 'user', content: `Initial state: ${JSON.stringify(initialState)}\n\nActions: ${JSON.stringify(actionSequence)}\n\nPurpose: ${purpose}\n\nDescription: ${description}` }
+      ],
       temperature: 0.5,
       max_tokens: 500
     });
     
-    const result = JSON.parse(response.choices[0].message.content);
+    const result = JSON.parse(response.content[0].text);
     
     // Store simulation
     const { rows } = await pool.query(

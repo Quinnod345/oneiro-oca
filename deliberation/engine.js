@@ -1,9 +1,9 @@
 // OCA Adversarial Deliberation Engine
 // Four perspectives debate decisions: Skeptic, Builder, Dreamer, Empath
 import { pool, emit } from '../event-bus.js';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PERSPECTIVES = {
   skeptic: {
@@ -58,17 +58,17 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
   const perspectives = await Promise.all(
     Object.entries(PERSPECTIVES).map(async ([key, perspective]) => {
       try {
-        const response = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6-20250514',
+          system: perspective.system,
           messages: [
-            { role: 'system', content: perspective.system },
             { role: 'user', content: prompt }
           ],
           max_tokens: 200,
           temperature: key === 'dreamer' ? 0.9 : key === 'skeptic' ? 0.2 : 0.5
         });
         
-        const argument = response.choices[0].message.content;
+        const argument = response.content[0].text;
         // Extract confidence from argument (simple heuristic)
         const confidence = argument.toLowerCase().includes('definitely') ? 0.9
           : argument.toLowerCase().includes('probably') ? 0.7
@@ -88,16 +88,16 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
   
   let resolution, resolutionMethod;
   try {
-    const synthesis = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const synthesis = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      system: 'You are the Executive Controller resolving a deliberation. Given four perspectives on a decision, synthesize the best path forward. Be decisive. 2-3 sentences. End with a clear action.',
       messages: [
-        { role: 'system', content: `You are the Executive Controller resolving a deliberation. Given four perspectives on a decision, synthesize the best path forward. Be decisive. 2-3 sentences. End with a clear action.` },
         { role: 'user', content: `Decision: ${decision}\n\nPerspectives:\n${perspectiveTexts}` }
       ],
       max_tokens: 200,
       temperature: 0.3
     });
-    resolution = synthesis.choices[0].message.content;
+    resolution = synthesis.content[0].text;
     resolutionMethod = 'synthesis';
   } catch (e) {
     // Fallback: highest confidence perspective wins
@@ -165,17 +165,17 @@ export async function quickCheck(perspective, question, context = '') {
   const p = PERSPECTIVES[perspective];
   if (!p) throw new Error(`Unknown perspective: ${perspective}`);
   
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6-20250514',
+    system: p.system,
     messages: [
-      { role: 'system', content: p.system },
       { role: 'user', content: `${question}\n\nContext: ${context}` }
     ],
     max_tokens: 150,
     temperature: 0.5
   });
   
-  return response.choices[0].message.content;
+  return response.content[0].text;
 }
 
 export default { deliberate, evaluateDeliberation, perspectiveStats, quickCheck };
