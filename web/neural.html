@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oneiro — Neural Map</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #070616;
+            --purple: #8738EB;
+            --blue: #4073FA;
+            --green: #2ECC71;
+            --orange: #E67E22;
+            --gold: #F1C40F;
+            --red: #E74C3C;
+            --text: #E0E0F0;
+            --text-dim: #7A7A9A;
+            --glass-bg: rgba(15, 12, 40, 0.75);
+            --glass-border: rgba(135, 56, 235, 0.2);
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas#neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+
+        /* Global Header Bar */
+        .header-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: linear-gradient(180deg, rgba(7,5,22,0.95) 0%, rgba(7,5,22,0) 100%);
+            pointer-events: none;
+        }
+        .header-bar > * { pointer-events: auto; }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-left .moon { font-size: 22px; }
+        .header-left .title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--purple);
+            text-transform: uppercase;
+        }
+        .header-left .subtitle {
+            font-size: 11px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+        }
+        .header-left a {
+            font-size: 11px;
+            color: var(--blue);
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .header-left a:hover { opacity: 1; }
+
+        .header-center {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .global-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        .global-stat .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .global-stat .stat-label {
+            font-size: 9px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+        .crm-value { color: var(--purple); }
+        .cycle-value { color: var(--blue); }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .mode-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: rgba(135, 56, 235, 0.2);
+            border: 1px solid rgba(135, 56, 235, 0.4);
+            color: var(--purple);
+        }
+        .status-items {
+            display: flex;
+            gap: 14px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        .status-items .sep { opacity: 0.3; }
+        .now-playing { color: var(--green); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Info Panel (on node click) */
+        .info-panel {
+            position: fixed;
+            right: -420px;
+            top: 60px;
+            bottom: 20px;
+            width: 400px;
+            z-index: 200;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            padding: 24px;
+            overflow-y: auto;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            scrollbar-width: thin;
+            scrollbar-color: var(--purple) transparent;
+        }
+        .info-panel.open { right: 20px; }
+        .info-panel .close-btn {
+            position: absolute;
+            top: 12px; right: 16px;
+            background: none; border: none;
+            color: var(--text-dim);
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .info-panel .close-btn:hover { color: var(--text); }
+        .info-panel h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .info-panel .node-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+        .info-panel .section-title {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin: 16px 0 8px;
+        }
+        .info-panel .data-block {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            line-height: 1.6;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .info-panel .connections-list {
+            list-style: none;
+            padding: 0;
+        }
+        .info-panel .connections-list li {
+            padding: 4px 0;
+            font-size: 12px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .info-panel .connections-list li .arrow { color: var(--purple); }
+
+        /* Legend */
+        .legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 16px;
+            padding: 8px 16px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            font-size: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-dim);
+        }
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            z-index: 300;
+            background: rgba(7,5,22,0.95);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            max-width: 250px;
+            backdrop-filter: blur(12px);
+        }
+        .tooltip.visible { opacity: 1; }
+        .tooltip .tt-name { font-weight: 700; margin-bottom: 2px; }
+        .tooltip .tt-metric { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+        @media (max-width: 768px) {
+            .info-panel { width: calc(100vw - 40px); right: -100vw; }
+            .info-panel.open { right: 20px; }
+            .header-center { display: none; }
+            .status-items { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="neuralCanvas"></canvas>
+
+    <div class="header-bar">
+        <div class="header-left">
+            <span class="moon">🌑</span>
+            <span class="title">ONEIRO</span>
+            <span class="subtitle">NEURAL MAP</span>
+            <a href="index.html">← Dashboard</a>
+        </div>
+        <div class="header-center">
+            <div class="global-stat">
+                <span class="stat-value crm-value" id="gCRM">—</span>
+                <span class="stat-label">CRM Score</span>
+            </div>
+            <div class="global-stat">
+                <span class="stat-value cycle-value" id="gCycle">—</span>
+                <span class="stat-label">Cycles</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="mode-badge" id="gMode">INITIALIZING</div>
+            <div class="status-items">
+                <span id="gBattery">🔋 —</span>
+                <span class="sep">|</span>
+                <span id="gApp">📱 —</span>
+                <span class="sep">|</span>
+                <span class="now-playing" id="gMusic">🎵 —</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        <button class="close-btn" id="infoPanelClose">✕</button>
+        <h3 id="ipName">—</h3>
+        <div class="node-type-badge" id="ipBadge">—</div>
+        <div class="section-title">Live Data</div>
+        <div class="data-block" id="ipData">Loading…</div>
+        <div class="section-title">Connections</div>
+        <ul class="connections-list" id="ipConnections"></ul>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#2ECC71"></div> Perception</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4073FA"></div> Memory</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8738EB"></div> Emotion</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E67E22"></div> Reasoning</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#F1C40F"></div> Higher / Creative</div>
+    </div>
+
+    <div class="tooltip" id="tooltip">
+        <div class="tt-name" id="ttName"></div>
+        <div class="tt-metric" id="ttMetric"></div>
+    </div>
+
+    <!-- Live data feed -->
+    <div id="liveFeed" style="
+        position: fixed; bottom: 12px; left: 12px; right: 12px;
+        max-height: 120px; overflow-y: auto;
+        background: rgba(7,6,22,0.85); border: 1px solid rgba(135,56,235,0.2);
+        border-radius: 8px; padding: 8px 12px; font-size: 11px;
+        font-family: 'SF Mono', 'Fira Code', monospace; color: rgba(200,200,255,0.7);
+        backdrop-filter: blur(8px); pointer-events: auto; z-index: 50;
+    ">
+        <div style="color: rgba(135,56,235,0.8); margin-bottom: 4px; font-weight: 600; letter-spacing: 1px;">LIVE FEED</div>
+        <div id="feedLines"></div>
+    </div>
+
+    <script src="neural.js"></script>
+</body>
+</html>
