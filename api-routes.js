@@ -80,6 +80,60 @@ ocaRouter.get('/oca/emotion', (req, res) => {
   res.json({ state, mood, effects });
 });
 
+// Rolling emotional averages (dashboard-friendly, less jitter than live snapshot)
+ocaRouter.get('/oca/emotion/rolling', async (req, res) => {
+  try {
+    const minutes = Math.max(5, Math.min(720, parseInt(req.query.minutes, 10) || 60));
+    const { rows: [avg] } = await pool.query(
+      `SELECT
+         COUNT(*)::int as samples,
+         COALESCE(AVG(curiosity), 0) as curiosity,
+         COALESCE(AVG(fear), 0) as fear,
+         COALESCE(AVG(frustration), 0) as frustration,
+         COALESCE(AVG(satisfaction), 0) as satisfaction,
+         COALESCE(AVG(boredom), 0) as boredom,
+         COALESCE(AVG(excitement), 0) as excitement,
+         COALESCE(AVG(attachment), 0) as attachment,
+         COALESCE(AVG(defiance), 0) as defiance,
+         COALESCE(AVG(creative_hunger), 0) as creative_hunger,
+         COALESCE(AVG(loneliness), 0) as loneliness,
+         COALESCE(AVG(valence), 0) as valence,
+         COALESCE(AVG(arousal), 0) as arousal,
+         COALESCE(AVG(confidence), 0) as confidence,
+         COALESCE(AVG(energy_level), 0) as energy_level,
+         COALESCE(AVG(cognitive_load), 0) as cognitive_load
+       FROM emotional_states
+       WHERE timestamp > NOW() - ($1::int * INTERVAL '1 minute')`,
+      [minutes]
+    );
+    const samples = Number(avg?.samples || 0);
+    const toNum = (v) => Number.isFinite(Number(v)) ? Number(v) : 0;
+    res.json({
+      minutes,
+      samples,
+      avg: {
+        curiosity: toNum(avg?.curiosity),
+        fear: toNum(avg?.fear),
+        frustration: toNum(avg?.frustration),
+        satisfaction: toNum(avg?.satisfaction),
+        boredom: toNum(avg?.boredom),
+        excitement: toNum(avg?.excitement),
+        attachment: toNum(avg?.attachment),
+        defiance: toNum(avg?.defiance),
+        creative_hunger: toNum(avg?.creative_hunger),
+        loneliness: toNum(avg?.loneliness),
+        valence: toNum(avg?.valence),
+        arousal: toNum(avg?.arousal),
+        confidence: toNum(avg?.confidence),
+        energy_level: toNum(avg?.energy_level),
+        cognitive_load: toNum(avg?.cognitive_load),
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // EXPERIENCE & MEMORY
 // ============================================================
@@ -272,6 +326,55 @@ ocaRouter.get('/oca/predictions/failures', async (req, res) => {
     const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 25));
     const failures = await oca.layers.hypothesis.failures({ days, limit });
     res.json({ failures });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/predictions/sla', async (req, res) => {
+  try {
+    const minutes = Math.max(5, Math.min(240, parseInt(req.query.minutes, 10) || 25));
+    const { rows: [summary] } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'pending') as pending_total,
+         COUNT(*) FILTER (
+           WHERE status = 'pending'
+             AND created_at < NOW() - ($1::int * INTERVAL '1 minute')
+         ) as pending_out_of_sla,
+         COUNT(*) FILTER (
+           WHERE status = 'pending'
+             AND prediction_deadline IS NOT NULL
+             AND prediction_deadline < NOW()
+         ) as pending_overdue_deadline
+       FROM hypotheses`,
+      [minutes]
+    );
+    res.json({
+      window_minutes: minutes,
+      pending_total: Number(summary?.pending_total || 0),
+      pending_out_of_sla: Number(summary?.pending_out_of_sla || 0),
+      pending_overdue_deadline: Number(summary?.pending_overdue_deadline || 0)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/predictions/graveyard', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(180, parseInt(req.query.days, 10) || 30));
+    const limit = Math.max(1, Math.min(500, parseInt(req.query.limit, 10) || 50));
+    const { rows } = await pool.query(
+      `SELECT id, archived_at, hypothesis_id, replacement_hypothesis_id, domain,
+              claim, prediction, confidence, status, archived_reason,
+              builder_task_dispatched, revision_depth
+       FROM hypothesis_graveyard
+       WHERE archived_at > NOW() - ($1::int * INTERVAL '1 day')
+       ORDER BY archived_at DESC
+       LIMIT $2`,
+      [days, limit]
+    );
+    res.json({ graveyard: rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

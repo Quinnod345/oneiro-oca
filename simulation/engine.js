@@ -7,6 +7,60 @@ import { startPrediction, completePrediction } from '../prediction-ledger.js';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function parseSimulationPayload(rawText) {
+  const raw = String(rawText || '').trim();
+  const attempts = [];
+  const deFenced = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  attempts.push(raw, deFenced);
+
+  for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+    if (match[1]) attempts.push(match[1].trim());
+  }
+
+  const objStart = raw.indexOf('{');
+  const objEnd = raw.lastIndexOf('}');
+  if (objStart >= 0 && objEnd > objStart) {
+    attempts.push(raw.slice(objStart, objEnd + 1));
+  }
+
+  const seen = new Set();
+  for (const candidate of attempts) {
+    if (!candidate) continue;
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const sanitized = candidate
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, '$1')
+      .trim();
+    const variants = candidate === sanitized ? [candidate] : [candidate, sanitized];
+
+    for (const variant of variants) {
+      try {
+        const parsed = JSON.parse(variant);
+        return {
+          predicted_states: Array.isArray(parsed?.predicted_states) ? parsed.predicted_states : [],
+          branch_points: Array.isArray(parsed?.branch_points) ? parsed.branch_points : [],
+          risks: Array.isArray(parsed?.risks) ? parsed.risks : [],
+          expected_outcome: parsed?.expected_outcome || ''
+        };
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  const condensed = raw.replace(/\s+/g, ' ').trim();
+  return {
+    predicted_states: [],
+    branch_points: [],
+    risks: ['simulation_output_parse_failure'],
+    expected_outcome: condensed.slice(0, 280)
+  };
+}
+
 // Update or create a world model entity
 export async function updateEntity(domain, entity, newState, { confidence = 0.5, transitionRule = null } = {}) {
   const stateJson = JSON.stringify(newState);
@@ -65,12 +119,7 @@ You MUST respond in valid JSON only, no other text:
       max_tokens: 500
     });
     
-    // Strip markdown code fences if Claude wraps the JSON
-    let rawSimText = response.content[0].text.trim();
-    if (rawSimText.startsWith('```')) {
-      rawSimText = rawSimText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    const result = JSON.parse(rawSimText);
+    const result = parseSimulationPayload(response.content?.[0]?.text);
     
     // Store simulation
     const { rows } = await pool.query(

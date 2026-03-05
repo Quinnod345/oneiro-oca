@@ -77,12 +77,27 @@ async function updateCRM() {
 const EMOTION_KEYS = ['curiosity','fear','frustration','satisfaction','boredom','excitement','attachment','defiance','creative_hunger','loneliness'];
 
 async function updateEmotion() {
-    const data = await fetchJSON('/oca/emotion');
+    const [data, rolling] = await Promise.all([
+        fetchJSON('/oca/emotion'),
+        fetchJSON('/oca/emotion/rolling?minutes=60')
+    ]);
     if (!data) return;
 
-    const state = data.state || {};
+    const liveState = data.state || {};
+    const moodState = data.mood || {};
+    const rollingState = rolling?.avg || {};
+    const rollingSamples = Number(rolling?.samples || 0);
+    const useRolling = rollingSamples >= 20;
+    const state = useRolling ? rollingState : (Object.keys(moodState).length ? moodState : liveState);
+
     const valence = state.valence ?? 0;
     const arousal = state.arousal ?? 0;
+
+    const fmtPercent = (raw) => {
+        const pct = Math.max(0, Math.min(Number(raw || 0) * 100, 100));
+        if (pct > 0 && pct < 1) return '<1%';
+        return `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
+    };
 
     const meta = document.getElementById('emotionMeta');
     meta.innerHTML = `
@@ -96,24 +111,29 @@ async function updateEmotion() {
         </div>
         <div class="emotion-meta-item">
             <span class="emotion-meta-label">Energy</span>
-            <span class="emotion-meta-value">${((state.energy_level ?? 0) * 100).toFixed(0)}%</span>
+            <span class="emotion-meta-value">${fmtPercent(state.energy_level ?? 0)}</span>
         </div>
         <div class="emotion-meta-item">
             <span class="emotion-meta-label">Confidence</span>
-            <span class="emotion-meta-value">${((state.confidence ?? 0) * 100).toFixed(0)}%</span>
+            <span class="emotion-meta-value">${fmtPercent(state.confidence ?? 0)}</span>
+        </div>
+        <div class="emotion-meta-item">
+            <span class="emotion-meta-label">Window</span>
+            <span class="emotion-meta-value">${useRolling ? `60m/${rollingSamples}` : 'live'}</span>
         </div>
     `;
 
     const bars = document.getElementById('emotionBars');
     bars.innerHTML = '';
     for (const key of EMOTION_KEYS) {
-        const val = state[key] ?? 0;
-        const pct = Math.min(val * 100, 100);
+        const val = Number(state[key] ?? 0);
+        const pct = Math.max(0, Math.min(val * 100, 100));
+        const label = pct > 0 && pct < 1 ? '<1%' : `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
         bars.innerHTML += `
             <div class="emo-row emo-${key}">
                 <span class="emo-name">${key.replace('_', ' ')}</span>
                 <div class="emo-track"><div class="emo-fill" style="width:${pct}%"></div></div>
-                <span class="emo-val">${(val * 100).toFixed(0)}%</span>
+                <span class="emo-val">${label}</span>
             </div>`;
     }
 }
@@ -189,6 +209,66 @@ async function updateGoals() {
                 </div>
             </div>`;
     }
+}
+
+// --- Dreams ---
+async function updateDreams() {
+    const [data, minds] = await Promise.all([
+        fetchJSON('/dreams?active=true&limit=12'),
+        fetchJSON('/minds/status')
+    ]);
+    const container = document.getElementById('dreamList');
+    const meta = document.getElementById('dreamMeta');
+    const button = document.getElementById('dreamActBtn');
+    if (!container || !meta) return;
+
+    if (!data || !Array.isArray(data.dreams) || data.dreams.length === 0) {
+        meta.textContent = 'No active dreams';
+        container.innerHTML = '<div class="dream-empty">No active dreams</div>';
+        if (button) button.disabled = true;
+        return;
+    }
+
+    const dreams = data.dreams;
+    const summary = data.summary || {};
+    const builderPending = minds?.minds?.builder?.queue?.pending ?? summary.builder_queue_pending ?? 0;
+    const actionable = summary.actionable ?? dreams.filter(d => d.actionable).length;
+    const lifecycle = summary.lifecycle || {};
+    const dormant = lifecycle.dormant || 0;
+    const executing = lifecycle.executing || 0;
+    const reflected = lifecycle.reflected || 0;
+    meta.innerHTML = `
+        <span>${actionable}/${dreams.length} actionable</span>
+        <span>queue ${builderPending}</span>
+        <span>dormant ${dormant}</span>
+        <span>executing ${executing}</span>
+        <span>reflected ${reflected}</span>
+    `;
+
+    container.innerHTML = '';
+    for (const dream of dreams) {
+        const weight = Number(dream.weight || 0);
+        const statusClass = dream.actionable ? 'dream-actionable' : 'dream-conceptual';
+        const statusText = dream.actionable ? 'actionable' : 'conceptual';
+        const lifecycleState = String(dream.lifecycle_state || 'dormant').toLowerCase();
+        const lifecycleClass = ['dormant', 'distilled', 'dispatched', 'executing', 'reflected'].includes(lifecycleState)
+            ? lifecycleState
+            : 'dormant';
+        const lifecycleLabel = lifecycleClass.replace('_', ' ');
+        const channel = String(dream.channel || 'builder');
+        container.innerHTML += `
+            <div class="dream-item">
+                <div class="dream-content">${escapeHtml(dream.content || '')}</div>
+                <div class="dream-row">
+                    <span class="dream-type">${escapeHtml(dream.type || 'dream')}</span>
+                    <span class="dream-weight">${(weight * 100).toFixed(0)}%</span>
+                    <span class="dream-channel">${escapeHtml(channel)}</span>
+                    <span class="dream-lifecycle ${lifecycleClass}">${escapeHtml(lifecycleLabel)}</span>
+                    <span class="${statusClass}">${statusText}</span>
+                </div>
+            </div>`;
+    }
+    if (button) button.disabled = false;
 }
 
 // --- Hypotheses ---
@@ -367,6 +447,19 @@ function init() {
     document.getElementById('chatInput').addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
     });
+    const dreamActBtn = document.getElementById('dreamActBtn');
+    if (dreamActBtn) {
+        dreamActBtn.addEventListener('click', async () => {
+            dreamActBtn.disabled = true;
+            dreamActBtn.textContent = 'Acting...';
+            try {
+                await fetch(`${API}/minds/dream-to-task`, { method: 'POST' });
+            } catch {}
+            await updateDreams();
+            dreamActBtn.textContent = 'Act On Dreams Now';
+            dreamActBtn.disabled = false;
+        });
+    }
 
     // Initial fetch
     refreshAll();
@@ -382,6 +475,7 @@ async function refreshAll() {
         updateBody(),
         updateMemory(),
         updateGoals(),
+        updateDreams(),
         updateHypotheses(),
         updatePerception(),
     ]);

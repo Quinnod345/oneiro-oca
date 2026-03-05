@@ -187,9 +187,192 @@ async function evaluateSemanticPrediction(prediction, observedText) {
   };
 }
 
+const DEFAULT_HYPOTHESIS_DEADLINE_MINUTES = 25;
+
+function formatExpectedValueForText(expected = {}) {
+  if (Array.isArray(expected.value)) return `[${expected.value.join(', ')}]`;
+  if (expected.operator === 'between') {
+    const lo = expected.min ?? expected.lower ?? '?';
+    const hi = expected.max ?? expected.upper ?? '?';
+    return `${lo}..${hi}`;
+  }
+  if (expected.value == null) return '?';
+  if (typeof expected.value === 'boolean') return expected.value ? 'true' : 'false';
+  return String(expected.value);
+}
+
+function buildRevisedHypothesisFromRefutation(hyp, evaluation) {
+  const expected = hyp?.source_data?.evaluation;
+  if (!expected || typeof expected !== 'object') return null;
+  if (!expected.metric) return null;
+
+  const revisionDepth = Number(hyp?.source_data?.revision_depth || 0);
+  if (revisionDepth >= 3) return null;
+
+  const windowMinutes = Math.max(
+    5,
+    Math.min(180, Number(expected.window_minutes) || 15)
+  );
+  const metric = String(expected.metric);
+  const operator = String(expected.operator || 'eq');
+  const valueText = formatExpectedValueForText(expected);
+  const reason = String(evaluation?.reason || 'refuted');
+
+  const revisedClaim = `Revised ${metric} hypothesis (${operator} ${valueText}) after ${reason}`;
+  const revisedPrediction = `Within ${windowMinutes}m, observed ${metric} should satisfy ${operator} ${valueText}`;
+
+  return {
+    domain: hyp.domain,
+    claim: revisedClaim.slice(0, 220),
+    prediction: revisedPrediction.slice(0, 220),
+    confidence: Math.max(0.35, Math.min(0.75, Number(hyp.confidence || 0.5) * 0.82)),
+    deadline: new Date(Date.now() + windowMinutes * 60000).toISOString(),
+    sourceData: {
+      ...(hyp.source_data || {}),
+      generator: 'revision_from_refutation',
+      revision_depth: revisionDepth + 1,
+      revised_from_hypothesis_id: hyp.id,
+      previous_evaluation_reason: reason,
+      previous_hypothesis: {
+        claim: hyp.claim,
+        prediction: hyp.prediction
+      },
+      evaluation: {
+        metric,
+        operator,
+        value: expected.value,
+        min: expected.min ?? expected.lower ?? null,
+        max: expected.max ?? expected.upper ?? null,
+        window_minutes: windowMinutes
+      }
+    }
+  };
+}
+
+function shouldDispatchBuilderTask(evaluation = {}, sourceData = {}) {
+  const reason = String(evaluation.reason || '');
+  if (!reason) return false;
+  const lowQualityReason =
+    reason.includes('unknown')
+    || reason.includes('missing_')
+    || reason.includes('metric_not_observed')
+    || reason.includes('unsupported_operator');
+  if (lowQualityReason) return true;
+  if (sourceData?.generator === 'llm_observation' && evaluation.verifiable === false) return true;
+  return false;
+}
+
+async function dispatchBuilderHypothesisTask({ hyp, evaluation, revised }) {
+  const reason = String(evaluation?.reason || 'unknown');
+  const bucket = reason.split(':')[0];
+  const { rows: recentlyDispatched } = await pool.query(
+    `SELECT 1
+     FROM hypothesis_graveyard
+     WHERE builder_task_dispatched = true
+       AND archived_reason = $1
+       AND archived_at > NOW() - INTERVAL '4 hours'
+     LIMIT 1`,
+    [bucket]
+  );
+  if (recentlyDispatched.length > 0) return false;
+
+  const payload = {
+    task: {
+      name: `Hypothesis pipeline fix (${bucket})`,
+      description: [
+        'HYPOTHESIS FEEDBACK TASK:',
+        `A hypothesis was refuted with quality/observability issue: ${reason}`,
+        `Original claim: ${hyp.claim}`,
+        `Original prediction: ${hyp.prediction}`,
+        revised?.id ? `Revised hypothesis id: ${revised.id}` : 'No revised hypothesis was created.',
+        'Improve hypothesis generation/evaluation reliability in cognitive pipeline.',
+        'Focus files: cognitive/cognitive-loop.js, cognitive/hypothesis/engine.js, cognitive/api-routes.js.',
+        'Goal: reduce unknown failure reasons, improve verifiability and evaluation coverage.'
+      ].join('\n'),
+      workdir: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive'
+    }
+  };
+
+  try {
+    const res = await fetch('http://localhost:3333/minds/builder/task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) return false;
+    let body = null;
+    try { body = await res.json(); } catch {}
+    if (body?.error) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function archiveHypothesisVersion({
+  hyp,
+  status = null,
+  evaluation,
+  replacementHypothesisId = null,
+  builderTaskDispatched = false,
+  observedText = null,
+  observedStructured = null
+}) {
+  const revisionDepth = Number(hyp?.source_data?.revision_depth || 0);
+  const archiveReason = String(evaluation?.reason || 'refuted');
+  const { rows: [grave] } = await pool.query(
+    `INSERT INTO hypothesis_graveyard (
+       hypothesis_id,
+       replacement_hypothesis_id,
+       domain,
+       claim,
+       prediction,
+       confidence,
+       status,
+       actual_outcome,
+       revision_depth,
+       archived_reason,
+       evaluation,
+       source_data,
+       builder_task_dispatched,
+       metadata
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+     ) RETURNING id`,
+    [
+      hyp.id,
+      replacementHypothesisId,
+      hyp.domain,
+      hyp.claim,
+      hyp.prediction,
+      hyp.confidence,
+      status || hyp.status,
+      observedText || hyp.actual_outcome || null,
+      revisionDepth,
+      archiveReason,
+      JSON.stringify(evaluation || {}),
+      JSON.stringify(hyp.source_data || {}),
+      builderTaskDispatched,
+      JSON.stringify({
+        observed_structured: observedStructured || null
+      })
+    ]
+  );
+  return grave?.id || null;
+}
+
 // Form a new hypothesis from an observation
 export async function form(domain, claim, prediction, { testMethod = null, testType = 'passive_observation', confidence = 0.5, sourceData = {}, deadline = null } = {}) {
   const embedding = await getEmbedding(`${claim} | ${prediction}`);
+  const effectiveDeadline = deadline || new Date(Date.now() + DEFAULT_HYPOTHESIS_DEADLINE_MINUTES * 60000).toISOString();
+  const normalizedSourceData = {
+    ...(sourceData || {}),
+    lifecycle: {
+      auto_sla_minutes: DEFAULT_HYPOTHESIS_DEADLINE_MINUTES,
+      generated_at: new Date().toISOString(),
+      ...(sourceData?.lifecycle || {})
+    }
+  };
   
   // Check for duplicate/similar hypotheses
   const { rows: similar } = await pool.query(
@@ -214,7 +397,7 @@ export async function form(domain, claim, prediction, { testMethod = null, testT
   const { rows } = await pool.query(
     `INSERT INTO hypotheses (domain, claim, confidence, prediction, prediction_deadline, test_method, test_type, source_data, embedding)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector) RETURNING id`,
-    [domain, claim, confidence, prediction, deadline, testMethod, testType, JSON.stringify(sourceData), JSON.stringify(embedding)]
+    [domain, claim, confidence, prediction, effectiveDeadline, testMethod, testType, JSON.stringify(normalizedSourceData), JSON.stringify(embedding)]
   );
   
   await emit('hypothesis_formed', 'hypothesis', {
@@ -329,7 +512,52 @@ export async function test(hypothesisId, actualOutcome) {
     metadata: { hypothesis_status: status, surprise },
   });
 
-  return { id: hypothesisId, status, surprise, confirmed, confidenceDelta, modelUpdate, evaluation };
+  let revision = null;
+  if (status === 'refuted') {
+    try {
+      const revisedSpec = buildRevisedHypothesisFromRefutation(hyp, evaluation);
+      let revised = null;
+      if (revisedSpec) {
+        revised = await form(
+          revisedSpec.domain,
+          revisedSpec.claim,
+          revisedSpec.prediction,
+          {
+            confidence: revisedSpec.confidence,
+            testType: 'passive_observation',
+            sourceData: revisedSpec.sourceData,
+            deadline: revisedSpec.deadline,
+          }
+        );
+      }
+
+      let builderTaskDispatched = false;
+      if (shouldDispatchBuilderTask(evaluation, hyp.source_data || {})) {
+        builderTaskDispatched = await dispatchBuilderHypothesisTask({ hyp, evaluation, revised });
+      }
+
+      const graveyardId = await archiveHypothesisVersion({
+        hyp,
+        status,
+        evaluation,
+        replacementHypothesisId: revised?.id || null,
+        builderTaskDispatched,
+        observedText,
+        observedStructured
+      });
+
+      revision = {
+        graveyardId,
+        replacementHypothesisId: revised?.id || null,
+        replacementAction: revised?.action || null,
+        builderTaskDispatched
+      };
+    } catch (e) {
+      revision = { error: e.message };
+    }
+  }
+
+  return { id: hypothesisId, status, surprise, confirmed, confidenceDelta, modelUpdate, evaluation, revision };
 }
 
 // Design an experiment for a hypothesis

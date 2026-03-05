@@ -79,29 +79,29 @@ const DYNAMIC_EDGE_COLORS = {
 // rx/ry are relative to canvas (0..1)
 const NODE_DEFS = [
     // Bottom band — sensory input
-    { id: 'perception',    label: 'Perception',       cat: 'perception', rx: 0.50, ry: 0.88 },
-    { id: 'interoception', label: 'Interoception',    cat: 'body',       rx: 0.68, ry: 0.82 },
+    { id: 'perception',    label: 'Perception',       cat: 'perception', rx: 0.50, ry: 0.86 },
+    { id: 'interoception', label: 'Interoception',    cat: 'body',       rx: 0.70, ry: 0.80 },
 
     // Left cluster — memory
-    { id: 'episodic',      label: 'Episodic Memory',  cat: 'memory',     rx: 0.11, ry: 0.60 },
-    { id: 'semantic',      label: 'Semantic Memory',  cat: 'memory',     rx: 0.08, ry: 0.38 },
-    { id: 'prospective',   label: 'Prospective',      cat: 'memory',     rx: 0.21, ry: 0.47 },
-    { id: 'consolidation', label: 'Consolidation',    cat: 'integration',rx: 0.14, ry: 0.73 },
+    { id: 'episodic',      label: 'Episodic Memory',  cat: 'memory',     rx: 0.22, ry: 0.64 },
+    { id: 'semantic',      label: 'Semantic Memory',  cat: 'memory',     rx: 0.20, ry: 0.38 },
+    { id: 'prospective',   label: 'Prospective',      cat: 'memory',     rx: 0.33, ry: 0.49 },
+    { id: 'consolidation', label: 'Consolidation',    cat: 'integration',rx: 0.28, ry: 0.76 },
 
     // Center — emotion hub
     { id: 'emotion',       label: 'Emotion Engine',   cat: 'emotion',    rx: 0.50, ry: 0.56 },
-    { id: 'undercurrents', label: 'Undercurrents',    cat: 'emotion',    rx: 0.65, ry: 0.65 },
+    { id: 'undercurrents', label: 'Undercurrents',    cat: 'emotion',    rx: 0.63, ry: 0.67 },
 
     // Right cluster — reasoning
-    { id: 'hypothesis',    label: 'Hypothesis',       cat: 'reasoning',  rx: 0.82, ry: 0.54 },
-    { id: 'metacognition', label: 'Metacognition',    cat: 'reasoning',  rx: 0.88, ry: 0.36 },
-    { id: 'calibration',   label: 'Calibration',      cat: 'reasoning',  rx: 0.92, ry: 0.58 },
+    { id: 'hypothesis',    label: 'Hypothesis',       cat: 'reasoning',  rx: 0.74, ry: 0.54 },
+    { id: 'metacognition', label: 'Metacognition',    cat: 'reasoning',  rx: 0.76, ry: 0.31 },
+    { id: 'calibration',   label: 'Calibration',      cat: 'reasoning',  rx: 0.85, ry: 0.60 },
 
     // Top band — higher cognition
     { id: 'executive',     label: 'Executive',        cat: 'higher',     rx: 0.50, ry: 0.17 },
-    { id: 'deliberation',  label: 'Deliberation',     cat: 'higher',     rx: 0.33, ry: 0.09 },
-    { id: 'creative',      label: 'Creative Synthesis', cat: 'creative', rx: 0.67, ry: 0.09 },
-    { id: 'worldsim',      label: 'World Model',      cat: 'higher',     rx: 0.80, ry: 0.20 },
+    { id: 'deliberation',  label: 'Deliberation',     cat: 'higher',     rx: 0.38, ry: 0.12 },
+    { id: 'creative',      label: 'Creative Synthesis', cat: 'creative', rx: 0.62, ry: 0.12 },
+    { id: 'worldsim',      label: 'World Model',      cat: 'higher',     rx: 0.69, ry: 0.24 },
 ];
 
 // ── Static connections ──
@@ -629,6 +629,37 @@ function drawEdges() {
         const a = nodes[e.from];
         const b = nodes[e.to];
         if (!a || !b) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const longEdge = len > 280;
+        const bendSign = ((e.from.charCodeAt(0) + e.to.charCodeAt(e.to.length - 1)) % 2 === 0) ? 1 : -1;
+        const bend = longEdge ? bendSign * Math.min(44, len * 0.12) : 0;
+        const cx = (a.x + b.x) * 0.5 + nx * bend;
+        const cy = (a.y + b.y) * 0.5 + ny * bend;
+
+        const drawPath = () => {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            if (bend === 0) {
+                ctx.lineTo(b.x, b.y);
+            } else {
+                ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+            }
+        };
+
+        const pointAt = (t) => {
+            if (bend === 0) {
+                return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+            }
+            const omt = 1 - t;
+            return {
+                x: omt * omt * a.x + 2 * omt * t * cx + t * t * b.x,
+                y: omt * omt * a.y + 2 * omt * t * cy + t * t * b.y
+            };
+        };
 
         const fromAct    = a.activity || 0;
         const toAct      = b.activity  || 0;
@@ -639,18 +670,14 @@ function drawEdges() {
         const lw    = 0.8 + e.weight * (0.35 + flowStrength * 0.45);
 
         ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        drawPath();
         ctx.strokeStyle = hexAlpha(e.color, alpha);
         ctx.lineWidth   = lw;
         ctx.stroke();
 
         // Subtle outer glow when active
         if (flowStrength > 0.3) {
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
+            drawPath();
             ctx.strokeStyle = hexAlpha(e.color, alpha * 0.2);
             ctx.lineWidth   = lw + 4;
             ctx.stroke();
@@ -661,8 +688,9 @@ function drawEdges() {
         for (const p of e.particles) {
             p.t += p.speed * particleSpeed * (0.3 + fromAct * 0.9);
             if (p.t > 1) p.t -= 1;
-            const px = a.x + (b.x - a.x) * p.t;
-            const py = a.y + (b.y - a.y) * p.t;
+            const pos = pointAt(p.t);
+            const px = pos.x;
+            const py = pos.y;
             const pr = 1.2 + fromAct * 1.8;
             const pa = 0.25 + fromAct * 0.55;
             ctx.beginPath();
