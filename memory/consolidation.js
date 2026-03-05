@@ -5,6 +5,7 @@ import { pool } from '../event-bus.js';
 import episodic from './episodic.js';
 import semantic from './semantic.js';
 import procedural from './procedural.js';
+import { inferLayerFromText, upsertNeuralConnection } from '../neural-connections.js';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -99,6 +100,21 @@ You MUST respond in valid JSON only, no other text:
              updated_at = NOW()`,
           [conn.cause, JSON.stringify({ effect: conn.effect }), JSON.stringify([conn])]
         );
+
+        // Also persist as a live neural connection for topology visualization.
+        await upsertNeuralConnection({
+          fromLayer: inferLayerFromText(conn.cause),
+          toLayer: inferLayerFromText(conn.effect),
+          connectionType: 'consolidation',
+          strengthDelta: (conn.confidence || 0.5) * 0.08,
+          baseStrength: Math.max(0.2, (conn.confidence || 0.5) * 0.5),
+          label: `${String(conn.cause || '').slice(0, 70)} → ${String(conn.effect || '').slice(0, 70)}`,
+          metadata: {
+            mechanism: conn.mechanism || null,
+            confidence: conn.confidence ?? null,
+            source: 'consolidation',
+          }
+        });
       }
     }
   } catch (e) {

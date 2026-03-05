@@ -1,5 +1,6 @@
 // OCA Creative Synthesis — dream states, novel connections, Lovelace layer
 import { pool, emit } from '../event-bus.js';
+import { upsertNeuralConnection } from '../neural-connections.js';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -69,6 +70,25 @@ export async function forceConnection() {
        VALUES ('connection', $1, 'constrained_randomness', $2, $3, $4) RETURNING id`,
       [connection, [a.id, b.id], noveltyScore, noveltyScore > 0.5 ? 0.7 : 0.4]
     );
+
+    // Write a living synapse edge for this creative bridge.
+    const [fromMem, toMem] = a.id <= b.id ? [a.id, b.id] : [b.id, a.id];
+    await upsertNeuralConnection({
+      fromLayer: 'episodic',
+      fromId: fromMem,
+      toLayer: 'episodic',
+      toId: toMem,
+      connectionType: 'creative',
+      strengthDelta: Math.max(0.03, noveltyScore * 0.1),
+      baseStrength: Math.max(0.25, Math.min(0.9, noveltyScore)),
+      label: connection.slice(0, 120),
+      metadata: {
+        artifact_id: artifact.id,
+        novelty_score: noveltyScore,
+        distance: maxDist,
+        source: 'creative.forceConnection',
+      }
+    });
     
     return {
       id: artifact.id,
@@ -184,6 +204,23 @@ export async function dream(durationMinutes = 2) {
        VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id`,
       [seeds.map(s => s.id), dreamContent, 0.4, hasNovel, connections]
     );
+
+    // Persist each dream novelty as a dynamic synapse.
+    for (const connText of connections) {
+      await upsertNeuralConnection({
+        fromLayer: 'creative',
+        toLayer: 'semantic',
+        connectionType: 'dream',
+        strengthDelta: 0.06,
+        baseStrength: 0.28,
+        label: connText.slice(0, 120),
+        metadata: {
+          dream_episode_id: ep.id,
+          seed_memories: seeds.map(s => s.id),
+          source: 'creative.dream',
+        }
+      });
+    }
     
     await emit('creative_output', 'creative', {
       type: 'dream', id: ep.id, hasNovel, connectionCount: connections.length
