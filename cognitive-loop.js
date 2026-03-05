@@ -26,6 +26,7 @@ let creativeCooldown = 0;
 let goalReviewCooldown = 0;
 let biasScanCooldown = 0;
 let visionCooldown = 0;
+let hypothesisCooldown = 0;
 
 // Interoceptive sensing
 function getInteroception() {
@@ -109,6 +110,7 @@ async function think() {
   
   // ── VISION ANALYSIS (every 20 cycles) ──────────────
   visionCooldown = Math.max(0, visionCooldown - 1);
+  hypothesisCooldown = Math.max(0, hypothesisCooldown - 1);
   if (visionCooldown <= 0) {
     visionCooldown = 20;
     try {
@@ -208,105 +210,102 @@ async function think() {
       await oca.layers.hypothesis.form(domain, claim, prediction, opts).catch(() => {});
     };
     
-    // Only form hypotheses if we have room (cap at 12 pending)
-    if (pendingCount < 12) {
+    // GENERATIVE HYPOTHESIS ENGINE — forms its own predictions from observation
+    // Not templates. Not rules. The system looks at everything it perceives and
+    // generates novel, testable predictions. This is how it beats Lovelace.
+    if (pendingCount < 12 && hypothesisCooldown <= 0) {
+      hypothesisCooldown = 10; // generate new hypotheses every 10 cycles
       
-      // 1. APP BEHAVIOR — what will user do next?
-      if (appSwitched && visual.frontApp !== 'unknown') {
-        // Predict session length based on app type
-        const longSessionApps = ['Cursor', 'Xcode', 'Logic Pro', 'Terminal', 'Claude'];
-        const shortSessionApps = ['Messages', 'Telegram', 'Slack', 'FindMy', 'Calendar'];
-        const isLong = longSessionApps.includes(visual.frontApp);
-        const isShort = shortSessionApps.includes(visual.frontApp);
-        const duration = isLong ? 30 : isShort ? 3 : 10;
-        const conf = isLong ? 0.75 : isShort ? 0.7 : 0.55;
+      try {
+        // Gather ALL available context
+        const visionAnalysis = sensory.getLastVisionAnalysis?.()?.description || '';
+        const recentApps = await pool.query(
+          `SELECT DISTINCT active_app FROM episodic_memory 
+           WHERE active_app IS NOT NULL AND active_app != 'unknown' 
+           AND timestamp > NOW() - INTERVAL '30 minutes' ORDER BY active_app`
+        ).then(r => r.rows.map(r => r.active_app)).catch(() => []);
         
-        await formIfNew(
-          'behavior',
-          `User switched to ${visual.frontApp} — predicting ${duration}+ min session`,
-          `User will still be in ${visual.frontApp} in ${duration} minutes`,
-          { confidence: conf, testType: 'passive_observation', deadline: new Date(Date.now() + duration * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 2. BATTERY PREDICTIONS
-      if (!isCharging && batteryPct > 5 && batteryPct < 30 && pendingCount < 10) {
-        const drainRate = cpuRaw > 300 ? 'fast' : 'slow';
-        const minsToLow = drainRate === 'fast' ? 20 : 45;
-        await formIfNew(
-          'system',
-          `Battery at ${batteryPct}% with ${drainRate} drain — predicting user plugs in within ${minsToLow} minutes`,
-          `Battery will be charging within ${minsToLow} minutes`,
-          { confidence: 0.65, testType: 'passive_observation', deadline: new Date(Date.now() + minsToLow * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 3. SLEEP/DEPARTURE PREDICTIONS (time-based)
-      if (hour >= 23 && activity.presence === 'present' && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `It's ${hour}:00 — predicting user goes to sleep within 90 minutes`,
-          `User will be away (idle >5min) within 90 minutes`,
-          { confidence: 0.7, testType: 'passive_observation', deadline: new Date(Date.now() + 90 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      if (hour >= 1 && hour < 5 && activity.presence === 'present' && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `It's ${hour}:00 AM — user is still active, predicting departure within 30 minutes`,
-          `User will be away within 30 minutes`,
-          { confidence: 0.8, testType: 'passive_observation', deadline: new Date(Date.now() + 30 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 4. MUSIC PREDICTIONS
-      if (music && appSwitched && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `User is listening to music while switching to ${visual.frontApp} — predicting focused work session`,
-          `User will have fewer than 3 app switches in the next 15 minutes (focused)`,
-          { confidence: 0.6, testType: 'passive_observation', deadline: new Date(Date.now() + 15 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 5. TYPING SPEED PREDICTIONS
-      if (typingSpeed > 60 && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `User typing at ${typingSpeed} WPM — predicting sustained writing session in ${visual.frontApp}`,
-          `User will remain in ${visual.frontApp} for 20+ minutes with continued high typing activity`,
-          { confidence: 0.55, testType: 'passive_observation', deadline: new Date(Date.now() + 20 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 6. CPU/WORKLOAD PREDICTIONS
-      if (cpuRaw > 350 && pendingCount < 10) {
-        await formIfNew(
-          'system',
-          `CPU at ${cpuRaw.toFixed(0)}% — heavy workload detected, predicting thermal throttling within 10 minutes`,
-          `System thermal pressure will increase above nominal within 10 minutes`,
-          { confidence: 0.5, testType: 'passive_observation', deadline: new Date(Date.now() + 10 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 7. PATTERN-BASED: If user was in Messages/Telegram, predict they'll return to work app
-      if (appSwitched && ['Messages', 'Telegram', 'Slack'].includes(visual.frontApp) && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `User switched to ${visual.frontApp} (communication) — predicting return to work app within 5 minutes`,
-          `User will switch back to a non-communication app within 5 minutes`,
-          { confidence: 0.7, testType: 'passive_observation', deadline: new Date(Date.now() + 5 * 60000).toISOString() }
-        ).catch(() => {});
-      }
-      
-      // 8. IDLE PREDICTION: if user starts going idle
-      if (activity.idleSeconds > 60 && activity.idleSeconds < 120 && pendingCount < 10) {
-        await formIfNew(
-          'behavior',
-          `User idle for ${Math.round(activity.idleSeconds)}s — predicting full departure (5+ min idle)`,
-          `User will be idle for 5+ minutes (away)`,
-          { confidence: 0.5, testType: 'passive_observation', deadline: new Date(Date.now() + 5 * 60000).toISOString() }
-        ).catch(() => {});
+        const recentHypos = await pool.query(
+          `SELECT claim, status FROM hypotheses ORDER BY id DESC LIMIT 5`
+        ).then(r => r.rows).catch(() => []);
+        
+        const recentSemantic = await pool.query(
+          `SELECT concept, category FROM semantic_memory ORDER BY id DESC LIMIT 5`
+        ).then(r => r.rows).catch(() => []);
+        
+        const contextSnapshot = {
+          currentApp: visual.frontApp,
+          windowTitle: visual.windowTitle || '',
+          presence: activity.presence,
+          idleSeconds: activity.idleSeconds,
+          battery: batteryPct,
+          charging: isCharging,
+          cpuLoad: cpuRaw.toFixed(0),
+          memoryPressure: (intero.memory?.pressure * 100 || 0).toFixed(0) + '%',
+          thermal: intero.thermal?.pressure || 'unknown',
+          music: music || 'none',
+          typingWPM: typingSpeed,
+          hour: hour,
+          dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+          runningApps: (visual.runningApps || []).join(', '),
+          recentApps30min: recentApps.join(', '),
+          visionDescription: visionAnalysis.slice(0, 200),
+          appJustSwitched: appSwitched,
+          previousApp: previousApp || 'unknown',
+          emotionalState: `valence=${emotionState.valence?.toFixed(2)}, arousal=${emotionState.arousal?.toFixed(2)}, dominant=${Object.entries(emotionState).filter(([k]) => !['valence','arousal','confidence','energy_level','cognitive_load'].includes(k)).sort((a,b) => b[1] - a[1])[0]?.[0] || 'neutral'}`,
+          recentKnowledge: recentSemantic.map(s => s.concept).join('; '),
+          existingPredictions: recentHypos.map(h => h.claim).join('; '),
+        };
+        
+        const Anthropic = (await import('@anthropic-ai/sdk')).default;
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        
+        const response = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 600,
+          system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking system state (app, battery, idle, thermal, etc).
+
+Be creative. Predict behavior patterns, system events, workflow transitions, emotional shifts, social patterns — anything you notice. Don't repeat existing predictions.
+
+Respond ONLY with a JSON array, no markdown:
+[{"domain":"behavior|system|pattern","claim":"short observation + prediction","prediction":"specific testable outcome","confidence":0.5,"deadline_minutes":15}]
+
+Keep claims under 80 chars. Keep predictions under 60 chars.`,
+          messages: [{
+            role: 'user',
+            content: `Current observation:\n${JSON.stringify(contextSnapshot, null, 1)}`
+          }],
+          temperature: 0.8,
+        });
+        
+        let rawText = response.content[0].text.trim();
+        if (rawText.startsWith('```')) {
+          rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        
+        const hypotheses = JSON.parse(rawText);
+        
+        for (const h of (Array.isArray(hypotheses) ? hypotheses : [hypotheses]).slice(0, 3)) {
+          if (!h.claim || !h.prediction) continue;
+          const deadlineMin = Math.max(3, Math.min(120, h.deadline_minutes || 15));
+          await formIfNew(
+            h.domain || 'behavior',
+            h.claim,
+            h.prediction,
+            { 
+              confidence: Math.max(0.1, Math.min(0.95, h.confidence || 0.5)),
+              testType: 'passive_observation',
+              deadline: new Date(Date.now() + deadlineMin * 60000).toISOString()
+            }
+          );
+        }
+        
+        if (hypotheses.length > 0) {
+          console.log(`[oca] 🔮 generated ${hypotheses.length} hypotheses from observation`);
+        }
+      } catch (e) {
+        console.error('[oca] hypothesis generation error:', e.message);
+        hypothesisCooldown = 20; // back off on error
       }
     }
     
