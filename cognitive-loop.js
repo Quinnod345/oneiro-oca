@@ -186,18 +186,128 @@ async function think() {
   ).catch(() => {});
   
   // ── 6. HYPOTHESIZE ────────────────────────────────
-  // Form predictions from observations
+  // Form rich predictions from ALL available data
   if (activity.presence !== 'away') {
     const pending = await oca.layers.hypothesis.getPendingTests(3);
+    const pendingCount = pending.length;
+    const hour = new Date().getHours();
+    const batteryPct = Math.round((intero.battery?.level || 0) * 100);
+    const isCharging = intero.battery?.charging || false;
+    const cpuRaw = intero.cpu?.raw || 0;
+    const typingSpeed = swiftSensory.getLatestHID?.()?.wpm || 0;
+    const music = perception.audio?.nowPlaying;
     
-    // App continuity hypothesis
-    if (pending.length < 8 && appSwitched) {
-      await oca.layers.hypothesis.form(
-        'behavior',
-        `User switched to ${visual.frontApp} — predicting 10+ min session`,
-        `User will still be in ${visual.frontApp} in 10 minutes`,
-        { confidence: 0.6, testType: 'passive_observation', deadline: new Date(Date.now() + 10 * 60000).toISOString() }
-      ).catch(() => {});
+    // Get existing pending claims for dedup
+    const { rows: existingClaims } = await pool.query(
+      `SELECT claim FROM hypotheses WHERE status = 'pending'`
+    );
+    const claimSet = new Set(existingClaims.map(r => r.claim));
+    const formIfNew = async (domain, claim, prediction, opts) => {
+      if (claimSet.has(claim)) return; // skip duplicate
+      claimSet.add(claim);
+      await oca.layers.hypothesis.form(domain, claim, prediction, opts).catch(() => {});
+    };
+    
+    // Only form hypotheses if we have room (cap at 12 pending)
+    if (pendingCount < 12) {
+      
+      // 1. APP BEHAVIOR — what will user do next?
+      if (appSwitched && visual.frontApp !== 'unknown') {
+        // Predict session length based on app type
+        const longSessionApps = ['Cursor', 'Xcode', 'Logic Pro', 'Terminal', 'Claude'];
+        const shortSessionApps = ['Messages', 'Telegram', 'Slack', 'FindMy', 'Calendar'];
+        const isLong = longSessionApps.includes(visual.frontApp);
+        const isShort = shortSessionApps.includes(visual.frontApp);
+        const duration = isLong ? 30 : isShort ? 3 : 10;
+        const conf = isLong ? 0.75 : isShort ? 0.7 : 0.55;
+        
+        await formIfNew(
+          'behavior',
+          `User switched to ${visual.frontApp} — predicting ${duration}+ min session`,
+          `User will still be in ${visual.frontApp} in ${duration} minutes`,
+          { confidence: conf, testType: 'passive_observation', deadline: new Date(Date.now() + duration * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 2. BATTERY PREDICTIONS
+      if (!isCharging && batteryPct > 5 && batteryPct < 30 && pendingCount < 10) {
+        const drainRate = cpuRaw > 300 ? 'fast' : 'slow';
+        const minsToLow = drainRate === 'fast' ? 20 : 45;
+        await formIfNew(
+          'system',
+          `Battery at ${batteryPct}% with ${drainRate} drain — predicting user plugs in within ${minsToLow} minutes`,
+          `Battery will be charging within ${minsToLow} minutes`,
+          { confidence: 0.65, testType: 'passive_observation', deadline: new Date(Date.now() + minsToLow * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 3. SLEEP/DEPARTURE PREDICTIONS (time-based)
+      if (hour >= 23 && activity.presence === 'present' && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `It's ${hour}:00 — predicting user goes to sleep within 90 minutes`,
+          `User will be away (idle >5min) within 90 minutes`,
+          { confidence: 0.7, testType: 'passive_observation', deadline: new Date(Date.now() + 90 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      if (hour >= 1 && hour < 5 && activity.presence === 'present' && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `It's ${hour}:00 AM — user is still active, predicting departure within 30 minutes`,
+          `User will be away within 30 minutes`,
+          { confidence: 0.8, testType: 'passive_observation', deadline: new Date(Date.now() + 30 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 4. MUSIC PREDICTIONS
+      if (music && appSwitched && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `User is listening to music while switching to ${visual.frontApp} — predicting focused work session`,
+          `User will have fewer than 3 app switches in the next 15 minutes (focused)`,
+          { confidence: 0.6, testType: 'passive_observation', deadline: new Date(Date.now() + 15 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 5. TYPING SPEED PREDICTIONS
+      if (typingSpeed > 60 && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `User typing at ${typingSpeed} WPM — predicting sustained writing session in ${visual.frontApp}`,
+          `User will remain in ${visual.frontApp} for 20+ minutes with continued high typing activity`,
+          { confidence: 0.55, testType: 'passive_observation', deadline: new Date(Date.now() + 20 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 6. CPU/WORKLOAD PREDICTIONS
+      if (cpuRaw > 350 && pendingCount < 10) {
+        await formIfNew(
+          'system',
+          `CPU at ${cpuRaw.toFixed(0)}% — heavy workload detected, predicting thermal throttling within 10 minutes`,
+          `System thermal pressure will increase above nominal within 10 minutes`,
+          { confidence: 0.5, testType: 'passive_observation', deadline: new Date(Date.now() + 10 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 7. PATTERN-BASED: If user was in Messages/Telegram, predict they'll return to work app
+      if (appSwitched && ['Messages', 'Telegram', 'Slack'].includes(visual.frontApp) && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `User switched to ${visual.frontApp} (communication) — predicting return to work app within 5 minutes`,
+          `User will switch back to a non-communication app within 5 minutes`,
+          { confidence: 0.7, testType: 'passive_observation', deadline: new Date(Date.now() + 5 * 60000).toISOString() }
+        ).catch(() => {});
+      }
+      
+      // 8. IDLE PREDICTION: if user starts going idle
+      if (activity.idleSeconds > 60 && activity.idleSeconds < 120 && pendingCount < 10) {
+        await formIfNew(
+          'behavior',
+          `User idle for ${Math.round(activity.idleSeconds)}s — predicting full departure (5+ min idle)`,
+          `User will be idle for 5+ minutes (away)`,
+          { confidence: 0.5, testType: 'passive_observation', deadline: new Date(Date.now() + 5 * 60000).toISOString() }
+        ).catch(() => {});
+      }
     }
     
     // Test overdue hypotheses BEFORE expiring them (so test() can still find them as 'pending')
@@ -207,19 +317,28 @@ async function think() {
     );
     for (const h of overdue) {
       try {
-        const result = await oca.layers.hypothesis.test(h.id, 
-          `Current app: ${visual.frontApp}. Time elapsed — testing prediction.`
-        );
-        // Feed result to emotion
+        // Build context-aware test outcome based on prediction type
+        let outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s`;
+        
+        // Add app switch count for focus predictions
+        if (h.prediction?.includes('fewer than') || h.prediction?.includes('focused')) {
+          // Count recent app switches from episodic memory
+          const { rows: switches } = await pool.query(
+            `SELECT COUNT(*) as cnt FROM episodic_memory WHERE event_type = 'cognitive_cycle' AND active_app != $1 AND timestamp > NOW() - INTERVAL '15 minutes'`,
+            [visual.frontApp]
+          ).catch(() => ({ rows: [{ cnt: 0 }] }));
+          outcomeDesc += `, app_switches_15min=${switches[0]?.cnt || 0}`;
+        }
+        
+        const result = await oca.layers.hypothesis.test(h.id, outcomeDesc);
         if (result.confirmed) {
-          oca.layers.emotion.processSuccess('prediction');
+          oca.layers.emotion.processSuccess(0.6);
           console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
         } else {
-          oca.layers.emotion.processSurprise(0.3, 'prediction', `Expected: ${h.prediction}, got: ${visual.frontApp}`);
+          oca.layers.emotion.processSurprise(0.3, 'prediction', `Prediction: ${h.prediction}. Reality: ${outcomeDesc}`);
           console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
         }
       } catch (e) {
-        // If test fails, expire it
         await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
       }
     }
