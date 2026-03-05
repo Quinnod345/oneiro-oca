@@ -91,8 +91,9 @@ export function getAudioState() {
 export function getInteroception() {
   try {
     // Battery
-    const batteryRaw = execSync("pmset -g batt 2>/dev/null | grep -o '[0-9]*%' | head -1 | tr -d '%'", { encoding: 'utf8', timeout: 3000 }).trim();
-    const charging = execSync("pmset -g batt 2>/dev/null | grep -o 'AC Power'", { encoding: 'utf8', timeout: 3000 }).trim();
+    const batteryRaw = execSync("/usr/bin/pmset -g batt 2>/dev/null | /usr/bin/grep -o '[0-9]*%' | head -1 | /usr/bin/tr -d '%'", { encoding: 'utf8', timeout: 3000 }).trim();
+    let charging = '0';
+    try { charging = execSync("/usr/bin/pmset -g batt 2>/dev/null | /usr/bin/grep -c 'AC Power'", { encoding: 'utf8', timeout: 3000 }).trim(); } catch { charging = '0'; }
     
     // CPU
     const cpuRaw = execSync("ps -A -o %cpu | awk '{s+=$1} END {printf \"%.1f\", s}'", { encoding: 'utf8', timeout: 5000 }).trim();
@@ -115,7 +116,7 @@ export function getInteroception() {
     return {
       battery: {
         level: parseInt(batteryRaw || '100') / 100,
-        charging: charging.includes('AC')
+        charging: charging !== '0' && charging !== ''
       },
       cpu: {
         utilization: Math.min(1, parseFloat(cpuRaw || '0') / 100),

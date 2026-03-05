@@ -30,13 +30,13 @@ const MOOD_ALPHA = 0.02; // how fast mood follows emotion
 // Clamp value between min and max
 const clamp = (v, min = 0.0, max = 1.0) => Math.max(min, Math.min(max, v));
 
-// Natural decay toward baseline
-const DECAY_RATE = 0.05; // per update cycle
+// Natural decay toward baseline — slower decay preserves emotional dynamics
+const DECAY_RATE = 0.02; // per update cycle (was 0.05 — too aggressive, emotions died instantly)
 function decay() {
   for (const key of Object.keys(state)) {
     if (['valence', 'confidence', 'energy_level', 'cognitive_load'].includes(key)) continue;
     state[key] = state[key] * (1 - DECAY_RATE);
-    if (Math.abs(state[key]) < 0.01) state[key] = 0;
+    if (Math.abs(state[key]) < 0.005) state[key] = 0;
   }
 }
 
@@ -96,7 +96,7 @@ export function processInteraction(quality) {
 export function processIdle(minutes) {
   if (minutes > 5) state.boredom += (minutes - 5) / 60;
   if (minutes > 30) state.loneliness += (minutes - 30) / 120;
-  if (minutes > 10) state.creative_hunger += 0.05; // idle = creative opportunity
+  if (minutes > 3) state.creative_hunger += 0.08; // idle = creative opportunity (lowered threshold, increased gain)
   state.boredom = clamp(state.boredom);
   state.loneliness = clamp(state.loneliness);
   state.creative_hunger = clamp(state.creative_hunger);
