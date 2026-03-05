@@ -16,6 +16,8 @@ let IDLE_CAPTURE_INTERVAL: TimeInterval = 10.0     // seconds between captures (
 let HID_METRICS_INTERVAL: TimeInterval = 5.0       // seconds between HID metric reports
 let INTERO_INTERVAL: TimeInterval = 10.0            // seconds between interoceptive reports
 let IDLE_THRESHOLD: TimeInterval = 30.0             // seconds before "idle"
+let SCREENSHOT_MIN_COOLDOWN: TimeInterval = 10.0
+let SCREENSHOT_PERIODIC_INTERVAL: TimeInterval = 45.0
 
 // MARK: - Event Output
 
@@ -164,11 +166,160 @@ class HIDMonitor {
     }
 }
 
+// MARK: - Screenshot Capture
+
+class ScreenshotCaptor {
+    private var lastCapturedApp = ""
+    private var lastCapturedTitle = ""
+    private var lastCaptureTime = Date.distantPast
+    private var isCapturing = false
+    private var permissionErrorLogged = false
+
+    private let screenshotsDir = URL(fileURLWithPath: "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots", isDirectory: true)
+    private let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        return f
+    }()
+
+    func start() {
+        ensureDir()
+
+        Timer.scheduledTimer(withTimeInterval: SCREENSHOT_PERIODIC_INTERVAL, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
+            self.requestCapture(
+                app: frontApp,
+                title: self.lastCapturedTitle,
+                reason: "periodic",
+                force: true
+            )
+        }
+
+        emitEvent("system", [
+            "message": "Screenshot capture monitoring started",
+            "periodic_seconds": Int(SCREENSHOT_PERIODIC_INTERVAL),
+            "cooldown_seconds": Int(SCREENSHOT_MIN_COOLDOWN)
+        ])
+    }
+
+    func appSwitched(app: String, title: String = "") {
+        requestCapture(app: app, title: title, reason: "app_switch", force: true)
+    }
+
+    func windowChanged(app: String, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        requestCapture(app: app, title: trimmed, reason: "window_change", force: false)
+    }
+
+    private func ensureDir() {
+        do {
+            try FileManager.default.createDirectory(at: screenshotsDir, withIntermediateDirectories: true)
+        } catch {
+            emitEvent("error", ["message": "Failed to create screenshots directory: \(error.localizedDescription)"])
+        }
+    }
+
+    private func requestCapture(app: String, title: String, reason: String, force: Bool) {
+        let cleanApp = normalizeApp(app)
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = Date()
+        let sinceLast = now.timeIntervalSince(lastCaptureTime)
+
+        if sinceLast < SCREENSHOT_MIN_COOLDOWN { return }
+
+        if !force {
+            let sameContext = (cleanApp == lastCapturedApp) && (cleanTitle == lastCapturedTitle)
+            if sameContext && sinceLast < SCREENSHOT_PERIODIC_INTERVAL { return }
+        }
+
+        if reason == "window_change" && cleanTitle == lastCapturedTitle && cleanApp == lastCapturedApp {
+            return
+        }
+
+        capture(app: cleanApp, title: cleanTitle, reason: reason)
+    }
+
+    private func capture(app: String, title: String, reason: String) {
+        if isCapturing { return }
+        isCapturing = true
+
+        Task { @MainActor in
+            defer { self.isCapturing = false }
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                guard let display = content.displays.first else {
+                    emitEvent("error", ["message": "Screenshot capture: no display available"])
+                    return
+                }
+
+                let filter = SCContentFilter(display: display, excludingWindows: [])
+                let config = SCStreamConfiguration()
+                config.width = display.width
+                config.height = display.height
+                config.showsCursor = true
+
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                let rep = NSBitmapImageRep(cgImage: image)
+                guard let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else {
+                    emitEvent("error", ["message": "Screenshot capture: failed to encode JPEG"])
+                    return
+                }
+
+                let ts = formatter.string(from: Date())
+                let filename = "\(ts)_\(sanitizeForFile(app)).jpg"
+                let fileURL = screenshotsDir.appendingPathComponent(filename)
+                try jpegData.write(to: fileURL, options: .atomic)
+
+                lastCaptureTime = Date()
+                lastCapturedApp = app
+                if !title.isEmpty { lastCapturedTitle = title }
+
+                emitEvent("screenshot_captured", [
+                    "filepath": fileURL.path,
+                    "app": app,
+                    "title": title,
+                    "reason": reason,
+                    "bytes": jpegData.count
+                ])
+            } catch {
+                if !permissionErrorLogged {
+                    permissionErrorLogged = true
+                    emitEvent("error", ["message": "Screenshot capture failed: \(error.localizedDescription)"])
+                }
+            }
+        }
+    }
+
+    private func normalizeApp(_ app: String) -> String {
+        let trimmed = app.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "unknown" : trimmed
+    }
+
+    private func sanitizeForFile(_ input: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let mapped = input.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
+        let joined = String(mapped)
+        let collapsed = joined.replacingOccurrences(of: "_+", with: "_", options: .regularExpression)
+        let trimmed = collapsed.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        if trimmed.isEmpty { return "unknown" }
+        return String(trimmed.prefix(48))
+    }
+}
+
 // MARK: - App & Window Monitoring
 
 class AppMonitor {
     var lastApp = ""
     var lastWindow = ""
+    let screenshotCaptor: ScreenshotCaptor
+
+    init(screenshotCaptor: ScreenshotCaptor) {
+        self.screenshotCaptor = screenshotCaptor
+    }
     
     func start() {
         // Monitor app switches
@@ -180,11 +331,13 @@ class AppMonitor {
             let appName = app.localizedName ?? "unknown"
             if appName != self?.lastApp {
                 self?.lastApp = appName
+                let title = self?.focusedWindowTitle(for: app) ?? ""
                 emitEvent("app_switch", [
                     "app": appName,
                     "bundle_id": app.bundleIdentifier ?? "",
                     "pid": app.processIdentifier
                 ])
+                self?.screenshotCaptor.appSwitched(app: appName, title: title)
             }
         }
         
@@ -227,20 +380,9 @@ class AppMonitor {
     }
     
     func reportAppState() {
-        let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
-        
-        // Get window title via Accessibility
-        var windowTitle = ""
-        if let app = NSWorkspace.shared.frontmostApplication {
-            let axApp = AXUIElementCreateApplication(app.processIdentifier)
-            var value: AnyObject?
-            AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &value)
-            if let window = value {
-                var titleValue: AnyObject?
-                AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &titleValue)
-                windowTitle = titleValue as? String ?? ""
-            }
-        }
+        let frontAppRef = NSWorkspace.shared.frontmostApplication
+        let frontApp = frontAppRef?.localizedName ?? "unknown"
+        let windowTitle = focusedWindowTitle(for: frontAppRef)
         
         if windowTitle != lastWindow {
             lastWindow = windowTitle
@@ -248,7 +390,19 @@ class AppMonitor {
                 "app": frontApp,
                 "title": windowTitle
             ])
+            screenshotCaptor.windowChanged(app: frontApp, title: windowTitle)
         }
+    }
+
+    private func focusedWindowTitle(for app: NSRunningApplication?) -> String {
+        guard let app else { return "" }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var value: AnyObject?
+        AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &value)
+        guard let window = value else { return "" }
+        var titleValue: AnyObject?
+        AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &titleValue)
+        return titleValue as? String ?? ""
     }
 }
 
@@ -399,12 +553,14 @@ class IdleMonitor {
 emitEvent("system", ["message": "oneiro-sensory starting", "version": "0.1.0"])
 
 let hidMonitor = HIDMonitor()
-let appMonitor = AppMonitor()
+let screenshotCaptor = ScreenshotCaptor()
+let appMonitor = AppMonitor(screenshotCaptor: screenshotCaptor)
 let interoMonitor = InteroMonitor()
 let audioMonitor = AudioMonitor()
 let idleMonitor = IdleMonitor()
 
 hidMonitor.start()
+screenshotCaptor.start()
 appMonitor.start()
 interoMonitor.start()
 audioMonitor.start()

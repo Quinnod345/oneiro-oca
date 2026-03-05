@@ -5,6 +5,7 @@ import oca from './index.js';
 import motor from './motor/engine.js';
 import { pool } from './event-bus.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
+import visualMemory from './sensory/screenshot-indexer.js';
 
 export const ocaRouter = Router();
 
@@ -54,6 +55,44 @@ ocaRouter.get('/oca/vision', async (req, res) => {
       const fresh = await sensory.default.analyzeScreenshot();
       res.json(fresh || { error: 'no screenshots available' });
     }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Semantic visual memory search
+ocaRouter.get('/oca/visual-memory', async (req, res) => {
+  try {
+    const query = String(req.query.query || '').trim();
+    if (!query) return res.status(400).json({ error: 'query required' });
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit, 10) || 10));
+    const results = await visualMemory.searchVisualMemory(query, limit);
+    res.json({ query, limit, results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Time-range visual memory timeline
+ocaRouter.get('/oca/visual-memory/timeline', async (req, res) => {
+  try {
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    const app = req.query.app ? String(req.query.app) : null;
+    const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit, 10) || 200));
+    const timeline = await visualMemory.getVisualMemoryTimeline({ from, to, app, limit });
+    res.json({ from, to, app, limit, timeline });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Most recent visual memories
+ocaRouter.get('/oca/visual-memory/recent', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 20));
+    const recent = await visualMemory.getRecentVisualMemory(limit);
+    res.json({ limit, recent });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

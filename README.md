@@ -23,6 +23,33 @@ A cognitive fork of [OpenClaw](https://github.com/openclaw/openclaw) · Built by
 
 ---
 
+## Quick Start
+
+### Prerequisites
+
+- macOS 14+ (Sequoia recommended)
+- Node.js 20+
+- PostgreSQL 15+ with pgvector (`brew install postgresql@16`)
+- Swift 5.9+ (`xcode-select --install`)
+- Anthropic API key
+- OpenAI API key
+
+### Install
+
+```bash
+git clone https://github.com/Quinnod345/oneiro-oca.git
+cd oneiro-oca
+bash bootstrap.sh
+```
+
+Edit `.env` with your API keys, then start OCA:
+
+```bash
+npm start
+```
+
+---
+
   
 
 
