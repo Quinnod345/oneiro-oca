@@ -388,6 +388,7 @@ GET  /oca/goals           # Active goal tree
 GET  /oca/reflect         # Metacognition report (biases, calibration, stuck states)
 GET  /oca/hypotheses      # Pending predictions + calibration curve
 GET  /oca/intentions      # Prospective memory (pending + triggered)
+GET  /oca/neural          # Live neural connection graph (dynamic synapses)
 ```
 
 </details>
@@ -433,6 +434,26 @@ POST /oca/motor/open      # Open URL {url}
 
 <br>
 
+## 🧠 Living Neural Topology
+
+The neural map is no longer just a static architecture diagram.
+
+- `mind.js` now runs a continuous OCA tick loop (default every 15s, configurable with `OCA_TICK_MS`)
+- Synapses are persisted in `neural_connections` and exposed via `GET /oca/neural`
+- Connections are formed from:
+  - consolidation-derived causal links
+  - creative memory bridging (`/oca/create` with `connection` / `dream`)
+  - co-occurrence patterns in cognitive events
+  - deterministic non-LLM fallback co-occurrence from live status signals
+- Synapses strengthen on reactivation and decay/prune over time
+- `web/neural.html` supports pan/zoom and visualizes connection birth, strength, and decay
+
+<br>
+
+---
+
+<br>
+
 ## 📁 Modules
 
 | File | Description |
@@ -458,9 +479,11 @@ POST /oca/motor/open      # Open URL {url}
 | `evaluation/chinese-room-meter.js` | 7-component understanding measurement |
 | `openclaw-bridge.js` | OpenClaw ↔ OCA integration layer |
 | `cognitive-loop.js` | Main thinking loop (adaptive cycle, mode-aware) |
+| `neural-connections.js` | Synapse graph persistence, co-occurrence ingestion, decay/prune maintenance |
 | `api-routes.js` | 30+ HTTP endpoints for all layers |
 | `index.js` | Orchestrator tying all layers together |
 | `migrations/001_foundation.sql` | Complete database schema (25+ tables) |
+| `migrations/002_neural_connections.sql` | Neural connection table + indexes for living topology |
 
 <br>
 

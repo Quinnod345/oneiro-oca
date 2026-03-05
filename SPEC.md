@@ -271,9 +271,22 @@ The system runs as a constellation of coordinated processes under launchd:
 | `oneiro-deliberation` | Adversarial debate cycles | On-demand (triggered by decisions) | Medium |
 | `oneiro-creative` | Dream states and synthesis | Periodic (low-activity windows) | Low |
 | `oneiro-executive` | Global workspace, attention, goals | Every 1-5 seconds | Highest |
-| `oneiro-mind` | LLM reasoning interface (existing mind.js) | On-demand | Medium |
+| `oneiro-mind` | Core runtime (`mind.js`) + periodic OCA cycle tick | Continuous (15s default tick + thought loop) | Medium |
 
-All processes communicate through a shared PostgreSQL database (existing pgvector instance) and a local event bus (Unix domain socket or Redis pub/sub).
+All processes communicate through a shared PostgreSQL database (existing pgvector instance) and a local event bus.
+
+### 3.4 Living Synapse Graph (Implemented)
+
+The runtime now includes an explicit neural topology layer for dynamic inter-layer association:
+
+- **Persistence:** `neural_connections` table (`from_layer`, `to_layer`, `connection_type`, `strength`, `last_activated`, `activation_count`, metadata)
+- **Formation paths:**
+  - consolidation outputs (`consolidation` links)
+  - creative memory bridging and dream novelty extraction (`creative` / `dream` links)
+  - event co-occurrence ingestion (`co_occurrence` links)
+  - deterministic status-driven fallback co-occurrence (non-LLM)
+- **Dynamics:** connections strengthen on repeated activation; inactive links decay and are pruned
+- **Exposure:** `GET /oca/neural` provides the live graph for visualization and tooling
 
 ---
 

@@ -14,6 +14,7 @@ import creative from './creative/engine.js';
 import sensory from './sensory/perception.js';
 import executive from './executive/engine.js';
 import prospective from './memory/prospective.js';
+import { ingestCoOccurrenceConnections, maintainSynapses } from './neural-connections.js';
 
 export const layers = {
   emotion, hypothesis, episodic, semantic, procedural,
@@ -47,6 +48,18 @@ export async function cycle() {
   
   // 3. HYPOTHESIS: Check for expired, testable hypotheses
   await hypothesis.expireOverdue();
+
+  // 3.5 SYNAPTIC DYNAMICS: form co-occurrence links, decay/prune old links
+  let synapseResult = null;
+  if (cycleCount % 10 === 0) {
+    try {
+      const co = await ingestCoOccurrenceConnections({ windowSeconds: 20, maxPairs: 40 });
+      const maintenance = await maintainSynapses();
+      synapseResult = { ...co, ...maintenance };
+    } catch (e) {
+      console.error('[oca] synapse maintenance error:', e.message);
+    }
+  }
   
   // 4. CONSOLIDATION: Run during low activity (every 100 cycles)
   if (cycleCount % 100 === 0 && effects.task_switch_pressure > 0.3) {
@@ -63,7 +76,8 @@ export async function cycle() {
     elapsed: Date.now() - t0,
     emotion: emotionResult.state,
     effects,
-    meta: metaResult
+    meta: metaResult,
+    synapses: synapseResult
   };
 }
 

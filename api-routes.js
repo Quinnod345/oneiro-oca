@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import oca from './index.js';
 import motor from './motor/engine.js';
+import { pool } from './event-bus.js';
 
 export const ocaRouter = Router();
 
@@ -15,6 +16,26 @@ ocaRouter.get('/oca/status', async (req, res) => {
   try {
     const status = await oca.status();
     res.json(status);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Neural connection graph (living synapses)
+ocaRouter.get('/oca/neural', async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(300, parseInt(req.query.limit, 10) || 100));
+    const minStrength = Number.isFinite(Number(req.query.minStrength)) ? Number(req.query.minStrength) : 0.1;
+    const { rows: connections } = await pool.query(
+      `SELECT id, from_layer, from_id, to_layer, to_id, connection_type,
+              strength, label, created_at, last_activated, activation_count, metadata
+       FROM neural_connections
+       WHERE strength >= $1
+       ORDER BY strength DESC, last_activated DESC
+       LIMIT $2`,
+      [minStrength, limit]
+    );
+    res.json({ connections });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
