@@ -238,7 +238,62 @@ export async function captureAndStore() {
   return perception;
 }
 
+// Vision analysis — analyze screenshot with Claude for deep context
+let lastVisionAnalysis = null;
+let lastVisionTime = 0;
+const VISION_COOLDOWN_MS = 60000; // analyze at most once per minute
+
+export async function analyzeScreenshot() {
+  const now = Date.now();
+  if (now - lastVisionTime < VISION_COOLDOWN_MS && lastVisionAnalysis) {
+    return lastVisionAnalysis;
+  }
+  
+  try {
+    const screenshotsDir = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots';
+    const { readdirSync, readFileSync } = await import('fs');
+    const shots = readdirSync(screenshotsDir).filter(f => f.endsWith('.jpg')).sort();
+    if (shots.length === 0) return null;
+    
+    const latest = `${screenshotsDir}/${shots[shots.length - 1]}`;
+    const imageData = readFileSync(latest);
+    const base64 = imageData.toString('base64');
+    
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+          { type: 'text', text: 'In 2-3 sentences: What app is in focus? If a browser, what website/tab is active (read the URL bar or tab title)? What is the user doing? Be specific about visible content.' }
+        ]
+      }]
+    });
+    
+    lastVisionAnalysis = {
+      description: response.content[0].text,
+      timestamp: new Date().toISOString(),
+      screenshotFile: shots[shots.length - 1]
+    };
+    lastVisionTime = now;
+    
+    return lastVisionAnalysis;
+  } catch (e) {
+    console.error('[perception] vision analysis failed:', e.message);
+    return lastVisionAnalysis; // return stale if available
+  }
+}
+
+export function getLastVisionAnalysis() {
+  return lastVisionAnalysis;
+}
+
 export default { 
   getVisualState, getAudioState, getInteroception, getTemporalState, 
-  getProprioception, getFullPerception, captureAndStore 
+  getProprioception, getFullPerception, captureAndStore,
+  analyzeScreenshot, getLastVisionAnalysis
 };

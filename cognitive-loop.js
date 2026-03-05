@@ -5,6 +5,7 @@ import { pool, emit, on } from './event-bus.js';
 import oca from './index.js';
 import prospective from './memory/prospective.js';
 import swiftSensory from './sensory/swift-bridge.js';
+import sensory from './sensory/perception.js';
 import { execSync } from 'child_process';
 
 const MAX_WORKING_MEMORY = 7;
@@ -24,6 +25,7 @@ let simulationCooldown = 0;
 let creativeCooldown = 0;
 let goalReviewCooldown = 0;
 let biasScanCooldown = 0;
+let visionCooldown = 0;
 
 // Interoceptive sensing
 function getInteroception() {
@@ -104,6 +106,28 @@ async function think() {
     intero.thermal.throttling ? 1 : 0
   );
   oca.layers.emotion.processIdle(activity.idleSeconds / 60);
+  
+  // ── VISION ANALYSIS (every 20 cycles) ──────────────
+  visionCooldown = Math.max(0, visionCooldown - 1);
+  if (visionCooldown <= 0) {
+    visionCooldown = 20;
+    try {
+      const vision = await sensory.analyzeScreenshot();
+      if (vision) {
+        await oca.layers.executive.addToWorkspace(
+          'vision_analysis',
+          { description: vision.description, timestamp: vision.timestamp },
+          'visual_cortex',
+          0.5
+        ).catch(() => {});
+        if (result.cycle % 20 === 0) {
+          console.log(`[oca] 👁 vision: ${vision.description.slice(0, 80)}...`);
+        }
+      }
+    } catch (e) {
+      visionCooldown = 40; // back off on error
+    }
+  }
   
   // App switch = novelty
   const appSwitched = visual.frontApp !== previousApp && previousApp;
