@@ -12,6 +12,8 @@ const BINARY_PATH = join(__dirname, 'swift/.build/debug/oneiro-sensory');
 let process = null;
 let lastHIDMetrics = {};
 let lastInteroception = {};
+let lastFrontApp = null;
+let lastWindowTitle = null;
 let eventCount = 0;
 
 // Start the Swift sensory binary
@@ -75,6 +77,7 @@ async function handleEvent(event) {
       break;
       
     case 'app_switch':
+      lastFrontApp = payload.newApp || payload.app || payload.name || null;
       await emit('perception_update', 'sensory_swift', {
         channel: 'proprioceptive',
         event: 'app_switch',
@@ -83,6 +86,7 @@ async function handleEvent(event) {
       break;
       
     case 'window_change':
+      lastWindowTitle = payload.title || payload.windowTitle || null;
       await emit('perception_update', 'sensory_swift', {
         channel: 'visual',
         event: 'window_change',
@@ -142,6 +146,8 @@ async function handleEvent(event) {
 // Get latest sensor data
 export function getLatestHID() { return lastHIDMetrics; }
 export function getLatestInteroception() { return lastInteroception; }
+export function getLatestFrontApp() { return lastFrontApp; }
+export function getLatestWindowTitle() { return lastWindowTitle; }
 export function getEventCount() { return eventCount; }
 
 // Stop the binary
@@ -166,4 +172,4 @@ export async function ensureTable() {
   `).catch(() => {});
 }
 
-export default { start, stop, getLatestHID, getLatestInteroception, getEventCount, ensureTable };
+export default { start, stop, getLatestHID, getLatestInteroception, getLatestFrontApp, getLatestWindowTitle, getEventCount, ensureTable };

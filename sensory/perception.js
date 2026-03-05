@@ -1,14 +1,19 @@
-// OCA Sensory Cortex — perception without Swift binary
-// Uses shell commands and macOS APIs accessible from Node
-// This is the bridge layer until oneiro-sensory (Swift) is built
+// OCA Sensory Cortex — multi-modal perception
+// Tries Swift binary cached data first, falls back to osascript
 import { execSync } from 'child_process';
 import { pool, emit } from '../event-bus.js';
+import swiftBridge from './swift-bridge.js';
 
 // === VISUAL PERCEPTION ===
 
 // Get current screen state (structured, not pixels)
 export function getVisualState() {
+  // Try Swift binary cached data first (works in launchd)
+  const swiftApp = swiftBridge.getLatestFrontApp();
+  const swiftTitle = swiftBridge.getLatestWindowTitle();
+  
   try {
+    // Try osascript for full data (works in interactive shells)
     const frontApp = execSync(
       "osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true'",
       { encoding: 'utf8', timeout: 3000 }
@@ -24,7 +29,6 @@ export function getVisualState() {
       { encoding: 'utf8', timeout: 3000 }
     ).trim();
     
-    // Running apps
     const runningApps = execSync(
       "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false'",
       { encoding: 'utf8', timeout: 3000 }
@@ -38,7 +42,14 @@ export function getVisualState() {
       timestamp: new Date().toISOString()
     };
   } catch (e) {
-    return { frontApp: 'unknown', windowTitle: '', windowCount: 0, runningApps: [], timestamp: new Date().toISOString() };
+    // osascript failed (launchd context) — use Swift binary data
+    return { 
+      frontApp: swiftApp || 'unknown', 
+      windowTitle: swiftTitle || '', 
+      windowCount: 0, 
+      runningApps: [], 
+      timestamp: new Date().toISOString() 
+    };
   }
 }
 
