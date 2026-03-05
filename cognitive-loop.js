@@ -9,6 +9,7 @@ import { execSync } from 'child_process';
 
 const MAX_WORKING_MEMORY = 7;
 let previousPresence = 'unknown';
+let lastKnownFrontApp = 'unknown';
 let previousApp = null;
 
 const MIN_CYCLE_MS = 5000;
@@ -61,6 +62,13 @@ function getUserActivity(sensoryFrontApp = null) {
     } catch {}
   }
   
+  // Cache last known frontApp to avoid "unknown" flicker
+  if (frontApp && frontApp !== 'unknown') {
+    lastKnownFrontApp = frontApp;
+  } else {
+    frontApp = lastKnownFrontApp;
+  }
+  
   return {
     idleSeconds,
     presence: idleSeconds < 30 ? 'present' : idleSeconds < 300 ? 'idle' : 'away',
@@ -100,7 +108,31 @@ async function think() {
   // App switch = novelty
   const appSwitched = visual.frontApp !== previousApp && previousApp;
   if (appSwitched) {
-    oca.layers.emotion.processInformationGain(0.3);
+    oca.layers.emotion.processInformationGain(0.4);
+    oca.layers.emotion.processSurprise(0.15, 'perception', `App changed: ${previousApp} → ${visual.frontApp}`);
+  }
+  
+  // Drive curiosity from environmental complexity
+  const runningAppCount = (visual.runningApps || []).length;
+  if (runningAppCount > 10) {
+    oca.layers.emotion.processInformationGain(0.05); // Complex environment = mild curiosity
+  }
+  
+  // Drive creative_hunger when idle
+  if (activity.idleSeconds > 120) {
+    oca.layers.emotion.processIdle(activity.idleSeconds / 60);
+  }
+  
+  // Baseline curiosity — every cycle, inject small curiosity from perceiving the world
+  // This prevents the system from being emotionally dead during normal operation
+  oca.layers.emotion.processInformationGain(0.02);
+  
+  // Working/consolidating modes boost creative hunger
+  if (mode === 'working' || mode === 'consolidating') {
+    const emotionPre = oca.layers.emotion.getState();
+    if (emotionPre.creative_hunger < 0.3) {
+      oca.layers.emotion.processIdle(5); // inject as if 5 min idle (adds 0.08 creative_hunger)
+    }
   }
   
   // Presence change events
@@ -144,21 +176,28 @@ async function think() {
       ).catch(() => {});
     }
     
-    // Test expired hypotheses
-    const expired = await oca.layers.hypothesis.expireOverdue();
-    for (const h of expired.slice(0, 5)) {
-      const wasRight = h.prediction?.includes(visual.frontApp);
+    // Test overdue hypotheses BEFORE expiring them (so test() can still find them as 'pending')
+    const { rows: overdue } = await pool.query(
+      `SELECT id, claim, prediction, confidence FROM hypotheses 
+       WHERE status = 'pending' AND prediction_deadline < NOW() LIMIT 5`
+    );
+    for (const h of overdue) {
       try {
-        await oca.layers.hypothesis.test(h.id, 
-          `Current app: ${visual.frontApp}. Prediction ${wasRight ? 'confirmed' : 'refuted'}.`
+        const result = await oca.layers.hypothesis.test(h.id, 
+          `Current app: ${visual.frontApp}. Time elapsed — testing prediction.`
         );
         // Feed result to emotion
-        if (wasRight) {
+        if (result.confirmed) {
           oca.layers.emotion.processSuccess('prediction');
+          console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
         } else {
           oca.layers.emotion.processSurprise(0.3, 'prediction', `Expected: ${h.prediction}, got: ${visual.frontApp}`);
+          console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
         }
-      } catch {}
+      } catch (e) {
+        // If test fails, expire it
+        await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
+      }
     }
   }
   
@@ -216,10 +255,24 @@ async function think() {
         }
       }
       
-      // Track active biases from metacognition
+      // ALWAYS record active biases as metacognitive observations
       if (meta.active_biases && meta.active_biases.length > 0) {
-        console.log(`[oca] 🪞 ${meta.active_biases.length} active biases: ${meta.active_biases.map(b => b.type).join(', ')}`);
+        for (const bias of meta.active_biases) {
+          await pool.query(
+            `INSERT INTO metacognitive_observations (target_layer, observation_type, description, evidence, severity) VALUES ($1, $2, $3, $4, $5)`,
+            ['cognitive_loop', 'active_bias', `${bias.type}: ${bias.countermeasure}`, JSON.stringify({ severity: bias.severity }), bias.severity || 0.3]
+          ).catch(() => {});
+        }
+        console.log(`[oca] 🪞 ${meta.active_biases.length} active biases recorded: ${meta.active_biases.map(b => b.type).join(', ')}`);
       }
+      
+      // Record overall health status as observation
+      await pool.query(
+        `INSERT INTO metacognitive_observations (target_layer, observation_type, description, evidence, severity) VALUES ($1, $2, $3, $4, $5)`,
+        ['system', 'health_check', meta.healthy ? 'System healthy' : 'System unhealthy', 
+         JSON.stringify({ biases: meta.active_biases?.length || 0, stuck: meta.stuck_issues?.length || 0 }),
+         meta.healthy ? 0.1 : 0.6]
+      ).catch(() => {});
       
       if (!meta.healthy) {
         console.log(`[oca] 🪞 metacognition: system unhealthy`);
@@ -282,8 +335,8 @@ async function think() {
   dreamCooldown = Math.max(0, dreamCooldown - 1);
   creativeCooldown = Math.max(0, creativeCooldown - 1);
   
-  // Dream state: consolidating mode + creative hunger
-  if (mode === 'consolidating' && emotionState.creative_hunger > 0.2 && dreamCooldown <= 0) {
+  // Dream state: consolidating/working mode + creative hunger (lowered threshold, more modes)
+  if ((mode === 'consolidating' || mode === 'working') && emotionState.creative_hunger > 0.05 && dreamCooldown <= 0) {
     console.log('[oca] 💭 entering dream state...');
     try {
       const dream = await oca.create('dream');
@@ -298,9 +351,9 @@ async function think() {
     }
   }
   
-  // Cross-domain connection: when curiosity is high and enough semantic memory exists
-  if (creativeCooldown <= 0 && emotionState.curiosity > 0.15) {
-    creativeCooldown = 40;
+  // Cross-domain connection: lower threshold, also trigger on boredom or creative_hunger
+  if (creativeCooldown <= 0 && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.1)) {
+    creativeCooldown = 25;
     try {
       const semanticCount = (await pool.query('SELECT COUNT(*) FROM semantic_memory')).rows[0].count;
       if (parseInt(semanticCount) >= 2) {
@@ -331,25 +384,33 @@ async function think() {
   // ── 11. WORLD SIMULATION ──────────────────────────
   simulationCooldown = Math.max(0, simulationCooldown - 1);
   
-  // Simulate when we have a meaningful context change
-  if (simulationCooldown <= 0 && presenceChanged && activity.presence === 'away') {
-    simulationCooldown = 60;
+  // Simulate on presence change OR periodically every 100 cycles
+  if (simulationCooldown <= 0 && ((presenceChanged && activity.presence === 'away') || result.cycle % 100 === 0)) {
+    simulationCooldown = 50;
     try {
-      const sim = await oca.imagine(
-        'User departed — what will happen next?',
-        { 
-          lastApp: visual.frontApp, 
-          lastPresence: previousPresence,
-          timeOfDay: new Date().getHours(),
-          recentApps: [previousApp, visual.frontApp].filter(Boolean)
-        },
-        ['User returns within 30 minutes', 'User returns after 1+ hours', 'User does not return today']
-      );
+      const simPrompt = presenceChanged && activity.presence === 'away'
+        ? 'User departed — what will happen next?'
+        : `Current state: user is ${activity.presence} in ${visual.frontApp}. What patterns are emerging? What might happen in the next hour?`;
+      const simContext = { 
+        lastApp: visual.frontApp, 
+        lastPresence: previousPresence,
+        timeOfDay: new Date().getHours(),
+        recentApps: [previousApp, visual.frontApp].filter(Boolean),
+        battery: intero.battery.level,
+        emotionalState: { valence: emotionState.valence, arousal: emotionState.arousal }
+      };
+      const simOptions = presenceChanged
+        ? ['User returns within 30 minutes', 'User returns after 1+ hours', 'User does not return today']
+        : ['User continues current activity', 'User switches to creative work', 'User takes a break', 'User goes to sleep'];
+      
+      const sim = await oca.imagine(simPrompt, simContext, simOptions);
       if (sim?.id) {
         console.log(`[oca] 🌍 simulation: ${sim.predicted_states?.length || 0} predicted states`);
+        oca.layers.emotion.processInformationGain(0.2);
       }
     } catch (e) {
-      simulationCooldown = 120;
+      console.error('[oca] simulation error:', e.message);
+      simulationCooldown = 80;
     }
   }
   
@@ -420,26 +481,25 @@ async function think() {
   }
   
   // ── 14. PROSPECTIVE MEMORY CREATION ───────────────
-  // Create intentions based on patterns
+  // Create intentions based on patterns — with dedup check
   if (result.cycle % 75 === 0) {
     try {
-      const pendingIntentions = await pool.query(
-        `SELECT COUNT(*) FROM prospective_memory WHERE status = 'pending'`
+      // Check for existing identical intentions before creating
+      const { rows: existing } = await pool.query(
+        `SELECT intention FROM prospective_memory WHERE status = 'pending'`
       );
-      if (parseInt(pendingIntentions.rows[0].count) < 5) {
-        await prospective.intend(
-          'Run deep consolidation — enough episodic memories accumulated',
-          'condition',
-          { user_away: true, user_idle_minutes: 10 },
-          { priority: 0.6 }
-        ).catch(() => {});
-        
-        await prospective.intend(
-          'User returned — update emotional state with attachment/satisfaction',
-          'event',
-          { event: 'user_returns' },
-          { priority: 0.7 }
-        ).catch(() => {});
+      const existingSet = new Set(existing.map(r => r.intention));
+      
+      const consolidationIntention = 'Run deep consolidation — enough episodic memories accumulated';
+      const returnIntention = 'User returned — update emotional state with attachment/satisfaction';
+      
+      if (!existingSet.has(consolidationIntention)) {
+        await prospective.intend(consolidationIntention, 'condition', 
+          { user_away: true, user_idle_minutes: 10 }, { priority: 0.6 }).catch(() => {});
+      }
+      if (!existingSet.has(returnIntention)) {
+        await prospective.intend(returnIntention, 'event',
+          { event: 'user_returns' }, { priority: 0.7 }).catch(() => {});
       }
     } catch {}
   }

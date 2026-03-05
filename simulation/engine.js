@@ -64,7 +64,12 @@ You MUST respond in valid JSON only, no other text:
       max_tokens: 500
     });
     
-    const result = JSON.parse(response.content[0].text);
+    // Strip markdown code fences if Claude wraps the JSON
+    let rawSimText = response.content[0].text.trim();
+    if (rawSimText.startsWith('```')) {
+      rawSimText = rawSimText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    const result = JSON.parse(rawSimText);
     
     // Store simulation
     const { rows } = await pool.query(

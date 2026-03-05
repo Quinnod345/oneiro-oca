@@ -56,7 +56,12 @@ You MUST respond in valid JSON only, no other text:
       max_tokens: 1024
     });
     
-    const extracted = JSON.parse(response.content[0].text);
+    // Strip markdown code fences if Claude wraps the JSON
+    let rawText = response.content[0].text.trim();
+    if (rawText.startsWith('```')) {
+      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    const extracted = JSON.parse(rawText);
     
     // 3. ABSTRACT: Create semantic memories from principles
     if (extracted.principles) {
