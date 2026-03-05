@@ -450,17 +450,22 @@ POST /oca/motor/open      # Open URL {url}
 
 ## 🧠 Living Neural Topology
 
-The neural map is no longer just a static architecture diagram.
+The neural map (`web/neural.html`) is a real-time, interactive cognitive architecture visualization.
 
-- `mind.js` now runs a continuous OCA tick loop (default every 15s, configurable with `OCA_TICK_MS`)
+**Backend — live synapse graph:**
+- `mind.js` runs a continuous OCA tick loop (default every 15s, configurable with `OCA_TICK_MS`)
 - Synapses are persisted in `neural_connections` and exposed via `GET /oca/neural`
-- Connections are formed from:
-  - consolidation-derived causal links
-  - creative memory bridging (`/oca/create` with `connection` / `dream`)
-  - co-occurrence patterns in cognitive events
-  - deterministic non-LLM fallback co-occurrence from live status signals
+- Connections form from consolidation causal links, creative memory bridging, co-occurrence patterns, and deterministic non-LLM fallback signals
 - Synapses strengthen on reactivation and decay/prune over time
-- `web/neural.html` supports pan/zoom and visualizes connection birth, strength, and decay
+
+**Frontend — `web/neural.js` + `web/neural.html`:**
+- **Draggable nodes:** click and drag any node to reposition it freely; connections follow in real-time; node pins in place with a dashed ring indicator; double-click releases the pin and resumes ambient drift
+- **Pan and zoom:** drag empty canvas to pan; scroll wheel to zoom (0.25×–4.0×)
+- **Wider default layout:** nodes spread further across the canvas in distinct clusters (memory left, reasoning right, higher cognition top, sensory bottom)
+- **Static vs. dynamic edge hierarchy:** structural backbone edges are clearly dominant (higher alpha, drawn on top); live synapse edges are visually subordinate (lower alpha, thinner, drawn underneath) — not the other way around
+- **Birth animations:** new synapses fade in with a traveling pulse along the edge
+- **Hover labels:** hovering a node shows a tooltip with live metrics; hovering a dynamic edge shows type and strength
+- **Info panel:** clicking a node opens a side panel with live data, static connections, and dynamic synapse list
 
 <br>
 

@@ -275,18 +275,31 @@ The system runs as a constellation of coordinated processes under launchd:
 
 All processes communicate through a shared PostgreSQL database (existing pgvector instance) and a local event bus.
 
-### 3.4 Living Synapse Graph (Implemented)
+### 3.4 Living Synapse Graph + Neural Map Visualization (Implemented)
 
-The runtime now includes an explicit neural topology layer for dynamic inter-layer association:
+The runtime includes an explicit neural topology layer for dynamic inter-layer association and a real-time interactive visualization.
 
+**Backend (synapse graph):**
 - **Persistence:** `neural_connections` table (`from_layer`, `to_layer`, `connection_type`, `strength`, `last_activated`, `activation_count`, metadata)
 - **Formation paths:**
   - consolidation outputs (`consolidation` links)
   - creative memory bridging and dream novelty extraction (`creative` / `dream` links)
   - event co-occurrence ingestion (`co_occurrence` links)
+  - causal intervention outcomes (`causal` links)
   - deterministic status-driven fallback co-occurrence (non-LLM)
-- **Dynamics:** connections strengthen on repeated activation; inactive links decay and are pruned
+- **Dynamics:** connections strengthen on repeated activation; inactive links decay and are pruned below threshold
 - **Exposure:** `GET /oca/neural` provides the live graph for visualization and tooling
+
+**Frontend (`web/neural.js` + `web/neural.html`):**
+- **Draggable nodes:** any node can be freely repositioned by dragging; connections follow in real-time; the node is pinned with a dashed indicator ring; double-clicking releases the pin and resumes ambient drift from the current position
+- **Pan and zoom:** drag empty canvas to pan; scroll wheel to zoom (0.25×–4.0×); hit testing uses world-space coordinates throughout
+- **Default layout:** nodes spread widely across the canvas in distinct clusters — memory (left), reasoning (right), higher cognition (top), sensory (bottom), emotion (center)
+- **Two-tier edge visual hierarchy:**
+  - Static structural edges (architecture backbone): higher alpha (~0.15–0.37), drawn above dynamic edges, with flow particles when active
+  - Live synapse edges: visually subordinate — lower alpha (~0.05–0.28), thinner lines, drawn first so static edges read clearly above them
+- **Birth animations:** new synapses fade in with a traveling pulse particle along the edge path
+- **Connection type legend:** nodes colored by cognitive category; live synapse types (consolidation, creative, co-occurrence, dream, causal) shown as distinct colored dashes
+- **Info panel:** clicking a node opens a side panel with live data, static connections, and dynamic synapse list sorted by strength
 
 ### 3.5 Prediction, Causality, and Benchmarking Loops (Implemented)
 
