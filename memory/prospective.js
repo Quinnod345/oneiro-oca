@@ -61,7 +61,11 @@ export async function check(currentState) {
       }
       
       case 'condition': {
-        // Check compound conditions
+        // Check compound conditions — require at least one recognized key
+        const recognizedKeys = ['battery_above','battery_below','user_idle_minutes','user_present','user_away','app_running','time_after','time_before'];
+        const hasRecognized = Object.keys(spec).some(k => recognizedKeys.includes(k));
+        if (!hasRecognized) break; // no recognized conditions = don't trigger
+        
         let allMet = true;
         if (spec.battery_above != null && (currentState.battery || 1) < spec.battery_above) allMet = false;
         if (spec.battery_below != null && (currentState.battery || 1) > spec.battery_below) allMet = false;
