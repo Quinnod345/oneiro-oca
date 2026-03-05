@@ -28,8 +28,101 @@ let goalReviewCooldown = 0;
 let biasScanCooldown = 0;
 let visionCooldown = 0;
 let hypothesisCooldown = 0;
+let hypothesisSlaCooldown = 0;
 let benchmarkCooldown = 0;
 let lastBenchmarkDate = null;
+let hypothesisGenerationMode = 'exploratory';
+
+const HYPOTHESIS_SLA_MINUTES = 25;
+const HYPOTHESIS_SLA_BATCH = 4;
+const HYPOTHESIS_SLA_CYCLES = 3;
+
+function parseHypothesisPayload(rawText) {
+  const raw = String(rawText || '').trim();
+  const deFenced = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  const attempts = [raw, deFenced];
+
+  for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+    if (match[1]) attempts.push(match[1].trim());
+  }
+
+  const arrStart = raw.indexOf('[');
+  const arrEnd = raw.lastIndexOf(']');
+  if (arrStart >= 0 && arrEnd > arrStart) {
+    attempts.push(raw.slice(arrStart, arrEnd + 1));
+  }
+
+  const objStart = raw.indexOf('{');
+  const objEnd = raw.lastIndexOf('}');
+  if (objStart >= 0 && objEnd > objStart) {
+    attempts.push(raw.slice(objStart, objEnd + 1));
+  }
+
+  const seen = new Set();
+  for (const candidate of attempts) {
+    if (!candidate) continue;
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const sanitized = candidate
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, '$1')
+      .trim();
+    const variants = candidate === sanitized ? [candidate] : [candidate, sanitized];
+
+    for (const variant of variants) {
+      try {
+        return JSON.parse(variant);
+      } catch {
+        // keep trying alternate payload extraction
+      }
+    }
+  }
+
+  return [];
+}
+
+function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode) {
+  const reasons = [];
+  const claim = String(candidate?.claim || '').trim();
+  const prediction = String(candidate?.prediction || '').trim();
+  const confidence = Number(candidate?.confidence || 0);
+  const deadlineMinutes = Math.max(3, Math.min(120, Number(candidate?.deadline_minutes || 15)));
+
+  if (!claim) reasons.push('missing_claim');
+  if (!prediction) reasons.push('missing_prediction');
+  if (claim.length < 18) reasons.push('claim_too_short');
+  if (claim.length > 160) reasons.push('claim_too_long');
+  if (prediction.length < 12) reasons.push('prediction_too_short');
+  if (prediction.length > 140) reasons.push('prediction_too_long');
+  if (!Number.isFinite(confidence) || confidence < 0.1 || confidence > 0.95) reasons.push('invalid_confidence');
+  if (!evaluation || typeof evaluation !== 'object') reasons.push('missing_structured_evaluation');
+
+  const vaguePattern = /\b(maybe|might|could|possibly|perhaps|somehow)\b/i;
+  if (vaguePattern.test(claim) || vaguePattern.test(prediction)) {
+    reasons.push('vague_language');
+  }
+  if (claim.includes('?') || prediction.includes('?')) {
+    reasons.push('question_format');
+  }
+
+  // Precision mode enforces stricter confidence ceiling and tighter claims.
+  if (mode === 'precision') {
+    if (confidence > 0.8) reasons.push('confidence_too_high_for_precision_mode');
+    if (claim.length > 120) reasons.push('claim_too_long_for_precision_mode');
+  }
+
+  return {
+    accepted: reasons.length === 0,
+    reasons,
+    claim,
+    prediction,
+    confidence,
+    deadlineMinutes
+  };
+}
 
 // Interoceptive sensing
 function getInteroception() {
@@ -62,7 +155,7 @@ function getUserActivity(sensoryFrontApp = null) {
   if (!frontApp || frontApp === 'unknown') {
     try {
       frontApp = execSync(
-        "/usr/bin/osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true'",
+        "/usr/bin/osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true' 2>/dev/null",
         { encoding: 'utf8', timeout: 3000 }
       ).trim() || 'unknown';
     } catch {}
@@ -191,6 +284,7 @@ async function think() {
   // ── 6. HYPOTHESIZE ────────────────────────────────
   // Form rich predictions from ALL available data
   if (activity.presence !== 'away') {
+    hypothesisSlaCooldown = Math.max(0, hypothesisSlaCooldown - 1);
     const pending = await oca.layers.hypothesis.getPendingTests(3);
     const pendingCount = pending.length;
     const hour = new Date().getHours();
@@ -271,6 +365,32 @@ async function think() {
       hypothesisCooldown = 10; // generate new hypotheses every 10 cycles
       
       try {
+        const diagnostics = await oca.layers.hypothesis
+          .diagnostics({ days: 7 })
+          .catch(() => null);
+        const verifiabilityRate = Number(diagnostics?.verifiability_rate);
+        const previousMode = hypothesisGenerationMode;
+        if (Number.isFinite(verifiabilityRate)) {
+          if (verifiabilityRate < 0.4) {
+            hypothesisGenerationMode = 'precision';
+          } else if (verifiabilityRate > 0.7) {
+            hypothesisGenerationMode = 'exploratory';
+          }
+        }
+        if (previousMode !== hypothesisGenerationMode && Number.isFinite(verifiabilityRate)) {
+          console.log(`[oca] 🔧 hypothesis mode -> ${hypothesisGenerationMode} (verifiability_rate=${verifiabilityRate.toFixed(2)})`);
+        }
+
+        const modeInstruction = hypothesisGenerationMode === 'precision'
+          ? `PRECISION MODE: prioritize low-ambiguity hypotheses that are easy to evaluate.
+- Prefer stable metrics (battery_pct, charging, presence, hour, idle_seconds).
+- Use short deadlines (5-20 minutes) and conservative confidence.
+- Avoid metaphorical or broad claims; every claim must have a direct metric/operator/value test.`
+          : `EXPLORATORY MODE: propose slightly broader behavioral/system hypotheses while staying testable.
+- You can use richer context (app switches, typing_wpm, memory pressure, front_app patterns).
+- Keep each hypothesis verifiable with an explicit metric/operator/value evaluation object.
+- Use realistic confidence and avoid duplicates.`;
+
         // Gather ALL available context
         const visionAnalysis = sensory.getLastVisionAnalysis?.()?.description || '';
         const recentApps = await pool.query(
@@ -318,6 +438,8 @@ async function think() {
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
           system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking concrete system state.
+Current generation mode: ${hypothesisGenerationMode.toUpperCase()}.
+${modeInstruction}
 
 Allowed metrics:
 - presence (present|idle|away)
@@ -353,28 +475,55 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
           temperature: 0.8,
         });
         
-        let rawText = response.content[0].text.trim();
-        if (rawText.startsWith('```')) {
-          rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-        }
-        
-        const hypotheses = JSON.parse(rawText);
+        const hypotheses = parseHypothesisPayload(response.content?.[0]?.text);
         let accepted = 0;
+        let rejected = 0;
         for (const h of (Array.isArray(hypotheses) ? hypotheses : [hypotheses]).slice(0, 3)) {
-          if (!h.claim || !h.prediction) continue;
           const evaluation = normalizeEvaluation(h.evaluation);
+          const quality = evaluateGeneratedHypothesisQuality(h, evaluation, hypothesisGenerationMode);
+          if (!quality.accepted) {
+            rejected++;
+            try {
+              await pool.query(
+                `INSERT INTO hypothesis_graveyard
+                   (hypothesis_id, domain, claim, prediction, confidence, status, archived_reason, evaluation, source_data, metadata)
+                 VALUES
+                   (NULL, $1, $2, $3, $4, 'rejected_preflight', $5, $6, $7, $8)`,
+                [
+                  h.domain || 'behavior',
+                  quality.claim || '[missing-claim]',
+                  quality.prediction || '[missing-prediction]',
+                  Number.isFinite(quality.confidence) ? quality.confidence : 0.5,
+                  quality.reasons.join(','),
+                  JSON.stringify({ candidate_evaluation: h.evaluation || null }),
+                  JSON.stringify({
+                    generator: 'llm_observation',
+                    mode: hypothesisGenerationMode,
+                    context_snapshot: contextSnapshot
+                  }),
+                  JSON.stringify({
+                    quality_reasons: quality.reasons
+                  })
+                ]
+              );
+            } catch {
+              // Graveyard table may not exist yet; keep generation resilient.
+            }
+            continue;
+          }
           if (!evaluation) continue;
-          const deadlineMin = Math.max(3, Math.min(120, h.deadline_minutes || 15));
+          const deadlineMin = quality.deadlineMinutes;
           await formIfNew(
             h.domain || 'behavior',
-            h.claim,
-            h.prediction,
+            quality.claim,
+            quality.prediction,
             { 
-              confidence: Math.max(0.1, Math.min(0.95, h.confidence || 0.5)),
+              confidence: Math.max(0.1, Math.min(0.95, quality.confidence || 0.5)),
               testType: 'passive_observation',
               deadline: new Date(Date.now() + deadlineMin * 60000).toISOString(),
               sourceData: {
                 generator: 'llm_observation',
+                mode: hypothesisGenerationMode,
                 evaluation,
                 context_snapshot: contextSnapshot,
               },
@@ -387,7 +536,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
           await addFallbackHypotheses();
           console.log('[oca] 🔮 generated deterministic fallback hypotheses');
         } else {
-          console.log(`[oca] 🔮 generated ${accepted} verifiable hypotheses from observation`);
+          console.log(`[oca] 🔮 generated ${accepted} verifiable hypotheses from observation (${rejected} rejected by quality gate)`);
         }
       } catch (e) {
         console.error('[oca] hypothesis generation error:', e.message);
@@ -439,6 +588,44 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         }
       } catch (e) {
         await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
+      }
+    }
+
+    // Hypothesis SLA: close stale pending predictions on a bounded cadence so
+    // evaluation coverage keeps climbing instead of leaving pending drift.
+    if (hypothesisSlaCooldown <= 0) {
+      hypothesisSlaCooldown = HYPOTHESIS_SLA_CYCLES;
+      const { rows: slaCandidates } = await pool.query(
+        `SELECT id, claim, prediction
+         FROM hypotheses
+         WHERE status = 'pending'
+           AND (
+             created_at < NOW() - $1::interval
+             OR (
+               prediction_deadline IS NOT NULL
+               AND prediction_deadline < NOW() + INTERVAL '2 minutes'
+             )
+           )
+         ORDER BY created_at ASC
+         LIMIT $2`,
+        [`${HYPOTHESIS_SLA_MINUTES} minutes`, HYPOTHESIS_SLA_BATCH]
+      );
+
+      let slaClosed = 0;
+      for (const h of slaCandidates) {
+        try {
+          const outcomeDesc = `SLA sweep snapshot: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
+          await oca.layers.hypothesis.test(h.id, {
+            description: outcomeDesc,
+            observed: observedState,
+          });
+          slaClosed += 1;
+        } catch (e) {
+          await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
+        }
+      }
+      if (slaClosed > 0) {
+        console.log(`[oca] ⏱ hypothesis SLA closed ${slaClosed} stale pending predictions`);
       }
     }
   }

@@ -10,6 +10,60 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function parseConsolidationPayload(rawText) {
+  const raw = String(rawText || '').trim();
+  const parseAttempts = [];
+  const deFenced = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+
+  parseAttempts.push(raw);
+  parseAttempts.push(deFenced);
+  for (const match of raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+    if (match[1]) parseAttempts.push(match[1].trim());
+  }
+
+  const objStart = raw.indexOf('{');
+  const objEnd = raw.lastIndexOf('}');
+  if (objStart >= 0 && objEnd > objStart) {
+    parseAttempts.push(raw.slice(objStart, objEnd + 1));
+  }
+
+  const seen = new Set();
+  for (const candidate of parseAttempts) {
+    if (!candidate) continue;
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const sanitized = candidate
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, '$1')
+      .trim();
+    const variants = candidate === sanitized ? [candidate] : [candidate, sanitized];
+
+    for (const variant of variants) {
+      try {
+        const parsed = JSON.parse(variant);
+        return {
+          principles: Array.isArray(parsed?.principles) ? parsed.principles : [],
+          procedures: Array.isArray(parsed?.procedures) ? parsed.procedures : [],
+          connections: Array.isArray(parsed?.connections) ? parsed.connections : [],
+          contradictions: Array.isArray(parsed?.contradictions) ? parsed.contradictions : []
+        };
+      } catch {
+        // continue trying candidates
+      }
+    }
+  }
+
+  return {
+    principles: [],
+    procedures: [],
+    connections: [],
+    contradictions: []
+  };
+}
+
 // Run a full consolidation cycle
 export async function consolidate() {
   const startedAt = new Date();
@@ -58,12 +112,7 @@ You MUST respond in valid JSON only, no other text:
       max_tokens: 1024
     });
     
-    // Strip markdown code fences if Claude wraps the JSON
-    let rawText = response.content[0].text.trim();
-    if (rawText.startsWith('```')) {
-      rawText = rawText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-    const extracted = JSON.parse(rawText);
+    const extracted = parseConsolidationPayload(response.content?.[0]?.text);
     
     // 3. ABSTRACT: Create semantic memories from principles
     if (extracted.principles) {
@@ -153,7 +202,9 @@ You MUST respond in valid JSON only, no other text:
             contradiction.reason || 'Consolidation contradiction',
             {
               contradictingConceptId,
-              episodeId: contradiction.evidence_episodes?.[0] || null,
+              episodeId: Number.isFinite(Number(contradiction.evidence_episodes?.[0]))
+                ? Number(contradiction.evidence_episodes?.[0])
+                : null,
               weight: Math.max(0.1, Math.min(3, contradiction.confidence || 1)),
             }
           );

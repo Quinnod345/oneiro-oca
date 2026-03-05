@@ -30,6 +30,15 @@ const MOOD_ALPHA = 0.02; // how fast mood follows emotion
 // Clamp value between min and max
 const clamp = (v, min = 0.0, max = 1.0) => Math.max(min, Math.min(max, v));
 
+// Tonic floors prevent emotionally "flatline" telemetry when the system is alive
+// but external stimuli are temporarily sparse.
+const TONIC_FLOOR = {
+  curiosity: 0.01,
+  boredom: 0.01,
+  frustration: 0.005,
+  creative_hunger: 0.005
+};
+
 // Natural decay toward baseline — slower decay preserves emotional dynamics
 const DECAY_RATE = 0.02; // per update cycle (was 0.05 — too aggressive, emotions died instantly)
 function decay() {
@@ -37,6 +46,8 @@ function decay() {
     if (['valence', 'confidence', 'energy_level', 'cognitive_load'].includes(key)) continue;
     state[key] = state[key] * (1 - DECAY_RATE);
     if (Math.abs(state[key]) < 0.005) state[key] = 0;
+    const floor = TONIC_FLOOR[key] || 0;
+    if (state[key] < floor) state[key] = floor;
   }
 }
 
