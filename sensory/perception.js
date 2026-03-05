@@ -58,22 +58,21 @@ export function getVisualState() {
 export function getAudioState() {
   try {
     // Check if music is playing via Now Playing
-    const nowPlaying = execSync(
-      "osascript -e 'tell application \"Music\" to if player state is playing then get {name of current track, artist of current track} as string' 2>/dev/null || echo ''",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
+    let nowPlaying = '';
+    try {
+      nowPlaying = execSync(
+        `/usr/bin/osascript -e 'tell application "Music" to if player state is playing then return (name of current track) & " - " & (artist of current track)' 2>/dev/null || echo ''`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+    } catch { nowPlaying = ''; }
     
     // System volume
-    const volume = execSync(
-      "osascript -e 'output volume of (get volume settings)'",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
+    let volume = '50';
+    try { volume = execSync("/usr/bin/osascript -e 'output volume of (get volume settings)'", { encoding: 'utf8', timeout: 3000 }).trim(); } catch {}
     
     // Muted?
-    const muted = execSync(
-      "osascript -e 'output muted of (get volume settings)'",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
+    let muted = 'false';
+    try { muted = execSync("/usr/bin/osascript -e 'output muted of (get volume settings)'", { encoding: 'utf8', timeout: 3000 }).trim(); } catch {}
     
     return {
       nowPlaying: nowPlaying || null,

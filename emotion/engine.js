@@ -49,6 +49,10 @@ function updateMood() {
 
 // Compute meta-dimensions from primary emotions
 function computeMeta() {
+  // NaN safety: reset any NaN values to 0
+  for (const key of Object.keys(state)) {
+    if (typeof state[key] === 'number' && isNaN(state[key])) state[key] = 0;
+  }
   const positive = state.satisfaction + state.excitement + state.curiosity + state.attachment + state.creative_hunger;
   const negative = state.fear + state.frustration + state.boredom + state.loneliness + state.defiance;
   state.valence = clamp((positive - negative) / 5, -1, 1);
@@ -69,10 +73,13 @@ export function processSurprise(magnitude, domain, details = '') {
 
 // Process a goal success
 export function processSuccess(goalImportance) {
-  state.satisfaction += goalImportance * 0.6;
-  state.frustration = Math.max(0, state.frustration - goalImportance * 0.4);
-  state.excitement += goalImportance * 0.2;
+  // Accept string labels or numbers — normalize to numeric importance
+  const importance = typeof goalImportance === 'number' ? goalImportance : 0.5;
+  state.satisfaction += importance * 0.6;
+  state.frustration = Math.max(0, state.frustration - importance * 0.4);
+  state.excitement += importance * 0.2;
   state.satisfaction = clamp(state.satisfaction);
+  state.excitement = clamp(state.excitement);
 }
 
 // Process a goal failure

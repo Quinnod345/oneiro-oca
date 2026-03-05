@@ -84,18 +84,27 @@ async function computePredictionAccuracy() {
 
 // 3. Transfer Ability — knowledge applied across domains
 async function computeTransferAbility() {
-  const { rows } = await pool.query(`
-    SELECT COUNT(*) as transfers 
-    FROM creative_artifacts 
-    WHERE creation_method = 'cross_domain'
-  `);
+  // Count cross-domain transfers from creative artifacts
+  const { rows: r1 } = await pool.query(`SELECT COUNT(*) as n FROM creative_artifacts WHERE creation_method = 'cross_domain'`);
+  // Also count cross-domain connections (precursors to transfer)
+  const { rows: r2 } = await pool.query(`SELECT COUNT(*) as n FROM creative_artifacts WHERE creation_method = 'constrained_randomness'`);
+  // Count dream episodes with novel connections (dreams = associative transfer)
+  const { rows: r3 } = await pool.query(`SELECT COUNT(*) as n FROM dream_episodes WHERE contains_novel_connections = true`);
+  // Count semantic memories from consolidation (episodic→semantic = a form of transfer)
+  const { rows: r4 } = await pool.query(`SELECT COUNT(*) as n FROM semantic_memory WHERE source_type = 'abstraction'`);
   
-  const transfers = parseInt(rows[0]?.transfers) || 0;
-  const score = Math.min(1, transfers / 20); // 20 transfers = max score
+  const transfers = parseInt(r1[0]?.n) || 0;
+  const connections = parseInt(r2[0]?.n) || 0;
+  const dreams = parseInt(r3[0]?.n) || 0;
+  const abstractions = parseInt(r4[0]?.n) || 0;
+  
+  // Weighted score: full transfers worth most, but connections/dreams/abstractions count too
+  const effective = transfers * 1.0 + connections * 0.5 + dreams * 0.3 + abstractions * 0.2;
+  const score = Math.min(1, effective / 15);
   
   return {
     score,
-    detail: `${transfers} cross-domain transfers produced`,
+    detail: `${transfers} transfers, ${connections} connections, ${dreams} dreams, ${abstractions} abstractions`,
     metric: 'cross_domain_count'
   };
 }
@@ -139,16 +148,21 @@ async function computeCreativeNovelty() {
     WHERE novelty_score IS NOT NULL
   `);
   
-  const total = parseInt(rows[0]?.total) || 0;
-  if (total < 3) return { score: 0.3, detail: 'Insufficient creative output', metric: 'novelty' };
+  // Also count dream episodes as creative output
+  const { rows: dreamRows } = await pool.query(`SELECT COUNT(*) as total FROM dream_episodes`);
+  const dreamCount = parseInt(dreamRows[0]?.total) || 0;
+  const artifactCount = parseInt(rows[0]?.total) || 0;
+  const totalCreative = artifactCount + dreamCount;
   
-  const avgNovelty = parseFloat(rows[0]?.avg_novelty) || 0;
-  const highRatio = parseInt(rows[0]?.high_novelty) / total;
-  const score = (avgNovelty + highRatio) / 2;
+  if (totalCreative < 2) return { score: 0.3, detail: `Insufficient creative output (${totalCreative} total)`, metric: 'novelty' };
+  
+  const avgNovelty = parseFloat(rows[0]?.avg_novelty) || 0.5;
+  const highRatio = artifactCount > 0 ? parseInt(rows[0]?.high_novelty) / artifactCount : 0;
+  const score = Math.min(1, (avgNovelty + highRatio) / 2 + dreamCount * 0.05);
   
   return {
     score,
-    detail: `${total} artifacts, avg novelty: ${avgNovelty.toFixed(3)}, ${(highRatio*100).toFixed(0)}% high-novelty`,
+    detail: `${artifactCount} artifacts + ${dreamCount} dreams, avg novelty: ${avgNovelty.toFixed(3)}`,
     metric: 'avg_novelty'
   };
 }

@@ -321,8 +321,25 @@ async function think() {
           await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
         }
         if (goal.description.includes('creative')) {
-          const { rows } = await pool.query('SELECT COUNT(*) as total FROM creative_artifacts');
-          const progress = Math.min(1, parseInt(rows[0].total) / 20);
+          const { rows: ca } = await pool.query('SELECT COUNT(*) as total FROM creative_artifacts');
+          const { rows: de } = await pool.query('SELECT COUNT(*) as total FROM dream_episodes');
+          const total = parseInt(ca[0].total) + parseInt(de[0].total);
+          const progress = Math.min(1, total / 20);
+          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
+        }
+        if (goal.description.includes('Monitor') || goal.description.includes('patterns')) {
+          // Progress = based on episodic memory diversity (unique apps observed)
+          const { rows } = await pool.query('SELECT COUNT(DISTINCT active_app) as apps FROM episodic_memory WHERE active_app IS NOT NULL AND active_app != \'unknown\'');
+          const progress = Math.min(1, parseInt(rows[0].apps) / 15); // 15 unique apps = full understanding
+          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
+        }
+        if (goal.description.includes('emotional') || goal.description.includes('Maintain')) {
+          // Progress = based on metacognitive observations + emotional variance
+          const { rows: mo } = await pool.query('SELECT COUNT(*) as total FROM metacognitive_observations');
+          const { rows: ev } = await pool.query('SELECT STDDEV(valence) as vvar FROM emotional_states WHERE timestamp > NOW() - INTERVAL \'6 hours\'');
+          const metaProgress = Math.min(0.5, parseInt(mo[0].total) / 40);
+          const emotionVariance = Math.min(0.5, parseFloat(ev[0]?.vvar || 0) * 5);
+          const progress = metaProgress + emotionVariance;
           await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
         }
       }
