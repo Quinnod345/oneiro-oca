@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --env-file=../.env test.js",
-    "migrate": "psql postgres://quinnodonnell@localhost/oneiro -f migrations/001_foundation.sql",
+    "migrate": "set -e; DB=postgres://quinnodonnell@localhost/oneiro; CORE_READY=$(psql \"$DB\" -tAc \"SELECT CASE WHEN to_regclass('public.cognitive_events') IS NULL THEN '0' ELSE '1' END\"); for f in migrations/*.sql; do if [ \"$(basename \"$f\" | cut -d'_' -f1)\" = \"001\" ] && [ \"$CORE_READY\" = \"1\" ]; then echo \"Skipping $f (already initialized)\"; continue; fi; echo \"Running $f\"; psql -v ON_ERROR_STOP=1 \"$DB\" -f \"$f\"; done",
     "start": "node --env-file=../.env cognitive-loop.js"
   },
   "dependencies": {

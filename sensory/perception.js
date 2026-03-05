@@ -1,7 +1,7 @@
 // OCA Sensory Cortex — multi-modal perception
 // Tries Swift binary cached data first, falls back to osascript
 import { execSync } from 'child_process';
-import { pool, emit } from '../event-bus.js';
+import { emit } from '../event-bus.js';
 import swiftBridge from './swift-bridge.js';
 
 // === VISUAL PERCEPTION ===
@@ -15,7 +15,7 @@ export function getVisualState() {
   try {
     // Try osascript for full data (works in interactive shells)
     const frontApp = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true'",
+      "osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true' 2>/dev/null",
       { encoding: 'utf8', timeout: 3000 }
     ).trim();
     
@@ -29,10 +29,18 @@ export function getVisualState() {
       { encoding: 'utf8', timeout: 3000 }
     ).trim();
     
-    const runningApps = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false'",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim().split(', ');
+    let runningApps = [];
+    try {
+      runningApps = execSync(
+        "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
+        { encoding: 'utf8', timeout: 3000 }
+      )
+        .trim()
+        .split(', ')
+        .filter(Boolean);
+    } catch {
+      runningApps = [];
+    }
     
     return {
       frontApp,
@@ -41,7 +49,7 @@ export function getVisualState() {
       runningApps,
       timestamp: new Date().toISOString()
     };
-  } catch (e) {
+  } catch {
     // osascript failed (launchd context) — use Swift binary data
     return { 
       frontApp: swiftApp || 'unknown', 

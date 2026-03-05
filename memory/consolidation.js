@@ -15,7 +15,7 @@ export async function consolidate() {
   const startedAt = new Date();
   console.log('[consolidation] starting cycle...');
   
-  let episodesReviewed = 0, semanticCreated = 0, proceduralUpdated = 0, episodesPruned = 0;
+  let episodesReviewed = 0, semanticCreated = 0, proceduralUpdated = 0, contradictionUpdates = 0, episodesPruned = 0;
   
   // 1. REPLAY: Get unconsolidated episodic memories
   const { rows: rawEpisodes } = await pool.query(
@@ -48,7 +48,8 @@ You MUST respond in valid JSON only, no other text:
 {
   "principles": [{"concept": "...", "category": "...", "evidence_episodes": [ids], "confidence": 0.0-1.0}],
   "procedures": [{"trigger": {...}, "actions": [...], "domain": "..."}],
-  "connections": [{"cause": "...", "effect": "...", "mechanism": "...", "confidence": 0.0-1.0}]
+  "connections": [{"cause": "...", "effect": "...", "mechanism": "...", "confidence": 0.0-1.0}],
+  "contradictions": [{"concept": "...", "contradicts": "...", "reason": "...", "evidence_episodes": [ids], "confidence": 0.0-1.0}]
 }`,
       messages: [
         { role: 'user', content: episodeSummaries }
@@ -92,13 +93,27 @@ You MUST respond in valid JSON only, no other text:
     // 5. CAUSAL LINKS: Store in world model
     if (extracted.connections) {
       for (const conn of extracted.connections) {
+        const causalEdge = [{
+          from: conn.cause,
+          to: conn.effect,
+          mechanism: conn.mechanism || null,
+          confidence: conn.confidence ?? null,
+          created_at: new Date().toISOString(),
+          source: 'consolidation'
+        }];
         await pool.query(
-          `INSERT INTO world_model (domain, entity, state, transition_rules)
-           VALUES ('causal', $1, $2, $3)
+          `INSERT INTO world_model (domain, entity, state, transition_rules, causal_graph_edges)
+           VALUES ('causal', $1, $2, $3, $4)
            ON CONFLICT (domain, entity) DO UPDATE SET
              transition_rules = world_model.transition_rules || $3,
+             causal_graph_edges = world_model.causal_graph_edges || $4,
              updated_at = NOW()`,
-          [conn.cause, JSON.stringify({ effect: conn.effect }), JSON.stringify([conn])]
+          [
+            conn.cause,
+            JSON.stringify({ effect: conn.effect }),
+            JSON.stringify([conn]),
+            JSON.stringify(causalEdge)
+          ]
         );
 
         // Also persist as a live neural connection for topology visualization.
@@ -115,6 +130,37 @@ You MUST respond in valid JSON only, no other text:
             source: 'consolidation',
           }
         });
+      }
+    }
+
+    // 6. CONTRADICTIONS: Update semantic truth maintenance
+    if (extracted.contradictions) {
+      for (const contradiction of extracted.contradictions) {
+        try {
+          const conceptText = contradiction.concept || contradiction.claim;
+          if (!conceptText) continue;
+          const [target] = await semantic.query(conceptText, { limit: 1, minConfidence: 0 });
+          if (!target?.id) continue;
+
+          let contradictingConceptId = null;
+          if (contradiction.contradicts) {
+            const [contra] = await semantic.query(contradiction.contradicts, { limit: 1, minConfidence: 0 });
+            contradictingConceptId = contra?.id || null;
+          }
+
+          await semantic.contradict(
+            target.id,
+            contradiction.reason || 'Consolidation contradiction',
+            {
+              contradictingConceptId,
+              episodeId: contradiction.evidence_episodes?.[0] || null,
+              weight: Math.max(0.1, Math.min(3, contradiction.confidence || 1)),
+            }
+          );
+          contradictionUpdates++;
+        } catch {
+          // Keep consolidation resilient even on malformed contradiction payloads.
+        }
       }
     }
   } catch (e) {
@@ -140,13 +186,13 @@ You MUST respond in valid JSON only, no other text:
     `INSERT INTO consolidation_log (completed_at, episodes_reviewed, semantic_created, procedural_updated, episodes_pruned, notes)
      VALUES (NOW(), $1, $2, $3, $4, $5)`,
     [episodesReviewed, semanticCreated, proceduralUpdated, episodesPruned, 
-     `Reviewed ${episodesReviewed} episodes, extracted ${semanticCreated} principles`]
+     `Reviewed ${episodesReviewed} episodes, extracted ${semanticCreated} principles, contradiction_updates=${contradictionUpdates}`]
   );
   
   const elapsed = ((Date.now() - startedAt.getTime()) / 1000).toFixed(1);
-  console.log(`[consolidation] done in ${elapsed}s: ${episodesReviewed} reviewed, ${semanticCreated} semantic, ${proceduralUpdated} procedural, ${episodesPruned} pruned`);
+  console.log(`[consolidation] done in ${elapsed}s: ${episodesReviewed} reviewed, ${semanticCreated} semantic, ${proceduralUpdated} procedural, ${contradictionUpdates} contradiction updates, ${episodesPruned} pruned`);
   
-  return { episodesReviewed, semanticCreated, proceduralUpdated, episodesPruned };
+  return { episodesReviewed, semanticCreated, proceduralUpdated, contradictionUpdates, episodesPruned };
 }
 
 // Get consolidation history

@@ -2,6 +2,7 @@
 import { pool, emit } from '../event-bus.js';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+import { startPrediction, completePrediction } from '../prediction-ledger.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -94,6 +95,15 @@ export async function evaluateSimulation(simulationId, actualOutcome) {
   // Simple accuracy: did the expected outcome match?
   const predicted = sim.predicted_states;
   const lastPredicted = predicted[predicted.length - 1]?.state || '';
+  const predictionLedgerId = await startPrediction({
+    actionSource: 'simulation',
+    actionType: 'evaluate_simulation',
+    actionDetails: { simulationId, purpose: sim.purpose || null },
+    expectedOutcome: lastPredicted,
+    expectedStructured: null,
+    confidence: 0.5,
+    simulationId,
+  });
   
   // Use embedding similarity for accuracy
   const predEmb = await openai.embeddings.create({ model: 'text-embedding-3-small', input: String(lastPredicted).slice(0, 8000) });
@@ -111,6 +121,24 @@ export async function evaluateSimulation(simulationId, actualOutcome) {
     'UPDATE simulations SET actual_outcome = $1, accuracy_score = $2 WHERE id = $3',
     [JSON.stringify(actualOutcome), accuracy, simulationId]
   );
+
+  await completePrediction(predictionLedgerId, {
+    observedOutcome: String(actualOutcome),
+    success: accuracy >= 0.62,
+    status: 'completed',
+    evaluationMode: 'semantic',
+    evaluationReason: `simulation_accuracy=${accuracy.toFixed(3)}`,
+    verifiability: 'semantic',
+    predictionError: Math.max(0, Math.min(1, 1 - accuracy)),
+    metadata: { accuracy },
+  });
+
+  await emit('simulation_result', 'simulation', {
+    simulationId,
+    accuracy,
+    predicted: lastPredicted,
+    actual: actualOutcome
+  }, { priority: 0.45 + (1 - Math.max(0, Math.min(1, accuracy))) * 0.4 });
   
   return { simulationId, accuracy, predicted: lastPredicted, actual: actualOutcome };
 }
@@ -143,6 +171,56 @@ export async function counterfactual(episodeId, actualAction, alternativeAction)
   return { id: rows[0].id, predictedOutcome, outcomeValence };
 }
 
+export async function evaluateCounterfactual(counterfactualId, actualOutcome) {
+  const { rows: [cf] } = await pool.query(
+    'SELECT * FROM counterfactuals WHERE id = $1',
+    [counterfactualId]
+  );
+  if (!cf) return null;
+
+  const predicted = cf.predicted_alternative_outcome || '';
+  if (!predicted || !actualOutcome) return null;
+
+  const predEmb = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: String(predicted).slice(0, 8000)
+  });
+  const actEmb = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: String(actualOutcome).slice(0, 8000)
+  });
+
+  let dot = 0;
+  let nA = 0;
+  let nB = 0;
+  for (let i = 0; i < predEmb.data[0].embedding.length; i++) {
+    dot += predEmb.data[0].embedding[i] * actEmb.data[0].embedding[i];
+    nA += predEmb.data[0].embedding[i] ** 2;
+    nB += actEmb.data[0].embedding[i] ** 2;
+  }
+  const accuracy = dot / (Math.sqrt(nA) * Math.sqrt(nB));
+  const modelUpdate = `Counterfactual predicted="${predicted}" | actual="${String(actualOutcome).slice(0, 240)}" | accuracy=${accuracy.toFixed(3)}`;
+
+  await pool.query(
+    `UPDATE counterfactuals SET
+       actual_outcome = $1,
+       accuracy_score = $2,
+       evaluated_at = NOW(),
+       model_update = COALESCE(model_update, $3)
+     WHERE id = $4`,
+    [String(actualOutcome), accuracy, modelUpdate, counterfactualId]
+  );
+
+  await emit('counterfactual_evaluated', 'simulation', {
+    counterfactualId,
+    accuracy,
+    predicted,
+    actual: actualOutcome
+  }, { priority: 0.5 });
+
+  return { counterfactualId, accuracy, predicted, actual: actualOutcome };
+}
+
 // Get model accuracy by domain
 export async function modelAccuracy() {
   const { rows } = await pool.query(
@@ -152,4 +230,12 @@ export async function modelAccuracy() {
   return rows;
 }
 
-export default { updateEntity, getEntity, simulate, evaluateSimulation, counterfactual, modelAccuracy };
+export default {
+  updateEntity,
+  getEntity,
+  simulate,
+  evaluateSimulation,
+  counterfactual,
+  evaluateCounterfactual,
+  modelAccuracy
+};
