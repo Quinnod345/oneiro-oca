@@ -1,11 +1,67 @@
 import SwiftUI
 import Foundation
 import Alamofire
+import UserNotifications
 
 // MARK: - App
 
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    var notificationManager: NotificationManager?
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        
+        // Request permission
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                print("Notification permission error: \(error)")
+            }
+        }
+        
+        // Register reply action
+        let replyAction = UNTextInputNotificationAction(
+            identifier: "REPLY_ACTION",
+            title: "Reply",
+            options: [],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Reply to Oneiro…"
+        )
+        let category = UNNotificationCategory(
+            identifier: "ONEIRO_MESSAGE",
+            actions: [replyAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([category])
+    }
+    
+    // Show notifications even when app is in foreground
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
+    }
+    
+    // Handle reply action
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let notifId = response.notification.request.content.userInfo["notificationId"] as? Int
+        
+        if response.actionIdentifier == "REPLY_ACTION",
+           let textResponse = response as? UNTextInputNotificationResponse,
+           let id = notifId {
+            let reply = textResponse.userText
+            notificationManager?.replyToNotification(id: id, reply: reply)
+        } else if let id = notifId {
+            // Tapped notification — mark as read
+            notificationManager?.markAsRead(id: id)
+        }
+        
+        completionHandler()
+    }
+}
+
 @main
 struct OneiroApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     
     var body: some Scene {
@@ -14,6 +70,9 @@ struct OneiroApp: App {
                 .environmentObject(appState)
                 .frame(minWidth: 1100, minHeight: 720)
                 .preferredColorScheme(.dark)
+                .onAppear {
+                    appDelegate.notificationManager = appState.notificationManager
+                }
         }
         .windowStyle(.hiddenTitleBar)
     }
@@ -128,6 +187,111 @@ struct ConversationMessage: Codable {
     let created_at: String
 }
 
+struct OneiroNotification: Codable, Identifiable {
+    let id: Int
+    let message: String
+    let category: String
+    let priority: String
+    let read: Bool
+    let reply: String?
+    let replied_at: String?
+    let created_at: String
+}
+
+// MARK: - Notification Manager
+
+class NotificationManager: ObservableObject {
+    @Published var notifications: [OneiroNotification] = []
+    @Published var unreadCount: Int = 0
+    
+    private var pollTimer: Timer?
+    private var knownIds: Set<Int> = []
+    
+    init() {
+        startPolling()
+    }
+    
+    func startPolling() {
+        fetchNotifications()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.fetchNotifications()
+        }
+    }
+    
+    func fetchNotifications() {
+        AF.request("http://localhost:3333/notifications")
+            .responseDecodable(of: [OneiroNotification].self) { [weak self] response in
+                if case .success(let notifs) = response.result {
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        
+                        // Deliver macOS notifications for new unread ones
+                        for notif in notifs where !notif.read && !self.knownIds.contains(notif.id) {
+                            self.deliverSystemNotification(notif)
+                        }
+                        
+                        self.knownIds = Set(notifs.map { $0.id })
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            self.notifications = notifs
+                            self.unreadCount = notifs.filter { !$0.read }.count
+                        }
+                        
+                        // Update dock badge
+                        if self.unreadCount > 0 {
+                            NSApp.dockTile.badgeLabel = "\(self.unreadCount)"
+                        } else {
+                            NSApp.dockTile.badgeLabel = nil
+                        }
+                    }
+                }
+            }
+    }
+    
+    func deliverSystemNotification(_ notif: OneiroNotification) {
+        let content = UNMutableNotificationContent()
+        content.title = notifTitle(for: notif.category)
+        content.body = notif.message
+        content.sound = notif.priority == "high" ? .defaultCritical : .default
+        content.categoryIdentifier = "ONEIRO_MESSAGE"
+        content.userInfo = ["notificationId": notif.id]
+        
+        let request = UNNotificationRequest(
+            identifier: "oneiro-\(notif.id)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    func notifTitle(for category: String) -> String {
+        switch category {
+        case "thought": return "🌑 Oneiro"
+        case "alert": return "🔴 Oneiro Alert"
+        case "question": return "❓ Oneiro"
+        case "update": return "🟢 Oneiro Update"
+        default: return "🌑 Oneiro"
+        }
+    }
+    
+    func markAsRead(id: Int) {
+        AF.request("http://localhost:3333/notifications/\(id)/read", method: .post)
+            .response { [weak self] _ in
+                self?.fetchNotifications()
+            }
+    }
+    
+    func replyToNotification(id: Int, reply: String) {
+        AF.request("http://localhost:3333/notifications/\(id)/reply",
+                   method: .post,
+                   parameters: ["reply": reply],
+                   encoding: JSONEncoding.default)
+            .response { [weak self] _ in
+                self?.fetchNotifications()
+            }
+    }
+}
+
 struct PulseResponse: Codable {
     let undercurrents: [Undercurrent]
     let recent_moments: [PulseMoment]
@@ -154,6 +318,9 @@ class AppState: ObservableObject {
     @Published var isThinking = false
     @Published var selectedTab: SideTab = .mind
     
+    // Notification Manager
+    let notificationManager = NotificationManager()
+    
     // OCA State
     @Published var crmData: CRMResponse?
     @Published var emotionData: EmotionResponse?
@@ -168,7 +335,7 @@ class AppState: ObservableObject {
     private var streamTask: URLSessionDataTask?
     private var streamSession: URLSession?
     
-    enum SideTab: String, CaseIterable { case mind, dreams, moments, history, cognitive, hypotheses, perception }
+    enum SideTab: String, CaseIterable { case mind, dreams, moments, history, cognitive, hypotheses, perception, notifications }
     
     func connect() {
         fetchPulse()
@@ -1206,15 +1373,27 @@ struct MindPanel: View {
                     }
                 }
                 HStack(spacing: 0) {
-                    ForEach([AppState.SideTab.cognitive, .hypotheses, .perception], id: \.self) { tab in
+                    ForEach([AppState.SideTab.cognitive, .hypotheses, .perception, .notifications], id: \.self) { tab in
                         Button(action: { withAnimation(.easeOut(duration: 0.2)) { state.selectedTab = tab } }) {
-                            Text(tabLabel(tab))
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(1.5)
-                                .foregroundColor(state.selectedTab == tab ? Color.oText : Color.oDim)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(state.selectedTab == tab ? Color.oAccent.opacity(0.1) : Color.clear)
+                            ZStack(alignment: .topTrailing) {
+                                Text(tabLabel(tab))
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(1.5)
+                                    .foregroundColor(state.selectedTab == tab ? Color.oText : Color.oDim)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(state.selectedTab == tab ? Color.oAccent.opacity(0.1) : Color.clear)
+                                
+                                if tab == .notifications && state.notificationManager.unreadCount > 0 {
+                                    Text("\(state.notificationManager.unreadCount)")
+                                        .font(.system(size: 7, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(Color.oRed))
+                                        .offset(x: -4, y: 2)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -1233,6 +1412,7 @@ struct MindPanel: View {
                 case .cognitive: CognitiveDashboardTab()
                 case .hypotheses: HypothesesTab()
                 case .perception: PerceptionTab()
+                case .notifications: NotificationsTab()
                 }
             }
             
@@ -1250,6 +1430,7 @@ struct MindPanel: View {
         case .cognitive: return "OCA"
         case .hypotheses: return "HYPO"
         case .perception: return "SENSE"
+        case .notifications: return "NOTIF"
         }
     }
 }
@@ -1590,6 +1771,256 @@ struct ChainRow: View {
             }
         }
         .padding(.horizontal, 24).padding(.vertical, 10)
+    }
+}
+
+// MARK: - Notifications Tab
+
+struct NotificationsTab: View {
+    @EnvironmentObject var state: AppState
+    @State private var replyText = ""
+    @State private var replyingTo: Int?
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            if state.notificationManager.notifications.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundColor(Color.oDim.opacity(0.5))
+                    Text("No notifications")
+                        .font(.system(size: 11)).foregroundColor(Color.oDim)
+                }
+                .frame(maxWidth: .infinity).padding(.top, 52)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(state.notificationManager.notifications.reversed()) { notif in
+                                NotificationBubbleRow(
+                                    notification: notif,
+                                    isReplying: replyingTo == notif.id,
+                                    onTapReply: {
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            replyingTo = replyingTo == notif.id ? nil : notif.id
+                                        }
+                                    },
+                                    onMarkRead: {
+                                        state.notificationManager.markAsRead(id: notif.id)
+                                    }
+                                )
+                                .id(notif.id)
+                                .onAppear {
+                                    if !notif.read {
+                                        state.notificationManager.markAsRead(id: notif.id)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        Color.clear.frame(height: 8).id("notif-bottom")
+                    }
+                }
+                
+                // Reply input
+                NotificationReplyBar(
+                    replyText: $replyText,
+                    replyingTo: replyingTo,
+                    onSend: {
+                        guard let id = replyingTo, !replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                        state.notificationManager.replyToNotification(id: id, reply: replyText)
+                        replyText = ""
+                        replyingTo = nil
+                    }
+                )
+            }
+        }
+    }
+}
+
+struct NotificationBubbleRow: View {
+    let notification: OneiroNotification
+    let isReplying: Bool
+    let onTapReply: () -> Void
+    let onMarkRead: () -> Void
+    @State private var appeared = false
+    
+    var categoryIcon: String {
+        switch notification.category {
+        case "thought": return "🌑"
+        case "alert": return "🔴"
+        case "question": return "❓"
+        case "update": return "🟢"
+        default: return "🌑"
+        }
+    }
+    
+    var categoryAccent: Color {
+        switch notification.category {
+        case "thought": return Color.oAccent
+        case "alert": return Color.oRed
+        case "question": return Color.oBlue
+        case "update": return Color.oGreen
+        default: return Color.oAccent
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Oneiro's message — left aligned
+            HStack(alignment: .top, spacing: 8) {
+                // Unread dot
+                if !notification.read {
+                    Circle()
+                        .fill(categoryAccent)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 6)
+                } else {
+                    Color.clear.frame(width: 6, height: 6).padding(.top, 6)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    // Category badge + timestamp
+                    HStack(spacing: 6) {
+                        Text(categoryIcon)
+                            .font(.system(size: 10))
+                        Text(notification.category.uppercased())
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(categoryAccent)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(categoryAccent.opacity(0.15)))
+                        
+                        Spacer()
+                        
+                        Text(relativeTime(notification.created_at))
+                            .font(.system(size: 8))
+                            .foregroundColor(Color.oDim)
+                    }
+                    
+                    // Message bubble
+                    Text(notification.message)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.oText.opacity(0.9))
+                        .lineSpacing(2)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.oSurface.opacity(0.65))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(categoryAccent.opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
+                    
+                    // Reply button
+                    if notification.reply == nil {
+                        Button(action: onTapReply) {
+                            Text(isReplying ? "Cancel" : "Reply")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(Color.oAccent.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 8)
+                    }
+                }
+            }
+            
+            // Quinn's reply — right aligned
+            if let reply = notification.reply {
+                HStack {
+                    Spacer(minLength: 40)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(reply)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white)
+                            .lineSpacing(2)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(LinearGradient.userBubbleGrad)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(LinearGradient(colors: [Color.white.opacity(0.08), Color.clear], startPoint: .top, endPoint: .center))
+                                    )
+                            )
+                        
+                        if let repliedAt = notification.replied_at {
+                            Text(relativeTime(repliedAt))
+                                .font(.system(size: 8))
+                                .foregroundColor(Color.oDim)
+                                .padding(.trailing, 4)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 8)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { appeared = true }
+        }
+    }
+    
+    func relativeTime(_ iso: String) -> String {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fmt.date(from: iso) else { return "" }
+        let diff = Date().timeIntervalSince(date)
+        if diff < 60 { return "just now" }
+        if diff < 3600 { return "\(Int(diff/60))m ago" }
+        if diff < 86400 { return "\(Int(diff/3600))h ago" }
+        return "\(Int(diff/86400))d ago"
+    }
+}
+
+struct NotificationReplyBar: View {
+    @Binding var replyText: String
+    let replyingTo: Int?
+    let onSend: () -> Void
+    @FocusState private var focused: Bool
+    
+    var canSend: Bool { replyingTo != nil && !replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    
+    var body: some View {
+        if replyingTo != nil {
+            VStack(spacing: 0) {
+                SepLine()
+                HStack(spacing: 8) {
+                    TextField("Reply…", text: $replyText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.oText)
+                        .focused($focused)
+                        .onSubmit { if canSend { onSend() } }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.oSurface.opacity(0.5))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(focused ? Color.oBorderFocus : Color.oBorder, lineWidth: 0.5)
+                                )
+                        )
+                    
+                    Button(action: { if canSend { onSend() } }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(canSend ? Color.oAccent : Color.oDim)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .background(Color.oPanel)
+            .onAppear { focused = true }
+        }
     }
 }
 
