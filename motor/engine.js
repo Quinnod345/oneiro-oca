@@ -2,52 +2,129 @@
 // Keystroke synthesis, mouse control, app management, system control
 import { execSync } from 'child_process';
 import { pool, emit } from '../event-bus.js';
+import { startPrediction, completePrediction } from '../prediction-ledger.js';
+
+async function runMotorAction(actionType, actionDetails, predictionConfig, execute) {
+  const {
+    expectedOutcome = null,
+    expectedStructured = null,
+    confidence = 0.5,
+    metadata = {},
+  } = predictionConfig || {};
+
+  const predictionLedgerId = await startPrediction({
+    actionSource: 'motor',
+    actionType,
+    actionDetails,
+    expectedOutcome,
+    expectedStructured,
+    confidence,
+    metadata,
+  });
+
+  try {
+    const result = await execute();
+    const motorCommandId = await logMotorAction(
+      actionType,
+      { ...actionDetails, success: true },
+      predictionLedgerId
+    );
+    await completePrediction(predictionLedgerId, {
+      observedOutcome: `${actionType} executed`,
+      success: true,
+      status: 'completed',
+      evaluationMode: 'none',
+      evaluationReason: 'motor_action_completed',
+      verifiability: 'none',
+      metadata: { motorCommandId },
+    });
+    return result;
+  } catch (e) {
+    const motorCommandId = await logMotorAction(
+      actionType,
+      { ...actionDetails, success: false, error: e.message },
+      predictionLedgerId
+    ).catch(() => null);
+    await completePrediction(predictionLedgerId, {
+      observedOutcome: e.message,
+      success: false,
+      status: 'failed',
+      evaluationMode: 'none',
+      evaluationReason: 'motor_action_failed',
+      verifiability: 'none',
+      predictionError: 1,
+      metadata: { motorCommandId },
+    });
+    throw e;
+  }
+}
 
 // === KEYSTROKE GENERATION ===
 
 // Type text into the frontmost app (uses AppleScript)
-export async function type(text, { speed = 'instant', app = null } = {}) {
-  if (app) await activateApp(app);
-  
-  const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  
-  if (speed === 'instant') {
-    execSync(`osascript -e 'tell application "System Events" to keystroke "${escaped}"'`, { timeout: 5000 });
-  } else {
-    // Natural typing: character by character with delays
-    const delay = speed === 'natural' ? 0.05 : 0.15; // natural or deliberate
-    for (const char of text) {
-      const c = char.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      execSync(`osascript -e 'tell application "System Events" to keystroke "${c}"'`, { timeout: 2000 });
-      await sleep(delay * 1000 * (0.7 + Math.random() * 0.6)); // add jitter
+export async function type(text, {
+  speed = 'instant',
+  app = null,
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'keystroke',
+    { text: text.slice(0, 100), speed, app },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      if (app) await activateApp(app);
+
+      const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+      if (speed === 'instant') {
+        execSync(`osascript -e 'tell application "System Events" to keystroke "${escaped}"'`, { timeout: 5000 });
+      } else {
+        // Natural typing: character by character with delays
+        const delay = speed === 'natural' ? 0.05 : 0.15; // natural or deliberate
+        for (const char of text) {
+          const c = char.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          execSync(`osascript -e 'tell application "System Events" to keystroke "${c}"'`, { timeout: 2000 });
+          await sleep(delay * 1000 * (0.7 + Math.random() * 0.6)); // add jitter
+        }
+      }
+      return true;
     }
-  }
-  
-  await logMotorAction('keystroke', { text: text.slice(0, 100), speed, app });
-  return true;
+  );
 }
 
 // Press a key combination (e.g., cmd+s, cmd+shift+n)
-export async function press(key, modifiers = [], { app = null } = {}) {
-  if (app) await activateApp(app);
-  
-  const modMap = {
-    cmd: 'command down', command: 'command down',
-    shift: 'shift down',
-    alt: 'option down', option: 'option down',
-    ctrl: 'control down', control: 'control down'
-  };
-  
-  const using = modifiers.map(m => modMap[m.toLowerCase()]).filter(Boolean).join(', ');
-  const usingClause = using ? ` using {${using}}` : '';
-  
-  execSync(
-    `osascript -e 'tell application "System Events" to key code ${getKeyCode(key)}${usingClause}'`,
-    { timeout: 5000 }
+export async function press(key, modifiers = [], {
+  app = null,
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'keypress',
+    { key, modifiers, app },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      if (app) await activateApp(app);
+
+      const modMap = {
+        cmd: 'command down', command: 'command down',
+        shift: 'shift down',
+        alt: 'option down', option: 'option down',
+        ctrl: 'control down', control: 'control down'
+      };
+
+      const using = modifiers.map(m => modMap[m.toLowerCase()]).filter(Boolean).join(', ');
+      const usingClause = using ? ` using {${using}}` : '';
+
+      execSync(
+        `osascript -e 'tell application "System Events" to key code ${getKeyCode(key)}${usingClause}'`,
+        { timeout: 5000 }
+      );
+      return true;
+    }
   );
-  
-  await logMotorAction('keypress', { key, modifiers, app });
-  return true;
 }
 
 function getKeyCode(key) {
@@ -68,24 +145,34 @@ function getKeyCode(key) {
 
 // === MOUSE CONTROL ===
 
-export async function click(x, y, { button = 'left', doubleClick = false } = {}) {
-  const clickType = doubleClick ? 'double click' : 'click';
-  // Using cliclick for precise mouse control (brew install cliclick)
-  try {
-    const cmd = doubleClick ? `cliclick dc:${x},${y}` : `cliclick c:${x},${y}`;
-    execSync(cmd, { timeout: 3000 });
-  } catch {
-    // Fallback to AppleScript
-    execSync(`osascript -e '
-      tell application "System Events"
-        set position of mouse to {${x}, ${y}}
-        click at {${x}, ${y}}
-      end tell
-    '`, { timeout: 3000 });
-  }
-  
-  await logMotorAction('click', { x, y, button, doubleClick });
-  return true;
+export async function click(x, y, {
+  button = 'left',
+  doubleClick = false,
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'click',
+    { x, y, button, doubleClick },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      // Using cliclick for precise mouse control (brew install cliclick)
+      try {
+        const cmd = doubleClick ? `cliclick dc:${x},${y}` : `cliclick c:${x},${y}`;
+        execSync(cmd, { timeout: 3000 });
+      } catch {
+        // Fallback to AppleScript
+        execSync(`osascript -e '
+          tell application "System Events"
+            set position of mouse to {${x}, ${y}}
+            click at {${x}, ${y}}
+          end tell
+        '`, { timeout: 3000 });
+      }
+      return true;
+    }
+  );
 }
 
 export async function moveMouse(x, y, { duration = 0 } = {}) {
@@ -110,17 +197,37 @@ export async function scroll(amount, { x = null, y = null } = {}) {
 
 // === APP CONTROL ===
 
-export async function launchApp(appName) {
-  execSync(`open -a "${appName}"`, { timeout: 10000 });
-  await sleep(1000);
-  await logMotorAction('launch_app', { app: appName });
-  return true;
+export async function launchApp(appName, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'launch_app',
+    { app: appName },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      execSync(`open -a "${appName}"`, { timeout: 10000 });
+      await sleep(1000);
+      return true;
+    }
+  );
 }
 
-export async function quitApp(appName) {
-  execSync(`osascript -e 'tell application "${appName}" to quit'`, { timeout: 5000 });
-  await logMotorAction('quit_app', { app: appName });
-  return true;
+export async function quitApp(appName, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'quit_app',
+    { app: appName },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      execSync(`osascript -e 'tell application "${appName}" to quit'`, { timeout: 5000 });
+      return true;
+    }
+  );
 }
 
 export async function activateApp(appName) {
@@ -138,24 +245,34 @@ export async function hideApp(appName) {
 export function getRunningApps() {
   try {
     const raw = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false'",
+      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
       { encoding: 'utf8', timeout: 3000 }
     ).trim();
-    return raw.split(', ');
+    return raw.split(', ').filter(Boolean);
   } catch { return []; }
 }
 
 // === WINDOW MANAGEMENT ===
 
-export async function resizeWindow(appName, x, y, width, height) {
-  execSync(`osascript -e '
-    tell application "System Events" to tell process "${appName}"
-      set position of window 1 to {${x}, ${y}}
-      set size of window 1 to {${width}, ${height}}
-    end tell
-  '`, { timeout: 5000 });
-  await logMotorAction('resize_window', { app: appName, x, y, width, height });
-  return true;
+export async function resizeWindow(appName, x, y, width, height, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'resize_window',
+    { app: appName, x, y, width, height },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      execSync(`osascript -e '
+        tell application "System Events" to tell process "${appName}"
+          set position of window 1 to {${x}, ${y}}
+          set size of window 1 to {${width}, ${height}}
+        end tell
+      '`, { timeout: 5000 });
+      return true;
+    }
+  );
 }
 
 export async function minimizeWindow(appName) {
@@ -168,45 +285,65 @@ export async function minimizeWindow(appName) {
 }
 
 // Select a menu item
-export async function selectMenuItem(appName, menuPath) {
+export async function selectMenuItem(appName, menuPath, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
   // menuPath: ["File", "Save"] or ["Edit", "Find", "Find..."]
-  let script = `tell application "System Events" to tell process "${appName}"\n`;
-  script += `  tell menu bar 1\n`;
-  
-  for (let i = 0; i < menuPath.length; i++) {
-    if (i === 0) {
-      script += `    tell menu bar item "${menuPath[i]}"\n`;
-      script += `      tell menu "${menuPath[i]}"\n`;
-    } else if (i < menuPath.length - 1) {
-      script += `        tell menu item "${menuPath[i]}"\n`;
-      script += `          tell menu "${menuPath[i]}"\n`;
-    } else {
-      script += `            click menu item "${menuPath[i]}"\n`;
+  return runMotorAction(
+    'menu_item',
+    { app: appName, path: menuPath },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      let script = `tell application "System Events" to tell process "${appName}"\n`;
+      script += '  tell menu bar 1\n';
+
+      for (let i = 0; i < menuPath.length; i++) {
+        if (i === 0) {
+          script += `    tell menu bar item "${menuPath[i]}"\n`;
+          script += `      tell menu "${menuPath[i]}"\n`;
+        } else if (i < menuPath.length - 1) {
+          script += `        tell menu item "${menuPath[i]}"\n`;
+          script += `          tell menu "${menuPath[i]}"\n`;
+        } else {
+          script += `            click menu item "${menuPath[i]}"\n`;
+        }
+      }
+
+      // Close nested tells
+      for (let i = menuPath.length - 1; i >= 0; i--) {
+        if (i === 0) {
+          script += '      end tell\n    end tell\n';
+        } else if (i < menuPath.length - 1) {
+          script += '          end tell\n        end tell\n';
+        }
+      }
+      script += '  end tell\nend tell';
+
+      execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 });
+      return true;
     }
-  }
-  
-  // Close nested tells
-  for (let i = menuPath.length - 1; i >= 0; i--) {
-    if (i === 0) {
-      script += `      end tell\n    end tell\n`;
-    } else if (i < menuPath.length - 1) {
-      script += `          end tell\n        end tell\n`;
-    }
-  }
-  script += `  end tell\nend tell`;
-  
-  execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 });
-  await logMotorAction('menu_item', { app: appName, path: menuPath });
-  return true;
+  );
 }
 
 // === SYSTEM CONTROL ===
 
-export async function setVolume(level) {
-  // level: 0-100
-  execSync(`osascript -e 'set volume output volume ${Math.round(level)}'`, { timeout: 3000 });
-  await logMotorAction('volume', { level });
-  return true;
+export async function setVolume(level, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'volume',
+    { level },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      // level: 0-100
+      execSync(`osascript -e 'set volume output volume ${Math.round(level)}'`, { timeout: 3000 });
+      return true;
+    }
+  );
 }
 
 export async function setBrightness(level) {
@@ -215,32 +352,56 @@ export async function setBrightness(level) {
   return true;
 }
 
-export async function showNotification(title, message, { sound = 'default' } = {}) {
-  const escaped = message.replace(/"/g, '\\"');
-  const titleEsc = title.replace(/"/g, '\\"');
-  execSync(
-    `osascript -e 'display notification "${escaped}" with title "${titleEsc}"'`,
-    { timeout: 5000 }
+export async function showNotification(title, message, {
+  sound = 'default',
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'notification',
+    { title, message, sound },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      const escaped = message.replace(/"/g, '\\"');
+      const titleEsc = title.replace(/"/g, '\\"');
+      execSync(
+        `osascript -e 'display notification "${escaped}" with title "${titleEsc}"'`,
+        { timeout: 5000 }
+      );
+      return true;
+    }
   );
-  await logMotorAction('notification', { title, message });
-  return true;
 }
 
-export async function openUrl(url) {
-  execSync(`open "${url}"`, { timeout: 5000 });
-  await logMotorAction('open_url', { url });
-  return true;
+export async function openUrl(url, {
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'open_url',
+    { url },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => {
+      execSync(`open "${url}"`, { timeout: 5000 });
+      return true;
+    }
+  );
 }
 
-export async function runShellCommand(command, { timeout = 10000 } = {}) {
-  try {
-    const output = execSync(command, { encoding: 'utf8', timeout });
-    await logMotorAction('shell', { command: command.slice(0, 200), success: true });
-    return output;
-  } catch (e) {
-    await logMotorAction('shell', { command: command.slice(0, 200), success: false, error: e.message });
-    throw e;
-  }
+export async function runShellCommand(command, {
+  timeout = 10000,
+  expectedOutcome = null,
+  expectedStructured = null,
+  confidence = 0.5,
+} = {}) {
+  return runMotorAction(
+    'shell',
+    { command: command.slice(0, 200), timeout },
+    { expectedOutcome, expectedStructured, confidence },
+    async () => execSync(command, { encoding: 'utf8', timeout })
+  );
 }
 
 // === CLIPBOARD ===
@@ -283,24 +444,49 @@ export async function plan(intention, actions) {
 
 // === LOGGING ===
 
-async function logMotorAction(actionType, details) {
+async function ensureMotorCommandsSchema() {
   await pool.query(
-    `INSERT INTO motor_commands (action_type, details, executed_at) VALUES ($1, $2, NOW())`,
-    [actionType, JSON.stringify(details)]
-  ).catch(() => {
-    // Table might not exist yet
-    pool.query(
-      `CREATE TABLE IF NOT EXISTS motor_commands (
-        id SERIAL PRIMARY KEY, action_type TEXT, details JSONB, 
-        executed_at TIMESTAMPTZ DEFAULT NOW(), success BOOLEAN DEFAULT TRUE
-      )`
-    ).then(() => {
-      pool.query('INSERT INTO motor_commands (action_type, details) VALUES ($1, $2)', 
-        [actionType, JSON.stringify(details)]);
-    }).catch(() => {});
-  });
-  
-  await emit('motor_feedback', 'motor', { actionType, details }, { priority: 0.4 });
+    `CREATE TABLE IF NOT EXISTS motor_commands (
+      id SERIAL PRIMARY KEY,
+      action_type TEXT,
+      details JSONB,
+      executed_at TIMESTAMPTZ DEFAULT NOW(),
+      success BOOLEAN DEFAULT TRUE,
+      prediction_ledger_id INT
+    )`
+  );
+  await pool.query('ALTER TABLE motor_commands ADD COLUMN IF NOT EXISTS prediction_ledger_id INT');
+}
+
+async function logMotorAction(actionType, details, predictionLedgerId = null) {
+  let insertedId = null;
+  const payload = JSON.stringify(details);
+
+  try {
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO motor_commands (action_type, details, executed_at, prediction_ledger_id)
+       VALUES ($1, $2, NOW(), $3)
+       RETURNING id`,
+      [actionType, payload, predictionLedgerId]
+    );
+    insertedId = row?.id || null;
+  } catch {
+    try {
+      await ensureMotorCommandsSchema();
+      const { rows: [row] } = await pool.query(
+        `INSERT INTO motor_commands (action_type, details, executed_at, prediction_ledger_id)
+         VALUES ($1, $2, NOW(), $3)
+         RETURNING id`,
+        [actionType, payload, predictionLedgerId]
+      );
+      insertedId = row?.id || null;
+    } catch {
+      insertedId = null;
+    }
+  }
+
+  await emit('motor_feedback', 'motor', { actionType, details, predictionLedgerId }, { priority: 0.4 });
+  return insertedId;
 }
 
 // === HELPERS ===

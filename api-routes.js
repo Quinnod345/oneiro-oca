@@ -4,6 +4,7 @@ import { Router } from 'express';
 import oca from './index.js';
 import motor from './motor/engine.js';
 import { pool } from './event-bus.js';
+import benchmarkHarness from './evaluation/benchmark-harness.js';
 
 export const ocaRouter = Router();
 
@@ -110,9 +111,24 @@ ocaRouter.post('/oca/remember', async (req, res) => {
 // Know (semantic query)
 ocaRouter.post('/oca/know', async (req, res) => {
   try {
-    const { query, limit = 5, category = null } = req.body;
+    const {
+      query,
+      limit = 5,
+      category = null,
+      minConfidence = 0,
+      includeContradictions = false,
+      includeEntities = false,
+      entityLimit = 8,
+    } = req.body;
     if (!query) return res.status(400).json({ error: 'query required' });
-    const results = await oca.know(query, { limit, category });
+    const results = await oca.know(query, {
+      limit,
+      category,
+      minConfidence,
+      includeContradictions,
+      includeEntities,
+      entityLimit
+    });
     res.json(results);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -122,10 +138,79 @@ ocaRouter.post('/oca/know', async (req, res) => {
 // Learn (store semantic knowledge)
 ocaRouter.post('/oca/learn', async (req, res) => {
   try {
-    const { concept, category = null, confidence = 0.5 } = req.body;
+    const {
+      concept,
+      category = null,
+      confidence = 0.5,
+      sourceType = 'observation',
+      sourceEpisodes = [],
+      causalLinks = [],
+      evidenceWeight = 1.0,
+      evidenceText = null,
+      metadata = {},
+    } = req.body;
     if (!concept) return res.status(400).json({ error: 'concept required' });
-    const result = await oca.learn(concept, category, confidence);
+    const result = await oca.learn(concept, {
+      category,
+      confidence,
+      sourceType,
+      sourceEpisodes,
+      causalLinks,
+      evidenceWeight,
+      evidenceText,
+      metadata,
+    });
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Contradict a semantic memory with provenance
+ocaRouter.post('/oca/contradict', async (req, res) => {
+  try {
+    const {
+      conceptId,
+      reason = '',
+      contradictingConceptId = null,
+      episodeId = null,
+      weight = 1.0,
+      contradictionSetId = null,
+    } = req.body || {};
+    if (!conceptId) return res.status(400).json({ error: 'conceptId required' });
+    const result = await oca.layers.semantic.contradict(conceptId, reason, {
+      contradictingConceptId,
+      episodeId,
+      weight,
+      contradictionSetId,
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Entity graph query surfaces
+ocaRouter.get('/oca/entities', async (req, res) => {
+  try {
+    const query = req.query.query || '';
+    const type = req.query.type || null;
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 20));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const entities = await oca.layers.entityGraph.searchEntities(query, { type, limit, offset });
+    res.json({ entities, pagination: { limit, offset } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/entities/relations', async (req, res) => {
+  try {
+    const entityKey = req.query.entityKey;
+    if (!entityKey) return res.status(400).json({ error: 'entityKey required' });
+    const limit = Math.max(1, Math.min(300, parseInt(req.query.limit, 10) || 50));
+    const relations = await oca.layers.entityGraph.relationsForEntity(entityKey, { limit });
+    res.json({ relations });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -170,6 +255,77 @@ ocaRouter.get('/oca/hypotheses', async (req, res) => {
   }
 });
 
+// Prediction diagnostics
+ocaRouter.get('/oca/predictions/diagnostics', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 7));
+    const report = await oca.layers.hypothesis.diagnostics({ days });
+    res.json(report);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/predictions/failures', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 7));
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 25));
+    const failures = await oca.layers.hypothesis.failures({ days, limit });
+    res.json({ failures });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/predictions/retest', async (req, res) => {
+  try {
+    const { hypothesisId, observed = null, description = null } = req.body || {};
+    if (!hypothesisId) return res.status(400).json({ error: 'hypothesisId required' });
+
+    let observedState = observed;
+    let observedDescription = description;
+
+    if (!observedState || typeof observedState !== 'object') {
+      const perception = oca.sense();
+      const visual = perception?.visual || {};
+      const intero = perception?.interoceptive || {};
+      const { rows: switches } = await pool.query(
+        `SELECT COUNT(*) as cnt FROM episodic_memory
+         WHERE event_type = 'cognitive_cycle'
+           AND active_app != $1
+           AND timestamp > NOW() - INTERVAL '15 minutes'`,
+        [visual.frontApp || 'unknown']
+      ).catch(() => ({ rows: [{ cnt: 0 }] }));
+
+      observedState = {
+        presence: 'unknown',
+        front_app: visual.frontApp || 'unknown',
+        battery_pct: Math.round((intero?.battery?.level || 0) * 100),
+        charging: !!intero?.battery?.charging,
+        cpu_raw: Number(intero?.cpu?.raw || intero?.cpu?.utilization || 0),
+        memory_pressure_pct: Math.round((intero?.memory?.pressure || 0) * 100),
+        typing_wpm: 0,
+        idle_seconds: 0,
+        hour: new Date().getHours(),
+        thermal: intero?.thermal?.pressure || 'unknown',
+        app_switches_15min: Number(switches[0]?.cnt || 0),
+      };
+    }
+
+    if (!observedDescription) {
+      observedDescription = `Manual retest snapshot: app=${observedState.front_app}, battery=${observedState.battery_pct}%`;
+    }
+
+    const result = await oca.layers.hypothesis.test(hypothesisId, {
+      description: observedDescription,
+      observed: observedState,
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // DELIBERATION & DECISION
 // ============================================================
@@ -177,9 +333,66 @@ ocaRouter.get('/oca/hypotheses', async (req, res) => {
 // Run adversarial deliberation
 ocaRouter.post('/oca/decide', async (req, res) => {
   try {
-    const { decision, stakes = 'medium', context = '' } = req.body;
+    const {
+      decision,
+      stakes = 'medium',
+      context = '',
+      forceReasoning = false,
+      confidence = null,
+      minConfidence = 0.55,
+      timeBudgetSeconds = 45,
+    } = req.body;
     if (!decision) return res.status(400).json({ error: 'decision required' });
-    const result = await oca.decide(decision, { stakes, context });
+    const result = await oca.decide(decision, {
+      stakes,
+      context,
+      forceReasoning,
+      confidence,
+      minConfidence,
+      timeBudgetSeconds,
+    });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Explicit structured reasoning controller
+ocaRouter.post('/oca/reason', async (req, res) => {
+  try {
+    const {
+      goal,
+      context = '',
+      stakes = 'medium',
+      timeBudgetSeconds = 45,
+      minConfidence = 0.55,
+    } = req.body || {};
+    if (!goal) return res.status(400).json({ error: 'goal required' });
+    const result = await oca.reason(goal, { context, stakes, timeBudgetSeconds, minConfidence });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/reason/evaluate', async (req, res) => {
+  try {
+    const {
+      traceId,
+      wasCorrect,
+      errorStep = null,
+      errorType = null,
+      lesson = null,
+    } = req.body || {};
+    if (!traceId || typeof wasCorrect !== 'boolean') {
+      return res.status(400).json({ error: 'traceId and wasCorrect (boolean) required' });
+    }
+    const result = await oca.layers.reasoningController.evaluate(traceId, {
+      wasCorrect,
+      errorStep,
+      errorType,
+      lesson
+    });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -197,6 +410,103 @@ ocaRouter.post('/oca/imagine', async (req, res) => {
     if (!description) return res.status(400).json({ error: 'description required' });
     const result = await oca.imagine(description, state || {}, actions || [], { purpose });
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Evaluate simulation against actual outcome
+ocaRouter.post('/oca/simulate/evaluate', async (req, res) => {
+  try {
+    const { simulationId, actualOutcome } = req.body;
+    if (!simulationId || !actualOutcome) {
+      return res.status(400).json({ error: 'simulationId and actualOutcome required' });
+    }
+    const result = await oca.layers.simulation.evaluateSimulation(simulationId, actualOutcome);
+    res.json(result || { error: 'simulation not found' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Evaluate counterfactual against observed outcome
+ocaRouter.post('/oca/counterfactual/evaluate', async (req, res) => {
+  try {
+    const { counterfactualId, actualOutcome } = req.body;
+    if (!counterfactualId || !actualOutcome) {
+      return res.status(400).json({ error: 'counterfactualId and actualOutcome required' });
+    }
+    const result = await oca.layers.simulation.evaluateCounterfactual(counterfactualId, actualOutcome);
+    res.json(result || { error: 'counterfactual not found' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Causal experiment lifecycle
+ocaRouter.post('/oca/causal/experiment', async (req, res) => {
+  try {
+    const {
+      causeType = 'freeform',
+      causeId = null,
+      causeDescription,
+      intervention,
+      expectedEffect = null,
+      expectedMechanism = null,
+      confidence = 0.5,
+      hypothesisId = null,
+      simulationId = null,
+      episodeId = null,
+      start = false,
+      metadata = {},
+    } = req.body || {};
+    if (!causeDescription || !intervention) {
+      return res.status(400).json({ error: 'causeDescription and intervention required' });
+    }
+
+    let created = await oca.layers.causal.designExperiment({
+      causeType,
+      causeId,
+      causeDescription,
+      intervention,
+      expectedEffect,
+      expectedMechanism,
+      confidence,
+      hypothesisId,
+      simulationId,
+      episodeId,
+      metadata,
+    });
+    if (start && created?.id) {
+      created = await oca.layers.causal.startExperiment(created.id);
+    }
+    res.json(created);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/causal/experiment/:id/complete', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'valid experiment id required' });
+    const {
+      actualOutcome,
+      outcomeValence = null,
+      causalSupport = null,
+      modelUpdate = null,
+      status = 'completed',
+      metadata = {},
+    } = req.body || {};
+    const result = await oca.layers.causal.completeExperiment(id, {
+      actualOutcome,
+      outcomeValence,
+      causalSupport,
+      modelUpdate,
+      status,
+      metadata,
+    });
+    res.json(result || { error: 'causal experiment not found' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -278,11 +588,18 @@ ocaRouter.get('/oca/body', (req, res) => {
 // Type text
 ocaRouter.post('/oca/motor/type', async (req, res) => {
   try {
-    const { text, speed = 'instant', app = null } = req.body;
+    const {
+      text,
+      speed = 'instant',
+      app = null,
+      expectedOutcome = null,
+      expectedStructured = null,
+      confidence = 0.5,
+    } = req.body;
     if (!text) return res.status(400).json({ error: 'text required' });
     const plan = await motor.plan('type text', [{ type: 'keystroke' }]);
     if (!plan.allowed) return res.status(403).json(plan);
-    await motor.type(text, { speed, app });
+    await motor.type(text, { speed, app, expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -292,9 +609,16 @@ ocaRouter.post('/oca/motor/type', async (req, res) => {
 // Press key
 ocaRouter.post('/oca/motor/press', async (req, res) => {
   try {
-    const { key, modifiers = [], app = null } = req.body;
+    const {
+      key,
+      modifiers = [],
+      app = null,
+      expectedOutcome = null,
+      expectedStructured = null,
+      confidence = 0.5,
+    } = req.body;
     if (!key) return res.status(400).json({ error: 'key required' });
-    await motor.press(key, modifiers, { app });
+    await motor.press(key, modifiers, { app, expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -304,9 +628,17 @@ ocaRouter.post('/oca/motor/press', async (req, res) => {
 // Click
 ocaRouter.post('/oca/motor/click', async (req, res) => {
   try {
-    const { x, y, button = 'left', doubleClick = false } = req.body;
+    const {
+      x,
+      y,
+      button = 'left',
+      doubleClick = false,
+      expectedOutcome = null,
+      expectedStructured = null,
+      confidence = 0.5,
+    } = req.body;
     if (x == null || y == null) return res.status(400).json({ error: 'x and y required' });
-    await motor.click(x, y, { button, doubleClick });
+    await motor.click(x, y, { button, doubleClick, expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -316,9 +648,9 @@ ocaRouter.post('/oca/motor/click', async (req, res) => {
 // Launch app
 ocaRouter.post('/oca/motor/launch', async (req, res) => {
   try {
-    const { app } = req.body;
+    const { app, expectedOutcome = null, expectedStructured = null, confidence = 0.5 } = req.body;
     if (!app) return res.status(400).json({ error: 'app required' });
-    await motor.launchApp(app);
+    await motor.launchApp(app, { expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -328,9 +660,9 @@ ocaRouter.post('/oca/motor/launch', async (req, res) => {
 // Show notification
 ocaRouter.post('/oca/motor/notify', async (req, res) => {
   try {
-    const { title, message } = req.body;
+    const { title, message, expectedOutcome = null, expectedStructured = null, confidence = 0.5 } = req.body;
     if (!title || !message) return res.status(400).json({ error: 'title and message required' });
-    await motor.showNotification(title, message);
+    await motor.showNotification(title, message, { expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -340,9 +672,9 @@ ocaRouter.post('/oca/motor/notify', async (req, res) => {
 // Set volume
 ocaRouter.post('/oca/motor/volume', async (req, res) => {
   try {
-    const { level } = req.body;
+    const { level, expectedOutcome = null, expectedStructured = null, confidence = 0.5 } = req.body;
     if (level == null) return res.status(400).json({ error: 'level required (0-100)' });
-    await motor.setVolume(level);
+    await motor.setVolume(level, { expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -352,9 +684,9 @@ ocaRouter.post('/oca/motor/volume', async (req, res) => {
 // Open URL
 ocaRouter.post('/oca/motor/open', async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, expectedOutcome = null, expectedStructured = null, confidence = 0.5 } = req.body;
     if (!url) return res.status(400).json({ error: 'url required' });
-    await motor.openUrl(url);
+    await motor.openUrl(url, { expectedOutcome, expectedStructured, confidence });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -409,6 +741,27 @@ ocaRouter.get('/oca/crm', async (req, res) => {
     const crm = await import('./evaluation/chinese-room-meter.js');
     const result = await crm.default.compute();
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/benchmark/run', async (req, res) => {
+  try {
+    const { runSource = 'manual', notes = null, force = false } = req.body || {};
+    const result = await benchmarkHarness.runBenchmark({ runSource, notes, force });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/benchmark/history', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days, 10) || 30));
+    const limit = Math.max(1, Math.min(1000, parseInt(req.query.limit, 10) || 90));
+    const history = await benchmarkHarness.benchmarkHistory({ days, limit });
+    res.json({ history });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

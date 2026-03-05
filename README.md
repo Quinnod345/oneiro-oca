@@ -372,7 +372,7 @@ npm start
 
 ## 🔌 API Reference
 
-**30+ HTTP endpoints** at `localhost:3333/oca/*`
+**40+ HTTP endpoints** at `localhost:3333/oca/*`
 
 <details>
 <summary><strong>Cognitive State</strong> (GET)</summary>
@@ -389,6 +389,11 @@ GET  /oca/reflect         # Metacognition report (biases, calibration, stuck sta
 GET  /oca/hypotheses      # Pending predictions + calibration curve
 GET  /oca/intentions      # Prospective memory (pending + triggered)
 GET  /oca/neural          # Live neural connection graph (dynamic synapses)
+GET  /oca/predictions/diagnostics  # Verifiability/coverage/accuracy diagnostics
+GET  /oca/predictions/failures     # Failed predictions with reasons
+GET  /oca/entities                # Entity graph query (paged)
+GET  /oca/entities/relations      # Relations for an entity key
+GET  /oca/benchmark/history       # Benchmark snapshot history
 ```
 
 </details>
@@ -401,14 +406,23 @@ POST /oca/experience      # Store an experience {eventType, content}
 POST /oca/remember        # Episodic recall {query}
 POST /oca/know            # Semantic query {query}
 POST /oca/learn           # Store knowledge {concept, category}
+POST /oca/contradict      # Record contradiction evidence against semantic memory
 POST /oca/predict         # Form hypothesis {domain, claim, prediction}
 POST /oca/test            # Test hypothesis {hypothesisId, actualOutcome}
+POST /oca/predictions/retest      # Re-evaluate prediction with structured observed state
 POST /oca/decide          # Adversarial deliberation {decision, stakes}
+POST /oca/reason          # Structured reasoning controller (propose→critique→revise→verify)
+POST /oca/reason/evaluate # Evaluate a stored reasoning trace
 POST /oca/imagine         # World simulation {description, state, actions}
+POST /oca/simulate/evaluate       # Score simulation vs actual outcome
+POST /oca/counterfactual/evaluate # Score counterfactual vs observed outcome
+POST /oca/causal/experiment       # Create causal intervention experiment
+POST /oca/causal/experiment/:id/complete # Complete + score causal experiment
 POST /oca/create          # Creative synthesis {method: "dream"|"connection"|"transfer"}
 POST /oca/intend          # Set intention {intention, triggerType, triggerSpec}
 POST /oca/consolidate     # Trigger memory consolidation
 POST /oca/goals           # Add goal {description, priority}
+POST /oca/benchmark/run           # Run + persist benchmark snapshot
 ```
 
 </details>
@@ -454,6 +468,23 @@ The neural map is no longer just a static architecture diagram.
 
 <br>
 
+## 📈 Prediction, Causality, and Benchmarking
+
+- Hypotheses now support **structured evaluators** (`metric`, `operator`, `value`) for deterministic scoring
+- Prediction diagnostics expose:
+  - `accuracy_on_verifiable_predictions`
+  - `verifiability_rate`
+  - `evaluation_coverage`
+- Prediction execution paths are persisted in `prediction_ledger`
+- Causal interventions are persisted in `causal_experiments`
+- Daily benchmark snapshots are persisted in `benchmark_history`
+
+<br>
+
+---
+
+<br>
+
 ## 📁 Modules
 
 | File | Description |
@@ -463,12 +494,15 @@ The neural map is no longer just a static architecture diagram.
 | `hypothesis/engine.js` | Prediction, testing, surprise-based learning, calibration |
 | `memory/episodic.js` | Raw experience storage with similarity recall and decay |
 | `memory/semantic.js` | Abstracted knowledge with evidence/contradiction tracking |
+| `memory/entity-graph.js` | Persistent entities, relations, mentions, and retrieval context |
 | `memory/procedural.js` | Trigger-matched skills with automaticity gradient |
 | `memory/prospective.js` | Future intentions triggered by time/event/condition |
 | `memory/consolidation.js` | Sleep-like memory processing (episodic → semantic) |
 | `metacognition/engine.js` | Bias tracking, calibration, stuck detection |
 | `deliberation/engine.js` | Four-perspective adversarial debate system |
+| `reasoning/controller.js` | Structured reasoning flow (propose→critique→revise→verify) |
 | `simulation/engine.js` | Forward models, counterfactual reasoning |
+| `causal/engine.js` | Causal experiment lifecycle + support scoring |
 | `creative/engine.js` | Dream states, constrained randomness, novelty tracking |
 | `executive/engine.js` | Goals, working memory, attention, body ownership |
 | `motor/engine.js` | Keystroke/mouse/app/system control with safety checks |
@@ -476,14 +510,21 @@ The neural map is no longer just a static architecture diagram.
 | `sensory/perception.js` | Multi-modal perception (Node.js layer) |
 | `sensory/swift/` | Real-time HID, app monitoring, interoception (native Swift) |
 | `sensory/swift-bridge.js` | Swift → Node.js event bridge |
-| `evaluation/chinese-room-meter.js` | 7-component understanding measurement |
+| `evaluation/chinese-room-meter.js` | Multi-component understanding measurement (prediction/causal/counterfactual) |
+| `evaluation/benchmark-harness.js` | Benchmark snapshot persistence + history retrieval |
 | `openclaw-bridge.js` | OpenClaw ↔ OCA integration layer |
 | `cognitive-loop.js` | Main thinking loop (adaptive cycle, mode-aware) |
 | `neural-connections.js` | Synapse graph persistence, co-occurrence ingestion, decay/prune maintenance |
-| `api-routes.js` | 30+ HTTP endpoints for all layers |
+| `prediction-ledger.js` | Unified prediction start/outcome/error logging helpers |
+| `api-routes.js` | 40+ HTTP endpoints for all layers |
 | `index.js` | Orchestrator tying all layers together |
 | `migrations/001_foundation.sql` | Complete database schema (25+ tables) |
 | `migrations/002_neural_connections.sql` | Neural connection table + indexes for living topology |
+| `migrations/003_prediction_ledger.sql` | Unified prediction ledger + evaluator metadata |
+| `migrations/004_causal_experiments.sql` | Causal experiment lifecycle + counterfactual evaluation fields |
+| `migrations/005_semantic_truth_maintenance.sql` | Semantic evidence/contradiction sets + decay metadata |
+| `migrations/006_benchmark_history.sql` | Persisted benchmark snapshots |
+| `migrations/007_entity_graph.sql` | Entity graph tables (entities, relations, mentions) |
 
 <br>
 

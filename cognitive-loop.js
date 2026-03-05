@@ -6,6 +6,7 @@ import oca from './index.js';
 import prospective from './memory/prospective.js';
 import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
+import benchmarkHarness from './evaluation/benchmark-harness.js';
 import { execSync } from 'child_process';
 
 const MAX_WORKING_MEMORY = 7;
@@ -27,6 +28,8 @@ let goalReviewCooldown = 0;
 let biasScanCooldown = 0;
 let visionCooldown = 0;
 let hypothesisCooldown = 0;
+let benchmarkCooldown = 0;
+let lastBenchmarkDate = null;
 
 // Interoceptive sensing
 function getInteroception() {
@@ -122,9 +125,7 @@ async function think() {
           'visual_cortex',
           0.5
         ).catch(() => {});
-        if (result.cycle % 20 === 0) {
-          console.log(`[oca] 👁 vision: ${vision.description.slice(0, 80)}...`);
-        }
+        console.log(`[oca] 👁 vision: ${vision.description.slice(0, 80)}...`);
       }
     } catch (e) {
       visionCooldown = 40; // back off on error
@@ -209,6 +210,59 @@ async function think() {
       claimSet.add(claim);
       await oca.layers.hypothesis.form(domain, claim, prediction, opts).catch(() => {});
     };
+    const normalizeEvaluation = (raw) => {
+      if (!raw || typeof raw !== 'object') return null;
+      const allowedMetrics = new Set([
+        'presence', 'front_app', 'battery_pct', 'charging', 'cpu_raw',
+        'memory_pressure_pct', 'typing_wpm', 'idle_seconds', 'hour',
+        'thermal', 'app_switches_15min'
+      ]);
+      const allowedOperators = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'in', 'between']);
+      const metric = String(raw.metric || '').trim();
+      const operator = String(raw.operator || 'eq').trim();
+      if (!allowedMetrics.has(metric) || !allowedOperators.has(operator)) return null;
+      return {
+        metric,
+        operator,
+        value: raw.value,
+        min: raw.min ?? raw.lower ?? null,
+        max: raw.max ?? raw.upper ?? null,
+        window_minutes: Number.isFinite(Number(raw.window_minutes))
+          ? Math.max(3, Math.min(180, Number(raw.window_minutes)))
+          : null,
+      };
+    };
+    const addFallbackHypotheses = async () => {
+      const safeBatteryFloor = Math.max(0, batteryPct - 3);
+      await formIfNew(
+        'system',
+        `Battery remains >= ${safeBatteryFloor}% in 15m`,
+        `battery_pct >= ${safeBatteryFloor}`,
+        {
+          confidence: 0.78,
+          testType: 'passive_observation',
+          deadline: new Date(Date.now() + 15 * 60000).toISOString(),
+          sourceData: {
+            generator: 'deterministic_fallback',
+            evaluation: { metric: 'battery_pct', operator: 'gte', value: safeBatteryFloor, window_minutes: 15 },
+          }
+        }
+      );
+      await formIfNew(
+        'behavior',
+        `Current app includes ${String(visual.frontApp).slice(0, 24)} in 10m`,
+        `front_app contains ${String(visual.frontApp).slice(0, 24)}`,
+        {
+          confidence: 0.62,
+          testType: 'passive_observation',
+          deadline: new Date(Date.now() + 10 * 60000).toISOString(),
+          sourceData: {
+            generator: 'deterministic_fallback',
+            evaluation: { metric: 'front_app', operator: 'contains', value: String(visual.frontApp).slice(0, 24), window_minutes: 10 },
+          }
+        }
+      );
+    };
     
     // GENERATIVE HYPOTHESIS ENGINE — forms its own predictions from observation
     // Not templates. Not rules. The system looks at everything it perceives and
@@ -263,12 +317,33 @@ async function think() {
         const response = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
-          system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking system state (app, battery, idle, thermal, etc).
+          system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking concrete system state.
 
-Be creative. Predict behavior patterns, system events, workflow transitions, emotional shifts, social patterns — anything you notice. Don't repeat existing predictions.
+Allowed metrics:
+- presence (present|idle|away)
+- front_app (string)
+- battery_pct (number)
+- charging (boolean)
+- cpu_raw (number)
+- memory_pressure_pct (number)
+- typing_wpm (number)
+- idle_seconds (number)
+- hour (number 0-23)
+- thermal (string)
+- app_switches_15min (number)
+
+Allowed operators: eq, neq, gt, gte, lt, lte, contains, in, between.
+Use realistic, modest confidence.
 
 Respond ONLY with a JSON array, no markdown:
-[{"domain":"behavior|system|pattern","claim":"short observation + prediction","prediction":"specific testable outcome","confidence":0.5,"deadline_minutes":15}]
+[{
+  "domain":"behavior|system|pattern",
+  "claim":"short observation + prediction",
+  "prediction":"specific concise outcome",
+  "confidence":0.5,
+  "deadline_minutes":15,
+  "evaluation":{"metric":"battery_pct","operator":"gte","value":42}
+}]
 
 Keep claims under 80 chars. Keep predictions under 60 chars.`,
           messages: [{
@@ -284,9 +359,11 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         }
         
         const hypotheses = JSON.parse(rawText);
-        
+        let accepted = 0;
         for (const h of (Array.isArray(hypotheses) ? hypotheses : [hypotheses]).slice(0, 3)) {
           if (!h.claim || !h.prediction) continue;
+          const evaluation = normalizeEvaluation(h.evaluation);
+          if (!evaluation) continue;
           const deadlineMin = Math.max(3, Math.min(120, h.deadline_minutes || 15));
           await formIfNew(
             h.domain || 'behavior',
@@ -295,16 +372,26 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
             { 
               confidence: Math.max(0.1, Math.min(0.95, h.confidence || 0.5)),
               testType: 'passive_observation',
-              deadline: new Date(Date.now() + deadlineMin * 60000).toISOString()
+              deadline: new Date(Date.now() + deadlineMin * 60000).toISOString(),
+              sourceData: {
+                generator: 'llm_observation',
+                evaluation,
+                context_snapshot: contextSnapshot,
+              },
             }
           );
+          accepted++;
         }
-        
-        if (hypotheses.length > 0) {
-          console.log(`[oca] 🔮 generated ${hypotheses.length} hypotheses from observation`);
+
+        if (accepted === 0) {
+          await addFallbackHypotheses();
+          console.log('[oca] 🔮 generated deterministic fallback hypotheses');
+        } else {
+          console.log(`[oca] 🔮 generated ${accepted} verifiable hypotheses from observation`);
         }
       } catch (e) {
         console.error('[oca] hypothesis generation error:', e.message);
+        await addFallbackHypotheses();
         hypothesisCooldown = 20; // back off on error
       }
     }
@@ -314,28 +401,41 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       `SELECT id, claim, prediction, confidence FROM hypotheses 
        WHERE status = 'pending' AND prediction_deadline < NOW() LIMIT 5`
     );
+    const { rows: switches } = await pool.query(
+      `SELECT COUNT(*) as cnt FROM episodic_memory
+       WHERE event_type = 'cognitive_cycle'
+         AND active_app != $1
+         AND timestamp > NOW() - INTERVAL '15 minutes'`,
+      [visual.frontApp]
+    ).catch(() => ({ rows: [{ cnt: 0 }] }));
+    const observedState = {
+      presence: activity.presence,
+      front_app: visual.frontApp,
+      battery_pct: batteryPct,
+      charging: isCharging,
+      cpu_raw: Number(cpuRaw || 0),
+      memory_pressure_pct: Math.round((intero.memory?.pressure || 0) * 100),
+      typing_wpm: Number(typingSpeed || 0),
+      idle_seconds: Number(activity.idleSeconds || 0),
+      hour,
+      thermal: intero.thermal?.pressure || 'unknown',
+      app_switches_15min: Number(switches[0]?.cnt || 0),
+    };
     for (const h of overdue) {
       try {
         // Build context-aware test outcome based on prediction type
-        let outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s`;
-        
-        // Add app switch count for focus predictions
-        if (h.prediction?.includes('fewer than') || h.prediction?.includes('focused')) {
-          // Count recent app switches from episodic memory
-          const { rows: switches } = await pool.query(
-            `SELECT COUNT(*) as cnt FROM episodic_memory WHERE event_type = 'cognitive_cycle' AND active_app != $1 AND timestamp > NOW() - INTERVAL '15 minutes'`,
-            [visual.frontApp]
-          ).catch(() => ({ rows: [{ cnt: 0 }] }));
-          outcomeDesc += `, app_switches_15min=${switches[0]?.cnt || 0}`;
-        }
-        
-        const result = await oca.layers.hypothesis.test(h.id, outcomeDesc);
+        const outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
+        const result = await oca.layers.hypothesis.test(h.id, {
+          description: outcomeDesc,
+          observed: observedState,
+        });
+        const mode = result.evaluation?.mode || 'unknown';
         if (result.confirmed) {
           oca.layers.emotion.processSuccess(0.6);
-          console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
+          console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (mode=${mode}, surprise=${result.surprise?.toFixed(2)})`);
         } else {
           oca.layers.emotion.processSurprise(0.3, 'prediction', `Prediction: ${h.prediction}. Reality: ${outcomeDesc}`);
-          console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (surprise=${result.surprise?.toFixed(2)})`);
+          console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (mode=${mode}, reason=${result.evaluation?.reason || 'n/a'}, surprise=${result.surprise?.toFixed(2)})`);
         }
       } catch (e) {
         await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
@@ -592,6 +692,30 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     } catch (e) {
       console.error('[oca] consolidation error:', e.message);
       consolidationCooldown = 120;
+    }
+  }
+
+  // ── 12.5 DAILY BENCHMARK SNAPSHOT ──────────────────
+  benchmarkCooldown = Math.max(0, benchmarkCooldown - 1);
+  if (benchmarkCooldown <= 0) {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const hour = now.getHours();
+    if (hour >= 3 && lastBenchmarkDate !== today) {
+      benchmarkCooldown = 20;
+      try {
+        const bench = await benchmarkHarness.runBenchmark({ runSource: 'scheduled' });
+        if (bench?.stored) {
+          const composite = Number(bench?.result?.composite);
+          console.log(`[oca] 📈 benchmark stored: composite=${Number.isFinite(composite) ? composite.toFixed(3) : 'n/a'}`);
+          lastBenchmarkDate = today;
+        } else if (bench?.skipped) {
+          lastBenchmarkDate = today;
+        }
+      } catch (e) {
+        console.error('[oca] benchmark error:', e.message);
+        benchmarkCooldown = 80;
+      }
     }
   }
   

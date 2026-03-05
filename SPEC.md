@@ -288,6 +288,18 @@ The runtime now includes an explicit neural topology layer for dynamic inter-lay
 - **Dynamics:** connections strengthen on repeated activation; inactive links decay and are pruned
 - **Exposure:** `GET /oca/neural` provides the live graph for visualization and tooling
 
+### 3.5 Prediction, Causality, and Benchmarking Loops (Implemented)
+
+The runtime now includes explicit closed-loop instrumentation for cognition quality:
+
+- **Prediction ledger:** `prediction_ledger` stores expectation -> observation -> error for motor, hypothesis, and simulation flows, with evaluator metadata (`evaluation_mode`, `evaluation_reason`, `verifiability`).
+- **Structured hypothesis testing:** hypotheses can carry machine-checkable evaluators (`metric`, `operator`, `value`) for deterministic scoring, with semantic fallback only when necessary.
+- **Causal interventions:** `causal_experiments` tracks designed interventions, expected/actual effects, and `causal_support` updates.
+- **Counterfactual evaluation:** counterfactuals can be scored against observed outcomes via embedding similarity and persisted accuracy.
+- **Entity-level world context:** `entities`, `entity_relations`, and `entity_mentions` support stable world representations beyond raw text matching.
+- **Reasoning controller:** high-stakes decisions can be routed through propose -> critique -> revise -> verify with persisted reasoning traces.
+- **Benchmark persistence:** daily and manual benchmark snapshots are stored in `benchmark_history`, with API retrieval for trend analysis.
+
 ---
 
 ## 4. Layer 0: Hardware Substrate & Embodiment
