@@ -6,6 +6,7 @@ import oca from './index.js';
 import prospective from './memory/prospective.js';
 import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
+import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
 import { execSync } from 'child_process';
 
@@ -392,7 +393,20 @@ async function think() {
 - Use realistic confidence and avoid duplicates.`;
 
         // Gather ALL available context
-        const visionAnalysis = sensory.getLastVisionAnalysis?.()?.description || '';
+        let recentVisualMemories = [];
+        try {
+          recentVisualMemories = await visualMemory.getRecentVisualMemory(4);
+        } catch {
+          recentVisualMemories = [];
+        }
+        const visionAnalysis = sensory.getLastVisionAnalysis?.()?.description || recentVisualMemories[0]?.description || '';
+        const visualDigest = recentVisualMemories
+          .map((m) => {
+            const app = m.front_app || 'unknown';
+            const desc = String(m.description || '').slice(0, 100);
+            return `[${app}] ${desc}`;
+          })
+          .join(' | ');
         const recentApps = await pool.query(
           `SELECT DISTINCT active_app FROM episodic_memory 
            WHERE active_app IS NOT NULL AND active_app != 'unknown' 
@@ -424,6 +438,9 @@ async function think() {
           runningApps: (visual.runningApps || []).join(', '),
           recentApps30min: recentApps.join(', '),
           visionDescription: visionAnalysis.slice(0, 200),
+          recentVisualMemory: visualDigest.slice(0, 450),
+          latestVisualActivity: recentVisualMemories[0]?.activity_type || 'unknown',
+          latestVisualApp: recentVisualMemories[0]?.front_app || visual.frontApp,
           appJustSwitched: appSwitched,
           previousApp: previousApp || 'unknown',
           emotionalState: `valence=${emotionState.valence?.toFixed(2)}, arousal=${emotionState.arousal?.toFixed(2)}, dominant=${Object.entries(emotionState).filter(([k]) => !['valence','arousal','confidence','energy_level','cognitive_load'].includes(k)).sort((a,b) => b[1] - a[1])[0]?.[0] || 'neutral'}`,
@@ -1045,6 +1062,15 @@ async function start() {
   await swiftSensory.ensureTable();
   const swiftStarted = await swiftSensory.start();
   console.log(swiftStarted ? '[oca] Swift sensory cortex online' : '[oca] Using Node.js sensory fallback');
+
+  try {
+    const visualStart = await visualMemory.startScreenshotIndexer();
+    if (visualStart?.started) {
+      console.log('[oca] Visual memory indexer online');
+    }
+  } catch (e) {
+    console.error('[oca] visual memory indexer failed:', e.message);
+  }
   
   // Boot experience
   await oca.experience('system', 'Cognitive architecture booted. All layers online.', {

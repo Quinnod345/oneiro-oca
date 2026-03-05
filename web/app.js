@@ -4,6 +4,8 @@
 const API = 'http://localhost:3333';
 let connected = false;
 let chatMessages = [];
+let visualSearchResults = [];
+let visualSearchQuery = '';
 
 // --- SVG gradient injection ---
 function injectSVGDefs() {
@@ -302,7 +304,10 @@ async function updateHypotheses() {
 
 // --- Perception ---
 async function updatePerception() {
-    const data = await fetchJSON('/oca/sense');
+    const [data, visualRecent] = await Promise.all([
+        fetchJSON('/oca/sense'),
+        fetchJSON('/oca/visual-memory/recent?limit=1')
+    ]);
     const container = document.getElementById('perceptionData');
     if (!data) { container.innerHTML = '<div class="perc-empty">No perception data</div>'; return; }
 
@@ -341,6 +346,77 @@ async function updatePerception() {
     }
 
     container.innerHTML = html || '<div class="perc-empty">No perception data</div>';
+
+    const latestContainer = document.getElementById('visualMemoryLatest');
+    const latest = Array.isArray(visualRecent?.recent) ? visualRecent.recent[0] : null;
+    if (latestContainer) {
+        if (!latest) {
+            latestContainer.innerHTML = '<div class="perc-empty">No indexed visual memory yet</div>';
+        } else {
+            const when = latest.captured_at ? formatRelativeTime(latest.captured_at) : 'just now';
+            latestContainer.innerHTML = `
+                <div class="visual-latest-label">Latest Visual Memory</div>
+                <div class="visual-latest-desc">${escapeHtml(latest.description || 'No description')}</div>
+                <div class="visual-latest-meta">
+                    <span>${escapeHtml(latest.front_app || 'unknown app')}</span>
+                    <span>${when}</span>
+                    <span>${latest.file_retained === false ? 'file pruned' : 'file retained'}</span>
+                </div>
+            `;
+        }
+    }
+
+    renderVisualSearchResults();
+}
+
+function renderVisualSearchResults() {
+    const container = document.getElementById('visualSearchResults');
+    if (!container) return;
+    if (!visualSearchQuery) {
+        container.innerHTML = '';
+        return;
+    }
+    if (!Array.isArray(visualSearchResults) || visualSearchResults.length === 0) {
+        container.innerHTML = `<div class="perc-empty">No results for “${escapeHtml(visualSearchQuery)}”</div>`;
+        return;
+    }
+
+    container.innerHTML = visualSearchResults.slice(0, 6).map((item) => {
+        const score = Number(item.similarity);
+        const scoreText = Number.isFinite(score) ? `${Math.round(score * 100)}%` : 'text';
+        const when = item.captured_at ? formatRelativeTime(item.captured_at) : 'unknown time';
+        return `
+            <div class="visual-search-item">
+                <div class="visual-search-head">
+                    <span>${escapeHtml(item.front_app || 'unknown')}</span>
+                    <span>${scoreText}</span>
+                </div>
+                <div class="visual-search-desc">${escapeHtml(item.description || '')}</div>
+                <div class="visual-search-meta">
+                    <span>${when}</span>
+                    <span>${escapeHtml(item.activity_type || 'activity unknown')}</span>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+async function runVisualSearch() {
+    const input = document.getElementById('visualSearchInput');
+    const container = document.getElementById('visualSearchResults');
+    if (!input || !container) return;
+
+    const query = input.value.trim();
+    visualSearchQuery = query;
+    if (!query) {
+        visualSearchResults = [];
+        renderVisualSearchResults();
+        return;
+    }
+
+    container.innerHTML = '<div class="perc-empty">Searching visual memory…</div>';
+    const data = await fetchJSON(`/oca/visual-memory?query=${encodeURIComponent(query)}&limit=6`);
+    visualSearchResults = Array.isArray(data?.results) ? data.results : [];
+    renderVisualSearchResults();
 }
 
 // --- Chat ---
@@ -438,6 +514,19 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function formatRelativeTime(iso) {
+    const ts = Date.parse(iso);
+    if (Number.isNaN(ts)) return 'unknown';
+    const deltaSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (deltaSec < 60) return `${deltaSec}s ago`;
+    const min = Math.floor(deltaSec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 48) return `${hr}h ago`;
+    const d = Math.floor(hr / 24);
+    return `${d}d ago`;
+}
+
 // --- Init ---
 function init() {
     injectSVGDefs();
@@ -458,6 +547,18 @@ function init() {
             await updateDreams();
             dreamActBtn.textContent = 'Act On Dreams Now';
             dreamActBtn.disabled = false;
+        });
+    }
+
+    const visualSearchBtn = document.getElementById('visualSearchBtn');
+    if (visualSearchBtn) visualSearchBtn.addEventListener('click', runVisualSearch);
+    const visualSearchInput = document.getElementById('visualSearchInput');
+    if (visualSearchInput) {
+        visualSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                runVisualSearch();
+            }
         });
     }
 

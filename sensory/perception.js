@@ -1,64 +1,107 @@
 // OCA Sensory Cortex — multi-modal perception
 // Tries Swift binary cached data first, falls back to osascript
 import { execSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
 import { emit } from '../event-bus.js';
 import swiftBridge from './swift-bridge.js';
+import visualMemory from './screenshot-indexer.js';
+
+const VISUAL_CACHE_PATH = new URL('./latest-visual-cache.json', import.meta.url);
+let lastVisualState = {
+  frontApp: 'unknown',
+  windowTitle: '',
+  windowCount: 0,
+  runningApps: [],
+  timestamp: new Date().toISOString()
+};
+
+function normalizeFrontApp(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return null;
+  if (normalized.toLowerCase() === 'unknown') return null;
+  return normalized;
+}
+
+function readVisualCache() {
+  try {
+    if (!existsSync(VISUAL_CACHE_PATH)) return null;
+    const parsed = JSON.parse(readFileSync(VISUAL_CACHE_PATH, 'utf8'));
+    return {
+      frontApp: normalizeFrontApp(parsed?.frontApp),
+      windowTitle: String(parsed?.windowTitle || '').trim(),
+      timestamp: parsed?.timestamp || null
+    };
+  } catch {
+    return null;
+  }
+}
 
 // === VISUAL PERCEPTION ===
 
 // Get current screen state (structured, not pixels)
 export function getVisualState() {
-  // Try Swift binary cached data first (works in launchd)
-  const swiftApp = swiftBridge.getLatestFrontApp();
-  const swiftTitle = swiftBridge.getLatestWindowTitle();
-  
+  const swiftApp = normalizeFrontApp(swiftBridge.getLatestFrontApp());
+  const swiftTitle = String(swiftBridge.getLatestWindowTitle() || '').trim();
+  const cached = readVisualCache();
+  const fallbackApp = swiftApp || cached?.frontApp || normalizeFrontApp(lastVisualState.frontApp) || 'unknown';
+  const fallbackTitle = swiftTitle || cached?.windowTitle || lastVisualState.windowTitle || '';
+
+  let frontApp = fallbackApp;
+  let windowTitle = fallbackTitle;
+  let windowCount = Number(lastVisualState.windowCount || 0);
+  let runningApps = Array.isArray(lastVisualState.runningApps) ? lastVisualState.runningApps : [];
+
   try {
-    // Try osascript for full data (works in interactive shells)
-    const frontApp = execSync(
+    const osascriptFrontApp = execSync(
       "osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true' 2>/dev/null",
       { encoding: 'utf8', timeout: 3000 }
     ).trim();
-    
-    const windowTitle = execSync(
-      `osascript -e 'tell application "System Events" to get title of front window of application process "${frontApp}"' 2>/dev/null`,
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
-    
-    const windowCount = execSync(
-      `osascript -e 'tell application "System Events" to count windows of application process "${frontApp}"' 2>/dev/null`,
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
-    
-    let runningApps = [];
-    try {
-      runningApps = execSync(
-        "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
-        { encoding: 'utf8', timeout: 3000 }
-      )
-        .trim()
-        .split(', ')
-        .filter(Boolean);
-    } catch {
-      runningApps = [];
-    }
-    
-    return {
-      frontApp,
-      windowTitle,
-      windowCount: parseInt(windowCount || '0'),
-      runningApps,
-      timestamp: new Date().toISOString()
-    };
+    frontApp = normalizeFrontApp(osascriptFrontApp) || frontApp;
   } catch {
-    // osascript failed (launchd context) — use Swift binary data
-    return { 
-      frontApp: swiftApp || 'unknown', 
-      windowTitle: swiftTitle || '', 
-      windowCount: 0, 
-      runningApps: [], 
-      timestamp: new Date().toISOString() 
-    };
+    // keep fallbackApp
   }
+
+  if (frontApp && frontApp !== 'unknown') {
+    try {
+      windowTitle = execSync(
+        `osascript -e 'tell application "System Events" to get title of front window of application process "${frontApp}"' 2>/dev/null`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim() || windowTitle;
+    } catch {
+      // keep fallbackTitle
+    }
+
+    try {
+      const rawCount = execSync(
+        `osascript -e 'tell application "System Events" to count windows of application process "${frontApp}"' 2>/dev/null`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      windowCount = parseInt(rawCount || '0') || windowCount;
+    } catch {
+      // keep previous count
+    }
+  }
+
+  try {
+    const appsRaw = execSync(
+      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
+      { encoding: 'utf8', timeout: 3000 }
+    ).trim();
+    const parsedApps = appsRaw.split(', ').filter(Boolean);
+    if (parsedApps.length > 0) runningApps = parsedApps;
+  } catch {
+    // keep previous running apps
+  }
+
+  const result = {
+    frontApp: frontApp || 'unknown',
+    windowTitle,
+    windowCount,
+    runningApps,
+    timestamp: new Date().toISOString()
+  };
+  if (result.frontApp !== 'unknown') lastVisualState = result;
+  return result;
 }
 
 // === AUDITORY PERCEPTION ===
@@ -256,42 +299,30 @@ export async function analyzeScreenshot() {
   if (now - lastVisionTime < VISION_COOLDOWN_MS && lastVisionAnalysis) {
     return lastVisionAnalysis;
   }
-  
+
   try {
-    const screenshotsDir = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots';
-    const { readdirSync, readFileSync } = await import('fs');
-    const shots = readdirSync(screenshotsDir).filter(f => f.endsWith('.jpg')).sort();
-    if (shots.length === 0) return null;
-    
-    const latest = `${screenshotsDir}/${shots[shots.length - 1]}`;
-    const imageData = readFileSync(latest);
-    const base64 = imageData.toString('base64');
-    
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text', text: 'In 2-3 sentences: What app is in focus? If a browser, what website/tab is active (read the URL bar or tab title)? What is the user doing? Be specific about visible content.' }
-        ]
-      }]
-    });
-    
+    const latest = await visualMemory.getLatestVisualMemory();
+    if (!latest) return lastVisionAnalysis;
+
+    const screenshotFile = String(latest.filepath || '').split('/').pop() || null;
     lastVisionAnalysis = {
-      description: response.content[0].text,
-      timestamp: new Date().toISOString(),
-      screenshotFile: shots[shots.length - 1]
+      description: latest.description || 'No indexed screenshot description available.',
+      contentSummary: latest.content_summary || null,
+      app: latest.front_app || null,
+      windowTitle: latest.window_title || null,
+      url: latest.url || null,
+      activityType: latest.activity_type || null,
+      timestamp: latest.captured_at ? new Date(latest.captured_at).toISOString() : new Date().toISOString(),
+      screenshotFile,
+      screenshotPath: latest.filepath || null,
+      fileRetained: latest.file_retained !== false,
+      source: latest.metadata?.source || null
     };
     lastVisionTime = now;
-    
+
     return lastVisionAnalysis;
   } catch (e) {
-    console.error('[perception] vision analysis failed:', e.message);
+    console.error('[perception] indexed vision lookup failed:', e.message);
     return lastVisionAnalysis; // return stale if available
   }
 }

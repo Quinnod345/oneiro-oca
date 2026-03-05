@@ -3,11 +3,13 @@
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { pool, emit } from '../event-bus.js';
+import { writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BINARY_PATH = join(__dirname, 'swift/.build/debug/oneiro-sensory');
+const VISUAL_CACHE_PATH = join(__dirname, 'latest-visual-cache.json');
 
 let process = null;
 let lastHIDMetrics = {};
@@ -15,6 +17,18 @@ let lastInteroception = {};
 let lastFrontApp = null;
 let lastWindowTitle = null;
 let eventCount = 0;
+
+function writeVisualCache() {
+  try {
+    writeFileSync(VISUAL_CACHE_PATH, JSON.stringify({
+      frontApp: lastFrontApp || 'unknown',
+      windowTitle: lastWindowTitle || '',
+      timestamp: new Date().toISOString()
+    }));
+  } catch {
+    // Best-effort cache only.
+  }
+}
 
 // Start the Swift sensory binary
 export async function start() {
@@ -30,7 +44,7 @@ export async function start() {
         const event = JSON.parse(line);
         eventCount++;
         await handleEvent(event);
-      } catch (e) {
+      } catch {
         // Not JSON, ignore
       }
     });
@@ -47,8 +61,8 @@ export async function start() {
     
     console.log('[sensory-swift] started, PID:', process.pid);
     return true;
-  } catch (e) {
-    console.error('[sensory-swift] failed to start:', e.message);
+  } catch (error) {
+    console.error('[sensory-swift] failed to start:', error.message);
     return false;
   }
 }
@@ -78,6 +92,7 @@ async function handleEvent(event) {
       
     case 'app_switch':
       lastFrontApp = payload.newApp || payload.app || payload.name || null;
+      writeVisualCache();
       await emit('perception_update', 'sensory_swift', {
         channel: 'proprioceptive',
         event: 'app_switch',
@@ -86,12 +101,25 @@ async function handleEvent(event) {
       break;
       
     case 'window_change':
+      if (payload.app) lastFrontApp = payload.app;
       lastWindowTitle = payload.title || payload.windowTitle || null;
+      writeVisualCache();
       await emit('perception_update', 'sensory_swift', {
         channel: 'visual',
         event: 'window_change',
         ...payload
       }, { priority: 0.3 });
+      break;
+
+    case 'screenshot_captured':
+      if (payload.app) lastFrontApp = payload.app;
+      if (payload.title) lastWindowTitle = payload.title;
+      writeVisualCache();
+      await emit('perception_update', 'sensory_swift', {
+        channel: 'visual',
+        event: 'screenshot_captured',
+        ...payload
+      }, { priority: 0.6 });
       break;
       
     case 'interoception':

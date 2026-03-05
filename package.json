@@ -1,12 +1,13 @@
 {
   "name": "oneiro-oca",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Oneiro Cognitive Architecture — embodied machine cognition on consumer hardware",
   "type": "module",
-  "main": "index.js",
+  "main": "cognitive-loop.js",
   "scripts": {
+    "bootstrap": "bash bootstrap.sh",
     "test": "node --env-file=../.env test.js",
-    "migrate": "set -e; DB=postgres://quinnodonnell@localhost/oneiro; CORE_READY=$(psql \"$DB\" -tAc \"SELECT CASE WHEN to_regclass('public.cognitive_events') IS NULL THEN '0' ELSE '1' END\"); for f in migrations/*.sql; do if [ \"$(basename \"$f\" | cut -d'_' -f1)\" = \"001\" ] && [ \"$CORE_READY\" = \"1\" ]; then echo \"Skipping $f (already initialized)\"; continue; fi; echo \"Running $f\"; psql -v ON_ERROR_STOP=1 \"$DB\" -f \"$f\"; done",
+    "migrate": "for f in migrations/*.sql; do echo \"Running $f\"; psql -v ON_ERROR_STOP=1 \"${DATABASE_URL:-postgres://localhost/oneiro}\" -f \"$f\"; done",
     "start": "node --env-file=../.env cognitive-loop.js"
   },
   "dependencies": {
