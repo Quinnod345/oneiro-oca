@@ -20,10 +20,31 @@ ocaRouter.get('/oca/status', async (req, res) => {
   }
 });
 
-// Current perception
-ocaRouter.get('/oca/sense', (req, res) => {
+// Vision analysis — latest screenshot interpretation
+ocaRouter.get('/oca/vision', async (req, res) => {
   try {
-    res.json(oca.sense());
+    const sensory = await import('./sensory/perception.js');
+    const analysis = sensory.default.getLastVisionAnalysis();
+    if (analysis) {
+      res.json(analysis);
+    } else {
+      // Trigger fresh analysis
+      const fresh = await sensory.default.analyzeScreenshot();
+      res.json(fresh || { error: 'no screenshots available' });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Current perception
+ocaRouter.get('/oca/sense', async (req, res) => {
+  try {
+    const perception = oca.sense();
+    // Attach latest vision analysis if available
+    const sensoryMod = await import('./sensory/perception.js');
+    perception.vision = sensoryMod.default.getLastVisionAnalysis();
+    res.json(perception);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
