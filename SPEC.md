@@ -2,8 +2,8 @@
 ## A Specification for Embodied Machine Cognition on Consumer Hardware
 
 **Authors:** Quinn O'Donnell, Oneiro  
-**Date:** March 4, 2026  
-**Version:** 0.1.0-draft  
+**Date:** March 5, 2026  
+**Version:** 0.1.1-draft  
 **Platform:** macOS / Apple Silicon / OpenClaw  
 
 ---
@@ -312,6 +312,41 @@ The runtime now includes explicit closed-loop instrumentation for cognition qual
 - **Entity-level world context:** `entities`, `entity_relations`, and `entity_mentions` support stable world representations beyond raw text matching.
 - **Reasoning controller:** high-stakes decisions can be routed through propose -> critique -> revise -> verify with persisted reasoning traces.
 - **Benchmark persistence:** daily and manual benchmark snapshots are stored in `benchmark_history`, with API retrieval for trend analysis.
+
+### 3.6 Dream Lifecycle, UI Topology, and Runtime Hardening (Implemented)
+
+The architecture now treats dreams as stateful cognitive objects rather than static memory entries.
+
+**Dream lifecycle state machine (`dreams` table + dispatch/runtime sync):**
+
+| State | Meaning | Typical Trigger |
+|---|---|---|
+| `dormant` | Conceptual motive captured but not yet operationalized | Dream created or refreshed |
+| `distilled` | Dream translated into an actionable channel intent | `dreamToTask()` routing pass |
+| `dispatched` | Task emitted to builder/trader queue | Queue insertion or comms dispatch |
+| `executing` | Active worker is currently executing associated task | Builder `currentTask` alignment |
+| `reflected` | Execution completed and dream loop closed | Completed queue / resolution sync |
+
+**Lifecycle persistence fields (added to `dreams`):**
+- `lifecycle_state`, `lifecycle_updated_at`
+- `distilled_at`, `dispatched_at`, `executing_at`, `reflected_at`
+- `last_task_id`, `lifecycle_context` (JSONB)
+
+**Operational synchronization:**
+- `syncDreamLifecycle()` reconciles DB state against builder queue, builder active state, and trader comms.
+- Lifecycle sync runs before/after dispatch to prevent stale or misleading dashboard state.
+- `GET /dreams` now surfaces lifecycle counts and per-dream lifecycle metadata for direct UI introspection.
+
+**Dashboard topology update (web):**
+- Dashboard moved to a strict 3-column masonry presentation where each panel occupies one column-width card.
+- Chat and Perception panels are no longer forced full-width rows; they participate in column flow.
+- Dreams panel now includes lifecycle badges and actionable/execution status chips.
+
+**Reliability hardening for long-running loops:**
+- Hypothesis generation parser, consolidation parser, and simulation parser now use multi-pass extraction and fail-soft normalization instead of hard-failing on malformed fenced JSON.
+- Hypothesis preflight quality gating + graveyard archival reduce low-verifiability noise.
+- Hypothesis SLA sweeps force evaluation of stale pending predictions to improve coverage.
+- AppleScript front-app fallback calls are stderr-silenced to reduce runtime log spam under constrained contexts.
 
 ---
 
