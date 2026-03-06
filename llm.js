@@ -7,7 +7,8 @@
 // Drop-in replacement: llm.messages.create({...}) has the same signature.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { execSync } from 'child_process';
+import { execSync, spawn as spawnChild } from 'child_process';
+import { createReadStream } from 'fs';
 import { existsSync, writeFileSync, unlinkSync } from 'fs';
 
 const API_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -21,6 +22,15 @@ let apiFailCount = 0;
 let apiDisabledUntil = 0;
 const API_BACKOFF_MS = 5 * 60 * 1000; // 5 min backoff after repeated failures
 const API_FAIL_THRESHOLD = 3;
+
+// CLI concurrency limiter — only one claude -p call at a time
+let cliLock = Promise.resolve();
+function withCliLock(fn) {
+  const prev = cliLock;
+  let resolve;
+  cliLock = new Promise(r => { resolve = r; });
+  return prev.then(() => fn()).finally(() => resolve());
+}
 
 // Claude CLI path — resolve it once at startup
 const CLAUDE_CLI = (() => {
@@ -88,8 +98,8 @@ const messages = {
       }
     }
 
-    // Fallback: claude -p CLI (OAuth/Max subscription)
-    return await callCLI(params);
+    // Fallback: claude -p CLI (OAuth/Max subscription) — serialized to prevent concurrent calls
+    return await withCliLock(() => callCLI(params));
   }
 };
 
@@ -103,55 +113,27 @@ async function callCLI(params) {
 
   // Build the prompt from system + messages
   let prompt = '';
-  if (system) {
-    prompt += `${system}\n\n`;
-  }
+  if (system) prompt += `${system}\n\n`;
   for (const msg of msgs) {
     if (msg.role === 'user') {
-      // Handle content that may be string or array (vision messages)
       if (typeof msg.content === 'string') {
         prompt += msg.content;
       } else if (Array.isArray(msg.content)) {
-        // Extract text blocks, skip image blocks (CLI can't handle them)
-        const textParts = msg.content
-          .filter(c => c.type === 'text')
-          .map(c => c.text);
-        prompt += textParts.join('\n');
+        prompt += msg.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
       }
     } else if (msg.role === 'assistant') {
       prompt += `\nAssistant: ${typeof msg.content === 'string' ? msg.content : ''}\n`;
     }
   }
 
-  // Escape for heredoc
-  const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/'/g, "'\"'\"'");
+  // Write prompt to temp file
+  const tmpFile = `/tmp/oca-llm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
+  writeFileSync(tmpFile, prompt, 'utf8');
 
   try {
-    // Always use temp file approach — more reliable for large prompts and avoids escaping issues
-    const tmpFile = `/tmp/oca-llm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
-    writeFileSync(tmpFile, prompt, 'utf8');
-    
-    const output = execSync(
-      `${CLAUDE_CLI} -p --model ${cliModel} < "${tmpFile}"`,
-      {
-        encoding: 'utf8',
-        timeout: 120_000,
-        shell: '/bin/zsh',
-        env: {
-          ...process.env,
-          HOME: '/Users/quinnodonnell',
-          PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
-          TERM: 'dumb',
-          USER: 'quinnodonnell',
-          SHELL: '/bin/zsh',
-          XDG_CONFIG_HOME: '/Users/quinnodonnell/.config',
-        }
-      }
-    ).trim();
-    
+    const output = await spawnClaude(cliModel, tmpFile);
     try { unlinkSync(tmpFile); } catch {}
 
-    // Return in Anthropic SDK response format
     return {
       id: `cli-${Date.now()}`,
       type: 'message',
@@ -159,12 +141,59 @@ async function callCLI(params) {
       content: [{ type: 'text', text: output }],
       model: cliModel,
       stop_reason: 'end_turn',
-      usage: { input_tokens: 0, output_tokens: 0 }, // CLI doesn't report tokens
+      usage: { input_tokens: 0, output_tokens: 0 },
       _via: 'cli_fallback'
     };
   } catch (e) {
+    try { unlinkSync(tmpFile); } catch {}
     throw new Error(`Both API and CLI failed. API: rate limited. CLI: ${e.message}`);
   }
+}
+
+// Use child_process.spawn for better control over the claude process
+function spawnClaude(model, inputFile) {
+  return new Promise((resolve, reject) => {
+    const child = spawnChild(CLAUDE_CLI, ['-p', '--model', model], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        HOME: '/Users/quinnodonnell',
+        PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
+        USER: 'quinnodonnell',
+        TERM: 'dumb',
+      }
+    });
+
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    
+    // Pipe the input file to stdin
+    const input = createReadStream(inputFile);
+    input.pipe(child.stdin);
+    input.on('error', () => { try { child.stdin.end(); } catch {} });
+    
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`CLI timeout (120s). stderr: ${stderr.slice(0, 200)}`));
+    }, 120_000);
+    
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0 && stdout.trim()) {
+        resolve(stdout.trim());
+      } else {
+        reject(new Error(`CLI exit ${code}. stderr: ${stderr.slice(0, 300)}. stdout: ${stdout.slice(0, 200)}`));
+      }
+    });
+    
+    child.on('error', (e) => {
+      clearTimeout(timeout);
+      reject(new Error(`CLI spawn error: ${e.message}`));
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════
