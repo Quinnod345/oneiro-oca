@@ -6,9 +6,8 @@ import episodic from './episodic.js';
 import semantic from './semantic.js';
 import procedural from './procedural.js';
 import { inferLayerFromText, upsertNeuralConnection } from '../neural-connections.js';
-import Anthropic from '@anthropic-ai/sdk';
+import llm from '../llm.js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function parseConsolidationPayload(rawText) {
   const raw = String(rawText || '').trim();
@@ -91,7 +90,7 @@ export async function consolidate() {
   ).join('\n');
   
   try {
-    const response = await anthropic.messages.create({
+    const response = await llm.messages.create({
       model: 'claude-sonnet-4-6',
       system: `You are a memory consolidation engine. Given a list of episodic memories, extract:
 1. PRINCIPLES: General knowledge/rules that can be abstracted (e.g., "Quinn prefers direct communication")

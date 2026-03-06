@@ -923,4 +923,34 @@ ocaRouter.post('/oca/consolidate', async (req, res) => {
   }
 });
 
+// LLM gateway status
+ocaRouter.get('/oca/llm-status', async (req, res) => {
+  try {
+    const llm = (await import('./llm.js')).default;
+    res.json(llm.getStatus());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/llm-force-cli', async (req, res) => {
+  try {
+    const llm = (await import('./llm.js')).default;
+    llm.forceCLI();
+    res.json({ mode: 'cli_only', message: 'Forced CLI mode for 24h' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/llm-reset', async (req, res) => {
+  try {
+    const llm = (await import('./llm.js')).default;
+    llm.resetAPI();
+    res.json({ mode: 'api_primary', message: 'API reset — will try direct API' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default ocaRouter;
