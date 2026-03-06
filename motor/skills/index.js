@@ -3,3 +3,4 @@ export { default as browser } from './browser.js';
 export { default as terminal } from './terminal.js';
 export { default as xcode } from './xcode.js';
 export { default as logicPro } from './logic-pro.js';
+export { default as xPoster } from './x-poster.js';
