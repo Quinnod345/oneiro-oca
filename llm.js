@@ -153,10 +153,15 @@ async function callCLI(params) {
 // Use child_process.spawn for better control over the claude process
 function spawnClaude(model, inputFile) {
   return new Promise((resolve, reject) => {
+    // CRITICAL: strip ANTHROPIC_API_KEY so claude uses OAuth/Max subscription
+    // instead of the raw API key (which may be rate-limited)
+    const cliEnv = { ...process.env };
+    delete cliEnv.ANTHROPIC_API_KEY;
+    
     const child = spawnChild(CLAUDE_CLI, ['-p', '--model', model], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
-        ...process.env,
+        ...cliEnv,
         HOME: '/Users/quinnodonnell',
         PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
         USER: 'quinnodonnell',
