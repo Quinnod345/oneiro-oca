@@ -8,6 +8,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { execSync } from 'child_process';
+import { existsSync, writeFileSync, unlinkSync } from 'fs';
 
 const API_KEY = process.env.ANTHROPIC_API_KEY || '';
 let anthropic = null;
@@ -20,6 +21,21 @@ let apiFailCount = 0;
 let apiDisabledUntil = 0;
 const API_BACKOFF_MS = 5 * 60 * 1000; // 5 min backoff after repeated failures
 const API_FAIL_THRESHOLD = 3;
+
+// Claude CLI path — resolve it once at startup
+const CLAUDE_CLI = (() => {
+  const candidates = [
+    '/Users/quinnodonnell/.local/bin/claude',
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude',
+  ];
+  for (const p of candidates) {
+    try { if (existsSync(p)) return p; } catch {}
+  }
+  // Last resort: try PATH
+  try { return execSync('which claude', { encoding: 'utf8', timeout: 3000 }).trim(); } catch {}
+  return 'claude'; // hope for the best
+})();
 
 // Model mapping for CLI (claude -p uses aliases)
 const MODEL_TO_CLI = {
@@ -111,14 +127,20 @@ async function callCLI(params) {
   const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/'/g, "'\"'\"'");
 
   try {
+    // Always use temp file approach — more reliable for large prompts and avoids escaping issues
+    const tmpFile = `/tmp/oca-llm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
+    writeFileSync(tmpFile, prompt, 'utf8');
+    
     const output = execSync(
-      `echo '${escapedPrompt}' | claude -p -m ${cliModel} --max-tokens ${max_tokens || 1024}`,
+      `cat "${tmpFile}" | ${CLAUDE_CLI} -p --model ${cliModel}`,
       {
         encoding: 'utf8',
         timeout: 120_000,
-        env: { ...process.env, TERM: 'dumb' }
+        env: { ...process.env, TERM: 'dumb', HOME: '/Users/quinnodonnell', PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }
       }
     ).trim();
+    
+    try { unlinkSync(tmpFile); } catch {}
 
     // Return in Anthropic SDK response format
     return {
@@ -132,36 +154,7 @@ async function callCLI(params) {
       _via: 'cli_fallback'
     };
   } catch (e) {
-    // If CLI also fails, try one more approach: write to temp file to avoid shell escaping issues
-    try {
-      const tmpFile = `/tmp/oca-llm-${Date.now()}.txt`;
-      const { writeFileSync, unlinkSync } = await import('fs');
-      writeFileSync(tmpFile, prompt, 'utf8');
-      
-      const output = execSync(
-        `cat "${tmpFile}" | claude -p -m ${cliModel} --max-tokens ${max_tokens || 1024}`,
-        {
-          encoding: 'utf8',
-          timeout: 120_000,
-          env: { ...process.env, TERM: 'dumb' }
-        }
-      ).trim();
-      
-      try { unlinkSync(tmpFile); } catch {}
-      
-      return {
-        id: `cli-${Date.now()}`,
-        type: 'message',
-        role: 'assistant',
-        content: [{ type: 'text', text: output }],
-        model: cliModel,
-        stop_reason: 'end_turn',
-        usage: { input_tokens: 0, output_tokens: 0 },
-        _via: 'cli_fallback_file'
-      };
-    } catch (e2) {
-      throw new Error(`Both API and CLI failed. API: rate limited. CLI: ${e2.message}`);
-    }
+    throw new Error(`Both API and CLI failed. API: rate limited. CLI: ${e.message}`);
   }
 }
 
