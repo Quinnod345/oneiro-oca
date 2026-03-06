@@ -1,9 +1,8 @@
 // OCA Adversarial Deliberation Engine
 // Four perspectives debate decisions: Skeptic, Builder, Dreamer, Empath
 import { pool, emit } from '../event-bus.js';
-import Anthropic from '@anthropic-ai/sdk';
+import llm from '../llm.js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PERSPECTIVES = {
   skeptic: {
@@ -58,7 +57,7 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
   const perspectives = await Promise.all(
     Object.entries(PERSPECTIVES).map(async ([key, perspective]) => {
       try {
-        const response = await anthropic.messages.create({
+        const response = await llm.messages.create({
           model: 'claude-sonnet-4-6',
           system: perspective.system,
           messages: [
@@ -88,7 +87,7 @@ export async function deliberate(decision, { stakes = 'medium', context = '', ti
   
   let resolution, resolutionMethod;
   try {
-    const synthesis = await anthropic.messages.create({
+    const synthesis = await llm.messages.create({
       model: 'claude-sonnet-4-6',
       system: 'You are the Executive Controller resolving a deliberation. Given four perspectives on a decision, synthesize the best path forward. Be decisive. 2-3 sentences. End with a clear action.',
       messages: [
@@ -165,7 +164,7 @@ export async function quickCheck(perspective, question, context = '') {
   const p = PERSPECTIVES[perspective];
   if (!p) throw new Error(`Unknown perspective: ${perspective}`);
   
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: 'claude-sonnet-4-6',
     system: p.system,
     messages: [

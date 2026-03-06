@@ -1,11 +1,10 @@
 // OCA World Simulation — forward models and counterfactual reasoning
 import { pool, emit } from '../event-bus.js';
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
+import llm from '../llm.js';
 import { startPrediction, completePrediction } from '../prediction-ledger.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function parseSimulationPayload(rawText) {
   const raw = String(rawText || '').trim();
@@ -101,7 +100,7 @@ export async function getEntity(domain, entity) {
 // Simulate forward: given current state + action, predict next state
 export async function simulate(description, initialState, actionSequence, { purpose = 'decision' } = {}) {
   try {
-    const response = await anthropic.messages.create({
+    const response = await llm.messages.create({
       model: 'claude-sonnet-4-6',
       system: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
 

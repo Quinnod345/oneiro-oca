@@ -450,10 +450,7 @@ async function think() {
           existingPredictions: recentHypos.map(h => h.claim).join('; '),
         };
         
-        const Anthropic = (await import('@anthropic-ai/sdk')).default;
-        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-        
-        const response = await anthropic.messages.create({
+        const response = await (await import('./llm.js')).default.messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
           system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking concrete system state.
