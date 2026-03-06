@@ -8,6 +8,7 @@ import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
+import dreamExecutor from './executive/dream-executor.js';
 import { execSync } from 'child_process';
 
 const MAX_WORKING_MEMORY = 7;
@@ -31,6 +32,7 @@ let visionCooldown = 0;
 let hypothesisCooldown = 0;
 let hypothesisSlaCooldown = 0;
 let benchmarkCooldown = 0;
+let dreamExecutionCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
 
@@ -842,6 +844,27 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         }
       }
     } catch {}
+  }
+  
+  // ── 10.5 DREAM EXECUTION ───────────────────────────
+  // Execute dispatched dreams into real actions
+  dreamExecutionCooldown = Math.max(0, dreamExecutionCooldown - 1);
+  
+  if (dreamExecutionCooldown <= 0 && result.cycle % 20 === 0) {
+    dreamExecutionCooldown = 30; // ~5 min at 10s cycles
+    try {
+      const execResult = await dreamExecutor.executeDreams();
+      if (execResult.executed > 0) {
+        console.log(`[oca] 🎯 dream execution: ${execResult.executed} dreams processed`);
+        for (const r of (execResult.results || [])) {
+          console.log(`[oca]   → "${r.content}": ${r.completed}/${r.tasks} tasks completed (${r.newState})`);
+        }
+        oca.layers.emotion.processSuccess('executive');
+      }
+    } catch (e) {
+      console.error('[oca] dream execution error:', e.message);
+      dreamExecutionCooldown = 60; // Back off on error
+    }
   }
   
   // ── 11. WORLD SIMULATION ──────────────────────────
