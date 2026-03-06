@@ -2,6 +2,7 @@
 // Takes dreams in 'dispatched' state, identifies capability gaps, builds what's missing, then executes.
 // This is the loop: dream → gap detection → self-modification → action → reflection
 import { pool, emit } from '../event-bus.js';
+import llm from '../llm.js';
 import motor from '../motor/engine.js';
 import { execSync, spawnSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
@@ -139,18 +140,18 @@ For self_build tasks, include build_spec:
 Be concrete. If the dream requires posting to X and no X skill exists, the FIRST task should be self_build to create the X posting capability, and subsequent tasks should USE that new capability.`;
 
   try {
-    const result = execSync(
-      `claude -p --no-input -m sonnet <<'PROMPT_EOF'\n${prompt}\nPROMPT_EOF`,
-      {
-        encoding: 'utf8',
-        timeout: 90_000,
-        env: { ...process.env }
-      }
-    ).trim();
+    const response = await llm.messages.create({
+      model: 'claude-sonnet-4-6',
+      system: 'You are a planning engine. Respond ONLY with valid JSON. No markdown fences. No explanation.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+      temperature: 0.3
+    });
 
-    const parsed = extractJSON(result);
+    const text = response.content?.[0]?.text || '';
+    const parsed = extractJSON(text);
     if (parsed && typeof parsed === 'object') return parsed;
-    return { can_execute_now: false, gaps: [{ description: 'Failed to analyze', gap_type: 'unknown', severity: 'blocking', self_buildable: false }], tasks_if_ready: [] };
+    return { can_execute_now: false, gaps: [{ description: 'Failed to parse analysis', gap_type: 'unknown', severity: 'blocking', self_buildable: false }], tasks_if_ready: [] };
   } catch (e) {
     console.error('[dream-executor] gap detection failed:', e.message);
     return { can_execute_now: false, gaps: [], tasks_if_ready: [] };
@@ -236,10 +237,14 @@ Existing motor skills for reference: ${readdirSync(MOTOR_SKILLS_DIR).filter(f =>
 RESPOND WITH ONLY THE CODE. No markdown fences. No explanation. Just the JavaScript file content.`;
 
       try {
-        let code = execSync(
-          `claude -p --no-input -m sonnet <<'CODEGEN_EOF'\n${codePrompt}\nCODEGEN_EOF`,
-          { encoding: 'utf8', timeout: SELF_BUILD_TIMEOUT_MS, env: { ...process.env } }
-        ).trim();
+        const codeResp = await llm.messages.create({
+          model: 'claude-sonnet-4-6',
+          system: 'Generate ONLY the JavaScript code. No markdown fences. No explanation. Just the file content.',
+          messages: [{ role: 'user', content: codePrompt }],
+          max_tokens: 4000,
+          temperature: 0.2
+        });
+        let code = (codeResp.content?.[0]?.text || '').trim();
 
         // Strip markdown fences if Claude added them anyway
         code = code.replace(/^```(?:javascript|js)?\n?/i, '').replace(/\n?```$/i, '').trim();
@@ -282,10 +287,14 @@ Respond with ONLY the complete modified file content. No markdown fences. No exp
 Make the minimum necessary changes. Preserve all existing functionality.`;
 
       try {
-        let newCode = execSync(
-          `claude -p --no-input -m sonnet <<'MODGEN_EOF'\n${modPrompt}\nMODGEN_EOF`,
-          { encoding: 'utf8', timeout: SELF_BUILD_TIMEOUT_MS, env: { ...process.env } }
-        ).trim();
+        const modResp = await llm.messages.create({
+          model: 'claude-sonnet-4-6',
+          system: 'Output ONLY the complete modified file content. No markdown fences. No explanation.',
+          messages: [{ role: 'user', content: modPrompt }],
+          max_tokens: 8000,
+          temperature: 0.2
+        });
+        let newCode = (modResp.content?.[0]?.text || '').trim();
 
         newCode = newCode.replace(/^```(?:javascript|js)?\n?/i, '').replace(/\n?```$/i, '').trim();
 
@@ -751,12 +760,15 @@ Respond with JSON:
 }`;
 
   try {
-    const result = execSync(
-      `claude -p --no-input -m sonnet <<'REACTIVE_EOF'\n${prompt}\nREACTIVE_EOF`,
-      { encoding: 'utf8', timeout: 60_000, env: { ...process.env } }
-    ).trim();
+    const reactResp = await llm.messages.create({
+      model: 'claude-sonnet-4-6',
+      system: 'Respond ONLY with valid JSON. No markdown fences. No explanation.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+      temperature: 0.3
+    });
 
-    const spec = extractJSON(result);
+    const spec = extractJSON(reactResp.content?.[0]?.text || '');
     if (spec && spec.skill_name) {
       return await selfBuild(spec, dream.id);
     }
