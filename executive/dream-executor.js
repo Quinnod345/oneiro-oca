@@ -149,8 +149,13 @@ Be concrete. If the dream requires posting to X and no X skill exists, the FIRST
     });
 
     const text = response.content?.[0]?.text || '';
+    console.log(`[dream-executor] 🧠 LLM response (${text.length} chars, via ${response._via || 'api'}): ${text.slice(0, 200)}...`);
     const parsed = extractJSON(text);
-    if (parsed && typeof parsed === 'object') return parsed;
+    if (parsed && typeof parsed === 'object') {
+      console.log(`[dream-executor] 📊 parsed: can_execute=${parsed.can_execute_now}, gaps=${parsed.gaps?.length || 0}, tasks=${parsed.tasks_if_ready?.length || 0}`);
+      return parsed;
+    }
+    console.log(`[dream-executor] ⚠️ failed to parse JSON from response`);
     return { can_execute_now: false, gaps: [{ description: 'Failed to parse analysis', gap_type: 'unknown', severity: 'blocking', self_buildable: false }], tasks_if_ready: [] };
   } catch (e) {
     console.error('[dream-executor] gap detection failed:', e.message);
