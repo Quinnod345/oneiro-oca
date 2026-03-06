@@ -132,11 +132,20 @@ async function callCLI(params) {
     writeFileSync(tmpFile, prompt, 'utf8');
     
     const output = execSync(
-      `cat "${tmpFile}" | ${CLAUDE_CLI} -p --model ${cliModel}`,
+      `${CLAUDE_CLI} -p --model ${cliModel} < "${tmpFile}"`,
       {
         encoding: 'utf8',
         timeout: 120_000,
-        env: { ...process.env, TERM: 'dumb', HOME: '/Users/quinnodonnell', PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }
+        shell: '/bin/zsh',
+        env: {
+          ...process.env,
+          HOME: '/Users/quinnodonnell',
+          PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
+          TERM: 'dumb',
+          USER: 'quinnodonnell',
+          SHELL: '/bin/zsh',
+          XDG_CONFIG_HOME: '/Users/quinnodonnell/.config',
+        }
       }
     ).trim();
     
