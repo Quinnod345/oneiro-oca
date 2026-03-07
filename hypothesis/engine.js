@@ -45,6 +45,15 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Sentinel values that mean "sensor returned no real data"
+const UNOBSERVED_SENTINELS = new Set(['unknown', 'n/a', 'unavailable', '']);
+
+function isObservedValueReal(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string' && UNOBSERVED_SENTINELS.has(value.toLowerCase().trim())) return false;
+  return true;
+}
+
 function getObservedMetricValue(observed, metric) {
   const aliases = {
     front_app: ['front_app', 'frontApp', 'active_app', 'activeApp', 'app'],
@@ -54,12 +63,19 @@ function getObservedMetricValue(observed, metric) {
     memory_pressure_pct: ['memory_pressure_pct', 'memoryPressurePct', 'memory_pressure'],
     typing_wpm: ['typing_wpm', 'typingWpm', 'wpm'],
     idle_seconds: ['idle_seconds', 'idleSeconds'],
+    hour: ['hour', 'currentHour'],
+    thermal: ['thermal', 'thermal_pressure', 'thermalPressure'],
+    presence: ['presence', 'userPresence'],
     app_switches_15min: ['app_switches_15min', 'appSwitches15min'],
   };
   const keys = aliases[metric] || [metric];
   for (const key of keys) {
     if (Object.hasOwn(observed, key)) {
-      return observed[key];
+      const val = observed[key];
+      // Treat sentinel values as not-observed so structured eval fails cleanly
+      // and the fallback path can attempt semantic evaluation instead.
+      if (!isObservedValueReal(val)) return undefined;
+      return val;
     }
   }
   return undefined;
@@ -91,7 +107,17 @@ function evaluateStructuredPrediction(expected, observed) {
     };
   }
 
-  const observedValue = getObservedMetricValue(observed || {}, metric);
+  let observedValue = getObservedMetricValue(observed || {}, metric);
+  // Last-resort: try to extract the metric from a description string attached
+  // to the observed payload (e.g. "thermal=nominal, battery=87%").
+  if (observedValue === undefined && observed?._description) {
+    const descMatch = String(observed._description).match(
+      new RegExp(`${metric}[=:]\\s*([^,;\\s]+)`, 'i')
+    );
+    if (descMatch?.[1] && isObservedValueReal(descMatch[1])) {
+      observedValue = descMatch[1];
+    }
+  }
   if (observedValue === undefined) {
     return {
       mode: 'structured',
@@ -427,7 +453,13 @@ export async function test(hypothesisId, actualOutcome) {
 
   let evaluation;
   if (expectedStructured) {
-    evaluation = evaluateStructuredPrediction(expectedStructured, observedStructured || {});
+    // Attach description text to observed payload so the structured evaluator
+    // can attempt last-resort metric extraction from descriptive strings.
+    const observedWithDesc = { ...(observedStructured || {}) };
+    if (observedText && !observedWithDesc._description) {
+      observedWithDesc._description = observedText;
+    }
+    evaluation = evaluateStructuredPrediction(expectedStructured, observedWithDesc);
     if (!evaluation.verifiable && observedText) {
       const semanticEval = await evaluateSemanticPrediction(hyp.prediction, observedText);
       evaluation = {

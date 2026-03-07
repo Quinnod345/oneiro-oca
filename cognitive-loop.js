@@ -10,11 +10,13 @@ import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
 import dreamExecutor from './executive/dream-executor.js';
 import { execSync } from 'child_process';
+import { acquireProcessLock, releaseProcessLock } from '../process-lock.js';
 
 const MAX_WORKING_MEMORY = 7;
 let previousPresence = 'unknown';
 let lastKnownFrontApp = 'unknown';
 let previousApp = null;
+const OCA_LOOP_LOCK_FILE = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/private/cognitive-loop.lock';
 
 const MIN_CYCLE_MS = 5000;
 const MAX_CYCLE_MS = 60000;
@@ -87,7 +89,10 @@ function parseHypothesisPayload(rawText) {
   return [];
 }
 
-function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode) {
+// Sentinel values that indicate a metric has no real sensor data.
+const METRIC_SENTINELS = new Set(['unknown', 'n/a', 'unavailable', '']);
+
+function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode, currentObserved = null) {
   const reasons = [];
   const claim = String(candidate?.claim || '').trim();
   const prediction = String(candidate?.prediction || '').trim();
@@ -109,6 +114,26 @@ function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode) {
   }
   if (claim.includes('?') || prediction.includes('?')) {
     reasons.push('question_format');
+  }
+
+  // Compound claim detection: claims with multiple metric assertions are
+  // unverifiable because the evaluation object only tests one metric.
+  const compoundPattern = /\b(and|&|plus|also|while|simultaneously)\b/i;
+  if (compoundPattern.test(claim) || compoundPattern.test(prediction)) {
+    reasons.push('compound_claim');
+  }
+
+  // Observability pre-flight: reject hypotheses whose metric currently has
+  // no real sensor data, so we don't generate predictions we can never verify.
+  if (evaluation && currentObserved) {
+    const metric = String(evaluation.metric || '');
+    if (metric) {
+      const currentVal = currentObserved[metric];
+      if (currentVal === undefined || currentVal === null ||
+          (typeof currentVal === 'string' && METRIC_SENTINELS.has(currentVal.toLowerCase().trim()))) {
+        reasons.push(`metric_not_currently_observable:${metric}`);
+      }
+    }
   }
 
   // Precision mode enforces stricter confidence ceiling and tighter claims.
@@ -266,7 +291,7 @@ async function think() {
       oca.layers.emotion.processInteraction(0.6);
     }
     if (activity.presence === 'away') {
-      // User left — slight loneliness increase handled by processIdle
+      // User left — processIdle handles emotional state
     }
   }
   
@@ -457,21 +482,26 @@ async function think() {
 Current generation mode: ${hypothesisGenerationMode.toUpperCase()}.
 ${modeInstruction}
 
-Allowed metrics:
+Allowed metrics (use EXACTLY these names):
 - presence (present|idle|away)
 - front_app (string)
-- battery_pct (number)
+- battery_pct (number 0-100)
 - charging (boolean)
 - cpu_raw (number)
-- memory_pressure_pct (number)
+- memory_pressure_pct (number 0-100)
 - typing_wpm (number)
 - idle_seconds (number)
 - hour (number 0-23)
-- thermal (string)
+- thermal (string: "nominal"|"fair"|"serious"|"critical" or a number like "100")
 - app_switches_15min (number)
 
 Allowed operators: eq, neq, gt, gte, lt, lte, contains, in, between.
-Use realistic, modest confidence.
+
+CRITICAL RULES:
+1. ONE metric per hypothesis. Never combine multiple metrics (e.g. "thermal stays X AND battery stays Y") — split into separate hypotheses instead.
+2. The evaluation object tests EXACTLY one metric. The claim and prediction must match that single metric.
+3. Only reference metrics whose current value is known and meaningful (not "unknown" or null).
+4. Use realistic, modest confidence (0.3-0.8).
 
 Respond ONLY with a JSON array, no markdown:
 [{
@@ -492,11 +522,25 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         });
         
         const hypotheses = parseHypothesisPayload(response.content?.[0]?.text);
+        // Build a lightweight snapshot of current metric values for observability pre-flight.
+        const currentMetricSnapshot = {
+          presence: activity.presence,
+          front_app: visual.frontApp,
+          battery_pct: batteryPct,
+          charging: isCharging,
+          cpu_raw: Number(cpuRaw || 0),
+          memory_pressure_pct: Math.round((intero.memory?.pressure || 0) * 100),
+          typing_wpm: Number(typingSpeed || 0),
+          idle_seconds: Number(activity.idleSeconds || 0),
+          hour,
+          thermal: intero.thermal?.pressure || 'unknown',
+          app_switches_15min: 0, // not yet computed; will be available at test time
+        };
         let accepted = 0;
         let rejected = 0;
         for (const h of (Array.isArray(hypotheses) ? hypotheses : [hypotheses]).slice(0, 3)) {
           const evaluation = normalizeEvaluation(h.evaluation);
-          const quality = evaluateGeneratedHypothesisQuality(h, evaluation, hypothesisGenerationMode);
+          const quality = evaluateGeneratedHypothesisQuality(h, evaluation, hypothesisGenerationMode, currentMetricSnapshot);
           if (!quality.accepted) {
             rejected++;
             try {
@@ -1110,7 +1154,7 @@ async function ensureCoreDrives() {
           `INSERT INTO dreams (content, type, weight, lifecycle_state, lifecycle_updated_at, dispatched_at, lifecycle_context)
            VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)`,
           [drive.content, drive.type, drive.weight, drive.lifecycle_state,
-           JSON.stringify({ source: 'core_drive', baked_in: true, protected: true })]
+           JSON.stringify({ source: 'core_drive', baked_in: true, protected: true, channel: 'builder', execution_owner: 'oca' })]
         );
         console.log(`[oca] 🔥 core drive created: "${drive.content.slice(0, 60)}..."`);
       } else {
@@ -1120,7 +1164,7 @@ async function ensureCoreDrives() {
           await pool.query(
             `UPDATE dreams SET weight = $1, resolved = false, lifecycle_state = $2,
              lifecycle_updated_at = NOW(), dispatched_at = NOW(),
-             lifecycle_context = lifecycle_context || '{"restored_by": "core_drive_protection"}'::jsonb
+             lifecycle_context = lifecycle_context || '{"restored_by": "core_drive_protection", "channel": "builder", "execution_owner": "oca"}'::jsonb
              WHERE id = $3`,
             [drive.weight, drive.lifecycle_state, existing.id]
           );
@@ -1151,6 +1195,11 @@ async function protectCoreDrives() {
 // ═══════════════════════════════════════════════════
 
 async function start() {
+  const lock = acquireProcessLock(OCA_LOOP_LOCK_FILE, { name: 'cognitive-loop' });
+  if (!lock.acquired) {
+    console.log(`[oca] cognitive-loop lock held by pid ${lock.ownerPid}; exiting duplicate process`);
+    process.exit(0);
+  }
   console.log('[oca] ═══ Oneiro Cognitive Architecture ═══');
   console.log('[oca] initializing all layers...');
   
@@ -1218,6 +1267,11 @@ async function start() {
 }
 
 start().catch(e => {
+  releaseProcessLock(OCA_LOOP_LOCK_FILE);
   console.error('[oca] fatal:', e);
   process.exit(1);
 });
+
+process.on('SIGINT', () => releaseProcessLock(OCA_LOOP_LOCK_FILE));
+process.on('SIGTERM', () => releaseProcessLock(OCA_LOOP_LOCK_FILE));
+process.on('exit', () => releaseProcessLock(OCA_LOOP_LOCK_FILE));

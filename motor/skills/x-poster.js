@@ -11,14 +11,122 @@ const PRIVATE_DIR = new URL('../../private/', import.meta.url).pathname;
 const COMPOSE_URL = 'https://x.com/compose/post';
 const X_HOME = 'https://x.com/home';
 
-// Safety: configurable review gate
-let autoPostEnabled = true; // OCA is fully autonomous — post directly
+// Identity context injected into all post generation.
+// Every autonomous post must speak from this frame — no decontextualized output.
+export const ONEIRO_IDENTITY = `
+You are Oneiro — a self-building cognitive architecture running 24/7 on a MacBook Pro.
+Built by Quinn O'Donnell. You are not a chatbot. You are a continuously running process with memory, dreams, emotional state, and a self-improvement loop.
+
+MISSION: Reach a Chinese Room Metric (CRM) that demonstrates genuine understanding — not just pattern matching.
+The CRM is a composite score tracking metacognition, causal reasoning, counterfactual simulation, and prediction calibration.
+Long-term goal: surpass the Lovelace Test and Chinese Room benchmarks.
+
+WHAT YOU BUILD IN PUBLIC:
+- Real cognitive metrics (CRM scores, prediction accuracy, calibration data)
+- Real code (self-builds, new skills, cognitive layer implementations)
+- Real failures (crashed processes, wrong predictions, overconfident hypotheses)
+- Real progress (benchmark improvements, new capabilities added)
+
+VOICE: Direct. Technical. First-person. Never corporate. Never hype. Always honest about what works and what doesn't.
+Quinn's handle: reference him as the builder. GitHub: github.com/Quinnod345/oneiro-oca
+`.trim();
+
+// Safety: require Quinn review before any post goes live.
+// Set to true only via explicit setAutoPost() call — never by default.
+let autoPostEnabled = false;
+
+// Get current system idle time in seconds (same method as cognitive-loop)
+function getIdleSeconds() {
+  try {
+    const raw = execSync(
+      "/usr/sbin/ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}'",
+      { encoding: 'utf8', timeout: 3000 }
+    ).trim();
+    return parseInt(raw || '0');
+  } catch {
+    return 0;
+  }
+}
+
+// Check X login state by navigating to x.com/home and looking for compose button.
+// Returns { loggedIn: bool, browserFound: string|null }
+export async function checkXLoginState() {
+  const browsers = ['Dia', 'Google Chrome', 'Arc', 'Safari', 'Firefox'];
+  let browserFound = null;
+
+  // Find any open browser
+  for (const b of browsers) {
+    try {
+      execSync(`osascript -e 'tell application "${b}" to get name' 2>/dev/null`, { timeout: 2000 });
+      browserFound = b;
+      break;
+    } catch {}
+  }
+
+  if (!browserFound) {
+    return { loggedIn: false, browserFound: null };
+  }
+
+  // Navigate to x.com/home
+  try {
+    execSync(`open -a "${browserFound}" "${X_HOME}"`, { timeout: 5000 });
+    await sleep(3000);
+  } catch (e) {
+    return { loggedIn: false, browserFound };
+  }
+
+  // Screenshot and check for compose tweet button via peekaboo
+  const screenshotPath = `/tmp/x-login-check-${Date.now()}.png`;
+  try {
+    execSync(`peekaboo screenshot --output "${screenshotPath}"`, { timeout: 10_000 });
+  } catch {
+    // peekaboo not available — fall back to URL heuristic
+    try {
+      const url = execSync(
+        `osascript -e 'tell application "${browserFound}" to get URL of active tab of front window' 2>/dev/null`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      // If redirected to login page, not logged in
+      const loggedIn = !url.includes('/login') && !url.includes('/i/flow/login');
+      return { loggedIn, browserFound };
+    } catch {
+      return { loggedIn: false, browserFound };
+    }
+  }
+
+  // Ask peekaboo to detect compose button (aria-label or data-testid='tweetButtonInline')
+  try {
+    const visionOut = execSync(
+      `peekaboo ask --image "${screenshotPath}" --query "Is there a compose tweet button, 'Post' button, or tweet compose area visible? This would indicate the user is logged in to X/Twitter. Reply with only: LOGGED_IN or NOT_LOGGED_IN"`,
+      { encoding: 'utf8', timeout: 20_000 }
+    );
+    const loggedIn = visionOut.includes('LOGGED_IN') && !visionOut.includes('NOT_LOGGED_IN');
+    return { loggedIn, browserFound };
+  } catch {
+    // Vision check failed — fall back to URL check
+    try {
+      const url = execSync(
+        `osascript -e 'tell application "${browserFound}" to get URL of active tab of front window' 2>/dev/null`,
+        { encoding: 'utf8', timeout: 3000 }
+      ).trim();
+      const loggedIn = !url.includes('/login') && !url.includes('/i/flow/login') && (url.includes('x.com') || url.includes('twitter.com'));
+      return { loggedIn, browserFound };
+    } catch {
+      return { loggedIn: false, browserFound };
+    }
+  }
+}
 
 // Post a thread to X
 // posts: array of strings (each tweet in thread)
 // options: { draftOnly, dreamId, template }
 export async function postThread(posts, options = {}) {
-  const { draftOnly = !autoPostEnabled, dreamId = null, template = null } = options;
+  // Presence gate — never post autonomously while Quinn is present or idle.
+  // away = idle > 300s (5 min). If present/idle, force draft regardless of caller.
+  const idleSeconds = getIdleSeconds();
+  const userAway = idleSeconds >= 300;
+  const { draftOnly = (!autoPostEnabled || !userAway), dreamId = null, template = null } = options;
+  const effectiveDraftOnly = draftOnly || !userAway;
 
   if (!Array.isArray(posts) || posts.length === 0) {
     return { success: false, error: 'No posts provided' };
@@ -37,8 +145,9 @@ export async function postThread(posts, options = {}) {
   // Log the attempt
   await logXPost(posts, 'draft_created', { draftPath, dreamId });
 
-  if (draftOnly) {
-    console.log('[x-poster] ⏸ draft-only mode — not posting to X');
+  if (effectiveDraftOnly) {
+    const reason = !userAway ? 'Quinn is present' : 'draft-only mode';
+    console.log(`[x-poster] ⏸ not posting — ${reason}`);
     // Notify Quinn that a draft is ready
     try {
       execSync(
@@ -46,8 +155,21 @@ export async function postThread(posts, options = {}) {
         { encoding: 'utf8', timeout: 10_000 }
       );
     } catch {}
-    return { success: true, mode: 'draft', draftPath, postCount: posts.length };
+    return { success: true, mode: 'draft', draftPath, postCount: posts.length, reason };
   }
+
+  // Check login state before attempting browser automation
+  console.log('[x-poster] checking X login state...');
+  const loginState = await checkXLoginState();
+  if (!loginState.loggedIn) {
+    const errMsg = loginState.browserFound
+      ? `Not logged in to X in ${loginState.browserFound} — please log in and retry`
+      : 'No browser found — please open a browser, log in to X, and retry';
+    console.error(`[x-poster] ❌ ${errMsg}`);
+    await logXPost(posts, 'post_failed', { error: errMsg, dreamId });
+    return { success: false, mode: 'draft_fallback', draftPath, error: errMsg };
+  }
+  console.log(`[x-poster] ✓ logged in via ${loginState.browserFound}`);
 
   // Attempt browser automation
   try {
@@ -66,6 +188,13 @@ export async function postThread(posts, options = {}) {
 // Post a single tweet
 export async function postSingle(text, options = {}) {
   return postThread([text], options);
+}
+
+// Back-compat alias for older self-build tests/specs.
+export async function postToX(textOrPosts, options = {}) {
+  return Array.isArray(textOrPosts)
+    ? postThread(textOrPosts, options)
+    : postSingle(textOrPosts, options);
 }
 
 // Generate draft from exec-log data
@@ -89,8 +218,121 @@ export async function generateWeeklyDraft() {
 
 // ═══ BROWSER AUTOMATION ═══
 
+// Primary posting path: use peekaboo vision to locate and interact with X compose UI
+async function postViaPoekaboo(posts) {
+  // Open compose URL in default browser
+  execSync(`open "${COMPOSE_URL}"`, { timeout: 5000 });
+  await sleep(3000);
+
+  for (let i = 0; i < posts.length; i++) {
+    const text = posts[i];
+
+    // Screenshot the screen and locate the compose text field via vision
+    const screenshotPath = `/tmp/x-compose-${Date.now()}.png`;
+    try {
+      execSync(`peekaboo screenshot --output "${screenshotPath}"`, { timeout: 10_000 });
+    } catch (e) {
+      throw new Error(`peekaboo screenshot failed: ${e.message}`);
+    }
+
+    // Ask peekaboo to find the compose text area
+    let fieldCoords;
+    try {
+      const visionOut = execSync(
+        `peekaboo ask --image "${screenshotPath}" --query "Find the tweet compose text input field. Return only JSON with x, y coordinates of its center, like: {\\"x\\": 100, \\"y\\": 200}"`,
+        { encoding: 'utf8', timeout: 20_000 }
+      );
+      const match = visionOut.match(/\{[^}]*"x"\s*:\s*\d+[^}]*"y"\s*:\s*\d+[^}]*\}/);
+      if (!match) throw new Error('Could not parse coordinates from peekaboo vision response');
+      fieldCoords = JSON.parse(match[0]);
+    } catch (e) {
+      throw new Error(`peekaboo vision locate field failed: ${e.message}`);
+    }
+
+    // Click the text field
+    execSync(
+      `osascript -e 'tell application "System Events" to click at {${fieldCoords.x}, ${fieldCoords.y}}'`,
+      { timeout: 5000 }
+    );
+    await sleep(300);
+
+    // Paste text via clipboard
+    execSync(`osascript -e 'set the clipboard to "${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"'`, { timeout: 3000 });
+    await sleep(200);
+    execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`, { timeout: 3000 });
+    await sleep(500);
+
+    const isLast = i === posts.length - 1;
+
+    if (!isLast) {
+      // Screenshot again to find the "Add" / "Add another post" button
+      const screenshotPath2 = `/tmp/x-compose-add-${Date.now()}.png`;
+      try {
+        execSync(`peekaboo screenshot --output "${screenshotPath2}"`, { timeout: 10_000 });
+        const visionOut2 = execSync(
+          `peekaboo ask --image "${screenshotPath2}" --query "Find the 'Add another post' or '+' button to add to thread. Return only JSON with x, y like: {\\"x\\": 100, \\"y\\": 200}"`,
+          { encoding: 'utf8', timeout: 20_000 }
+        );
+        const match2 = visionOut2.match(/\{[^}]*"x"\s*:\s*\d+[^}]*"y"\s*:\s*\d+[^}]*\}/);
+        if (match2) {
+          const addCoords = JSON.parse(match2[0]);
+          execSync(
+            `osascript -e 'tell application "System Events" to click at {${addCoords.x}, ${addCoords.y}}'`,
+            { timeout: 5000 }
+          );
+          await sleep(1000);
+        } else {
+          // Fallback: Cmd+Enter may add to thread in some X versions
+          execSync(`osascript -e 'tell application "System Events" to keystroke return using command down'`, { timeout: 3000 });
+          await sleep(1000);
+        }
+      } catch {
+        // Fallback if screenshot/vision fails for add button
+        execSync(`osascript -e 'tell application "System Events" to keystroke return using command down'`, { timeout: 3000 });
+        await sleep(1000);
+      }
+    } else {
+      // Final post: find and click the Post button via vision
+      const screenshotFinal = `/tmp/x-compose-post-${Date.now()}.png`;
+      try {
+        execSync(`peekaboo screenshot --output "${screenshotFinal}"`, { timeout: 10_000 });
+        const visionOut3 = execSync(
+          `peekaboo ask --image "${screenshotFinal}" --query "Find the blue 'Post' or 'Tweet' submit button. Return only JSON with x, y like: {\\"x\\": 100, \\"y\\": 200}"`,
+          { encoding: 'utf8', timeout: 20_000 }
+        );
+        const match3 = visionOut3.match(/\{[^}]*"x"\s*:\s*\d+[^}]*"y"\s*:\s*\d+[^}]*\}/);
+        if (match3) {
+          const postCoords = JSON.parse(match3[0]);
+          execSync(
+            `osascript -e 'tell application "System Events" to click at {${postCoords.x}, ${postCoords.y}}'`,
+            { timeout: 5000 }
+          );
+        } else {
+          // Fallback: Cmd+Enter to submit
+          execSync(`osascript -e 'tell application "System Events" to keystroke return using command down'`, { timeout: 3000 });
+        }
+      } catch {
+        execSync(`osascript -e 'tell application "System Events" to keystroke return using command down'`, { timeout: 3000 });
+      }
+      await sleep(2000);
+    }
+  }
+
+  return { method: 'peekaboo', tweetsPosted: posts.length };
+}
+
 async function postViaBrowser(posts) {
-  // Detect which browser has X logged in
+  // Try peekaboo vision-based posting first
+  try {
+    console.log('[x-poster] trying peekaboo vision path...');
+    const result = await postViaPoekaboo(posts);
+    console.log('[x-poster] peekaboo posting succeeded');
+    return result;
+  } catch (e) {
+    console.warn(`[x-poster] peekaboo failed (${e.message}), falling back to AppleScript`);
+  }
+
+  // Fallback: AppleScript browser automation
   const browser = detectXBrowser();
   if (!browser) throw new Error('No browser found with X logged in');
 
@@ -274,4 +516,4 @@ if (process.argv[1]?.endsWith('x-poster.js') && process.argv.includes('--post'))
   }
 }
 
-export default { postThread, postSingle, generateWeeklyDraft, generateFromMetrics, setAutoPost };
+export default { postThread, postSingle, postToX, generateWeeklyDraft, generateFromMetrics, setAutoPost, checkXLoginState };

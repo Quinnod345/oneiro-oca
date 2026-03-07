@@ -4,3 +4,8 @@ export { default as terminal } from './terminal.js';
 export { default as xcode } from './xcode.js';
 export { default as logicPro } from './logic-pro.js';
 export { default as xPoster } from './x-poster.js';
+export { default as peekaboo } from './peekaboo.js';
+export { default as gapDetector } from './gap-detector.js';
+export { default as selfBuildOrchestrator } from './self-build-orchestrator.js';
+export { default as selfBuilder } from './self-builder.js';
+export { default as selfBuilderPrompt } from './self-builder-prompt.js';

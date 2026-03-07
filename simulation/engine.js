@@ -60,6 +60,26 @@ function parseSimulationPayload(rawText) {
   };
 }
 
+function heuristicSimulation(description, initialState, actionSequence, reason = 'heuristic_fallback') {
+  const actions = Array.isArray(actionSequence) ? actionSequence : [];
+  const predicted_states = actions.slice(0, 5).map((action, idx) => ({
+    step: idx + 1,
+    state: `After "${String(action).slice(0, 120)}", the system is likely to move incrementally toward: ${String(description).slice(0, 180)}`,
+    confidence: 0.28
+  }));
+  const joined = actions.map((action) => String(action).toLowerCase()).join(' ');
+  const risks = [reason];
+  if (/\bdelete|drop|reset|kill|rm\b/.test(joined)) risks.push('destructive_action_risk');
+  if (/\bpost|publish|tweet|email|message\b/.test(joined)) risks.push('external_side_effect_risk');
+  if (/\brestart|deploy|migrate|install\b/.test(joined)) risks.push('service_instability_risk');
+  return {
+    predicted_states,
+    branch_points: [],
+    risks,
+    expected_outcome: `Heuristic simulation fallback: ${String(description).slice(0, 220)}`
+  };
+}
+
 // Update or create a world model entity
 export async function updateEntity(domain, entity, newState, { confidence = 0.5, transitionRule = null } = {}) {
   const stateJson = JSON.stringify(newState);
@@ -100,9 +120,11 @@ export async function getEntity(domain, entity) {
 // Simulate forward: given current state + action, predict next state
 export async function simulate(description, initialState, actionSequence, { purpose = 'decision' } = {}) {
   try {
-    const response = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
-      system: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
+    let result;
+    try {
+      const response = await llm.messages.create({
+        model: 'claude-sonnet-4-6',
+        system: `You are a world simulation engine. Given an initial state and a sequence of actions, predict the resulting states. Be realistic and specific. Consider what could go wrong.
 
 You MUST respond in valid JSON only, no other text:
 {
@@ -113,12 +135,22 @@ You MUST respond in valid JSON only, no other text:
 }`,
       messages: [
         { role: 'user', content: `Initial state: ${JSON.stringify(initialState)}\n\nActions: ${JSON.stringify(actionSequence)}\n\nPurpose: ${purpose}\n\nDescription: ${description}` }
-      ],
-      temperature: 0.5,
-      max_tokens: 500
-    });
-    
-    const result = parseSimulationPayload(response.content?.[0]?.text);
+        ],
+        temperature: 0.5,
+        max_tokens: 500
+      });
+
+      result = parseSimulationPayload(response.content?.[0]?.text);
+      if (
+        (!result.expected_outcome || result.expected_outcome === '') &&
+        (!Array.isArray(result.predicted_states) || result.predicted_states.length === 0)
+      ) {
+        result = heuristicSimulation(description, initialState, actionSequence, 'simulation_output_parse_failure');
+      }
+    } catch (llmErr) {
+      console.warn('[simulation] falling back to heuristic simulation:', llmErr.message);
+      result = heuristicSimulation(description, initialState, actionSequence, 'simulation_llm_unavailable');
+    }
     
     // Store simulation
     const { rows } = await pool.query(
@@ -131,7 +163,7 @@ You MUST respond in valid JSON only, no other text:
     return { id: rows[0].id, ...result };
   } catch (e) {
     console.error('[simulation] forward sim failed:', e.message);
-    return { error: e.message };
+    return heuristicSimulation(description, initialState, actionSequence, 'simulation_storage_failure');
   }
 }
 
