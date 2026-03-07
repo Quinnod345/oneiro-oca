@@ -488,7 +488,9 @@ async function updateNudges() {
         if (items.length === 0) {
             panel.innerHTML = '<div class="nudge-empty">No nudges yet</div>';
         } else {
-            items.forEach(n => renderNudgeItem(n, panel));
+            items.forEach((n) => {
+                renderNudgeItem(n, panel);
+            });
         }
     }
 
@@ -499,7 +501,9 @@ async function updateNudges() {
         if (data.length === 0) {
             overlay.innerHTML = '<div class="nudge-empty">No nudges yet</div>';
         } else {
-            data.forEach(n => renderNudgeItem(n, overlay));
+            data.forEach((n) => {
+                renderNudgeItem(n, overlay);
+            });
         }
     }
 }
@@ -522,6 +526,29 @@ async function sendNudgeReply(id) {
 
     input.disabled = false;
     await updateNudges();
+}
+
+async function sendNudge(text) {
+    const nudgeText = String(text || '').trim();
+    if (!nudgeText) return;
+    try {
+        await fetch(`${API}/nudge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: nudgeText, intensity: 0.7 })
+        });
+    } catch {}
+}
+
+async function sendNudgeFromInput(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    input.disabled = true;
+    await sendNudge(text);
+    input.disabled = false;
 }
 
 // --- Chat ---
@@ -666,6 +693,17 @@ function init() {
             }
         });
     }
+
+    ['panelNudgeInput', 'overlayNudgeInput'].forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendNudgeFromInput(id);
+            }
+        });
+    });
 
     // Initial fetch
     refreshAll();

@@ -34,6 +34,18 @@ const builtThisSession = new Set();
 // Track dreams where credential gaps were already notified this session (avoid spam).
 const credentialGapsNotified = new Set();
 
+async function createRuntimeNotification(message, category = 'thought', priority = 'normal', metadata = {}) {
+  try {
+    await fetch('http://localhost:3333/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, category, priority, metadata })
+    });
+  } catch (e) {
+    console.warn(`[dream-executor] notification dispatch failed: ${e.message}`);
+  }
+}
+
 function normalizeTestCommand(command) {
   const raw = String(command || '').trim();
   if (!raw) return raw;
@@ -565,13 +577,12 @@ async function executeTask(task, dreamId) {
       }
 
       case 'notification': {
-        await motor.showNotification('Oneiro', task.content || task.description);
-        try {
-          execSync(
-            `openclaw system event --message ${JSON.stringify(task.content || task.description)}`,
-            { encoding: 'utf8', timeout: 10_000 }
-          );
-        } catch {}
+        await createRuntimeNotification(
+          task.content || task.description,
+          'update',
+          'normal',
+          { dreamId, taskType: 'notification' }
+        );
         result = { success: true, output: 'Notification sent' };
         break;
       }
@@ -676,16 +687,7 @@ export async function executeDreams() {
       if (credGaps.length > 0 && !credentialGapsNotified.has(dream.id)) {
         credentialGapsNotified.add(dream.id);
         const gapSummary = credGaps.map(g => g.description).join('; ');
-        const msg = `Dream #${dream.id} is blocked on credentials: ${gapSummary}. Dream: "${dream.content.slice(0, 120)}"`;
-        console.log(`[dream-executor] 🔑 credential gap — notifying Quinn: ${gapSummary}`);
-        try {
-          execSync(
-            `openclaw system event --message ${JSON.stringify(`🔑 I need credentials to proceed: ${msg}`)}`,
-            { encoding: 'utf8', timeout: 10_000 }
-          );
-        } catch (e) {
-          console.warn(`[dream-executor] credential notify failed: ${e.message}`);
-        }
+        console.log(`[dream-executor] 🔑 credential gap detected: ${gapSummary}`);
       }
     }
 
