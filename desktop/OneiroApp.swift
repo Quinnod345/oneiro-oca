@@ -290,6 +290,18 @@ class NotificationManager: ObservableObject {
                 self?.fetchNotifications()
             }
     }
+
+    func sendNudge(text: String, intensity: Double = 0.7) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        AF.request("http://localhost:3333/nudge",
+                   method: .post,
+                   parameters: ["text": trimmed, "intensity": intensity],
+                   encoding: JSONEncoding.default)
+            .response { [weak self] _ in
+                self?.fetchNotifications()
+            }
+    }
 }
 
 struct PulseResponse: Codable {
@@ -2419,6 +2431,8 @@ struct NudgesFeedView: View {
     @EnvironmentObject var state: AppState
     @State private var replyTexts: [Int: String] = [:]
     @State private var sendingIds: Set<Int> = []
+    @State private var nudgeText = ""
+    @State private var sendingNudge = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2437,6 +2451,39 @@ struct NudgesFeedView: View {
                 }
             }
             .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("BIAS THE MIND")
+                    .font(.system(size: 7, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundColor(Color.oBlue.opacity(0.85))
+
+                HStack(spacing: 8) {
+                    TextField("Nudge Oneiro without giving a directive…", text: $nudgeText)
+                        .font(.system(size: 11))
+                        .textFieldStyle(.plain)
+                        .foregroundColor(Color.oText)
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9)
+                                .fill(Color.oSurface.opacity(0.55))
+                                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.oBorder, lineWidth: 0.5))
+                        )
+                        .onSubmit { sendNudge() }
+
+                    Button(action: sendNudge) {
+                        Image(systemName: sendingNudge ? "checkmark" : "arrow.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(LinearGradient(colors: [Color.oBlue, Color.oAccent], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(nudgeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sendingNudge)
+                    .opacity(nudgeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sendingNudge ? 0.45 : 1)
+                }
+            }
+            .padding(.horizontal, 14).padding(.bottom, 12)
 
             SepLine()
 
@@ -2472,6 +2519,17 @@ struct NudgesFeedView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func sendNudge() {
+        let text = nudgeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        sendingNudge = true
+        state.notificationManager.sendNudge(text: text, intensity: 0.7)
+        nudgeText = ""
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            sendingNudge = false
         }
     }
 }

@@ -9,3 +9,32 @@ export { default as gapDetector } from './gap-detector.js';
 export { default as selfBuildOrchestrator } from './self-build-orchestrator.js';
 export { default as selfBuilder } from './self-builder.js';
 export { default as selfBuilderPrompt } from './self-builder-prompt.js';
+export { default as deploySkill } from './deploy-skill.js';
+export { default as selfBuildVerifier } from './self-build-verifier.js';
+export { default as autoBuilder } from './auto-builder.js';
+export { default as autonomousBuilder } from './autonomous-builder.js';
+export { default as capabilityGapTracker } from './capability-gap-tracker.js';
+export { default as selfBuildLoopMonitor } from './self-build-loop-monitor.js';
+export { default as runtimeGapResponder } from './runtime-gap-responder.js';
+export { default as capabilityIntrospector } from './capability-introspector.js';
+export { default as capabilityBootstrap } from './capability-bootstrap.js';
+export { default as selfAuditor } from './self-auditor.js';
+export { default as gapScanner } from './gap-scanner.js';
+
+const skillsRegistry = {
+  'gap-scanner': gapScanner,
+};
+
+export async function registerSkill(name, modulePath) {
+  const module = await import(modulePath);
+  skillsRegistry[name] = module.default ?? module;
+  return skillsRegistry[name];
+}
+
+export function getSkill(name) {
+  return skillsRegistry[name];
+}
+
+export function listRegisteredSkills() {
+  return Object.keys(skillsRegistry);
+}

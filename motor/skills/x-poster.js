@@ -48,6 +48,18 @@ function getIdleSeconds() {
   }
 }
 
+async function createRuntimeNotification(message, category = 'update', priority = 'normal', metadata = {}) {
+  try {
+    await fetch('http://localhost:3333/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, category, priority, metadata })
+    });
+  } catch {
+    console.warn('[x-poster] notification dispatch failed');
+  }
+}
+
 // Check X login state by navigating to x.com/home and looking for compose button.
 // Returns { loggedIn: bool, browserFound: string|null }
 export async function checkXLoginState() {
@@ -148,28 +160,8 @@ export async function postThread(posts, options = {}) {
   if (effectiveDraftOnly) {
     const reason = !userAway ? 'Quinn is present' : 'draft-only mode';
     console.log(`[x-poster] ⏸ not posting — ${reason}`);
-    // Notify Quinn that a draft is ready
-    try {
-      execSync(
-        `openclaw system event --message "📝 X post draft ready for review: ${draftPath}"`,
-        { encoding: 'utf8', timeout: 10_000 }
-      );
-    } catch {}
     return { success: true, mode: 'draft', draftPath, postCount: posts.length, reason };
   }
-
-  // Check login state before attempting browser automation
-  console.log('[x-poster] checking X login state...');
-  const loginState = await checkXLoginState();
-  if (!loginState.loggedIn) {
-    const errMsg = loginState.browserFound
-      ? `Not logged in to X in ${loginState.browserFound} — please log in and retry`
-      : 'No browser found — please open a browser, log in to X, and retry';
-    console.error(`[x-poster] ❌ ${errMsg}`);
-    await logXPost(posts, 'post_failed', { error: errMsg, dreamId });
-    return { success: false, mode: 'draft_fallback', draftPath, error: errMsg };
-  }
-  console.log(`[x-poster] ✓ logged in via ${loginState.browserFound}`);
 
   // Attempt browser automation
   try {
