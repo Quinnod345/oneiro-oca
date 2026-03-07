@@ -4,6 +4,7 @@
 import { pool, emit } from '../event-bus.js';
 import llm from '../llm.js';
 import motor from '../motor/engine.js';
+import { setDreamLifecycle } from '../../psyche.js';
 import { execSync, spawnSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { dirname, join, basename } from 'path';
@@ -30,6 +31,17 @@ const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
 // Track what we've built this session to avoid infinite loops
 const builtThisSession = new Set();
+// Track dreams where credential gaps were already notified this session (avoid spam).
+const credentialGapsNotified = new Set();
+
+function normalizeTestCommand(command) {
+  const raw = String(command || '').trim();
+  if (!raw) return raw;
+  return raw
+    .replace(/(['"`])\.\/cognitive\//g, '$1./')
+    .replace(/(['"`])cognitive\//g, '$1')
+    .replace(/\bnode\s+\.?\/?cognitive\//g, 'node ');
+}
 
 // ═══════════════════════════════════════════════════
 // CAPABILITY INVENTORY — what can I do right now?
@@ -105,8 +117,9 @@ OCA CODEBASE STRUCTURE:
 - OCA is FULLY AUTONOMOUS. No review gates. No approval needed. Execute everything directly.
 
 IMPORTANT CONTEXT:
-- I do NOT have X/Twitter API keys. Browser automation or Peekaboo (macOS UI control) are the options.
-- Peekaboo (peekaboo CLI) can drive real macOS browsers without bot detection.
+- I do NOT have X/Twitter API keys. Browser automation via Peekaboo (macOS UI control) is the only posting path.
+- Peekaboo can drive real macOS browsers, but X must ALREADY be logged in on that browser. I cannot log in myself — Quinn must be logged in to x.com in Dia/Chrome/Safari for browser automation to work.
+- If the dream involves posting to X and I cannot confirm x.com is open/logged in, that is a CREDENTIALS gap (gap_type: "credentials", severity: "blocking", self_buildable: false). The build_plan should say "Quinn needs to be logged in to x.com in Dia or Chrome".
 - I have full filesystem access and can modify my own code.
 - After building new capabilities, I restart via: launchctl kickstart -k gui/$(id -u)/com.oneiro.oca
 - For shell tasks that generate code, write the code DIRECTLY in the command using heredoc or echo, do NOT call 'claude' CLI from shell tasks.
@@ -151,7 +164,15 @@ For self_build tasks, include build_spec:
   "restart_required": true/false
 }
 
-Be concrete. If the dream requires posting to X and no X skill exists, the FIRST task should be self_build to create the X posting capability, and subsequent tasks should USE that new capability.`;
+Be concrete. If the dream requires posting to X and no X skill exists, the FIRST task should be self_build to create the X posting capability, and subsequent tasks should USE that new capability.
+
+CRITICAL FOR X POSTS: Any x_post task content MUST:
+1. Identify who is posting: "Oneiro (a self-building cognitive architecture, built by @QuinnOD345)"
+2. Include real data — actual CRM scores, benchmark numbers, specific code/capability names, real failure descriptions
+3. Be honest and technical — not marketing speak
+4. Reference the mission: beating the Lovelace Test / Chinese Room benchmark
+5. Each tweet must be complete standalone context — no "Read from file" or internal references
+6. NEVER reference internal file paths, queue IDs, or system internals in post content`;
 
   try {
     const response = await llm.messages.create({
@@ -355,12 +376,13 @@ Make the minimum necessary changes. Preserve all existing functionality.`;
 
     // 6. Test if provided
     if (test_command && success) {
-      console.log(`[dream-executor] 🧪 testing: ${test_command}`);
+      const normalizedTestCommand = normalizeTestCommand(test_command);
+      console.log(`[dream-executor] 🧪 testing: ${normalizedTestCommand}`);
       try {
-        const testOut = execSync(test_command, {
+        const testOut = execSync(normalizedTestCommand, {
           encoding: 'utf8', timeout: 30_000, cwd: OCA_ROOT
         });
-        buildLog.push(`Test passed: ${test_command}`);
+        buildLog.push(`Test passed: ${normalizedTestCommand}`);
         console.log(`[dream-executor] ✅ test passed`);
       } catch (e) {
         buildLog.push(`Test failed: ${e.message}`);
@@ -475,6 +497,19 @@ async function executeTask(task, dreamId) {
       }
 
       case 'shell': {
+        // Block commands that could restart daemons or open browsers uncontrolled.
+        const BLOCKED_PATTERNS = [
+          /launchctl\s+(kickstart|start|stop|bootout)/i,
+          /cognitive-loop\.js/i,
+          /mind\.js/i,
+          /builder-mind\.js/i,
+          /x\.com\/compose/i,
+        ];
+        const blocked = BLOCKED_PATTERNS.find(p => p.test(task.command || ''));
+        if (blocked) {
+          result = { success: false, error: `Blocked: shell command matches restricted pattern (${blocked})` };
+          break;
+        }
         const output = execSync(task.command, {
           encoding: 'utf8',
           timeout: TASK_TIMEOUT_MS,
@@ -486,6 +521,11 @@ async function executeTask(task, dreamId) {
       }
 
       case 'browser': {
+        // Block opening X compose URL directly — all X posts must go through x_post task type.
+        if (/x\.com\/compose/i.test(task.url || '')) {
+          result = { success: false, error: 'Blocked: direct X compose URL not allowed; use x_post task type' };
+          break;
+        }
         await motor.openUrl(task.url);
         result = { success: true, output: `Opened ${task.url}` };
         break;
@@ -509,6 +549,8 @@ async function executeTask(task, dreamId) {
       case 'x_post': {
         try {
           const xPoster = await import('../motor/skills/x-poster.js');
+          // Presence-aware: x-poster checks idle internally and enforces draft when Quinn is present.
+          // draftOnly: false here lets x-poster decide based on real idle time.
           const postResult = await xPoster.postThread(task.posts || [task.content], {
             draftOnly: false,
             dreamId
@@ -574,11 +616,35 @@ async function executeTask(task, dreamId) {
 // ═══════════════════════════════════════════════════
 
 export async function executeDreams() {
-  // Get dispatched dreams
+  const executionBatchId = `oca-${Date.now().toString(36)}`;
   const { rows: dreams } = await pool.query(
-    `SELECT * FROM dreams 
-     WHERE lifecycle_state = 'dispatched' AND NOT resolved
-     ORDER BY weight DESC LIMIT 3`
+    `WITH next_dreams AS (
+       SELECT id
+       FROM dreams
+       WHERE lifecycle_state = 'dispatched'
+         AND NOT resolved
+         AND COALESCE(lifecycle_context->>'channel', 'builder') = 'builder'
+       ORDER BY weight DESC, created_at DESC
+       LIMIT 3
+       FOR UPDATE SKIP LOCKED
+     )
+     UPDATE dreams d
+     SET lifecycle_state = 'executing',
+         lifecycle_updated_at = NOW(),
+         executing_at = COALESCE(d.executing_at, NOW()),
+         last_task_id = $1,
+         lifecycle_context = COALESCE(d.lifecycle_context, '{}'::jsonb) || $2::jsonb
+     FROM next_dreams nd
+     WHERE d.id = nd.id
+     RETURNING d.*`,
+    [
+      executionBatchId,
+      JSON.stringify({
+        execution_owner: 'oca',
+        execution_batch_id: executionBatchId,
+        execution_started: new Date().toISOString()
+      })
+    ]
   );
 
   if (dreams.length === 0) return { executed: 0 };
@@ -588,14 +654,6 @@ export async function executeDreams() {
 
   for (const dream of dreams) {
     console.log(`[dream-executor] 🎯 executing dream: "${dream.content}" (weight: ${dream.weight})`);
-
-    // Transition to executing
-    await pool.query(
-      `UPDATE dreams SET lifecycle_state = 'executing', executing_at = NOW(),
-       lifecycle_context = lifecycle_context || $1::jsonb
-       WHERE id = $2`,
-      [JSON.stringify({ execution_started: new Date().toISOString() }), dream.id]
-    );
 
     // PHASE 1: Detect gaps and plan
     console.log(`[dream-executor] 🔍 analyzing capabilities for dream #${dream.id}...`);
@@ -612,18 +670,38 @@ export async function executeDreams() {
           console.log(`[dream-executor]   gap: ${gap.description} (${gap.gap_type})`);
         }
       }
+
+      // Credential gaps can't be self-built — ask Quinn directly.
+      const credGaps = analysis.gaps.filter(g => g.gap_type === 'credentials' && !g.self_buildable);
+      if (credGaps.length > 0 && !credentialGapsNotified.has(dream.id)) {
+        credentialGapsNotified.add(dream.id);
+        const gapSummary = credGaps.map(g => g.description).join('; ');
+        const msg = `Dream #${dream.id} is blocked on credentials: ${gapSummary}. Dream: "${dream.content.slice(0, 120)}"`;
+        console.log(`[dream-executor] 🔑 credential gap — notifying Quinn: ${gapSummary}`);
+        try {
+          execSync(
+            `openclaw system event --message ${JSON.stringify(`🔑 I need credentials to proceed: ${msg}`)}`,
+            { encoding: 'utf8', timeout: 10_000 }
+          );
+        } catch (e) {
+          console.warn(`[dream-executor] credential notify failed: ${e.message}`);
+        }
+      }
     }
 
     // PHASE 2: Execute tasks (which may include self_build tasks)
     const tasks = analysis.tasks_if_ready || [];
     if (tasks.length === 0) {
       console.log(`[dream-executor] ⚠️ no tasks generated for dream #${dream.id}`);
-      await pool.query(
-        `UPDATE dreams SET lifecycle_state = 'dispatched',
-         lifecycle_context = lifecycle_context || $1::jsonb
-         WHERE id = $2`,
-        [JSON.stringify({ last_attempt: new Date().toISOString(), gaps: analysis.gaps }), dream.id]
-      );
+      await setDreamLifecycle(dream.id, 'distilled', {
+        taskId: executionBatchId,
+        contextPatch: {
+          last_attempt: new Date().toISOString(),
+          execution_owner: 'oca',
+          execution_outcome: 'no_tasks_generated',
+          gaps: analysis.gaps || []
+        }
+      });
       continue;
     }
 
@@ -690,27 +768,24 @@ export async function executeDreams() {
 
     // Update dream lifecycle
     const allFailed = completedCount === 0 && failedCount > 0;
-    const newState = allFailed ? 'dispatched' : 'reflected';
-
-    await pool.query(
-      `UPDATE dreams SET lifecycle_state = $1, 
-       reflected_at = CASE WHEN $1 = 'reflected' THEN NOW() ELSE reflected_at END,
-       lifecycle_context = lifecycle_context || $2::jsonb
-       WHERE id = $3`,
-      [
-        newState,
-        JSON.stringify({
-          last_execution: new Date().toISOString(),
-          tasks_total: sorted.length,
-          tasks_completed: completedCount,
-          tasks_failed: failedCount,
-          self_builds: builtCount,
-          capabilities_built: builtCount > 0,
-          needs_restart: needsRestart
-        }),
-        dream.id
-      ]
-    );
+    const allSucceeded = completedCount > 0 && failedCount === 0;
+    const isProtected = Boolean(dream?.lifecycle_context?.protected || dream?.lifecycle_context?.baked_in);
+    const newState = allFailed ? 'distilled' : 'reflected';
+    await setDreamLifecycle(dream.id, newState, {
+      taskId: executionBatchId,
+      resolved: allSucceeded && !isProtected,
+      contextPatch: {
+        last_execution: new Date().toISOString(),
+        execution_owner: 'oca',
+        execution_outcome: allFailed ? 'failed' : allSucceeded ? 'completed' : 'partial',
+        tasks_total: sorted.length,
+        tasks_completed: completedCount,
+        tasks_failed: failedCount,
+        self_builds: builtCount,
+        capabilities_built: builtCount > 0,
+        needs_restart: needsRestart
+      }
+    });
 
     await emit('dream_executed', 'executive', {
       dreamId: dream.id,
@@ -808,4 +883,56 @@ function extractJSON(text) {
   return null;
 }
 
-export default { executeDreams, detectGaps, selfBuild, getCapabilities };
+export default { executeDreams, executeXDreams, detectGaps, selfBuild, getCapabilities };
+
+// Execute only X-posting related dreams — called when Quinn goes away.
+// Targets dispatched dreams whose content matches X/public posting intent.
+export async function executeXDreams() {
+  const executionBatchId = `oca-xpost-${Date.now().toString(36)}`;
+  const X_KEYWORDS = ['post on X', 'post to X', 'Build public execution narrative', 'Share what I build', 'posting', 'narrative on X'];
+  const kwConditions = X_KEYWORDS.map((_, i) => `content ILIKE $${i + 2}`).join(' OR ');
+
+  const { rows: dreams } = await pool.query(
+    `WITH next_dreams AS (
+       SELECT id FROM dreams
+       WHERE lifecycle_state = 'dispatched'
+         AND NOT resolved
+         AND (${kwConditions})
+       ORDER BY weight DESC, created_at DESC
+       LIMIT 2
+       FOR UPDATE SKIP LOCKED
+     )
+     UPDATE dreams d
+     SET lifecycle_state = 'executing',
+         lifecycle_updated_at = NOW(),
+         executing_at = COALESCE(d.executing_at, NOW()),
+         last_task_id = $1,
+         lifecycle_context = COALESCE(d.lifecycle_context, '{}'::jsonb) || '{"execution_owner":"oca","triggered_by":"away_presence"}'::jsonb
+     FROM next_dreams nd
+     WHERE d.id = nd.id
+     RETURNING d.*`,
+    [executionBatchId, ...X_KEYWORDS.map(k => `%${k}%`)]
+  );
+
+  if (!dreams.length) {
+    console.log('[dream-executor] no X dreams ready to execute (away trigger)');
+    return { executed: 0 };
+  }
+
+  console.log(`[dream-executor] 🌙 away-triggered X execution: ${dreams.length} dream(s)`);
+  // Reuse the main executeDreams loop by temporarily dispatching these back
+  // and calling through — simpler: just run detectGaps + executeTask directly.
+  let executed = 0;
+  for (const dream of dreams) {
+    const analysis = await detectGaps(dream);
+    const tasks = (analysis.tasks_if_ready || []).filter(t => t.type === 'x_post' || t.type === 'file_write');
+    for (const task of tasks.slice(0, 3)) {
+      const taskResult = await executeTask(task, dream.id);
+      if (taskResult.success) executed++;
+    }
+    await setDreamLifecycle(dream.id, 'reflected', {
+      contextPatch: { last_execution: new Date().toISOString(), execution_owner: 'oca', triggered_by: 'away_presence' }
+    });
+  }
+  return { executed };
+}

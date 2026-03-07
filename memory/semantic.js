@@ -16,6 +16,12 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeEpisodeIds(values) {
+  return [...new Set((Array.isArray(values) ? values : [values])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0))];
+}
+
 async function computeWeightedConfidence(conceptId, fallbackEvidence = 1, fallbackContradictions = 0) {
   const { rows: [evidence] } = await pool.query(
     `SELECT
@@ -56,6 +62,7 @@ export async function learn(concept, {
   evidenceText = null,
   metadata = {},
 } = {}) {
+  sourceEpisodes = normalizeEpisodeIds(sourceEpisodes);
   const embedding = await getEmbedding(concept);
   
   // Check for existing similar concept

@@ -2,7 +2,6 @@
 // Ingests screenshots, runs structured vision extraction, embeds summaries,
 // stores vectors in screenshot_memory, and maintains retention state.
 import Anthropic from '@anthropic-ai/sdk';
-import llm from '../llm.js';
 import OpenAI from 'openai';
 import {
   existsSync,
@@ -18,7 +17,8 @@ import { on, pool } from '../event-bus.js';
 
 const SCREENSHOTS_DIR = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots';
 const VISUAL_CACHE_PATH = new URL('./latest-visual-cache.json', import.meta.url);
-const VISION_MODEL = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_VISION_MODEL = 'claude-haiku-4-5-20251001';
+const OPENAI_VISION_MODEL = 'gpt-4o-mini';
 const RETENTION_DAYS = 7;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MAX_ANALYSES_PER_MINUTE = 2;
@@ -26,7 +26,15 @@ const FILE_SCAN_INTERVAL_MS = 60 * 1000;
 const STARTUP_SCAN_MAX_FILES = 120;
 const PERIODIC_SCAN_MAX_FILES = 60;
 
-const anthropic = process.env.ANTHROPIC_API_KEY
+const ANTHROPIC_AUTH_MODE = (() => {
+  const raw = String(process.env.ANTHROPIC_AUTH_MODE || 'auto').trim().toLowerCase();
+  return ['auto', 'api', 'oauth'].includes(raw) ? raw : 'auto';
+})();
+const VISION_PROVIDER = (() => {
+  const raw = String(process.env.OCA_VISION_PROVIDER || 'auto').trim().toLowerCase();
+  return ['auto', 'anthropic', 'openai'].includes(raw) ? raw : 'auto';
+})();
+const anthropic = (ANTHROPIC_AUTH_MODE !== 'oauth' && process.env.ANTHROPIC_API_KEY)
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
 const openai = process.env.OPENAI_API_KEY
@@ -43,6 +51,8 @@ const queue = [];
 const queuedPaths = new Set();
 const analysisTimestamps = [];
 const URGENT_SOURCES = new Set(['swift-event', 'fs-watch']);
+let visionDisabledUntil = 0;
+let visionDisableReason = null;
 
 function sleep(ms) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -138,6 +148,47 @@ function textOrNull(value, maxLen = 3000) {
   return str.slice(0, maxLen);
 }
 
+function isVisionTemporarilyDisabled() {
+  return Date.now() < visionDisabledUntil;
+}
+
+function resolveVisionProvider() {
+  if (VISION_PROVIDER === 'anthropic') return anthropic ? 'anthropic' : 'none';
+  if (VISION_PROVIDER === 'openai') return openai ? 'openai' : 'none';
+  if (anthropic) return 'anthropic';
+  if (openai) return 'openai';
+  return 'none';
+}
+
+function parseRetryAtFromErrorMessage(message) {
+  const match = String(message || '').match(/regain access on ([^.]+(?:UTC)?)/i);
+  if (!match?.[1]) return null;
+  const ts = Date.parse(match[1].trim());
+  return Number.isNaN(ts) ? null : ts;
+}
+
+function isVisionProviderLimitError(err) {
+  const message = String(err?.message || err || '');
+  return (
+    Number(err?.status) === 429 ||
+    /usage limits?/i.test(message) ||
+    /quota/i.test(message) ||
+    /insufficient_quota/i.test(message) ||
+    /rate limit/i.test(message) ||
+    /invalid_request_error/i.test(message)
+  );
+}
+
+function disableVisionUntil(untilTs, reason) {
+  const nextUntil = Math.max(Date.now() + 30 * 60 * 1000, Number(untilTs) || 0);
+  if (nextUntil <= visionDisabledUntil) return;
+  visionDisabledUntil = nextUntil;
+  visionDisableReason = String(reason || 'vision_api_unavailable');
+  console.warn(
+    `[screenshot-indexer] vision disabled until ${new Date(visionDisabledUntil).toISOString()} (${visionDisableReason})`
+  );
+}
+
 async function waitForVisionBudget() {
   while (true) {
     const now = Date.now();
@@ -154,14 +205,27 @@ async function waitForVisionBudget() {
 }
 
 async function analyzeScreenshot(filepath, context) {
-  if (!anthropic) {
+  const provider = resolveVisionProvider();
+  if (provider === 'none') {
     return {
       app: context.frontApp,
       url: null,
       activity_type: null,
       description: fallbackDescription(context.frontApp, context.windowTitle),
       content_summary: null,
-      model: 'fallback-no-anthropic'
+      model: 'fallback-no-vision-provider'
+    };
+  }
+
+  if (isVisionTemporarilyDisabled()) {
+    return {
+      app: context.frontApp,
+      url: null,
+      activity_type: null,
+      description: fallbackDescription(context.frontApp, context.windowTitle),
+      content_summary: 'vision temporarily disabled',
+      model: 'fallback-vision-disabled',
+      raw: visionDisableReason
     };
   }
 
@@ -169,11 +233,14 @@ async function analyzeScreenshot(filepath, context) {
 
   const imageData = readFileSync(filepath);
   const base64 = imageData.toString('base64');
-  const response = await anthropic.messages.create({
-    model: VISION_MODEL,
-    max_tokens: 420,
-    temperature: 0.1,
-    system: `You are an image perception extractor for a cognitive memory system.
+  let rawText = '';
+  try {
+    if (provider === 'anthropic') {
+      const response = await anthropic.messages.create({
+        model: ANTHROPIC_VISION_MODEL,
+        max_tokens: 420,
+        temperature: 0.1,
+        system: `You are an image perception extractor for a cognitive memory system.
 Return ONLY one valid JSON object with this exact shape:
 {
   "app": "string or null",
@@ -187,26 +254,85 @@ Rules:
 - No extra keys.
 - Keep description under 320 characters.
 - If uncertain, set fields to null except description.`,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-        {
-          type: 'text',
-          text: `Context hints:
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            {
+              type: 'text',
+              text: `Context hints:
 front_app=${context.frontApp || 'unknown'}
 window_title=${context.windowTitle || 'unknown'}
 capture_source=${context.source || 'unknown'}`
-        }
-      ]
-    }]
-  });
+            }
+          ]
+        }]
+      });
+      rawText = (response?.content || [])
+        .filter((part) => part?.type === 'text')
+        .map((part) => part?.text || '')
+        .join('\n')
+        .trim();
+    } else {
+      const response = await openai.chat.completions.create({
+        model: OPENAI_VISION_MODEL,
+        temperature: 0.1,
+        max_tokens: 420,
+        response_format: { type: 'json_object' },
+        messages: [{
+          role: 'system',
+          content: `You are an image perception extractor for a cognitive memory system.
+Return ONLY one valid JSON object with this exact shape:
+{
+  "app": "string or null",
+  "url": "string or null",
+  "activity_type": "coding|browsing|writing|chatting|reading|designing|debugging|research|other",
+  "description": "specific factual 1-2 sentence description",
+  "content_summary": "very short summary phrase"
+}
+Rules:
+- No markdown.
+- No extra keys.
+- Keep description under 320 characters.
+- If uncertain, set fields to null except description.`
+        }, {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Context hints:
+front_app=${context.frontApp || 'unknown'}
+window_title=${context.windowTitle || 'unknown'}
+capture_source=${context.source || 'unknown'}`
+            },
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/jpeg;base64,${base64}` }
+            }
+          ]
+        }]
+      });
+      rawText = response?.choices?.[0]?.message?.content?.trim?.() || '';
+    }
+  } catch (err) {
+    if (isVisionProviderLimitError(err)) {
+      disableVisionUntil(
+        parseRetryAtFromErrorMessage(err?.message),
+        String(err?.message || 'vision provider usage limit')
+      );
+      return {
+        app: context.frontApp,
+        url: null,
+        activity_type: null,
+        description: fallbackDescription(context.frontApp, context.windowTitle),
+        content_summary: 'vision deferred due to provider limit',
+        model: 'fallback-api-limited',
+        raw: String(err?.message || err)
+      };
+    }
+    throw err;
+  }
 
-  const rawText = (response?.content || [])
-    .filter((part) => part?.type === 'text')
-    .map((part) => part?.text || '')
-    .join('\n')
-    .trim();
   const parsed = parseVisionJson(rawText);
 
   if (!parsed) {
@@ -216,7 +342,7 @@ capture_source=${context.source || 'unknown'}`
       activity_type: null,
       description: fallbackDescription(context.frontApp, context.windowTitle),
       content_summary: null,
-      model: VISION_MODEL,
+      model: provider === 'anthropic' ? ANTHROPIC_VISION_MODEL : OPENAI_VISION_MODEL,
       raw: rawText
     };
   }
@@ -227,7 +353,7 @@ capture_source=${context.source || 'unknown'}`
     activity_type: textOrNull(parsed.activity_type, 80),
     description: textOrNull(parsed.description, 1200) || fallbackDescription(context.frontApp, context.windowTitle),
     content_summary: textOrNull(parsed.content_summary, 800),
-    model: VISION_MODEL,
+    model: provider === 'anthropic' ? ANTHROPIC_VISION_MODEL : OPENAI_VISION_MODEL,
     raw: rawText
   };
 }
@@ -332,7 +458,7 @@ async function indexScreenshot(filepath, hints = {}) {
       analysis.description,
       analysis.content_summary,
       embedding ? JSON.stringify(embedding) : null,
-      analysis.model || VISION_MODEL,
+      analysis.model || (resolveVisionProvider() === 'anthropic' ? ANTHROPIC_VISION_MODEL : OPENAI_VISION_MODEL),
       JSON.stringify(metadata)
     ]
   );
@@ -492,8 +618,11 @@ export async function startScreenshotIndexer() {
 
   return {
     started: true,
-    visionEnabled: Boolean(anthropic),
-    embeddingsEnabled: Boolean(openai)
+    visionEnabled: resolveVisionProvider() !== 'none',
+    embeddingsEnabled: Boolean(openai),
+    visionProvider: resolveVisionProvider(),
+    visionTemporarilyDisabled: isVisionTemporarilyDisabled(),
+    visionDisabledUntil: visionDisabledUntil ? new Date(visionDisabledUntil).toISOString() : null
   };
 }
 

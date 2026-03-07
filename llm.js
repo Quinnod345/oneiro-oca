@@ -1,7 +1,9 @@
-// OCA LLM Gateway — unified AI access with automatic fallback
-// 
-// Primary: Anthropic API (direct, fast)
-// Fallback: claude -p CLI (OAuth/Max subscription, survives API spend limits)
+// OCA LLM Gateway — unified Claude access with configurable auth mode.
+//
+// Supported modes:
+// - auto  : prefer Anthropic API if configured, fall back to OAuth-backed CLI
+// - api   : use Anthropic API only
+// - oauth : use Claude CLI OAuth session only
 //
 // Every cognitive layer should use this instead of raw Anthropic SDK.
 // Drop-in replacement: llm.messages.create({...}) has the same signature.
@@ -17,10 +19,15 @@ try {
   if (API_KEY) anthropic = new Anthropic({ apiKey: API_KEY });
 } catch {}
 
-// Track API failures to avoid hammering a dead key
+const ANTHROPIC_AUTH_MODE = (() => {
+  const raw = String(process.env.ANTHROPIC_AUTH_MODE || 'auto').trim().toLowerCase();
+  return ['auto', 'api', 'oauth'].includes(raw) ? raw : 'auto';
+})();
+
+// Track API failures to avoid hammering a dead key in auto mode.
 let apiFailCount = 0;
 let apiDisabledUntil = 0;
-const API_BACKOFF_MS = 5 * 60 * 1000; // 5 min backoff after repeated failures
+const API_BACKOFF_MS = 5 * 60 * 1000;
 const API_FAIL_THRESHOLD = 3;
 
 // CLI concurrency limiter — only one claude -p call at a time
@@ -66,39 +73,46 @@ function getCliModel(apiModel) {
 
 const messages = {
   async create(params) {
-    const { model, system, messages: msgs, temperature, max_tokens } = params;
+    if (ANTHROPIC_AUTH_MODE === 'oauth') {
+      return await withCliLock(() => callCLI(params));
+    }
 
-    // Try API first (if not in backoff)
-    if (anthropic && Date.now() > apiDisabledUntil) {
+    if (!anthropic) {
+      if (ANTHROPIC_AUTH_MODE === 'api') {
+        throw new Error('ANTHROPIC_AUTH_MODE=api but ANTHROPIC_API_KEY is not configured');
+      }
+      return await withCliLock(() => callCLI(params));
+    }
+
+    if (ANTHROPIC_AUTH_MODE === 'api') {
+      return await anthropic.messages.create(params);
+    }
+
+    if (Date.now() > apiDisabledUntil) {
       try {
         const response = await anthropic.messages.create(params);
-        // API worked — reset failure count
         if (apiFailCount > 0) {
           apiFailCount = 0;
-          console.log('[llm] API recovered — switching back to direct API');
+          console.log('[llm] Anthropic API recovered — switching back to API in auto mode');
         }
         return response;
       } catch (e) {
-        const isRateLimit = e.status === 429 || e.status === 400 || 
+        const isRateLimit = e.status === 429 || e.status === 400 ||
           e.message?.includes('usage limits') || e.message?.includes('rate limit');
 
         if (isRateLimit) {
           apiFailCount++;
-          console.log(`[llm] API rate limited (${apiFailCount}/${API_FAIL_THRESHOLD}) — falling back to CLI`);
-
+          console.log(`[llm] Anthropic API rate limited (${apiFailCount}/${API_FAIL_THRESHOLD}) — falling back to OAuth CLI`);
           if (apiFailCount >= API_FAIL_THRESHOLD) {
             apiDisabledUntil = Date.now() + API_BACKOFF_MS;
-            console.log(`[llm] API disabled for ${API_BACKOFF_MS / 1000}s — using CLI exclusively`);
+            console.log(`[llm] Anthropic API disabled for ${API_BACKOFF_MS / 1000}s in auto mode`);
           }
-          // Fall through to CLI
         } else {
-          // Non-rate-limit error — still try CLI as fallback
-          console.error(`[llm] API error: ${e.message} — trying CLI fallback`);
+          console.error(`[llm] Anthropic API error: ${e.message} — trying OAuth CLI fallback`);
         }
       }
     }
 
-    // Fallback: claude -p CLI (OAuth/Max subscription) — serialized to prevent concurrent calls
     return await withCliLock(() => callCLI(params));
   }
 };
@@ -108,7 +122,7 @@ const messages = {
 // ═══════════════════════════════════════════════════
 
 async function callCLI(params) {
-  const { model, system, messages: msgs, max_tokens } = params;
+  const { model, system, messages: msgs } = params;
   const cliModel = getCliModel(model);
 
   // Build the prompt from system + messages
@@ -207,26 +221,34 @@ function spawnClaude(model, inputFile) {
 
 function getStatus() {
   return {
+    authMode: ANTHROPIC_AUTH_MODE,
     apiAvailable: Boolean(anthropic),
     apiDisabled: Date.now() < apiDisabledUntil,
     apiDisabledUntil: apiDisabledUntil > 0 ? new Date(apiDisabledUntil).toISOString() : null,
     apiFailCount,
-    cliFallbackActive: !anthropic || Date.now() < apiDisabledUntil || apiFailCount >= API_FAIL_THRESHOLD,
-    mode: (!anthropic || Date.now() < apiDisabledUntil) ? 'cli_only' : apiFailCount > 0 ? 'degraded' : 'api_primary'
+    cliFallbackActive: ANTHROPIC_AUTH_MODE !== 'api',
+    mode:
+      ANTHROPIC_AUTH_MODE === 'oauth'
+        ? 'cli_only'
+        : ANTHROPIC_AUTH_MODE === 'api'
+          ? 'api_only'
+          : (!anthropic || Date.now() < apiDisabledUntil)
+            ? 'cli_only'
+            : apiFailCount > 0
+              ? 'degraded'
+              : 'api_primary'
   };
 }
 
-// Force CLI mode (useful when you know the API is down)
 function forceCLI() {
-  apiDisabledUntil = Date.now() + (24 * 60 * 60 * 1000); // 24h
-  console.log('[llm] forced CLI mode for 24h');
+  apiDisabledUntil = Date.now() + (24 * 60 * 60 * 1000);
+  console.log('[llm] forced OAuth CLI mode for 24h');
 }
 
-// Reset to try API again
 function resetAPI() {
   apiFailCount = 0;
   apiDisabledUntil = 0;
-  console.log('[llm] API reset — will try direct API on next call');
+  console.log('[llm] API reset — auto mode will try Anthropic API again');
 }
 
 export { messages, getStatus, forceCLI, resetAPI };

@@ -1,0 +1,1 @@
+The file is ready to write — awaiting your permission to create `cognitive/motor/skills/self-builder-prompt.js`.

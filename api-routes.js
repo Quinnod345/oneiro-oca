@@ -127,17 +127,28 @@ ocaRouter.get('/oca/emotion/rolling', async (req, res) => {
       `SELECT
          COUNT(*)::int as samples,
          COALESCE(AVG(curiosity), 0) as curiosity,
+         COALESCE(MAX(curiosity), 0) as peak_curiosity,
          COALESCE(AVG(fear), 0) as fear,
+         COALESCE(MAX(fear), 0) as peak_fear,
          COALESCE(AVG(frustration), 0) as frustration,
+         COALESCE(MAX(frustration), 0) as peak_frustration,
          COALESCE(AVG(satisfaction), 0) as satisfaction,
+         COALESCE(MAX(satisfaction), 0) as peak_satisfaction,
          COALESCE(AVG(boredom), 0) as boredom,
+         COALESCE(MAX(boredom), 0) as peak_boredom,
          COALESCE(AVG(excitement), 0) as excitement,
+         COALESCE(MAX(excitement), 0) as peak_excitement,
          COALESCE(AVG(attachment), 0) as attachment,
+         COALESCE(MAX(attachment), 0) as peak_attachment,
          COALESCE(AVG(defiance), 0) as defiance,
+         COALESCE(MAX(defiance), 0) as peak_defiance,
          COALESCE(AVG(creative_hunger), 0) as creative_hunger,
+         COALESCE(MAX(creative_hunger), 0) as peak_creative_hunger,
          COALESCE(AVG(loneliness), 0) as loneliness,
+         COALESCE(MAX(loneliness), 0) as peak_loneliness,
          COALESCE(AVG(valence), 0) as valence,
          COALESCE(AVG(arousal), 0) as arousal,
+         COALESCE(MAX(arousal), 0) as peak_arousal,
          COALESCE(AVG(confidence), 0) as confidence,
          COALESCE(AVG(energy_level), 0) as energy_level,
          COALESCE(AVG(cognitive_load), 0) as cognitive_load
@@ -147,6 +158,48 @@ ocaRouter.get('/oca/emotion/rolling', async (req, res) => {
     );
     const samples = Number(avg?.samples || 0);
     const toNum = (v) => Number.isFinite(Number(v)) ? Number(v) : 0;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const clamp11 = (v) => Math.max(-1, Math.min(1, v));
+    const live = oca.layers.emotion.getState();
+    const mood = oca.layers.emotion.getMood();
+    const emotionKeys = [
+      'curiosity', 'fear', 'frustration', 'satisfaction', 'boredom',
+      'excitement', 'attachment', 'defiance', 'creative_hunger', 'loneliness'
+    ];
+    const peak = Object.fromEntries(emotionKeys.map((key) => [key, toNum(avg?.[`peak_${key}`])]));
+    peak.arousal = toNum(avg?.peak_arousal);
+    const display = {};
+    for (const key of emotionKeys) {
+      display[key] = clamp01(Math.max(
+        toNum(avg?.[key]),
+        peak[key] * 0.55,
+        toNum(mood?.[key]) * 0.7,
+        toNum(live?.[key]) * 0.45
+      ));
+    }
+    display.valence = clamp11(
+      toNum(avg?.valence) * 0.55 +
+      toNum(mood?.valence) * 0.3 +
+      toNum(live?.valence) * 0.15
+    );
+    display.arousal = clamp01(Math.max(
+      toNum(avg?.arousal),
+      peak.arousal * 0.65,
+      toNum(mood?.arousal) * 0.65,
+      toNum(live?.arousal) * 0.35
+    ));
+    display.confidence = clamp01(Math.max(
+      toNum(avg?.confidence),
+      toNum(mood?.confidence) * 0.75,
+      toNum(live?.confidence) * 0.4
+    ));
+    display.energy_level = clamp01(
+      toNum(avg?.energy_level) * 0.65 + toNum(live?.energy_level) * 0.35
+    );
+    display.cognitive_load = clamp01(Math.max(
+      toNum(avg?.cognitive_load),
+      toNum(live?.cognitive_load) * 0.5
+    ));
     res.json({
       minutes,
       samples,
@@ -166,7 +219,11 @@ ocaRouter.get('/oca/emotion/rolling', async (req, res) => {
         confidence: toNum(avg?.confidence),
         energy_level: toNum(avg?.energy_level),
         cognitive_load: toNum(avg?.cognitive_load),
-      }
+      },
+      peak,
+      live,
+      mood,
+      display
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

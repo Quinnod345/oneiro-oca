@@ -68,7 +68,7 @@ struct OneiroApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
-                .frame(minWidth: 1100, minHeight: 720)
+                .frame(minWidth: 1200, minHeight: 720)
                 .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.notificationManager = appState.notificationManager
@@ -660,7 +660,7 @@ struct ContentView: View {
                 
                 // Main chat
                 VStack(spacing: 0) {
-                    AppHeader(isConnected: state.isConnected)
+                    AppHeader(isConnected: state.isConnected, unreadCount: state.notificationManager.unreadCount)
                     SepLine()
                     ChatArea()
                     InputBar(draft: $draft, onSend: send, isThinking: state.isThinking)
@@ -671,7 +671,7 @@ struct ContentView: View {
                 
                 // Mind panel
                 MindPanel()
-                    .frame(width: 300)
+                    .frame(width: 360)
             }
         }
         .onAppear { state.connect() }
@@ -815,6 +815,7 @@ struct AmbientBackground: View {
 
 struct AppHeader: View {
     let isConnected: Bool
+    var unreadCount: Int = 0
     @State private var moonScale: CGFloat = 1.0
     
     var body: some View {
@@ -834,16 +835,37 @@ struct AppHeader: View {
             
             HStack {
                 Spacer()
-                HStack(spacing: 8) {
-                    ConnectionDot(live: isConnected)
-                    Text(isConnected ? "connected" : "offline")
-                        .font(.system(size: 10, weight: .medium))
-                        .tracking(2)
-                        .foregroundColor(isConnected ? Color.oGreen.opacity(0.85) : Color.oDim)
+                HStack(spacing: 10) {
+                    // Notification bell
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(unreadCount > 0 ? Color.oText.opacity(0.85) : Color.oDim)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color.white.opacity(unreadCount > 0 ? 0.04 : 0.01))
+                                .overlay(Circle().stroke(Color.oBorder, lineWidth: 0.5)))
+                        if unreadCount > 0 {
+                            Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.oRed))
+                                .offset(x: 4, y: -4)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.25), value: unreadCount)
+
+                    HStack(spacing: 8) {
+                        ConnectionDot(live: isConnected)
+                        Text(isConnected ? "connected" : "offline")
+                            .font(.system(size: 10, weight: .medium))
+                            .tracking(2)
+                            .foregroundColor(isConnected ? Color.oGreen.opacity(0.85) : Color.oDim)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.white.opacity(0.02)).overlay(Capsule().stroke(Color.oBorder, lineWidth: 0.5)))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.02)).overlay(Capsule().stroke(Color.oBorder, lineWidth: 0.5)))
             }
             .padding(.trailing, 28)
         }
@@ -1356,7 +1378,33 @@ struct MindPanel: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Tab selector - two rows
+
+            // ── TOP ZONE: CRM + Emotion side by side ──────────────────
+            if state.crmData != nil || state.emotionData != nil {
+                HStack(alignment: .top, spacing: 0) {
+                    if let crm = state.crmData {
+                        CRMRingView(crm: crm)
+                            .frame(maxWidth: .infinity)
+                    }
+                    if state.crmData != nil && state.emotionData != nil {
+                        SepLine(vertical: true)
+                    }
+                    if let emo = state.emotionData {
+                        EmotionBarsView(emotion: emo)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .background(Color.white.opacity(0.012))
+
+                SepLine()
+            }
+
+            // ── NUDGES ZONE ────────────────────────────────────────────
+            NudgesFeedView()
+
+            SepLine()
+
+            // ── TAB STRIP ─────────────────────────────────────────────
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     ForEach([AppState.SideTab.mind, .dreams, .moments, .history], id: \.self) { tab in
@@ -1366,7 +1414,7 @@ struct MindPanel: View {
                                 .tracking(1.5)
                                 .foregroundColor(state.selectedTab == tab ? Color.oText : Color.oDim)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, 9)
                                 .background(state.selectedTab == tab ? Color.oAccent.opacity(0.1) : Color.clear)
                         }
                         .buttonStyle(.plain)
@@ -1381,15 +1429,13 @@ struct MindPanel: View {
                                     .tracking(1.5)
                                     .foregroundColor(state.selectedTab == tab ? Color.oText : Color.oDim)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
+                                    .padding(.vertical, 9)
                                     .background(state.selectedTab == tab ? Color.oAccent.opacity(0.1) : Color.clear)
-                                
                                 if tab == .notifications && state.notificationManager.unreadCount > 0 {
                                     Text("\(state.notificationManager.unreadCount)")
                                         .font(.system(size: 7, weight: .bold))
                                         .foregroundColor(.white)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
+                                        .padding(.horizontal, 4).padding(.vertical, 1)
                                         .background(Capsule().fill(Color.oRed))
                                         .offset(x: -4, y: 2)
                                 }
@@ -1399,10 +1445,11 @@ struct MindPanel: View {
                     }
                 }
             }
-            .padding(.top, 8)
-            
+            .padding(.top, 4)
+
             SepLine()
-            
+
+            // ── TAB CONTENT ───────────────────────────────────────────
             ScrollView(.vertical, showsIndicators: false) {
                 switch state.selectedTab {
                 case .mind: MindTab()
@@ -1415,8 +1462,6 @@ struct MindPanel: View {
                 case .notifications: NotificationsTab()
                 }
             }
-            
-            Spacer()
         }
         .background(ZStack { Color.oPanel; LinearGradient.panelGlow })
     }
@@ -2200,6 +2245,349 @@ struct CognitiveDashboardTab: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Dashboard Panel Components (persistent top zone)
+
+// Compact CRM ring for the persistent dashboard top zone
+struct CRMRingView: View {
+    let crm: CRMResponse
+    @State private var animatedScore: Double = 0
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 8) {
+            Text("CRM")
+                .font(.system(size: 8, weight: .bold))
+                .tracking(2)
+                .foregroundColor(Color.oMuted)
+
+            ZStack {
+                Circle()
+                    .stroke(Color.oBorderHi.opacity(0.35), lineWidth: 5)
+                    .frame(width: 72, height: 72)
+                Circle()
+                    .trim(from: 0, to: animatedScore)
+                    .stroke(
+                        LinearGradient.accentGrad,
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                    )
+                    .frame(width: 72, height: 72)
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 1) {
+                    Text("\(Int(crm.composite * 100))")
+                        .font(.system(size: 20, weight: .light, design: .monospaced))
+                        .foregroundColor(Color.oText)
+                    Text("%")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundColor(Color.oDim)
+                }
+            }
+
+            if let interp = crm.interpretation {
+                Text(interp)
+                    .font(.system(size: 9))
+                    .foregroundColor(Color.oDim)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+
+            VStack(spacing: 4) {
+                ForEach(Array(crm.components.keys.sorted()), id: \.self) { key in
+                    if let comp = crm.components[key] {
+                        HStack(spacing: 6) {
+                            Text(key.prefix(10))
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(Color.oMuted)
+                                .frame(width: 68, alignment: .trailing)
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 1.5)
+                                        .fill(Color.oBorderHi.opacity(0.3)).frame(height: 2)
+                                    RoundedRectangle(cornerRadius: 1.5)
+                                        .fill(comp.score > 0.7 ? Color.oGreen : comp.score > 0.4 ? Color.oYellow : Color.oRed)
+                                        .frame(width: max(2, geo.size.width * comp.score), height: 2)
+                                }
+                            }
+                            .frame(height: 2)
+                            Text("\(Int(comp.score * 100))%")
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(comp.score > 0.7 ? Color.oGreen : comp.score > 0.4 ? Color.oYellow : Color.oRed)
+                                .frame(width: 26, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(14)
+        .onAppear {
+            withAnimation(.spring(response: 1.0, dampingFraction: 0.8)) { animatedScore = crm.composite }
+        }
+        .onChange(of: crm.composite) { _, v in
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.8)) { animatedScore = v }
+        }
+    }
+}
+
+private let emotionColors: [String: Color] = [
+    "curiosity": Color.oBlue,
+    "fear": Color(red: 0.69, green: 0.26, blue: 0.91),
+    "frustration": Color.oRed,
+    "satisfaction": Color.oGreen,
+    "boredom": Color.oDim,
+    "excitement": Color.oYellow,
+    "attachment": Color(red: 0.91, green: 0.38, blue: 0.66),
+    "defiance": Color(red: 1.0, green: 0.33, blue: 0.20),
+    "creative_hunger": Color.oAccent,
+    "loneliness": Color(red: 0.42, green: 0.48, blue: 0.74),
+]
+
+// Compact emotion bars for the persistent dashboard top zone
+struct EmotionBarsView: View {
+    let emotion: EmotionResponse
+    private let keys = ["curiosity","fear","frustration","satisfaction","boredom",
+                        "excitement","attachment","defiance","creative_hunger","loneliness"]
+    @State private var loaded = false
+
+    var displayState: [String: Double] {
+        emotion.mood?.isEmpty == false ? emotion.mood! : emotion.state
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("EMOTION")
+                .font(.system(size: 8, weight: .bold))
+                .tracking(2)
+                .foregroundColor(Color.oMuted)
+                .padding(.bottom, 10)
+
+            let vals = displayState
+            let valence = vals["valence"] ?? 0
+            HStack(spacing: 16) {
+                VStack(spacing: 2) {
+                    Text(valence >= 0 ? "+\(String(format: "%.2f", valence))" : String(format: "%.2f", valence))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(valence >= 0 ? Color.oGreen : Color.oRed)
+                    Text("valence").font(.system(size: 8)).foregroundColor(Color.oDim)
+                }
+                VStack(spacing: 2) {
+                    Text(String(format: "%.2f", vals["arousal"] ?? 0))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.oText)
+                    Text("arousal").font(.system(size: 8)).foregroundColor(Color.oDim)
+                }
+            }
+            .padding(.bottom, 10)
+
+            VStack(spacing: 6) {
+                ForEach(keys, id: \.self) { key in
+                    let val = max(0, min(vals[key] ?? 0, 1.0))
+                    let barColor = emotionColors[key] ?? Color.oDim
+                    HStack(spacing: 8) {
+                        Text(key.replacingOccurrences(of: "_", with: " "))
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(Color.oMuted)
+                            .frame(width: 82, alignment: .trailing)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.oBorderHi.opacity(0.3))
+                                    .frame(height: 3)
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(barColor)
+                                    .frame(width: loaded ? max(3, geo.size.width * val) : 0, height: 3)
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.78), value: loaded)
+                            }
+                        }
+                        .frame(height: 3)
+                        Text("\(Int(val * 100))%")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(Color.oDim)
+                            .frame(width: 28, alignment: .trailing)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .onAppear { withAnimation { loaded = true } }
+    }
+}
+
+// Persistent nudges feed with inline reply, shown in the top dashboard zone
+struct NudgesFeedView: View {
+    @EnvironmentObject var state: AppState
+    @State private var replyTexts: [Int: String] = [:]
+    @State private var sendingIds: Set<Int> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("NUDGES")
+                    .font(.system(size: 8, weight: .bold))
+                    .tracking(2)
+                    .foregroundColor(Color.oMuted)
+                Spacer()
+                if state.notificationManager.unreadCount > 0 {
+                    Text("\(state.notificationManager.unreadCount)")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.oRed))
+                }
+            }
+            .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 10)
+
+            SepLine()
+
+            let notifs = state.notificationManager.notifications.prefix(5)
+            if notifs.isEmpty {
+                Text("No nudges yet")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color.oDim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            } else {
+                ForEach(Array(notifs)) { notif in
+                    NudgeFeedRow(
+                        notif: notif,
+                        replyText: Binding(
+                            get: { replyTexts[notif.id] ?? "" },
+                            set: { replyTexts[notif.id] = $0 }
+                        ),
+                        isSending: sendingIds.contains(notif.id),
+                        onSend: {
+                            let text = replyTexts[notif.id]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                            guard !text.isEmpty else { return }
+                            sendingIds.insert(notif.id)
+                            state.notificationManager.replyToNotification(id: notif.id, reply: text)
+                            replyTexts[notif.id] = ""
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                sendingIds.remove(notif.id)
+                            }
+                        }
+                    )
+                    if notif.id != notifs.last?.id {
+                        SepLine().padding(.horizontal, 14)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct NudgeFeedRow: View {
+    let notif: OneiroNotification
+    @Binding var replyText: String
+    let isSending: Bool
+    let onSend: () -> Void
+
+    var accentColor: Color {
+        switch notif.category {
+        case "alert": return Color.oRed
+        case "question": return Color.oBlue
+        case "update": return Color.oGreen
+        default: return Color.oAccent
+        }
+    }
+
+    var catIcon: String {
+        switch notif.category {
+        case "thought": return "🌑"
+        case "alert": return "🔴"
+        case "question": return "❓"
+        case "update": return "🟢"
+        default: return "🌑"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(width: 2)
+                    .cornerRadius(1)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("\(catIcon) \(notif.category.uppercased())")
+                            .font(.system(size: 7, weight: .bold))
+                            .tracking(1)
+                            .foregroundColor(accentColor)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(accentColor.opacity(0.15)))
+                        if !notif.read {
+                            Circle().fill(accentColor).frame(width: 5, height: 5)
+                        }
+                        Spacer()
+                        Text(relativeTime(notif.created_at))
+                            .font(.system(size: 8))
+                            .foregroundColor(Color.oDim)
+                    }
+
+                    Text(notif.message)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.oText)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let reply = notif.reply {
+                        HStack(spacing: 6) {
+                            Text("YOU")
+                                .font(.system(size: 7, weight: .bold))
+                                .tracking(1)
+                                .foregroundColor(Color.oBlue)
+                            Text(reply)
+                                .font(.system(size: 10))
+                                .foregroundColor(Color.oMuted)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.oBlue.opacity(0.08))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.oBlue.opacity(0.2), lineWidth: 0.5)))
+                    }
+
+                    // Reply input
+                    HStack(spacing: 8) {
+                        TextField("Reply…", text: $replyText)
+                            .font(.system(size: 11))
+                            .textFieldStyle(.plain)
+                            .foregroundColor(Color.oText)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.oSurface.opacity(0.5))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.oBorder, lineWidth: 0.5))
+                            )
+                            .onSubmit { onSend() }
+
+                        Button(action: onSend) {
+                            Image(systemName: isSending ? "checkmark" : "arrow.up")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(LinearGradient.accentGrad))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                        .opacity(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending ? 0.45 : 1)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+    }
+
+    func relativeTime(_ iso: String) -> String {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fmt.date(from: iso) else { return "" }
+        let diff = Date().timeIntervalSince(date)
+        if diff < 60 { return "just now" }
+        if diff < 3600 { return "\(Int(diff/60))m ago" }
+        if diff < 86400 { return "\(Int(diff/3600))h ago" }
+        return "\(Int(diff/86400))d ago"
     }
 }
 

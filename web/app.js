@@ -88,9 +88,12 @@ async function updateEmotion() {
     const liveState = data.state || {};
     const moodState = data.mood || {};
     const rollingState = rolling?.avg || {};
+    const rollingDisplay = rolling?.display || {};
     const rollingSamples = Number(rolling?.samples || 0);
-    const useRolling = rollingSamples >= 20;
-    const state = useRolling ? rollingState : (Object.keys(moodState).length ? moodState : liveState);
+    const useRolling = rollingSamples >= 6;
+    const state = useRolling
+        ? (Object.keys(rollingDisplay).length ? rollingDisplay : rollingState)
+        : (Object.keys(moodState).length ? moodState : liveState);
 
     const valence = state.valence ?? 0;
     const arousal = state.arousal ?? 0;
@@ -121,7 +124,7 @@ async function updateEmotion() {
         </div>
         <div class="emotion-meta-item">
             <span class="emotion-meta-label">Window</span>
-            <span class="emotion-meta-value">${useRolling ? `60m/${rollingSamples}` : 'live'}</span>
+            <span class="emotion-meta-value">${useRolling ? `60m blended/${rollingSamples}` : 'live'}</span>
         </div>
     `;
 
@@ -419,6 +422,108 @@ async function runVisualSearch() {
     renderVisualSearchResults();
 }
 
+// --- Nudges ---
+let nudgeOverlayOpen = false;
+
+function toggleNudgeOverlay() {
+    nudgeOverlayOpen = !nudgeOverlayOpen;
+    document.getElementById('nudgeOverlay').classList.toggle('open', nudgeOverlayOpen);
+    document.getElementById('nudgeBackdrop').classList.toggle('open', nudgeOverlayOpen);
+}
+
+function nudgeCategoryIcon(cat) {
+    return { thought: '🌑', alert: '🔴', question: '❓', update: '🟢' }[cat] || '🌑';
+}
+
+function renderNudgeItem(notif, container) {
+    const catClass = ['thought','alert','question','update'].includes(notif.category) ? notif.category : 'default';
+    const unreadClass = notif.read ? '' : 'unread';
+    const timeAgo = formatRelativeTime(notif.created_at);
+    const repliedHtml = notif.reply
+        ? `<div class="nudge-replied">
+            <span class="nudge-replied-label">You</span>
+            <span class="nudge-replied-text">${escapeHtml(notif.reply)}</span>
+           </div>`
+        : '';
+    const replyForm = `
+        <div class="nudge-reply-form">
+            <input class="nudge-reply-input" id="nudge-input-${notif.id}"
+                   placeholder="Reply to Oneiro…"
+                   onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendNudgeReply(${notif.id})}">
+            <button class="nudge-reply-btn" onclick="sendNudgeReply(${notif.id})" title="Send">↑</button>
+        </div>`;
+
+    const div = document.createElement('div');
+    div.className = `nudge-item ${unreadClass} category-${catClass}`;
+    div.dataset.id = notif.id;
+    div.innerHTML = `
+        <div class="nudge-meta">
+            <span class="nudge-cat-badge ${catClass}">${nudgeCategoryIcon(notif.category)} ${notif.category}</span>
+            <span class="nudge-time">${timeAgo}</span>
+        </div>
+        <div class="nudge-message">${escapeHtml(notif.message)}</div>
+        ${repliedHtml}
+        ${replyForm}
+    `;
+    container.appendChild(div);
+}
+
+async function updateNudges() {
+    const data = await fetchJSON('/notifications');
+    if (!data || !Array.isArray(data)) return;
+
+    // Badge count
+    const unread = data.filter(n => !n.read).length;
+    const badge = document.getElementById('notifBadge');
+    if (badge) {
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+        badge.style.display = unread > 0 ? '' : 'none';
+    }
+
+    // Panel — last 5
+    const panel = document.getElementById('nudgesList');
+    if (panel) {
+        panel.innerHTML = '';
+        const items = data.slice(0, 5);
+        if (items.length === 0) {
+            panel.innerHTML = '<div class="nudge-empty">No nudges yet</div>';
+        } else {
+            items.forEach(n => renderNudgeItem(n, panel));
+        }
+    }
+
+    // Overlay — all
+    const overlay = document.getElementById('nudgeOverlayFeed');
+    if (overlay) {
+        overlay.innerHTML = '';
+        if (data.length === 0) {
+            overlay.innerHTML = '<div class="nudge-empty">No nudges yet</div>';
+        } else {
+            data.forEach(n => renderNudgeItem(n, overlay));
+        }
+    }
+}
+
+async function sendNudgeReply(id) {
+    const input = document.getElementById(`nudge-input-${id}`);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    input.disabled = true;
+
+    try {
+        await fetch(`${API}/notifications/${id}/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reply: text })
+        });
+    } catch {}
+
+    input.disabled = false;
+    await updateNudges();
+}
+
 // --- Chat ---
 function renderChat() {
     const container = document.getElementById('chatMessages');
@@ -579,6 +684,7 @@ async function refreshAll() {
         updateDreams(),
         updateHypotheses(),
         updatePerception(),
+        updateNudges(),
     ]);
 }
 

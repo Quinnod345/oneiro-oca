@@ -382,6 +382,30 @@ npm start
 | ♿️  | **Accessibility**    | Window title reading, UI element inspection |
 | 🖥️ | **Screen Recording** | Visual perception (if using screen capture) |
 
+### Claude/Auth Provider Choice
+
+You can choose how OCA talks to Claude:
+
+```bash
+# Prefer API key when present, otherwise use local Claude OAuth session
+ANTHROPIC_AUTH_MODE=auto
+
+# Force API-key usage
+ANTHROPIC_AUTH_MODE=api
+
+# Force Claude Code / Claude CLI OAuth usage
+ANTHROPIC_AUTH_MODE=oauth
+
+# Choose the screenshot vision backend independently
+OCA_VISION_PROVIDER=auto
+```
+
+Notes:
+
+- `ANTHROPIC_AUTH_MODE=oauth` requires a working local `claude` CLI login.
+- `OCA_VISION_PROVIDER=anthropic` requires `ANTHROPIC_API_KEY`, because screenshot vision uses Anthropic's API vision endpoint, not the CLI.
+- `OCA_VISION_PROVIDER=openai` keeps visual indexing working even if you run Claude text via OAuth-only mode.
+
 
   
 
