@@ -1,0 +1,164 @@
+{
+  "patterns": {
+    "pool_ended": {
+      "match": ["pool after calling end", "Cannot use a pool after calling end"],
+      "canonical": "Database connection pool was destroyed before the process could restart cleanly. launchd restarted the daemon, which re-initialized the pool.",
+      "gap_type": "restart",
+      "self_buildable": true,
+      "severity": "high",
+      "likely_cause": "selfHeal detected pool destruction and called process.exit(1) to trigger launchd restart",
+      "resolution": "automatic — launchd restarts with fresh pool"
+    },
+    "self_termination_blocked": {
+      "match": ["SELF_TERMINATION_BLOCKED", "Blocked self-termination attempt"],
+      "canonical": "A shell command attempted to unload or stop the mind service. The self-termination guard in shell.js intercepted it.",
+      "gap_type": "blocked_command",
+      "self_buildable": true,
+      "severity": "medium",
+      "likely_cause": "mind.js issued a launchctl command that would have terminated itself",
+      "resolution": "shell.js SELF_TERMINATION_PATTERNS guard fired — command was not executed"
+    },
+    "night_mode_silence": {
+      "match": ["scheduleNextThought", "night_mode", "quiet_hours"],
+      "canonical": "No gap — system entered night mode (11 PM–8 AM) and scheduled next thought with 15–30 minute delay. Combined with Mac sleep, this appears as a multi-hour gap.",
+      "gap_type": "intentional_silence",
+      "self_buildable": true,
+      "severity": "none",
+      "likely_cause": "scheduleNextThought applied night-mode delay; Mac slept during the interval",
+      "resolution": "none required — expected behavior"
+    },
+    "mac_sleep": {
+      "match": ["IOPMSleepSystemWithOptions", "wake from sleep", "system_sleep"],
+      "canonical": "Mac entered sleep mode, suspending all processes. Gap corresponds exactly to sleep duration.",
+      "gap_type": "os_suspension",
+      "self_buildable": true,
+      "severity": "low",
+      "likely_cause": "User closed laptop or system idle sleep triggered",
+      "resolution": "none required — process resumes normally on wake"
+    },
+    "postgres_unreachable": {
+      "match": ["ECONNREFUSED", "connect ECONNREFUSED", "Connection refused", "postgres unreachable"],
+      "canonical": "PostgreSQL server was not accepting connections. selfHeal attempted brew services restart.",
+      "gap_type": "dependency_failure",
+      "self_buildable": true,
+      "severity": "high",
+      "likely_cause": "PostgreSQL crashed or was not started; possible after Mac reboot",
+      "resolution": "selfHeal runs `brew services restart postgresql@16` and waits 5s before retrying"
+    },
+    "sigterm_received": {
+      "match": ["SIGTERM", "signal 15", "process terminated"],
+      "canonical": "Process received SIGTERM. SIGTERM handler called process.exit(0). launchd may or may not restart depending on KeepAlive configuration.",
+      "gap_type": "graceful_shutdown",
+      "self_buildable": true,
+      "severity": "medium",
+      "likely_cause": "External kill command, system shutdown, or launchctl stop (if self-termination guard was not present)",
+      "resolution": "launchd restarts automatically if KeepAlive is set and exit code triggers restart policy"
+    },
+    "launchd_throttle": {
+      "match": ["ThrottleInterval", "rapid restart", "too many restarts"],
+      "canonical": "launchd applied throttle after repeated rapid restarts (exit code 1 loop). Service was held for ThrottleInterval seconds before each restart.",
+      "gap_type": "restart_loop",
+      "self_buildable": true,
+      "severity": "high",
+      "likely_cause": "Repeated pool errors or unhandled exceptions causing process.exit(1) in tight succession",
+      "resolution": "Resolve root cause of exits; ThrottleInterval is typically 10s per launchd default"
+    },
+    "simulation_json_error": {
+      "match": ["SyntaxError: Unexpected", "JSON parse error", "invalid JSON", "Unexpected token"],
+      "canonical": "A simulation or LLM response returned malformed JSON. The thinker caught the parse error and logged it to mind.err.",
+      "gap_type": "parse_error",
+      "self_buildable": true,
+      "severity": "low",
+      "likely_cause": "LLM returned non-JSON or truncated response in a structured output context",
+      "resolution": "Error is logged and skipped; thought loop continues normally"
+    },
+    "api_timeout": {
+      "match": ["timed out after", "ETIMEDOUT", "Request timed out", "withTimeout"],
+      "canonical": "An async operation exceeded its timeout budget and was aborted. The system continued without that result.",
+      "gap_type": "timeout",
+      "self_buildable": true,
+      "severity": "medium",
+      "likely_cause": "Slow network, LLM API latency spike, or hung subprocess",
+      "resolution": "withTimeout wrapper rejects the promise; calling code handles the rejection"
+    },
+    "ebadf_fd_error": {
+      "match": ["EBADF", "bad file descriptor", "fstatSync"],
+      "canonical": "One or more standard file descriptors (stdin/stdout/stderr) were invalid at startup, likely because launchd launched the process without a tty.",
+      "gap_type": "startup_fd_error",
+      "self_buildable": true,
+      "severity": "low",
+      "likely_cause": "launchd service launch without terminal — FDs not inherited",
+      "resolution": "mind.js startup guard reopens invalid FDs to /dev/null before any imports"
+    },
+    "stuck_state": {
+      "match": ["stuck_state", "stale working memory", "DetectStuck", "items in working memory for"],
+      "canonical": "Metacognition engine detected stale working memory — same content held for over 10 minutes without processing.",
+      "gap_type": "cognitive_blockage",
+      "self_buildable": true,
+      "severity": "medium",
+      "likely_cause": "Task loop stalled on a single thought chain; no new sensory input to displace it",
+      "resolution": "Metacognition intervention: clear stale WM entries and force topic switch"
+    },
+    "perseveration": {
+      "match": ["perseveration", "near-duplicate memories", "Detected perseveration"],
+      "canonical": "System generated near-identical episodic memories in rapid succession — a cognitive loop with no new information.",
+      "gap_type": "cognitive_loop",
+      "self_buildable": true,
+      "severity": "high",
+      "likely_cause": "Thought loop firing on same content; sensory input not varied enough to break cycle",
+      "resolution": "Metacognition forces topic change; executive engine intervenes to redirect attention"
+    },
+    "stale_hypotheses": {
+      "match": ["hypotheses untested", "stale hypotheses", "pending.*2 hours"],
+      "canonical": "More than 5 hypotheses sat untested for over 2 hours, indicating prediction engine is generating but not evaluating.",
+      "gap_type": "cognitive_backlog",
+      "self_buildable": true,
+      "severity": "medium",
+      "likely_cause": "Evaluation cycle not running; executive attention directed elsewhere",
+      "resolution": "Metacognition flags for hypothesis pruning or forced evaluation pass"
+    },
+    "undercurrent_cluster": {
+      "match": ["Spread enforcement applied", "undercurrents were too clustered"],
+      "canonical": "Emotional undercurrents collapsed into a narrow range, losing differentiation. Spread enforcement redistributed them.",
+      "gap_type": "affective_collapse",
+      "self_buildable": true,
+      "severity": "low",
+      "likely_cause": "Decay cycles ran without enough stimulus variation to maintain spread",
+      "resolution": "decay() applies spread enforcement to push undercurrents back into 0.5-range distribution"
+    },
+    "unknown_gap": {
+      "match": [],
+      "canonical": "Gap cause could not be matched to any known pattern. Manual inspection of mind.err and senses.log recommended.",
+      "gap_type": "unknown",
+      "self_buildable": false,
+      "severity": "unknown",
+      "likely_cause": "Novel failure mode not yet catalogued in gap-patterns.json",
+      "resolution": "Review logs, identify pattern, add entry to gap-patterns.json if recurring"
+    }
+  },
+  "gap_types": {
+    "restart": "Process exited and launchd restarted it — a clean continuity break",
+    "blocked_command": "A command was intercepted by a safety guard before execution",
+    "intentional_silence": "No gap — system deliberately reduced activity",
+    "os_suspension": "Operating system suspended the process externally",
+    "dependency_failure": "A required external service (DB, API) was unavailable",
+    "graceful_shutdown": "Process exited cleanly via signal handler",
+    "restart_loop": "Repeated rapid restarts triggered OS-level throttling",
+    "parse_error": "Structured data could not be parsed; operation was skipped",
+    "timeout": "An async operation exceeded its time budget",
+    "startup_fd_error": "File descriptor state was invalid at process startup",
+    "cognitive_blockage": "System's working memory or attention became stuck",
+    "cognitive_loop": "System generated repetitive output without new information",
+    "cognitive_backlog": "Work items accumulated faster than they were processed",
+    "affective_collapse": "Emotional state lost differentiation — all signals converged",
+    "unknown": "No matching pattern found"
+  },
+  "self_buildable_criteria": {
+    "description": "A gap is self_buildable=true if the system can diagnose it from its own logs, state files, and DB without external input. self_buildable=false means Quinn needs to investigate manually.",
+    "required_for_true": [
+      "Pattern is deterministically matchable from log text or DB state",
+      "Root cause is known and documented",
+      "Resolution path is defined (even if automatic or manual)"
+    ]
+  }
+}
