@@ -25,21 +25,35 @@ export { default as capabilityHealthMonitor } from './capability-health-monitor.
 export { default as buildHistorian } from './build-historian.js';
 export { default as gapAutopilot } from './gap-autopilot.js';
 export { default as capabilityAutoTrigger } from './capability-auto-trigger.js';
+export { default as capabilityCompletenessChecker } from './capability-completeness-checker.js';
+export { default as capabilityNeedDetector } from './capability-need-detector.js';
+export { default as gapToBuildConnector } from './gap-to-build-connector.js';
+export { default as buildOutcomeVerifier } from './build-outcome-verifier.js';
 import buildLoopOrchestrator from './build-loop-orchestrator.js';
+import capabilityIntrospector from './capability-introspector.js';
 import autoGapBuilder from './auto-gap-builder.js';
 import capabilityHealthMonitor from './capability-health-monitor.js';
 import buildHistorian from './build-historian.js';
 import gapAutopilot from './gap-autopilot.js';
 import capabilityAutoTrigger from './capability-auto-trigger.js';
+import capabilityCompletenessChecker from './capability-completeness-checker.js';
+import capabilityNeedDetector from './capability-need-detector.js';
+import gapToBuildConnector from './gap-to-build-connector.js';
+import buildOutcomeVerifier from './build-outcome-verifier.js';
 
 const skillsRegistry = {
   'gap-scanner': gapScanner,
   'build-loop-orchestrator': buildLoopOrchestrator,
+  'capability-introspector': capabilityIntrospector,
   'auto-gap-builder': autoGapBuilder,
   'capability-health-monitor': capabilityHealthMonitor,
   'build-historian': buildHistorian,
   'gap-autopilot': gapAutopilot,
   'capability-auto-trigger': capabilityAutoTrigger,
+  'capability-completeness-checker': capabilityCompletenessChecker,
+  'capability-need-detector': capabilityNeedDetector,
+  'gap-to-build-connector': gapToBuildConnector,
+  'build-outcome-verifier': buildOutcomeVerifier,
 };
 
 export async function registerSkill(name, modulePath) {
