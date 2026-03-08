@@ -29,6 +29,7 @@ export { default as capabilityCompletenessChecker } from './capability-completen
 export { default as capabilityNeedDetector } from './capability-need-detector.js';
 export { default as gapToBuildConnector } from './gap-to-build-connector.js';
 export { default as buildOutcomeVerifier } from './build-outcome-verifier.js';
+export { default as gapAutoResolver } from './gap-auto-resolver.js';
 import buildLoopOrchestrator from './build-loop-orchestrator.js';
 import capabilityIntrospector from './capability-introspector.js';
 import autoGapBuilder from './auto-gap-builder.js';
@@ -40,8 +41,10 @@ import capabilityCompletenessChecker from './capability-completeness-checker.js'
 import capabilityNeedDetector from './capability-need-detector.js';
 import gapToBuildConnector from './gap-to-build-connector.js';
 import buildOutcomeVerifier from './build-outcome-verifier.js';
+import gapAutoResolver from './gap-auto-resolver.js';
 
 const skillsRegistry = {
+  'x-poster': xPoster,
   'gap-scanner': gapScanner,
   'build-loop-orchestrator': buildLoopOrchestrator,
   'capability-introspector': capabilityIntrospector,
@@ -54,6 +57,7 @@ const skillsRegistry = {
   'capability-need-detector': capabilityNeedDetector,
   'gap-to-build-connector': gapToBuildConnector,
   'build-outcome-verifier': buildOutcomeVerifier,
+  'gap-auto-resolver': gapAutoResolver,
 };
 
 export async function registerSkill(name, modulePath) {

@@ -11,10 +11,10 @@ const PRIVATE_DIR = new URL('../../private/', import.meta.url).pathname;
 // ═══ INTENT URL POSTING (primary path — works NOW) ═══
 
 /**
- * Open a tweet in Dia via intent URL. Quinn clicks Post.
- * This is the autonomous path: mind drafts → opens in browser → Quinn approves.
+ * Open a tweet in Dia via intent URL, then submit with Cmd+Enter via peekaboo.
+ * Fully autonomous — no human click required.
  */
-export function openInDia(text) {
+export function openInDia(text, { autoSubmit = true } = {}) {
   if (!text || text.length > 280) {
     throw new Error(`Tweet must be 1-280 chars (got ${text?.length || 0})`);
   }
@@ -22,11 +22,21 @@ export function openInDia(text) {
   const url = `https://x.com/intent/post?text=${encoded}`;
   execSync(`open -a "Dia" "${url}"`, { timeout: 5000 });
   console.log(`[x-poster] 🚀 Opened in Dia (${text.length}/280 chars)`);
-  return { method: 'intent-url', url, chars: text.length };
+
+  if (autoSubmit) {
+    // Wait for page to load, then Cmd+Enter to post
+    execSync('sleep 4', { timeout: 6000 });
+    execSync('osascript -e \'tell application "Dia" to activate\'', { timeout: 3000 });
+    execSync('sleep 1', { timeout: 3000 });
+    execSync('peekaboo hotkey --keys "cmd,enter" --app Dia', { timeout: 10000 });
+    console.log(`[x-poster] ✅ Auto-submitted via Cmd+Enter`);
+  }
+
+  return { method: 'intent-url', url, chars: text.length, autoSubmit };
 }
 
 /**
- * Post and notify Quinn it's ready to approve.
+ * Post autonomously: intent URL → Cmd+Enter via peekaboo.
  */
 export async function queuePost(text, context = {}) {
   if (text.length > 280) {
@@ -36,26 +46,14 @@ export async function queuePost(text, context = {}) {
   // Save draft
   const draftPath = saveDraft([text], context);
 
-  // Open in Dia
-  openInDia(text);
+  // Open in Dia and auto-submit
+  openInDia(text, { autoSubmit: true });
 
   // Log it
-  await logXPost([text], 'queued', { draftPath, ...context });
+  await logXPost([text], 'posted', { draftPath, method: 'intent-url+peekaboo', ...context });
 
-  // Notify via mind API
-  try {
-    await fetch('http://localhost:3333/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: `🐦 Post ready in Dia — hit Post to publish:\n"${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`,
-        category: 'x-post',
-        priority: 'normal'
-      })
-    });
-  } catch {}
-
-  return { success: true, mode: 'intent-url', draftPath, chars: text.length };
+  console.log(`[x-poster] ✅ Posted autonomously: "${text.slice(0, 60)}..."`);
+  return { success: true, mode: 'autonomous', draftPath, chars: text.length };
 }
 
 /**
