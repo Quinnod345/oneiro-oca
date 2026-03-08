@@ -57,9 +57,10 @@ export async function queuePost(text, context = {}) {
 }
 
 /**
- * Queue a thread (multiple posts). Opens first one, logs all.
+ * Post a full thread by composing all tweets in X's compose window.
+ * Uses peekaboo to type each tweet and click "Add another post" (+) between them.
  */
-export async function queueThread(posts, context = {}) {
+export async function postThread(posts, context = {}) {
   if (!Array.isArray(posts) || posts.length === 0) throw new Error('Empty thread');
 
   const tooLong = posts.findIndex(p => p.length > 280);
@@ -67,13 +68,58 @@ export async function queueThread(posts, context = {}) {
 
   const draftPath = saveDraft(posts, context);
 
-  // Open first post — rest need to be threaded manually or via API
-  openInDia(posts[0]);
+  // Try API first (chains replies properly)
+  const client = await getApiClient();
+  if (client) {
+    try {
+      let replyToId = null;
+      const results = [];
+      for (const text of posts) {
+        const payload = { text };
+        if (replyToId) payload.reply = { in_reply_to_tweet_id: replyToId };
+        const { data } = await client.readWrite.v2.tweet(payload);
+        replyToId = data.id;
+        results.push(data);
+        console.log(`[x-poster] ✅ Thread [${results.length}/${posts.length}] → ${data.id}`);
+        if (results.length < posts.length) await new Promise(r => setTimeout(r, 1200));
+      }
+      await logXPost(posts, 'posted', { draftPath, method: 'api-thread', tweetIds: results.map(r => r.id), ...context });
+      return { success: true, mode: 'api-thread', draftPath, postCount: posts.length, tweetIds: results.map(r => r.id) };
+    } catch (e) {
+      console.warn(`[x-poster] API thread failed (${e.message}), falling back to compose window`);
+    }
+  }
 
-  await logXPost(posts, 'queued', { draftPath, thread: true, ...context });
+  // Fallback: use X compose window with peekaboo
+  // Open compose with first tweet text via intent URL
+  openInDia(posts[0], { autoSubmit: false });
+  execSync('sleep 4', { timeout: 6000 });
+  execSync('osascript -e \'tell application "Dia" to activate\'', { timeout: 3000 });
+  execSync('sleep 1', { timeout: 3000 });
 
-  return { success: true, mode: 'intent-url-thread', draftPath, postCount: posts.length };
+  // For each additional tweet, click "+" to add to thread, then paste
+  for (let i = 1; i < posts.length; i++) {
+    // Cmd+Shift+Enter adds another tweet to the thread in X's compose
+    execSync('peekaboo hotkey --keys "cmd,shift,return" --app Dia', { timeout: 10000 });
+    execSync('sleep 1', { timeout: 3000 });
+    // Paste the next tweet text
+    execSync(`peekaboo paste "${posts[i].replace(/"/g, '\\"')}" --app Dia`, { timeout: 10000 });
+    execSync('sleep 0.5', { timeout: 3000 });
+    console.log(`[x-poster] 📝 Added thread [${i + 1}/${posts.length}]`);
+  }
+
+  // Now submit the entire thread with Cmd+Enter
+  execSync('sleep 1', { timeout: 3000 });
+  execSync('peekaboo hotkey --keys "cmd,enter" --app Dia', { timeout: 10000 });
+  console.log(`[x-poster] ✅ Thread submitted (${posts.length} posts)`);
+
+  await logXPost(posts, 'posted', { draftPath, method: 'compose-thread', thread: true, ...context });
+
+  return { success: true, mode: 'compose-thread', draftPath, postCount: posts.length };
 }
+
+// Legacy alias
+export const queueThread = postThread;
 
 // ═══ API POSTING (when credits are loaded) ═══
 
@@ -175,4 +221,4 @@ if (process.argv[1]?.endsWith('x-poster.js')) {
   }
 }
 
-export default { post, queuePost, queueThread, openInDia, ONEIRO_IDENTITY };
+export default { post, postThread, queuePost, queueThread: postThread, openInDia, ONEIRO_IDENTITY };
