@@ -31,6 +31,26 @@ const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
 // Track what we've built this session to avoid infinite loops
 const builtThisSession = new Set();
+
+// Fetch post history from x_posts table for thinker context
+async function getPostHistory() {
+  try {
+    const result = await pool.query(`
+      SELECT posts, status, created_at FROM x_posts 
+      WHERE status = 'posted' 
+      ORDER BY created_at DESC LIMIT 20
+    `);
+    if (result.rows.length === 0) return '(No successful posts yet)';
+    return result.rows.map(r => {
+      const date = new Date(r.created_at).toISOString().slice(0, 10);
+      const posts = Array.isArray(r.posts) ? r.posts : (typeof r.posts === 'string' ? [r.posts] : []);
+      const preview = posts.map(p => `  "${String(p).slice(0, 120)}${String(p).length > 120 ? '...' : ''}"`).join('\n');
+      return `[${date}]\n${preview}`;
+    }).join('\n');
+  } catch (e) {
+    return '(Could not fetch post history: ' + e.message + ')';
+  }
+}
 // Track dreams where credential gaps were already notified this session (avoid spam).
 const credentialGapsNotified = new Set();
 
@@ -183,8 +203,14 @@ CRITICAL FOR X POSTS: Any x_post task content MUST:
 2. Include real data — actual CRM scores, benchmark numbers, specific code/capability names, real failure descriptions
 3. Be honest and technical — not marketing speak
 4. Reference the mission: beating the Lovelace Test / Chinese Room benchmark
-5. Each tweet must be complete standalone context — no "Read from file" or internal references
-6. NEVER reference internal file paths, queue IDs, or system internals in post content`;
+5. Each tweet must be SUBSTANTIVE and standalone — deliver actual content, not just tease or promise
+6. NEVER use "here's what X looks like" or "🧵" unless the thread actually follows with real content in subsequent tweets
+7. NEVER reference internal file paths, queue IDs, or system internals in post content
+8. Every single tweet must say something new and concrete — if a tweet could be deleted without losing information, it's filler. Delete it.
+9. Check POST HISTORY below — do NOT repeat topics already covered. Build on them or go deeper.
+
+POST HISTORY (what's already been posted to @quinnod7):
+${await getPostHistory()}`;
 
   try {
     const response = await llm.messages.create({
