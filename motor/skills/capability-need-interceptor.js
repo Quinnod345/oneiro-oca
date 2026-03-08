@@ -1,0 +1,1 @@
+The file write requires permission approval. Please approve the write to `cognitive/motor/skills/capability-need-interceptor.js` and I'll complete the creation.

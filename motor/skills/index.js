@@ -4,6 +4,11 @@ export { default as terminal } from './terminal.js';
 export { default as xcode } from './xcode.js';
 export { default as logicPro } from './logic-pro.js';
 export { default as xPoster } from './x-poster.js';
+export { default as xPost } from './x-post.js';
+export { default as xThreadPoster } from './x-thread-poster.js';
+export { default as xThreadReply } from './x-thread-reply.js';
+export { default as xIntroThreadPoster } from './x-intro-thread-poster.js';
+export { default as xSessionPoster } from './x-session-poster.js';
 export { default as peekaboo } from './peekaboo.js';
 export { default as gapDetector } from './gap-detector.js';
 export { default as selfBuildOrchestrator } from './self-build-orchestrator.js';
@@ -30,6 +35,14 @@ export { default as capabilityNeedDetector } from './capability-need-detector.js
 export { default as gapToBuildConnector } from './gap-to-build-connector.js';
 export { default as buildOutcomeVerifier } from './build-outcome-verifier.js';
 export { default as gapAutoResolver } from './gap-auto-resolver.js';
+export { default as capabilitySnapshot } from './capability-snapshot.js';
+export { default as runtimeNeedDetector } from './runtime-need-detector.js';
+export { default as capabilityUsageAudit } from './capability-usage-audit.js';
+export { default as capabilityNeedSensor } from './capability-need-sensor.js';
+export { default as xCodePost } from './x-code-post.js';
+export { default as xBuildPublic } from './x-build-public.js';
+export { default as selfBuildLoopHealth } from './self-build-loop-health.js';
+export { default as capabilityNeedInterceptor } from './capability-need-interceptor.js';
 import buildLoopOrchestrator from './build-loop-orchestrator.js';
 import capabilityIntrospector from './capability-introspector.js';
 import autoGapBuilder from './auto-gap-builder.js';
@@ -42,9 +55,23 @@ import capabilityNeedDetector from './capability-need-detector.js';
 import gapToBuildConnector from './gap-to-build-connector.js';
 import buildOutcomeVerifier from './build-outcome-verifier.js';
 import gapAutoResolver from './gap-auto-resolver.js';
+import capabilitySnapshot from './capability-snapshot.js';
+import runtimeNeedDetector from './runtime-need-detector.js';
+import capabilityUsageAudit from './capability-usage-audit.js';
+import capabilityNeedSensor from './capability-need-sensor.js';
+import xPost from './x-post.js';
+import xThreadPoster from './x-thread-poster.js';
+import xIntroThreadPoster from './x-intro-thread-poster.js';
+import xSessionPoster from './x-session-poster.js';
+import selfBuildLoopHealth from './self-build-loop-health.js';
+import capabilityNeedInterceptor from './capability-need-interceptor.js';
 
 const skillsRegistry = {
   'x-poster': xPoster,
+  'x-post': xPost,
+  'x-thread-poster': xThreadPoster,
+  'x-intro-thread-poster': xIntroThreadPoster,
+  'x-session-poster': xSessionPoster,
   'gap-scanner': gapScanner,
   'build-loop-orchestrator': buildLoopOrchestrator,
   'capability-introspector': capabilityIntrospector,
@@ -58,6 +85,12 @@ const skillsRegistry = {
   'gap-to-build-connector': gapToBuildConnector,
   'build-outcome-verifier': buildOutcomeVerifier,
   'gap-auto-resolver': gapAutoResolver,
+  'capability-snapshot': capabilitySnapshot,
+  'runtime-need-detector': runtimeNeedDetector,
+  'capability-usage-audit': capabilityUsageAudit,
+  'capability-need-sensor': capabilityNeedSensor,
+  'self-build-loop-health': selfBuildLoopHealth,
+  'capability-need-interceptor': capabilityNeedInterceptor,
 };
 
 export async function registerSkill(name, modulePath) {
