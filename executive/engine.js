@@ -51,15 +51,15 @@ export async function getWorkspace() {
 }
 
 // Decay salience of working memory items
-export async function decayWorkspace(decayAmount = 0.05) {
+export async function decayWorkspace(decayAmount = 0.25) {
   await pool.query(
     `UPDATE working_memory SET salience = GREATEST(0, salience - $1) WHERE is_active`,
     [decayAmount]
   );
-  // Evict items that dropped to 0
+  // Evict items that dropped below salience floor
   await pool.query(
     `UPDATE working_memory SET is_active = FALSE, deactivated_at = NOW() 
-     WHERE is_active AND salience <= 0`
+     WHERE is_active AND salience <= 0.25`
   );
 }
 

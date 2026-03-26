@@ -25,12 +25,143 @@ function resolveOCAPath(relativePath) {
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 2;
-const TASK_TIMEOUT_MS = 120_000;
+const TASK_TIMEOUT_MS = 300_000;
 const SELF_BUILD_TIMEOUT_MS = 180_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
 // Track what we've built this session to avoid infinite loops
 const builtThisSession = new Set();
+
+// ═══════════════════════════════════════════════════
+// DREAM VERIFICATION — check if code-referencing dreams are still relevant
+// ═══════════════════════════════════════════════════
+
+// Extract file paths and function/pattern references from dream content.
+// Returns { files: string[], patterns: string[] } — all paths resolved against REPO_ROOT.
+export function extractCodeReferences(dreamContent) {
+  const text = String(dreamContent || '');
+  const files = [];
+  const patterns = [];
+
+  // Match explicit file paths: foo.js, foo/bar.js, cognitive/foo.js, cognitive-loop.js etc.
+  const fileRe = /\b((?:cognitive\/)?[\w./-]+\.(?:js|ts|mjs|json|sql|py|sh))\b/g;
+  let m;
+  while ((m = fileRe.exec(text)) !== null) {
+    const raw = m[1];
+    // Skip obvious non-paths (e.g. "v1.js" in a version string)
+    if (/^\d/.test(raw)) continue;
+    files.push(raw);
+  }
+
+  // Match function/method names mentioned with () or as identifiers after keywords
+  const fnRe = /\b((?:await\s+)?[\w.]+\(\))/g;
+  while ((m = fnRe.exec(text)) !== null) {
+    patterns.push(m[1].replace(/^await\s+/, ''));
+  }
+
+  // Match "function foo" or "async function foo" style references
+  const fnDeclRe = /\b(?:async\s+)?function\s+([\w]+)/g;
+  while ((m = fnDeclRe.exec(text)) !== null) {
+    patterns.push(m[1] + '()');
+  }
+
+  // Deduplicate
+  return {
+    files: [...new Set(files)],
+    patterns: [...new Set(patterns)]
+  };
+}
+
+// Verify whether a goal dream's described code problem still exists.
+// Returns { relevant: true } if the gap persists, or
+// { relevant: false, actualGap: string|null } if it's stale.
+async function verifyDreamRelevance(dream) {
+  // Only verify goal-type dreams that reference code
+  if (dream.type !== 'goal') return { relevant: true };
+
+  const refs = extractCodeReferences(dream.content);
+  if (refs.files.length === 0 && refs.patterns.length === 0) {
+    // No code references — can't verify, assume relevant
+    return { relevant: true };
+  }
+
+  // Read referenced files (cap total to avoid huge prompts)
+  const fileSnippets = [];
+  let totalChars = 0;
+  const MAX_SNIPPET_CHARS = 6000;
+
+  for (const relPath of refs.files.slice(0, 4)) {
+    if (totalChars >= MAX_SNIPPET_CHARS) break;
+    const fullPath = resolveOCAPath(relPath);
+    try {
+      const content = readFileSync(fullPath, 'utf8');
+      const snippet = content.slice(0, MAX_SNIPPET_CHARS - totalChars);
+      fileSnippets.push({ path: relPath, content: snippet, truncated: content.length > snippet.length });
+      totalChars += snippet.length;
+    } catch {
+      fileSnippets.push({ path: relPath, content: '(file not found)', truncated: false });
+    }
+  }
+
+  if (fileSnippets.length === 0) return { relevant: true };
+
+  const filesContext = fileSnippets.map(f =>
+    `--- ${f.path}${f.truncated ? ' (truncated)' : ''} ---\n${f.content}`
+  ).join('\n\n');
+
+  const prompt = `You are verifying whether a dream/goal about a code problem is still relevant.
+
+DREAM DESCRIPTION:
+"${dream.content}"
+
+REFERENCED CODE (current state):
+${filesContext}
+
+${refs.patterns.length > 0 ? `REFERENCED PATTERNS: ${refs.patterns.join(', ')}` : ''}
+
+TASK: Read the dream description carefully. It describes a specific code problem or gap.
+Now look at the CURRENT code. Does the described problem/gap STILL EXIST in the current code?
+
+Respond with JSON only:
+{
+  "still_relevant": true/false,
+  "reasoning": "1-2 sentence explanation of why the gap does or does not still exist",
+  "actual_gap": "if the original gap is fixed but you see a DIFFERENT real gap in the same area, describe it here. null if no gap remains or if original gap still exists"
+}`;
+
+  try {
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Verification timeout')), 10000)
+    );
+    
+    const response = await Promise.race([
+      llm.messages.create({
+        model: 'claude-sonnet-4-6',
+        system: 'You are a code analysis engine. Respond ONLY with valid JSON. No markdown fences.',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 500,
+        temperature: 0.1
+      }),
+      timeoutPromise
+    ]);
+
+    const text = response.content?.[0]?.text || '';
+    const parsed = extractJSON(text);
+    if (parsed && typeof parsed.still_relevant === 'boolean') {
+      console.log(`[dream-executor] 🔍 verify dream #${dream.id}: still_relevant=${parsed.still_relevant} — ${parsed.reasoning}`);
+      return {
+        relevant: parsed.still_relevant,
+        reasoning: parsed.reasoning,
+        actualGap: parsed.actual_gap || null
+      };
+    }
+  } catch (e) {
+    console.warn(`[dream-executor] verify failed for dream #${dream.id}: ${e.message}`);
+  }
+
+  // On failure, assume relevant (don't block execution)
+  return { relevant: true };
+}
 
 // Fetch post history from x_posts table for thinker context
 async function getPostHistory() {
@@ -692,6 +823,73 @@ export async function executeDreams() {
   for (const dream of dreams) {
     console.log(`[dream-executor] 🎯 executing dream: "${dream.content}" (weight: ${dream.weight})`);
 
+    // PHASE 0: Verify dream relevance — is the described code problem still real?
+    const verification = await verifyDreamRelevance(dream);
+    if (!verification.relevant) {
+      console.log(`[dream-executor] 🔄 dream #${dream.id} is stale — described gap no longer exists`);
+
+      await emit('dream_stale', 'executive', {
+        dreamId: dream.id,
+        originalContent: dream.content,
+        reasoning: verification.reasoning,
+        actualGap: verification.actualGap
+      });
+
+      if (verification.actualGap) {
+        // Re-derive: update dream content to the actual current gap
+        console.log(`[dream-executor] 📝 re-deriving dream #${dream.id} → actual gap: "${verification.actualGap}"`);
+        await pool.query(
+          `UPDATE dreams SET content = $1, lifecycle_state = 'distilled', lifecycle_updated_at = NOW(),
+           lifecycle_context = COALESCE(lifecycle_context, '{}'::jsonb) || $2::jsonb
+           WHERE id = $3`,
+          [
+            verification.actualGap,
+            JSON.stringify({
+              stale_verification: true,
+              original_content: dream.content.slice(0, 500),
+              re_derived_at: new Date().toISOString(),
+              reasoning: verification.reasoning
+            }),
+            dream.id
+          ]
+        );
+        results.push({
+          dreamId: dream.id,
+          content: dream.content,
+          tasks: 0,
+          completed: 0,
+          failed: 0,
+          selfBuilds: 0,
+          newState: 'distilled',
+          staleVerification: { reDerived: true, actualGap: verification.actualGap }
+        });
+      } else {
+        // No remaining gap — mark as reflected/resolved
+        console.log(`[dream-executor] ✅ dream #${dream.id} gap already resolved — marking reflected`);
+        const isProtected = Boolean(dream?.lifecycle_context?.protected || dream?.lifecycle_context?.baked_in);
+        await setDreamLifecycle(dream.id, 'reflected', {
+          resolved: !isProtected,
+          contextPatch: {
+            stale_verification: true,
+            original_content: dream.content.slice(0, 500),
+            verified_resolved_at: new Date().toISOString(),
+            reasoning: verification.reasoning
+          }
+        });
+        results.push({
+          dreamId: dream.id,
+          content: dream.content,
+          tasks: 0,
+          completed: 0,
+          failed: 0,
+          selfBuilds: 0,
+          newState: 'reflected',
+          staleVerification: { resolved: true }
+        });
+      }
+      continue;
+    }
+
     // PHASE 1: Detect gaps and plan
     console.log(`[dream-executor] 🔍 analyzing capabilities for dream #${dream.id}...`);
     const analysis = await detectGaps(dream);
@@ -911,7 +1109,7 @@ function extractJSON(text) {
   return null;
 }
 
-export default { executeDreams, executeXDreams, detectGaps, selfBuild, getCapabilities };
+export default { executeDreams, executeXDreams, detectGaps, selfBuild, getCapabilities, extractCodeReferences, verifyDreamRelevance };
 
 // Execute only X-posting related dreams — called when Quinn goes away.
 // Targets dispatched dreams whose content matches X/public posting intent.

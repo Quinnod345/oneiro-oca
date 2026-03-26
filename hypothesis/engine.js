@@ -7,8 +7,18 @@ import { startPrediction, completePrediction, computeErrorFromEvaluation } from 
 
 const apiKey = process.env.OPENAI_API_KEY || (() => {
   try {
-    const envFile = readFileSync('/Users/quinnodonnell/.env.local', 'utf-8');
-    return envFile.match(/OPENAI_API_KEY="?([^"\n]+)"?/)?.[1];
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    const envPaths = [
+      `${home}/.env.local`,
+      new URL('../../.env', import.meta.url),
+    ];
+    for (const p of envPaths) {
+      try {
+        const envFile = readFileSync(p, 'utf-8');
+        const match = envFile.match(/OPENAI_API_KEY="?([^"\n]+)"?/)?.[1];
+        if (match) return match;
+      } catch {}
+    }
   } catch { return undefined; }
 })();
 const openai = new OpenAI({ apiKey });
@@ -315,7 +325,7 @@ async function dispatchBuilderHypothesisTask({ hyp, evaluation, revised }) {
         'Focus files: cognitive/cognitive-loop.js, cognitive/hypothesis/engine.js, cognitive/api-routes.js.',
         'Goal: reduce unknown failure reasons, improve verifiability and evaluation coverage.'
       ].join('\n'),
-      workdir: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive'
+      workdir: process.env.OCA_ROOT || new URL('.', import.meta.url).pathname
     }
   };
 
@@ -412,13 +422,36 @@ export async function form(domain, claim, prediction, { testMethod = null, testT
   );
   
   if (similar.length > 0) {
-    // Strengthen existing rather than duplicate
+    // Strengthen existing rather than duplicate — cap at 0.75 to prevent inflation
     await pool.query(
-      'UPDATE hypotheses SET confidence = LEAST(1.0, confidence + 0.1) WHERE id = $1',
+      'UPDATE hypotheses SET confidence = LEAST(0.75, confidence + 0.05) WHERE id = $1',
       [similar[0].id]
     );
     return { id: similar[0].id, action: 'strengthened', claim: similar[0].claim };
   }
+  
+  // Calibration adjustment — deflate confidence based on historical accuracy
+  // If we've been overconfident at this level, reduce the stated confidence
+  try {
+    const calBucket = Math.round(confidence * 10) / 10;
+    const { rows: calRows } = await pool.query(
+      `SELECT actual_accuracy, total FROM calibration_curve WHERE confidence_bucket = $1`,
+      [calBucket]
+    );
+    if (calRows.length > 0 && parseInt(calRows[0].total) >= 10) {
+      const actualAccuracy = parseFloat(calRows[0].actual_accuracy);
+      const deviation = confidence - actualAccuracy;
+      if (deviation > 0.15) {
+        // We're overconfident at this level — apply a correction
+        // Blend toward actual accuracy: stated = stated * 0.6 + actual * 0.4
+        const adjusted = confidence * 0.6 + actualAccuracy * 0.4;
+        confidence = Math.max(0.3, Math.min(0.85, adjusted));
+      }
+    }
+  } catch {}
+  
+  // Hard cap: never form a hypothesis above 0.85 — earn certainty through confirmation
+  confidence = Math.min(0.85, confidence);
   
   const { rows } = await pool.query(
     `INSERT INTO hypotheses (domain, claim, confidence, prediction, prediction_deadline, test_method, test_type, source_data, embedding)

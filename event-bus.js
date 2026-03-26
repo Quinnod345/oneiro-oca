@@ -3,7 +3,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://quinnodonnell@localhost/oneiro' });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL || `postgres://${process.env.USER || 'postgres'}@localhost/oneiro` });
 
 const listeners = new Map(); // event_type -> [callback]
 
@@ -51,7 +51,7 @@ export function on(eventType, callback) {
 // Subscribe to pg NOTIFY (cross-process)
 let pgListener = null;
 export async function startCrossProcessListener(handler) {
-  pgListener = new pg.Client({ connectionString: process.env.DATABASE_URL || 'postgres://quinnodonnell@localhost/oneiro' });
+  pgListener = new pg.Client({ connectionString: process.env.DATABASE_URL || `postgres://${process.env.USER || 'postgres'}@localhost/oneiro` });
   await pgListener.connect();
   await pgListener.query('LISTEN oca_events');
   pgListener.on('notification', async (msg) => {

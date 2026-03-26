@@ -111,8 +111,10 @@ export function getAudioState() {
     // Check if music is playing via Now Playing
     let nowPlaying = '';
     try {
+      // IMPORTANT: Don't use `tell application "Music"` — that LAUNCHES Music if it's not running.
+      // Instead, check if Music is running first, then query it only if it is.
       nowPlaying = execSync(
-        `/usr/bin/osascript -e 'tell application "Music" to if player state is playing then return (name of current track) & " - " & (artist of current track)' 2>/dev/null || echo ''`,
+        `/usr/bin/osascript -e 'if application "Music" is running then tell application "Music" to if player state is playing then return (name of current track) & " - " & (artist of current track)' 2>/dev/null || echo ''`,
         { encoding: 'utf8', timeout: 3000 }
       ).trim();
     } catch { nowPlaying = ''; }

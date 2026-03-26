@@ -41,8 +41,9 @@ function withCliLock(fn) {
 
 // Claude CLI path — resolve it once at startup
 const CLAUDE_CLI = (() => {
+  const homedir = process.env.HOME || process.env.USERPROFILE || '/tmp';
   const candidates = [
-    '/Users/quinnodonnell/.local/bin/claude',
+    `${homedir}/.local/bin/claude`,
     '/opt/homebrew/bin/claude',
     '/usr/local/bin/claude',
   ];
@@ -176,9 +177,9 @@ function spawnClaude(model, inputFile) {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...cliEnv,
-        HOME: '/Users/quinnodonnell',
-        PATH: '/Users/quinnodonnell/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
-        USER: 'quinnodonnell',
+        HOME: process.env.HOME || process.env.USERPROFILE || '/tmp',
+        PATH: `${process.env.HOME || ''}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
+        USER: process.env.USER || 'unknown',
         TERM: 'dumb',
       }
     });
@@ -194,10 +195,11 @@ function spawnClaude(model, inputFile) {
     input.pipe(child.stdin);
     input.on('error', () => { try { child.stdin.end(); } catch {} });
     
+    const CLI_TIMEOUT_MS = parseInt(process.env.LLM_CLI_TIMEOUT_MS || '120000', 10);
     const timeout = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new Error(`CLI timeout (120s). stderr: ${stderr.slice(0, 200)}`));
-    }, 120_000);
+      reject(new Error(`CLI timeout (${Math.round(CLI_TIMEOUT_MS/1000)}s). stderr: ${stderr.slice(0, 200)}`));
+    }, CLI_TIMEOUT_MS);
     
     child.on('close', (code) => {
       clearTimeout(timeout);

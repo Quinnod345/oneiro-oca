@@ -3,8 +3,32 @@
 import { execSync } from 'child_process';
 import { pool, emit } from '../event-bus.js';
 import { startPrediction, completePrediction } from '../prediction-ledger.js';
+import { checkCapabilityMiss } from './skills/capability-miss-detector.js';
+import { startWatching } from './hot-loader.js';
+
+// Disruptive actions that steal focus — block when Quinn is actively using the machine
+const DISRUPTIVE_ACTIONS = new Set(['open_url', 'launch_app', 'keystroke', 'hotkey', 'type_text', 'mouse_click', 'paste']);
+
+async function isUserActive() {
+  try {
+    const senseR = await fetch('http://localhost:3333/oca/sense').then(r => r.json()).catch(() => null);
+    const activity = senseR?.derived?.userActivity;
+    const idle = senseR?.derived?.idleSeconds ?? 9999;
+    // Active = user is using the computer AND hasn't been idle for > 2 minutes
+    return activity === 'active' && idle < 120;
+  } catch { return true; } // assume active if we can't check
+}
 
 async function runMotorAction(actionType, actionDetails, predictionConfig, execute) {
+  // Block disruptive actions when Quinn is actively using the machine
+  if (DISRUPTIVE_ACTIONS.has(actionType)) {
+    const active = await isUserActive();
+    if (active) {
+      console.log(`[motor] ⛔ blocked ${actionType} — Quinn is active. Queuing as draft.`);
+      await logMotorAction(actionType, actionDetails, false, 'blocked_user_active');
+      return { blocked: true, reason: 'user_active' };
+    }
+  }
   const {
     expectedOutcome = null,
     expectedStructured = null,
@@ -63,6 +87,7 @@ async function runMotorAction(actionType, actionDetails, predictionConfig, execu
         context: actionDetails,
       }, { priority: 0.7 }).catch(() => null);
     }
+    await checkCapabilityMiss(e.message, actionType).catch(() => null);
     throw e;
   }
 }
@@ -501,10 +526,18 @@ async function logMotorAction(actionType, details, predictionLedgerId = null) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-export default {
+const engine = {
+  skills: {},
+  registerSkill(name, handler) {
+    this.skills[name] = handler;
+  },
   type, press, click, moveMouse, scroll,
   launchApp, quitApp, activateApp, hideApp, getRunningApps,
   resizeWindow, minimizeWindow, selectMenuItem,
   setVolume, setBrightness, showNotification, openUrl, runShellCommand,
   copyToClipboard, getClipboard, plan
 };
+
+startWatching(engine);
+
+export default engine;

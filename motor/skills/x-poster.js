@@ -14,7 +14,19 @@ const PRIVATE_DIR = new URL('../../private/', import.meta.url).pathname;
  * Open a tweet in Dia via intent URL, then submit with Cmd+Enter via peekaboo.
  * Fully autonomous — no human click required.
  */
-export function openInDia(text, { autoSubmit = true } = {}) {
+async function isQuinnActive() {
+  try {
+    const r = await fetch('http://localhost:3333/oca/sense');
+    const s = await r.json();
+    return s?.derived?.userActivity === 'active' && (s?.derived?.idleSeconds ?? 9999) < 120;
+  } catch { return true; }
+}
+
+export async function openInDia(text, { autoSubmit = true } = {}) {
+  if (await isQuinnActive()) {
+    console.log(`[x-poster] ⛔ Quinn is active — skipping browser open. Draft: "${text.slice(0, 60)}..."`);
+    return { blocked: true, draft: text };
+  }
   if (!text || text.length > 280) {
     throw new Error(`Tweet must be 1-280 chars (got ${text?.length || 0})`);
   }

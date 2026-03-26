@@ -15,9 +15,9 @@ import { unlink } from 'fs/promises';
 import { basename, extname, resolve, join } from 'path';
 import { on, pool } from '../event-bus.js';
 
-const SCREENSHOTS_DIR = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots';
+const SCREENSHOTS_DIR = process.env.OCA_SCREENSHOTS_DIR || join(new URL('..', import.meta.url).pathname, '..', 'screenshots');
 const VISUAL_CACHE_PATH = new URL('./latest-visual-cache.json', import.meta.url);
-const ANTHROPIC_VISION_MODEL = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_VISION_MODEL = 'claude-sonnet-4-20250514';
 const OPENAI_VISION_MODEL = 'gpt-4o-mini';
 const RETENTION_DAYS = 7;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000;

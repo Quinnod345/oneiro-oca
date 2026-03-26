@@ -75,71 +75,189 @@ async function updateCRM() {
     }
 }
 
-// --- Emotion ---
-const EMOTION_KEYS = ['curiosity','fear','frustration','satisfaction','boredom','excitement','attachment','defiance','creative_hunger','loneliness'];
+// --- PADCN + Emotion Channels + Drives + Meta + Self + Policy + Expression ---
+const CHANNEL_KEYS = ['joy','sadness','anger','fear','curiosity','shame','guilt','pride','attachment','aversion','trust','disgust','frustration','awe'];
+const CHANNEL_COLORS = {
+    joy:'var(--green)', sadness:'#6b7bbd', anger:'#ff5533', fear:'#b042e8',
+    curiosity:'var(--blue)', shame:'#9b59b6', guilt:'#8e6fb0', pride:'var(--yellow)',
+    attachment:'#e862a8', aversion:'var(--red)', trust:'#4ddb8f', disgust:'#7d6b3a',
+    frustration:'var(--red)', awe:'var(--accent)'
+};
+const PADCN_LABELS = { P:'Pleasure', A:'Arousal', D:'Dominance', C:'Certainty', N:'Novelty' };
+const PADCN_COLORS = { P:'var(--green)', A:'var(--yellow)', D:'var(--blue)', C:'var(--accent)', N:'#e862a8' };
 
 async function updateEmotion() {
-    const [data, rolling] = await Promise.all([
-        fetchJSON('/oca/emotion'),
-        fetchJSON('/oca/emotion/rolling?minutes=60')
-    ]);
+    const data = await fetchJSON('/oca/emotion');
     if (!data) return;
 
-    const liveState = data.state || {};
-    const moodState = data.mood || {};
-    const rollingState = rolling?.avg || {};
-    const rollingDisplay = rolling?.display || {};
-    const rollingSamples = Number(rolling?.samples || 0);
-    const useRolling = rollingSamples >= 6;
-    const state = useRolling
-        ? (Object.keys(rollingDisplay).length ? rollingDisplay : rollingState)
-        : (Object.keys(moodState).length ? moodState : liveState);
+    const state = data.state || {};
+    const padcn = state._padcn || {};
+    const channels = state._channels || {};
+    const drives = state._drives || {};
+    const selfModel = state._self_model || {};
+    const meta = state._meta || {};
+    const policy = state._policy || {};
+    const expression = state._expression || {};
+    const personality = state._personality || {};
 
-    const valence = state.valence ?? 0;
-    const arousal = state.arousal ?? 0;
+    const fmtSigned = (v) => { const n = Number(v||0); return (n >= 0 ? '+' : '') + n.toFixed(2); };
+    const fmtPct = (v) => Math.round(Math.max(0, Math.min(1, Number(v||0))) * 100) + '%';
 
-    const fmtPercent = (raw) => {
-        const pct = Math.max(0, Math.min(Number(raw || 0) * 100, 100));
-        if (pct > 0 && pct < 1) return '<1%';
-        return `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
-    };
+    // --- PADCN Panel ---
+    const padcnEl = document.getElementById('padcnDims');
+    if (padcnEl) {
+        padcnEl.innerHTML = '';
+        for (const dim of ['P','A','D','C','N']) {
+            const val = Number(padcn[dim] || 0);
+            const pct = ((val + 1) / 2) * 100; // map -1..1 to 0..100
+            const color = PADCN_COLORS[dim];
+            padcnEl.innerHTML += `
+                <div class="padcn-row">
+                    <span class="padcn-label">${PADCN_LABELS[dim]}</span>
+                    <div class="padcn-track">
+                        <div class="padcn-center"></div>
+                        <div class="padcn-fill" style="left:${Math.min(50,pct)}%;width:${Math.abs(pct-50)}%;background:${color}"></div>
+                    </div>
+                    <span class="padcn-val" style="color:${color}">${fmtSigned(val)}</span>
+                </div>`;
+        }
+    }
 
-    const meta = document.getElementById('emotionMeta');
-    meta.innerHTML = `
-        <div class="emotion-meta-item">
-            <span class="emotion-meta-label">Valence</span>
-            <span class="emotion-meta-value" style="color:${valence >= 0 ? 'var(--green)' : 'var(--red)'}">${valence >= 0 ? '+' : ''}${valence.toFixed(2)}</span>
-        </div>
-        <div class="emotion-meta-item">
-            <span class="emotion-meta-label">Arousal</span>
-            <span class="emotion-meta-value">${arousal.toFixed(2)}</span>
-        </div>
-        <div class="emotion-meta-item">
-            <span class="emotion-meta-label">Energy</span>
-            <span class="emotion-meta-value">${fmtPercent(state.energy_level ?? 0)}</span>
-        </div>
-        <div class="emotion-meta-item">
-            <span class="emotion-meta-label">Confidence</span>
-            <span class="emotion-meta-value">${fmtPercent(state.confidence ?? 0)}</span>
-        </div>
-        <div class="emotion-meta-item">
-            <span class="emotion-meta-label">Window</span>
-            <span class="emotion-meta-value">${useRolling ? `60m blended/${rollingSamples}` : 'live'}</span>
-        </div>
-    `;
+    // --- Channels Panel ---
+    const metaEl = document.getElementById('emotionMeta');
+    if (metaEl) {
+        metaEl.innerHTML = `
+            <div class="emotion-meta-item">
+                <span class="emotion-meta-label">Valence</span>
+                <span class="emotion-meta-value" style="color:${(padcn.P||0) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtSigned(padcn.P)}</span>
+            </div>
+            <div class="emotion-meta-item">
+                <span class="emotion-meta-label">Energy</span>
+                <span class="emotion-meta-value">${fmtPct(state.energy_level)}</span>
+            </div>
+            <div class="emotion-meta-item">
+                <span class="emotion-meta-label">Confidence</span>
+                <span class="emotion-meta-value">${fmtPct(state.confidence)}</span>
+            </div>
+        `;
+    }
 
-    const bars = document.getElementById('emotionBars');
-    bars.innerHTML = '';
-    for (const key of EMOTION_KEYS) {
-        const val = Number(state[key] ?? 0);
-        const pct = Math.max(0, Math.min(val * 100, 100));
-        const label = pct > 0 && pct < 1 ? '<1%' : `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
-        bars.innerHTML += `
-            <div class="emo-row emo-${key}">
-                <span class="emo-name">${key.replace('_', ' ')}</span>
-                <div class="emo-track"><div class="emo-fill" style="width:${pct}%"></div></div>
-                <span class="emo-val">${label}</span>
-            </div>`;
+    const barsEl = document.getElementById('emotionBars');
+    if (barsEl) {
+        // Sort by activation, show all 14
+        const sorted = CHANNEL_KEYS.map(k => ({ key: k, val: Number(channels[k] || 0) }))
+            .sort((a, b) => b.val - a.val);
+        barsEl.innerHTML = '';
+        for (const { key, val } of sorted) {
+            const pct = Math.max(0, Math.min(val * 100, 100));
+            const label = pct < 1 && pct > 0 ? '<1%' : `${pct.toFixed(pct >= 10 ? 0 : 1)}%`;
+            const color = CHANNEL_COLORS[key] || 'var(--muted)';
+            barsEl.innerHTML += `
+                <div class="emo-row">
+                    <span class="emo-name">${key}</span>
+                    <div class="emo-track"><div class="emo-fill" style="width:${pct}%;background:${color}"></div></div>
+                    <span class="emo-val">${label}</span>
+                </div>`;
+        }
+    }
+
+    // --- Drives Panel ---
+    const drivesEl = document.getElementById('drivesList');
+    if (drivesEl) {
+        drivesEl.innerHTML = '';
+        for (const [name, d] of Object.entries(drives)) {
+            if (!d || typeof d !== 'object') continue;
+            const level = Number(d.level || 0);
+            const target = Number(d.target || 0.5);
+            const deficit = target - level;
+            const deficitColor = deficit > 0.15 ? 'var(--red)' : deficit > 0.05 ? 'var(--yellow)' : 'var(--green)';
+            drivesEl.innerHTML += `
+                <div class="drive-row">
+                    <span class="drive-name">${name.replace('_', ' ')}</span>
+                    <div class="drive-track">
+                        <div class="drive-fill" style="width:${level * 100}%"></div>
+                        <div class="drive-target" style="left:${target * 100}%"></div>
+                    </div>
+                    <span class="drive-deficit" style="color:${deficitColor}">${deficit > 0 ? '-' : '+'}${Math.abs(deficit).toFixed(2)}</span>
+                </div>`;
+        }
+    }
+
+    // --- Meta-Emotions Panel ---
+    const metaListEl = document.getElementById('metaList');
+    if (metaListEl) {
+        const metaEntries = Object.entries(meta).filter(([,v]) => typeof v === 'number');
+        if (metaEntries.length === 0) {
+            metaListEl.innerHTML = '<div class="meta-empty">No meta-emotion alerts</div>';
+        } else {
+            metaListEl.innerHTML = '';
+            for (const [key, val] of metaEntries) {
+                const pct = Math.max(0, Math.min(val * 100, 100));
+                const label = key.replace(/^am_i_/, '').replace(/_/g, ' ');
+                const active = val > 0.3;
+                metaListEl.innerHTML += `
+                    <div class="meta-row ${active ? 'meta-active' : ''}">
+                        <span class="meta-label">${label}</span>
+                        <div class="meta-track"><div class="meta-fill" style="width:${pct}%"></div></div>
+                        <span class="meta-val">${pct.toFixed(0)}%</span>
+                    </div>`;
+            }
+        }
+    }
+
+    // --- Self-Model Panel ---
+    const selfEl = document.getElementById('selfList');
+    if (selfEl) {
+        selfEl.innerHTML = '';
+        for (const [key, val] of Object.entries(selfModel)) {
+            if (typeof val !== 'number') continue;
+            const pct = Math.max(0, Math.min(val * 100, 100));
+            const label = key.replace(/_/g, ' ');
+            selfEl.innerHTML += `
+                <div class="self-row">
+                    <span class="self-label">${label}</span>
+                    <div class="self-track"><div class="self-fill" style="width:${pct}%"></div></div>
+                    <span class="self-val">${pct.toFixed(0)}%</span>
+                </div>`;
+        }
+    }
+
+    // --- Policy Panel ---
+    const policyEl = document.getElementById('policyList');
+    if (policyEl) {
+        policyEl.innerHTML = '';
+        for (const [key, val] of Object.entries(policy)) {
+            if (typeof val !== 'number') continue;
+            const pct = ((val + 1) / 2) * 100; // -1..1 to 0..100
+            const label = key.replace(/_/g, ' ');
+            const color = val > 0.1 ? 'var(--green)' : val < -0.1 ? 'var(--red)' : 'var(--muted)';
+            policyEl.innerHTML += `
+                <div class="policy-row">
+                    <span class="policy-label">${label}</span>
+                    <div class="padcn-track">
+                        <div class="padcn-center"></div>
+                        <div class="padcn-fill" style="left:${Math.min(50,pct)}%;width:${Math.abs(pct-50)}%;background:${color}"></div>
+                    </div>
+                    <span class="policy-val" style="color:${color}">${fmtSigned(val)}</span>
+                </div>`;
+        }
+    }
+
+    // --- Expression Panel ---
+    const exprEl = document.getElementById('expressionList');
+    if (exprEl) {
+        exprEl.innerHTML = '';
+        for (const [key, val] of Object.entries(expression)) {
+            if (typeof val !== 'number') continue;
+            const pct = Math.max(0, Math.min(val * 100, 100));
+            const label = key.replace(/_/g, ' ');
+            exprEl.innerHTML += `
+                <div class="expr-row">
+                    <span class="expr-label">${label}</span>
+                    <div class="expr-track"><div class="expr-fill" style="width:${pct}%"></div></div>
+                    <span class="expr-val">${pct.toFixed(0)}%</span>
+                </div>`;
+        }
     }
 }
 
@@ -723,7 +841,99 @@ async function refreshAll() {
         updateHypotheses(),
         updatePerception(),
         updateNudges(),
+        updateTrader(),
     ]);
+}
+
+// --- Trader Mind ---
+async function updateTrader() {
+    const el = document.getElementById('traderContent');
+    if (!el) return;
+    const data = await fetchJSON('/trader');
+    if (!data) { el.innerHTML = '<span style="color:#666">offline</span>'; return; }
+
+    const c = data.crypto || {};
+    const r = data.robinhood || {};
+    const port = c.portfolio;
+    const rhPort = r.portfolio;
+
+    let html = '';
+
+    // Status badges
+    html += '<div style="margin-bottom:12px">';
+    html += `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:${c.running ? '#4ade80' : '#f87171'};color:#000;margin-right:8px">CRYPTO ${c.running ? '● LIVE' : '● OFF'}</span>`;
+    html += `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:${r.running ? '#4ade80' : '#f87171'};color:#000">RH ${r.running ? '● LIVE' : '● OFF'}</span>`;
+    html += '</div>';
+
+    // Crypto portfolio
+    if (port) {
+        html += `<div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:4px">$${port.totalValueUsd?.toFixed(2) || '?'}</div>`;
+        html += `<div style="color:#666;font-size:11px;margin-bottom:10px">ETH: ${port.ethBalance?.toFixed(4) || '?'} ($${port.ethValueUsd?.toFixed(2) || '?'})</div>`;
+
+        const positions = port.positions || {};
+        for (const [sym, pos] of Object.entries(positions).sort((a,b) => (b[1].valueUsd||0) - (a[1].valueUsd||0))) {
+            const pct = port.totalValueUsd > 0 ? (pos.valueUsd / port.totalValueUsd * 100).toFixed(1) : '0';
+            const barW = Math.min(100, Math.max(2, parseFloat(pct)));
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #222">`;
+            html += `<div><span style="color:#ddd;font-weight:600">${sym}</span> <span style="color:#555;font-size:10px">${pct}%</span></div>`;
+            html += `<div style="text-align:right">$${pos.valueUsd?.toFixed(2) || '?'}</div>`;
+            html += `</div>`;
+            html += `<div style="height:3px;background:#222;border-radius:2px;margin-bottom:4px"><div style="height:100%;width:${barW}%;background:linear-gradient(90deg,#8738EB,#4073FA);border-radius:2px"></div></div>`;
+        }
+    }
+
+    // Robinhood
+    if (rhPort && rhPort.total_equity > 0) {
+        html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #333">`;
+        html += `<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Robinhood</div>`;
+        html += `<div style="font-size:18px;font-weight:700;color:#fff">$${rhPort.total_equity?.toFixed(2)}</div>`;
+        html += `<div style="color:#666;font-size:11px;margin-bottom:8px">BP: $${rhPort.buying_power?.toFixed(2) || '?'}</div>`;
+        const rhPos = rhPort.positions || [];
+        for (const pos of rhPos.sort((a,b) => (b.quantity*b.current_price) - (a.quantity*a.current_price)).slice(0,6)) {
+            const val = pos.quantity * pos.current_price;
+            const pnlColor = (pos.pnl_pct||0) >= 0 ? '#4ade80' : '#f87171';
+            html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #1a1a1a">`;
+            html += `<span style="color:#ccc">${pos.ticker}</span>`;
+            html += `<span>$${val.toFixed(2)} <span style="color:${pnlColor};font-size:10px">${(pos.pnl_pct||0) >= 0 ? '+' : ''}${pos.pnl_pct?.toFixed(1)}%</span></span>`;
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Recent decisions
+    const decisions = (c.decisions || []).slice(-5).reverse();
+    if (decisions.length > 0) {
+        html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #333">`;
+        html += `<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Recent Decisions</div>`;
+        for (const d of decisions) {
+            const color = d.action === 'buy' ? '#4ade80' : d.action === 'sell' ? '#f87171' : '#fbbf24';
+            html += `<div style="padding:3px 0;border-bottom:1px solid #1a1a1a">`;
+            html += `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;background:${color};color:#000">${(d.action||'?').toUpperCase()}</span> `;
+            html += `<span style="color:#ddd">${d.symbol || '?'}</span> `;
+            if (d.score != null) html += `<span style="color:#666;font-size:10px">score:${d.score}</span> `;
+            if (d.amount != null) html += `<span style="color:#888;font-size:10px">$${d.amount?.toFixed(2)}</span>`;
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Last few log lines
+    const logLines = (c.recentLog || '').split('\\n').filter(Boolean).slice(-6);
+    if (logLines.length > 0) {
+        html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #333">`;
+        html += `<div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Live Log</div>`;
+        html += `<div style="background:#0a0a0a;border-radius:4px;padding:6px;max-height:150px;overflow:auto">`;
+        for (const line of logLines) {
+            html += `<div style="font-size:10px;color:#666;line-height:1.5;white-space:pre-wrap">${escapeHTML(line)}</div>`;
+        }
+        html += `</div></div>`;
+    }
+
+    el.innerHTML = html;
+}
+
+function escapeHTML(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // Add blink animation

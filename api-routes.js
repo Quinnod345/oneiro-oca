@@ -766,6 +766,49 @@ ocaRouter.post('/oca/goals', async (req, res) => {
 });
 
 // Working memory
+// ============================================================
+// AUTONOMIC SELF-MODIFICATION
+// ============================================================
+ocaRouter.get('/oca/autonomic/metrics', async (req, res) => {
+  try {
+    const autonomic = await import('./autonomic/self-modifier.js');
+    const metrics = await autonomic.collectPerformanceMetrics();
+    res.json(metrics);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/autonomic/trends', async (req, res) => {
+  try {
+    const autonomic = await import('./autonomic/self-modifier.js');
+    const result = await autonomic.analyzeTrends();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/autonomic/history', async (req, res) => {
+  try {
+    const autonomic = await import('./autonomic/self-modifier.js');
+    const history = await autonomic.getModificationHistory(parseInt(req.query.limit) || 10);
+    res.json(history);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/autonomic/run', async (req, res) => {
+  try {
+    const autonomic = await import('./autonomic/self-modifier.js');
+    const result = await autonomic.runAutonomicCycle();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 ocaRouter.get('/oca/workspace', async (req, res) => {
   try {
     const items = await oca.layers.executive.getWorkspace();
@@ -970,14 +1013,23 @@ ocaRouter.get('/oca/benchmark/history', async (req, res) => {
 // CONSOLIDATION
 // ============================================================
 
-// Trigger consolidation manually
+// Trigger consolidation manually (fire-and-forget to avoid blocking the event loop
+// with a 50-70s LLM call that starves the OCA tick in mind.js)
+let apiConsolidating = false;
 ocaRouter.post('/oca/consolidate', async (req, res) => {
-  try {
-    const result = await oca.layers.consolidation.consolidate();
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  if (apiConsolidating) {
+    return res.status(409).json({ error: 'consolidation already in flight' });
   }
+  apiConsolidating = true;
+  // Return immediately — consolidation runs in background
+  res.status(202).json({ status: 'started', message: 'consolidation running in background' });
+  oca.layers.consolidation.consolidate()
+    .then(result => {
+      const p = result?.principles?.length || result?.semanticCreated || 0;
+      if (p > 0) console.log(`[oca] 📚 api-triggered consolidation done: ${JSON.stringify(result)}`);
+    })
+    .catch(e => console.error('[oca] api consolidation error:', e.message))
+    .finally(() => { apiConsolidating = false; });
 });
 
 // LLM gateway status
@@ -1009,5 +1061,11 @@ ocaRouter.post('/oca/llm-reset', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ============================================================
+// MIRROR — client-side animated ASCII, server just feeds data
+// The neural.js client polls /oca/emotion, /oca/crm, etc directly
+// No server-side rendering needed anymore.
+// ============================================================
 
 export default ocaRouter;
