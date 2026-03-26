@@ -5,8 +5,18 @@ import { readFileSync } from 'fs';
 
 const apiKey = process.env.OPENAI_API_KEY || (() => {
   try {
-    const envFile = readFileSync('/Users/quinnodonnell/.openclaw/workspace/oneiro-core/.env', 'utf-8');
-    return envFile.match(/OPENAI_API_KEY="?([^"\n]+)"?/)?.[1];
+    // Walk up from this file to find .env in the project root
+    const envPaths = [
+      new URL('../../.env', import.meta.url),
+      new URL('../../../.env', import.meta.url),
+    ];
+    for (const p of envPaths) {
+      try {
+        const envFile = readFileSync(p, 'utf-8');
+        const match = envFile.match(/OPENAI_API_KEY="?([^"\n]+)"?/)?.[1];
+        if (match) return match;
+      } catch {}
+    }
   } catch { return undefined; }
 })();
 const openai = new OpenAI({ apiKey });

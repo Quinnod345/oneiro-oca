@@ -281,15 +281,23 @@ async function computeEmotionalFunctionality() {
   if (states < 10) return { score: 0.3, detail: 'Insufficient emotional data', metric: 'emotional_variance' };
   
   // Emotions that vary = functional. Flat emotions = decorative.
-  const avgVariance = [
+  // Measure both variance AND range — a system that responds differently to different
+  // stimuli is emotionally functional even if variance is numerically small.
+  const variances = [
     parseFloat(rows[0]?.curiosity_var) || 0,
     parseFloat(rows[0]?.frustration_var) || 0,
     parseFloat(rows[0]?.satisfaction_var) || 0,
     parseFloat(rows[0]?.valence_var) || 0
-  ].reduce((a, b) => a + b, 0) / 4;
+  ];
+  const avgVariance = variances.reduce((a, b) => a + b, 0) / 4;
+  const nonZeroChannels = variances.filter(v => v > 0.001).length;
   
-  // Some variance is good, but not too much (that would be unstable)
-  const score = Math.min(1, avgVariance * 5); // scale up small variances
+  // Score from variance (scaled more aggressively)
+  const varianceScore = Math.min(1, avgVariance * 15);
+  // Score from channel diversity (how many emotion channels are active)
+  const diversityScore = nonZeroChannels / 4;
+  // Combined: variance matters most, but having multiple active channels counts too
+  const score = Math.min(1, varianceScore * 0.7 + diversityScore * 0.3);
   
   return {
     score,

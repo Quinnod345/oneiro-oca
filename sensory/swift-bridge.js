@@ -3,11 +3,13 @@
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { pool, emit } from '../event-bus.js';
-import { writeFileSync } from 'fs';
+import { writeFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// Use the original debug binary — it had Input Monitoring permission before
+// The .app copy didn't inherit it. Original path is what macOS recognizes.
 const BINARY_PATH = join(__dirname, 'swift/.build/debug/oneiro-sensory');
 const VISUAL_CACHE_PATH = join(__dirname, 'latest-visual-cache.json');
 
@@ -80,7 +82,7 @@ async function handleEvent(event) {
       }, { priority: 0.3 });
       
       // Store significant typing sessions
-      if (payload.keystrokes > 10) {
+      if (true) { // always store HID — idle data matters for predictions too
         await pool.query(
           `INSERT INTO sensory_events (event_type, channel, data, timestamp)
            VALUES ('hid_metrics', 'tactile', $1, $2)

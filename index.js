@@ -31,27 +31,71 @@ export const layers = {
 
 let cycleCount = 0;
 let running = false;
+let runningStartedAt = 0;
 let causalHooksReady = false;
+const MAX_CYCLE_RUNNING_MS = 60000; // force-release stale lock after 60s
 
 export async function cycle() {
+  // Reentrancy guard with stale-lock recovery.
+  // When withTimeout in mind.js fires, the underlying _cycleInner() promise
+  // keeps running.  `running` stays true until it settles.  If a DB query or
+  // event-bus listener hangs, this could block ALL future cycles indefinitely.
+  // Recovery: if the lock has been held for >60s, force-release it so new
+  // cycles can proceed instead of returning null forever.
+  if (running) {
+    if (runningStartedAt > 0 && Date.now() - runningStartedAt > MAX_CYCLE_RUNNING_MS) {
+      console.warn(`[oca] force-releasing stale cycle lock (held for ${Math.round((Date.now() - runningStartedAt) / 1000)}s)`);
+      running = false;
+    } else {
+      return null;
+    }
+  }
+  running = true;
+  runningStartedAt = Date.now();
+  try {
+    return await _cycleInner();
+  } finally {
+    running = false;
+    runningStartedAt = 0;
+  }
+}
+
+async function _cycleInner() {
   cycleCount++;
   const t0 = Date.now();
-  
+
+  // Each step is wrapped in try/catch so one slow or failing step
+  // doesn't kill the entire cycle.  This prevents cascade failures
+  // from DB contention with the cognitive-loop.js consolidation process.
+
   // 1. EMOTION: Update emotional state
-  const emotionResult = await emotion.update();
+  let emotionResult = { state: {}, effects: {} };
+  try {
+    emotionResult = await emotion.update();
+  } catch (e) {
+    console.error('[oca] emotion.update error:', e.message);
+  }
   const effects = emotionResult.effects;
-  
+
   // 2. METACOGNITION: Check for stuck states, biases (every 10 cycles)
   let metaResult = null;
   if (cycleCount % 10 === 0) {
-    metaResult = await metacognition.runCycle();
-    if (!metaResult.healthy) {
-      console.log('[oca] metacognition alert:', JSON.stringify(metaResult));
+    try {
+      metaResult = await metacognition.runCycle();
+      if (!metaResult.healthy) {
+        console.log('[oca] metacognition alert:', JSON.stringify(metaResult));
+      }
+    } catch (e) {
+      console.error('[oca] metacognition error:', e.message);
     }
   }
-  
+
   // 3. HYPOTHESIS: Check for expired, testable hypotheses
-  await hypothesis.expireOverdue();
+  try {
+    await hypothesis.expireOverdue();
+  } catch (e) {
+    console.error('[oca] hypothesis.expireOverdue error:', e.message);
+  }
 
   // 3.5 SYNAPTIC DYNAMICS: form co-occurrence links, decay/prune old links
   let synapseResult = null;
@@ -64,22 +108,29 @@ export async function cycle() {
       console.error('[oca] synapse maintenance error:', e.message);
     }
   }
-  
-  // 4. CONSOLIDATION: Run during low activity (every 100 cycles)
-  if (cycleCount % 100 === 0 && effects.task_switch_pressure > 0.3) {
-    await consolidation.consolidate();
-  }
+
+  // 4. CONSOLIDATION: Handled by cognitive-loop.js (separate process).
+  // Removed from here — LLM-heavy consolidation (60-120s) exceeds the 22500ms
+  // OCA tick timeout in mind.js, causing cascade failures.
 
   // 4.5 SEMANTIC DECAY: confidence should decay with disuse
   if (cycleCount % 25 === 0) {
-    await semantic.decayStaleConcepts(200).catch(() => null);
+    try {
+      await semantic.decayStaleConcepts(200);
+    } catch {}
   }
-  
-  // 5. EVENT CLEANUP (every 50 cycles)
+
+  // 5. EVENT CLEANUP (every 50 cycles) + emotional_states pruning
   if (cycleCount % 50 === 0) {
-    await cleanup(24);
+    try {
+      await cleanup(24);
+      // Prune emotional_states — keep only last 24h (table grows unboundedly)
+      await pool.query(
+        `DELETE FROM emotional_states WHERE timestamp < NOW() - INTERVAL '24 hours'`
+      );
+    } catch {}
   }
-  
+
   return {
     cycle: cycleCount,
     elapsed: Date.now() - t0,

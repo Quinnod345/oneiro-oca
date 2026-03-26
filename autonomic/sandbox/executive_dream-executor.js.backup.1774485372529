@@ -25,7 +25,7 @@ function resolveOCAPath(relativePath) {
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 2;
-const TASK_TIMEOUT_MS = 300_000;
+const TASK_TIMEOUT_MS = 120_000;
 const SELF_BUILD_TIMEOUT_MS = 180_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
@@ -130,20 +130,13 @@ Respond with JSON only:
 }`;
 
   try {
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 10000)
-    );
-    
-    const response = await Promise.race([
-      llm.messages.create({
-        model: 'claude-sonnet-4-6',
-        system: 'You are a code analysis engine. Respond ONLY with valid JSON. No markdown fences.',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500,
-        temperature: 0.1
-      }),
-      timeoutPromise
-    ]);
+    const response = await llm.messages.create({
+      model: 'claude-sonnet-4-6',
+      system: 'You are a code analysis engine. Respond ONLY with valid JSON. No markdown fences.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      temperature: 0.1
+    });
 
     const text = response.content?.[0]?.text || '';
     const parsed = extractJSON(text);

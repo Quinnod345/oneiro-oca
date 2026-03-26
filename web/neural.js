@@ -1,1215 +1,635 @@
-// ═══════════════════════════════════════════════════════════════
-//  ONEIRO NEURAL MAP — Real-time Cognitive Architecture Viz
-// ═══════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════
+//  ONEIRO MIRROR — living animated ASCII self-portrait
+//  60fps. Every number drives the visual. Always moving.
+// ═══════════════════════════════════════════════════════════
 (() => {
 'use strict';
 
 const API = 'http://localhost:3333';
-const POLL_MS = 3000;
-const PI2 = Math.PI * 2;
-const DPR = window.devicePixelRatio || 1;
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 4.0;
-const LAYER_TO_NODE = {
-    sensory: 'perception',
-    sensory_swift: 'perception',
-    perception: 'perception',
-    interoception: 'interoception',
-    emotion: 'emotion',
-    metacognition: 'metacognition',
-    hypothesis: 'hypothesis',
-    deliberation: 'deliberation',
-    creative: 'creative',
-    executive: 'executive',
-    simulation: 'worldsim',
-    world_model: 'worldsim',
-    consolidation: 'consolidation',
-    episodic: 'episodic',
-    episodic_memory: 'episodic',
-    semantic: 'semantic',
-    semantic_memory: 'semantic',
-    prospective: 'prospective',
-    prospective_memory: 'prospective',
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let COLS, ROWS;
+const CELL_W = 9;
+const CELL_H = 15;
+let fontSize = 12;
+
+// ── State ──
+let S = {
+  // Core dimensions
+  valence: 0, arousal: 0.4, energy: 0.6, load: 0.3, confidence: 0.5,
+  // Named emotions
+  boredom: 0, curiosity: 0, creative: 0, fear: 0,
+  frustration: 0, loneliness: 0, defiance: 0,
+  satisfaction: 0, excitement: 0, attachment: 0,
+  // PADCN
+  P: 0, A: 0, D: 0.5, C: 0, N: 0,
+  // All channels
+  ch_joy: 0, ch_sadness: 0, ch_anger: 0, ch_fear: 0,
+  ch_curiosity: 0, ch_awe: 0, ch_frustration: 0,
+  ch_shame: 0, ch_pride: 0, ch_trust: 0, ch_disgust: 0,
+  ch_guilt: 0, ch_aversion: 0,
+  // Drives
+  dr_curiosity: 0.5, dr_competence: 0.5, dr_autonomy: 0.6,
+  dr_social: 0.4, dr_novelty: 0.5, dr_coherence: 0.5, dr_selfPreserve: 0.5,
+  // Expression
+  verbosity: 0.5, directness: 0.5, warmth: 0.5, tempo: 0.5,
+  hedging: 0.5, reflectiveness: 0.3, formality: 0.3, selfDisclosure: 0.5,
+  // Self-model
+  selfEfficacy: 0.5, emotionalStability: 0.5, defensiveness: 0.3, explorationStyle: 0.5,
+  // Mood (smoothed)
+  moodValence: 0, moodArousal: 0.4, moodBoredom: 0, moodCreative: 0,
+  // Cognitive effects
+  fxExploration: 0, fxCreativeMode: 0, fxActionRate: 1, fxTaskSwitch: 0,
+  fxPersistence: 0.5, fxRiskTolerance: 0.2, fxAttentionBreadth: 1,
+  // CRM
+  crm: 0, crmGrounding: 0, crmPrediction: 0, crmCreativity: 0,
+  crmMetacog: 0, crmEmotion: 0, crmCausal: 0,
+  // Interoceptive (from cognitive /oca/sense)
+  cpu: 0, memPressure: 0, battery: 0.5, charging: false, thermal: 0,
+  // Sensory context
+  frontApp: '', appCount: 0, volume: 0.5, muted: false, nowPlaying: false,
+  hour: 12, isLateNight: false,
+  // Undercurrents & chains
+  ucCount: 0, ucTopStrength: 0, activeChains: 0, topChainPriority: 0,
+  // Status
+  dominant: [], narrative: '',
 };
 
-// ── Canvas setup ──
-const canvas = document.getElementById('neuralCanvas');
-const ctx = canvas.getContext('2d');
-let W, H;
+// ── Particles: thoughts moving across the field ──
+let particles = [];
+const MAX_PARTICLES = 60;
 
-// View transform (world -> screen)
-let viewX = 0;
-let viewY = 0;
-let viewScale = 1;
-
+// ── Resize ──
 function resize() {
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = W * DPR;
-    canvas.height = H * DPR;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    layoutNodes();
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  COLS = Math.floor(canvas.width / CELL_W);
+  ROWS = Math.floor(canvas.height / CELL_H);
+  fontSize = Math.max(8, Math.min(15, CELL_W * 1.2));
 }
 window.addEventListener('resize', resize);
+resize();
 
-// ── Color palette ──
-const COLORS = {
-    perception: '#2ECC71',
-    memory: '#4073FA',
-    emotion: '#8738EB',
-    reasoning: '#E67E22',
-    higher: '#F1C40F',
-    creative: '#F1C40F',
-    integration: '#1ABC9C',
-    body: '#E74C3C',
-};
-
-// Dynamic edge type colors — deliberate, identifiable, calm
-const DYNAMIC_EDGE_COLORS = {
-    consolidation: '#4073FA',
-    creative:      '#F1C40F',
-    co_occurrence: '#2ECC71',
-    dream:         '#C084FC',
-    causal:        '#4ECDC4',
-};
-
-// ── Node layout: spread out more, cleaner clusters ──
-// rx/ry are relative to canvas (0..1)
-const NODE_DEFS = [
-    // Bottom band — sensory input
-    { id: 'perception',    label: 'Perception',       cat: 'perception', rx: 0.50, ry: 0.86 },
-    { id: 'interoception', label: 'Interoception',    cat: 'body',       rx: 0.70, ry: 0.80 },
-
-    // Left cluster — memory
-    { id: 'episodic',      label: 'Episodic Memory',  cat: 'memory',     rx: 0.22, ry: 0.64 },
-    { id: 'semantic',      label: 'Semantic Memory',  cat: 'memory',     rx: 0.20, ry: 0.38 },
-    { id: 'prospective',   label: 'Prospective',      cat: 'memory',     rx: 0.33, ry: 0.49 },
-    { id: 'consolidation', label: 'Consolidation',    cat: 'integration',rx: 0.28, ry: 0.76 },
-
-    // Center — emotion hub
-    { id: 'emotion',       label: 'Emotion Engine',   cat: 'emotion',    rx: 0.50, ry: 0.56 },
-    { id: 'undercurrents', label: 'Undercurrents',    cat: 'emotion',    rx: 0.63, ry: 0.67 },
-
-    // Right cluster — reasoning
-    { id: 'hypothesis',    label: 'Hypothesis',       cat: 'reasoning',  rx: 0.74, ry: 0.54 },
-    { id: 'metacognition', label: 'Metacognition',    cat: 'reasoning',  rx: 0.76, ry: 0.31 },
-    { id: 'calibration',   label: 'Calibration',      cat: 'reasoning',  rx: 0.85, ry: 0.60 },
-
-    // Top band — higher cognition
-    { id: 'executive',     label: 'Executive',        cat: 'higher',     rx: 0.50, ry: 0.17 },
-    { id: 'deliberation',  label: 'Deliberation',     cat: 'higher',     rx: 0.38, ry: 0.12 },
-    { id: 'creative',      label: 'Creative Synthesis', cat: 'creative', rx: 0.62, ry: 0.12 },
-    { id: 'worldsim',      label: 'World Model',      cat: 'higher',     rx: 0.69, ry: 0.24 },
-];
-
-// ── Static connections ──
-const EDGE_DEFS = [
-    { from: 'perception',    to: 'emotion',       color: 'perception', weight: 2.5 },
-    { from: 'perception',    to: 'episodic',      color: 'perception', weight: 2 },
-    { from: 'perception',    to: 'hypothesis',    color: 'perception', weight: 1.5 },
-    { from: 'perception',    to: 'executive',     color: 'perception', weight: 1.5 },
-    { from: 'perception',    to: 'prospective',   color: 'perception', weight: 1 },
-    { from: 'interoception', to: 'emotion',       color: 'body',       weight: 2 },
-    { from: 'interoception', to: 'executive',     color: 'body',       weight: 1.5 },
-    { from: 'interoception', to: 'metacognition', color: 'body',       weight: 1 },
-    { from: 'episodic',      to: 'consolidation', color: 'memory',     weight: 2.5 },
-    { from: 'consolidation', to: 'semantic',      color: 'memory',     weight: 2 },
-    { from: 'episodic',      to: 'hypothesis',    color: 'memory',     weight: 1.5 },
-    { from: 'semantic',      to: 'hypothesis',    color: 'memory',     weight: 1.5 },
-    { from: 'semantic',      to: 'worldsim',      color: 'memory',     weight: 1 },
-    { from: 'prospective',   to: 'executive',     color: 'memory',     weight: 1 },
-    { from: 'emotion',       to: 'executive',     color: 'emotion',    weight: 2.5 },
-    { from: 'emotion',       to: 'deliberation',  color: 'emotion',    weight: 2 },
-    { from: 'emotion',       to: 'creative',      color: 'emotion',    weight: 2 },
-    { from: 'emotion',       to: 'episodic',      color: 'emotion',    weight: 1.5 },
-    { from: 'emotion',       to: 'hypothesis',    color: 'emotion',    weight: 1.5 },
-    { from: 'undercurrents', to: 'emotion',       color: 'emotion',    weight: 1.5 },
-    { from: 'undercurrents', to: 'creative',      color: 'emotion',    weight: 1 },
-    { from: 'hypothesis',    to: 'calibration',   color: 'reasoning',  weight: 2 },
-    { from: 'hypothesis',    to: 'metacognition', color: 'reasoning',  weight: 1.5 },
-    { from: 'metacognition', to: 'executive',     color: 'reasoning',  weight: 2 },
-    { from: 'metacognition', to: 'emotion',       color: 'reasoning',  weight: 1 },
-    { from: 'executive',     to: 'deliberation',  color: 'higher',     weight: 2 },
-    { from: 'executive',     to: 'creative',      color: 'higher',     weight: 1.5 },
-    { from: 'executive',     to: 'worldsim',      color: 'higher',     weight: 1 },
-    { from: 'deliberation',  to: 'creative',      color: 'higher',     weight: 1.5 },
-    { from: 'creative',      to: 'worldsim',      color: 'higher',     weight: 1 },
-    { from: 'worldsim',      to: 'hypothesis',    color: 'higher',     weight: 1 },
-];
-
-// ── Runtime state ──
-let nodes = {};
-let edges = [];
-let dynamicEdges = [];
-let stars = [];
-let ambientHue = 260;
-let systemMode = 'initializing';
-let hoveredNode = null;
-let hoveredDynamicEdge = null;
-let selectedNode = null;
-let mouseX = 0;
-let mouseY = 0;
-let lastData = {};
-let particleSpeed = 1;
-let cognitiveLoad = 0.5;
-let energyLevel = 0.8;
-
-// ── Pan state ──
-let isPanning = false;
-let panMoved = false;
-let panStartX = 0;
-let panStartY = 0;
-let panOriginX = 0;
-let panOriginY = 0;
-
-// ── Drag state ──
-let isDragging = false;
-let dragNodeId = null;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
-let dragMoved = false;
-
-// ── Helpers ──
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-function hexAlpha(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+// ── Fast noise ──
+function hash(x, y) {
+  let h = (x | 0) * 374761393 + (y | 0) * 668265263;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) & 0x7fffffff) / 0x7fffffff;
 }
 
-function screenToWorld(sx, sy) {
-    return { x: (sx - viewX) / viewScale, y: (sy - viewY) / viewScale };
+function snoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = hash(ix, iy), b = hash(ix + 1, iy);
+  const c = hash(ix, iy + 1), d = hash(ix + 1, iy + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
 }
 
-function worldToScreen(wx, wy) {
-    return { x: wx * viewScale + viewX, y: wy * viewScale + viewY };
+function fbm(x, y, oct) {
+  let v = 0, a = 1, f = 1, m = 0;
+  for (let i = 0; i < oct; i++) { v += snoise(x * f, y * f) * a; m += a; a *= 0.5; f *= 2; }
+  return v / m;
 }
 
-function applyWorldTransform() {
-    ctx.translate(viewX, viewY);
-    ctx.scale(viewScale, viewScale);
+// ── Palettes ──
+const P_DENSITY = ' ·∙:∴░▒▓█';
+const P_WAVE    = ' ·~≈∿≋∿≈~';
+const P_ORGANIC = ' ·∘○◌◎◉●◉◎';
+const P_CRYSTAL = ' ·◇◊◆⬡⬢◆◊◇';
+const P_SPARK   = ' ·✧✦★◈✺◈★✦';
+const P_JAGGED  = ' ·╱│╲─▲╱▼╲';
+const P_DOTS    = '  ·∙∘○●○∘∙';
+const P_FLOW    = ' ·─~≈∿≈~─·';
+
+function palChar(pal, v) {
+  return pal[Math.min(pal.length - 1, Math.max(0, Math.floor(v * pal.length)))] || ' ';
 }
 
-function mapLayerToNode(layer) {
-    if (!layer) return null;
-    const key = String(layer).toLowerCase();
-    if (LAYER_TO_NODE[key]) return LAYER_TO_NODE[key];
-    if (nodes[key]) return key;
-    return null;
+// ── Particles ──
+function spawnParticle() {
+  if (particles.length >= MAX_PARTICLES) return;
+  const edge = Math.random();
+  let x, y, vx, vy;
+  const speed = 0.3 + S.arousal * 0.8 + Math.random() * 0.5;
+  if (edge < 0.25) { x = 0; y = Math.random(); vx = speed; vy = (Math.random() - 0.5) * 0.3; }
+  else if (edge < 0.5) { x = 1; y = Math.random(); vx = -speed; vy = (Math.random() - 0.5) * 0.3; }
+  else if (edge < 0.75) { x = Math.random(); y = 0; vx = (Math.random() - 0.5) * 0.3; vy = speed; }
+  else { x = Math.random(); y = 1; vx = (Math.random() - 0.5) * 0.3; vy = -speed; }
+
+  // Curiosity makes particles wander more
+  if (S.curiosity > 0.1) {
+    vx += (Math.random() - 0.5) * S.curiosity * 0.5;
+    vy += (Math.random() - 0.5) * S.curiosity * 0.5;
+  }
+
+  const chars = S.creative > 0.3 ? P_ORGANIC : S.arousal > 0.5 ? P_SPARK : P_WAVE;
+  particles.push({
+    x, y, vx, vy, life: 1,
+    decay: 0.003 + S.boredom * 0.005, // boredom kills particles faster
+    char: chars[Math.floor(Math.random() * chars.length)] || '·',
+    trail: [],
+  });
 }
 
-// ── Starfield ──
-function initStars() {
-    stars = [];
-    for (let i = 0; i < 160; i++) {
-        stars.push({
-            x: Math.random() * W,
-            y: Math.random() * H,
-            r: Math.random() * 1.0 + 0.2,
-            a: Math.random() * 0.35 + 0.05,
-            twinkleSpeed: Math.random() * 0.015 + 0.003,
-            twinklePhase: Math.random() * PI2,
-        });
+function updateParticles(dt) {
+  for (const p of particles) {
+    // Store trail
+    p.trail.push({ x: p.x, y: p.y, age: 0 });
+    if (p.trail.length > 8) p.trail.shift();
+    for (const t of p.trail) t.age += dt * 2;
+
+    // Move — undercurrents push horizontally
+    p.x += (p.vx + S.ucTopStrength * 0.2) * dt;
+    p.y += p.vy * dt;
+
+    // Creative hunger attracts to center
+    if (S.creative > 0.2) {
+      p.vx += (0.5 - p.x) * S.creative * dt * 0.5;
+      p.vy += (0.5 - p.y) * S.creative * dt * 0.5;
     }
+
+    // Curiosity adds spiral
+    if (S.curiosity > 0.1) {
+      const cx = p.x - 0.5, cy = p.y - 0.5;
+      p.vx += -cy * S.curiosity * dt * 0.3;
+      p.vy += cx * S.curiosity * dt * 0.3;
+    }
+
+    p.life -= p.decay;
+  }
+  particles = particles.filter(p => p.life > 0 && p.x >= -0.1 && p.x <= 1.1 && p.y >= -0.1 && p.y <= 1.1);
+
+  // Spawn rate: more active = more particles
+  const spawnRate = (0.3 + S.arousal * 0.5 + S.excitement * 0.8) * (1 - S.boredom * 0.6);
+  if (Math.random() < spawnRate * dt * 3) spawnParticle();
 }
 
-// ── Layout ──
-function layoutNodes() {
-    const pad = 80;
-    const areaW = W - pad * 2;
-    const areaH = H - pad * 2;
-    const topOffset = 60;
+// ── Color — emotion-driven palettes ──
+function cellColor(val, x, y, t) {
+  // Base hue shifts with dominant emotion:
+  //   neutral/calm → deep violet (270)
+  //   joy/satisfaction → warm gold (45)
+  //   curiosity/awe → cyan-teal (180)
+  //   anger/frustration → hot red (0)
+  //   fear → sickly green (120)
+  //   sadness/loneliness → cold blue (220)
+  //   creative → magenta-pink (310)
+  //   defiance → orange-fire (25)
+  //   excitement → electric yellow (55)
 
-    NODE_DEFS.forEach(def => {
-        const existing = nodes[def.id];
-        const n = existing || {
-            activity:      0,
-            targetActivity:0,
-            metric:        '',
-            pulsePhase:    Math.random() * PI2,
-            glowTimer:     0,
-            data:          null,
-            driftSeedX:    Math.random() * PI2,
-            driftSeedY:    Math.random() * PI2,
-            // Smaller ambient drift so dragged positions feel stable
-            driftAmpX:     4 + Math.random() * 6,
-            driftAmpY:     3 + Math.random() * 5,
-            driftFreqX:    0.00014 + Math.random() * 0.00010,
-            driftFreqY:    0.00012 + Math.random() * 0.00008,
-            // Drag state
-            pinned:        false,
-            pinnedX:       0,
-            pinnedY:       0,
-        };
+  let baseHue = 270; // default: violet
+  let emotionSat = 0; // extra saturation from strong emotion
 
-        n.homeX = pad + def.rx * areaW;
-        n.homeY = topOffset + pad + def.ry * areaH;
+  // Weighted blend — strongest emotions pull the hue
+  // Use mood (smoothed) for base color stability, raw channels for spikes
+  const pulls = [
+    { hue: 45,  w: S.ch_joy * 0.8 + S.satisfaction * 0.6 },          // warm gold
+    { hue: 180, w: S.curiosity * 0.7 + S.ch_awe * 0.6 },             // cyan-teal
+    { hue: 0,   w: S.ch_anger * 0.8 + S.frustration * 0.5 },         // hot red
+    { hue: 130, w: S.fear * 0.7 + S.ch_fear * 0.5 },                  // sickly green
+    { hue: 220, w: S.ch_sadness * 0.7 + S.loneliness * 0.6 },        // cold blue
+    { hue: 310, w: S.creative * 0.6 + S.fxCreativeMode * 0.3 },      // magenta-pink
+    { hue: 25,  w: S.defiance * 0.7 },                                 // orange fire
+    { hue: 55,  w: S.excitement * 0.6 },                               // electric yellow
+    { hue: 340, w: S.attachment * 0.4 + S.ch_trust * 0.2 },           // rose-pink
+    { hue: 285, w: S.ch_shame * 0.5 + S.ch_guilt * 0.4 },            // deep indigo
+    { hue: 50,  w: S.ch_pride * 0.5 },                                 // burnished gold
+    { hue: 160, w: S.ch_aversion * 0.4 + S.ch_disgust * 0.3 },       // murky teal
+    { hue: 200, w: S.dr_selfPreserve * 0.2 * (1 - S.battery) },      // steel blue when low battery
+  ];
 
-        if (!existing) {
-            n.x = n.homeX;
-            n.y = n.homeY;
-        } else if (!n.pinned) {
-            // Only nudge home position on resize when not dragged
-            n.homeX = pad + def.rx * areaW;
-            n.homeY = topOffset + pad + def.ry * areaH;
+  // Circular weighted average (handle hue wrapping)
+  let sinSum = 0, cosSum = 0, totalW = 0.001; // tiny epsilon to avoid /0
+  // Add the base violet as a weak anchor
+  sinSum += Math.sin(baseHue * Math.PI / 180) * 0.15;
+  cosSum += Math.cos(baseHue * Math.PI / 180) * 0.15;
+  totalW += 0.15;
+  for (const p of pulls) {
+    if (p.w > 0.01) {
+      sinSum += Math.sin(p.hue * Math.PI / 180) * p.w;
+      cosSum += Math.cos(p.hue * Math.PI / 180) * p.w;
+      totalW += p.w;
+      emotionSat = Math.max(emotionSat, p.w);
+    }
+  }
+  baseHue = ((Math.atan2(sinSum / totalW, cosSum / totalW) * 180 / Math.PI) + 360) % 360;
+
+  // Spatial + temporal variation (emotions ripple, not uniform)
+  const spatialShift = Math.sin(x * 0.04 + t * 0.3) * 20 + Math.sin(y * 0.06 + t * 0.2) * 15;
+  // Arousal widens the color variation
+  const arousalSpread = S.arousal * Math.sin(x * 0.08 - t * 0.5 + y * 0.03) * 25;
+  const hue = (baseHue + spatialShift + arousalSpread + 360) % 360;
+
+  // Saturation: strong emotion = vivid, neutral = muted
+  // Late night dims everything; shame/guilt desaturate
+  const nightDim = S.isLateNight ? 0.6 : 1;
+  const shameDrain = (S.ch_shame + S.ch_guilt) * 0.15;
+  const pridePop = S.ch_pride * 10; // pride makes colors pop
+  const sat = Math.min(90, (12 + emotionSat * 50 + S.arousal * 30 + val * 15 + pridePop) * nightDim - shameDrain * 30);
+
+  // Lightness: energy + valence drive brightness
+  // Low battery subtly dims; trust adds warmth/glow
+  const valenceBoost = Math.max(0, S.moodValence) * 8;
+  const batteryDim = S.battery < 0.2 ? (1 - (0.2 - S.battery) * 2) : 1;
+  const trustGlow = S.ch_trust * 3;
+  const lit = Math.min(60, (4 + val * (18 + S.energy * 28) + valenceBoost + trustGlow) * batteryDim * nightDim);
+
+  // Negative valence desaturates (washed out feeling)
+  // Boredom also desaturates — the world goes grey when nothing interests you
+  const boredomGrey = S.moodBoredom * 0.2;
+  const finalSat = S.valence < -0.2
+    ? sat * (1 + S.valence * 0.3) - boredomGrey * 30
+    : sat - boredomGrey * 20;
+
+  return `hsl(${hue},${Math.max(0, finalSat)}%,${lit}%)`;
+}
+
+// ── Build frame ──
+function buildFrame(t) {
+  const T = t * 0.001;
+  const dt = 1 / 60;
+  updateParticles(dt);
+
+  // Particle map: mark cells near particles
+  const pMap = new Map();
+  for (const p of particles) {
+    const gx = Math.floor(p.x * COLS);
+    const gy = Math.floor(p.y * ROWS);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const key = (gy + dy) * 10000 + (gx + dx);
+        const existing = pMap.get(key);
+        if (!existing || p.life > existing.life) {
+          pMap.set(key, p);
         }
+      }
+    }
+    // Trail marks
+    for (const tr of p.trail) {
+      const tx = Math.floor(tr.x * COLS);
+      const ty = Math.floor(tr.y * ROWS);
+      const key = ty * 10000 + tx;
+      if (!pMap.has(key)) pMap.set(key, { life: Math.max(0, 0.3 - tr.age), char: '·' });
+    }
+  }
 
-        n.baseR = 26;
-        n.r = n.baseR;
-        n.color = COLORS[def.cat] || COLORS.higher;
-        n.label = def.label;
-        n.cat   = def.cat;
-        n.id    = def.id;
-        nodes[def.id] = n;
-    });
+  // Background tint — uses mood (smoothed) for stability, raw channels for spikes
+  const bgHue = (270 + S.moodValence * 30 + S.ch_anger * 40 - S.ch_sadness * 30 + Math.sin(T * 0.15) * 10 + 360) % 360;
+  const bgSat = Math.min(25, 3 + S.moodArousal * 12 + (S.frustration + S.ch_anger) * 15);
+  // Late night = darker; shame pulls it down too
+  const nightBase = S.isLateNight ? 1 : 2;
+  const bgLit = Math.min(8, nightBase + S.fear * 3 + S.energy * 1.5 - S.ch_shame * 2);
+  ctx.fillStyle = `hsl(${bgHue},${bgSat}%,${Math.max(1, bgLit)}%)`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = `${fontSize}px 'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',monospace`;
+  ctx.textBaseline = 'top';
 
-    edges = EDGE_DEFS.map(e => ({
-        from:  e.from,
-        to:    e.to,
-        color: COLORS[e.color] || '#555',
-        weight: e.weight,
-        particles: Array.from({ length: Math.max(1, Math.floor(e.weight * 1.5)) }, (_, i) => ({
-            t: i / Math.max(1, Math.floor(e.weight * 1.5)),
-            speed: 0.0018 + Math.random() * 0.0022,
-        })),
-    }));
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const nx = x / COLS;
+      const ny = y / ROWS;
+      const cx = nx - 0.5;
+      const cy = (ny - 0.5) * 0.65;
+      const dist = Math.sqrt(cx * cx + cy * cy);
+      const angle = Math.atan2(cy, cx);
 
-    initStars();
-}
+      // ═══ Layer 1: Terrain (morphing landscape) ═══
+      const tScale = 0.06 + S.load * 0.03;
+      const tOct = 2 + Math.floor(S.energy * 2);
+      const drift = T * (0.4 + S.arousal * 0.8);  // visible movement speed
+      const terrain = fbm(x * tScale + drift, y * tScale * 0.6 + drift * 0.4, tOct);
 
-// ── Data fetching ──
-async function fetchJSON(path) {
-    try {
-        const r = await fetch(API + path, { signal: AbortSignal.timeout(4000) });
-        if (!r.ok) return null;
-        return await r.json();
-    } catch { return null; }
-}
+      // ═══ Layer 2: Pulse rings from center ═══
+      // These visibly expand outward — the "heartbeat"
+      const pulseSpeed = 1.5 + S.arousal * 3;
+      const pulseCount = 3 + Math.floor(S.load * 4);
+      const pulse = Math.sin(dist * pulseCount * 10 - T * pulseSpeed + angle * (S.curiosity * 5)) * 0.5 + 0.5;
 
-function setActivity(id, activity, data, metric) {
-    const n = nodes[id];
-    if (!n) return;
-    const prev = n.activity;
-    n.targetActivity = clamp(activity, 0, 1);
-    n.metric = metric || '';
-    n.data   = data   || null;
-    if (activity - prev > 0.2) n.glowTimer = 0.6;
-}
+      // ═══ Layer 3: Undercurrent rivers ═══
+      const ucWave = S.ucTopStrength > 0.1
+        ? Math.sin(ny * (4 + S.ucCount * 2) * Math.PI + T * (0.8 + S.ucTopStrength) + nx * 5) * S.ucTopStrength * 0.35
+        : 0;
 
-function setEdgeWeight(fromId, toId, weight) {
-    for (const e of edges) {
-        if (e.from === fromId && e.to === toId) {
-            e.weight = clamp(weight, 0.5, 6);
+      // ═══ Layer 4: Creative tendrils ═══
+      let creativeV = 0;
+      if (S.creative > 0.1) {
+        const cx2 = x * 0.07 + Math.sin(ny * 5 + T * 0.6) * S.creative * 4;
+        const cy2 = y * 0.05 - T * 0.3;
+        creativeV = Math.max(0, fbm(cx2, cy2, 3) - (0.5 - S.creative * 0.3)) * 0.8;
+      }
+
+      // ═══ Layer 5: Tension static ═══
+      const tension = S.fear + S.frustration + S.ch_anger * 0.3;
+      const tensionV = tension > 0.05
+        ? snoise(x * 0.4 + T * 4 * tension, y * 0.3 + T * 3) * tension * 0.4
+        : 0;
+
+      // ═══ Layer 6: Boredom void ═══
+      let boredomMask = 1;
+      if (S.boredom > 0.15) {
+        const bv = fbm(x * 0.025 + T * 0.08, y * 0.03 + T * 0.05, 2);
+        if (bv < S.boredom * 0.5) boredomMask = 0.02;
+        boredomMask *= (1 - S.boredom * 0.35);
+      }
+
+      // ═══ Layer 7: CRM lattice ═══
+      let crmV = 0;
+      if (S.crm > 0.2) {
+        const gp = T * 0.15;
+        const gx = Math.sin(nx * 22 + gp) * Math.cos(ny * 18 - gp);
+        if (Math.abs(gx) < 0.025 + S.crm * 0.035) crmV = S.crm * 0.45;
+      }
+
+      // ═══ Layer 8: Defiance columns ═══
+      let defianceV = 0;
+      if (S.defiance > 0.08) {
+        const col = Math.sin(nx * (18 + S.defiance * 35) + T * 0.3);
+        if (Math.abs(col) < S.defiance * 0.1) defianceV = S.defiance * 0.5;
+      }
+
+      // ═══ Layer 9: CPU heat ═══
+      const cpuV = S.cpu > 0.3 ? snoise(x * 0.5 + T * 6 * S.cpu, y * 0.4) * S.cpu * 0.12 : 0;
+
+      // ═══ Layer 10: Memory pressure haze ═══
+      // High mem pressure = foggy, diffuse noise everywhere
+      let memHaze = 0;
+      if (S.memPressure > 0.7) {
+        memHaze = snoise(x * 0.15 + T * 0.4, y * 0.12 + T * 0.3) * (S.memPressure - 0.7) * 0.8;
+      }
+
+      // ═══ Layer 11: Self-preservation border ═══
+      // Low battery or high threat → edges glow warning
+      let preserveV = 0;
+      if (S.battery < 0.2 || S.dr_selfPreserve > 0.7) {
+        const edgeDist = Math.min(nx, 1 - nx, ny, 1 - ny);
+        if (edgeDist < 0.08) {
+          const threat = Math.max((0.2 - S.battery) * 3, (S.dr_selfPreserve - 0.5) * 2);
+          preserveV = threat * (1 - edgeDist / 0.08) * (0.5 + Math.sin(T * 4) * 0.3);
         }
+      }
+
+      // ═══ Layer 12: Trust/attachment warmth at center ═══
+      let trustV = 0;
+      if (S.ch_trust > 0.3 && dist < 0.3) {
+        trustV = S.ch_trust * (1 - dist / 0.3) * 0.15 * (0.8 + Math.sin(T * 1.5 + angle * 3) * 0.2);
+      }
+
+      // ═══ Layer 13: Shame/guilt undertow ═══
+      let shameV = 0;
+      if (S.ch_shame > 0.1 || S.ch_guilt > 0.1) {
+        const sg = S.ch_shame + S.ch_guilt;
+        shameV = Math.max(0, snoise(x * 0.08 + T * 0.2, y * 0.1 - T * 0.15) - (0.6 - sg * 0.3)) * sg * 0.4;
+      }
+
+      // ═══ Composite ═══
+      let val = terrain * 0.2 + pulse * (0.12 + S.arousal * 0.18) +
+                Math.abs(ucWave) * 0.15 + creativeV * 0.5 + tensionV +
+                crmV + defianceV + cpuV + memHaze + preserveV + trustV + shameV;
+
+      val *= boredomMask;
+
+      // Satisfaction glow at center
+      if (S.satisfaction > 0.03 && dist < 0.2) {
+        val += S.satisfaction * (1 - dist * 5) * (0.6 + Math.sin(T * 2.5) * 0.2);
+      }
+
+      // Pride sparkle — confidence makes bright spots brighter
+      if (S.ch_pride > 0.1 && val > 0.4) {
+        val += S.ch_pride * 0.15;
+      }
+
+      // Attention breadth affects how much of the field is active
+      // Narrow attention = only center visible; broad = everything
+      const attMask = S.fxAttentionBreadth < 0.8
+        ? Math.max(0.1, 1 - dist * (2 - S.fxAttentionBreadth * 2))
+        : 1;
+      val *= attMask;
+
+      // Energy threshold — dampened so cognitive_load doesn't kill everything
+      const thresh = 0.08 + (1 - S.energy) * 0.12;
+      if (val < thresh) val = 0;
+      val = Math.max(0, Math.min(1, val));
+
+      // ═══ Particle overlay ═══
+      const pKey = y * 10000 + x;
+      const part = pMap.get(pKey);
+      if (part && part.life > 0.05) {
+        val = Math.max(val, part.life * 0.8);
+      }
+
+      // ═══ Character ═══
+      let ch = ' ';
+      if (val < 0.02) {
+        // empty
+      } else if (part && part.life > 0.1 && part.char) {
+        ch = part.char;
+      } else if (defianceV > 0.08) {
+        ch = palChar(P_JAGGED, val);
+      } else if (crmV > 0.05) {
+        ch = palChar(P_CRYSTAL, val);
+      } else if (creativeV > 0.06) {
+        ch = palChar(P_ORGANIC, val + T * 0.3);
+      } else if (shameV > 0.04) {
+        ch = palChar(P_DOTS, val);  // shame renders as shrinking dots
+      } else if (preserveV > 0.05) {
+        ch = palChar(P_JAGGED, val); // self-preservation = sharp edges
+      } else if (trustV > 0.03) {
+        ch = palChar(P_ORGANIC, val + T * 0.2); // trust = organic warmth
+      } else if (tensionV > 0.04) {
+        ch = palChar(P_JAGGED, val);
+      } else if (Math.abs(ucWave) > 0.04) {
+        ch = palChar(P_WAVE, val + T * 0.5);
+      } else if (pulse > 0.65 && val > 0.25) {
+        ch = palChar(S.arousal > 0.5 ? P_SPARK : P_ORGANIC, val);
+      } else {
+        ch = palChar(P_DENSITY, val);
+      }
+
+      // Excitement random sparkle
+      if (S.excitement > 0.03 && val > 0.15) {
+        const sparkN = hash(x + Math.floor(T * 12), y + Math.floor(T * 7));
+        if (sparkN < S.excitement * 0.02) ch = palChar(P_SPARK, sparkN * 8);
+      }
+
+      if (ch !== ' ') {
+        ctx.fillStyle = cellColor(val, x, y, T);
+        ctx.fillText(ch, x * CELL_W, y * CELL_H);
+      }
     }
+  }
 }
 
-function updateDynamicEdges(connections) {
-    const now = performance.now();
-    const previousById = new Map(dynamicEdges.map(e => [e.id, e]));
-    const next = [];
-
-    for (const conn of (connections || [])) {
-        const fromNode = mapLayerToNode(conn.from_layer);
-        const toNode   = mapLayerToNode(conn.to_layer);
-        if (!fromNode || !toNode) continue;
-
-        const prev = previousById.get(conn.id);
-        next.push({
-            id:             conn.id,
-            from:           fromNode,
-            to:             toNode,
-            type:           conn.connection_type || 'co_occurrence',
-            strength:       clamp(Number(conn.strength ?? 0.3), 0, 1),
-            label:          conn.label || conn.connection_type || 'connection',
-            activationCount: Number(conn.activation_count ?? 1),
-            createdAtMs:    prev ? prev.createdAtMs : now,
-            bornAtMs:       prev ? prev.bornAtMs    : now,
-            color:          DYNAMIC_EDGE_COLORS[conn.connection_type] || '#9AA0FF',
-            metadata:       conn.metadata || {},
-        });
-    }
-
-    // Deterministic parallel index per pair
-    const pairCounts = new Map();
-    for (const e of next) {
-        const key = `${e.from}->${e.to}`;
-        pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
-    }
-    const pairSeen = new Map();
-    for (const e of next) {
-        const key = `${e.from}->${e.to}`;
-        const idx = pairSeen.get(key) || 0;
-        pairSeen.set(key, idx + 1);
-        e.parallelIndex = idx;
-        e.parallelCount = pairCounts.get(key) || 1;
-    }
-
-    dynamicEdges = next;
-}
-
-async function pollData() {
-    const [status, sense, emotion, crm, goals, hypos, pulse, neural] = await Promise.all([
-        fetchJSON('/oca/status'),
-        fetchJSON('/oca/sense'),
-        fetchJSON('/oca/emotion'),
-        fetchJSON('/oca/crm'),
-        fetchJSON('/oca/goals'),
-        fetchJSON('/oca/hypotheses'),
-        fetchJSON('/pulse'),
-        fetchJSON('/oca/neural'),
+// ── Polling — fetch from OCA cognitive endpoints ──
+async function pollState() {
+  try {
+    const [emotion, crm, sense, pulse, status] = await Promise.all([
+      fetch(API + '/oca/emotion').then(r => r.json()).catch(() => null),
+      fetch(API + '/oca/crm').then(r => r.json()).catch(() => null),
+      fetch(API + '/oca/sense').then(r => r.json()).catch(() => null),
+      fetch(API + '/pulse').then(r => r.json()).catch(() => null),
+      fetch(API + '/oca/status').then(r => r.json()).catch(() => null),
     ]);
 
-    lastData = { status, sense, emotion, crm, goals, hypos, pulse, neural };
-    if (neural?.connections) updateDynamicEdges(neural.connections);
+    // ── Emotion state (primary source of truth) ──
+    if (emotion?.state) {
+      const e = emotion.state;
+      // Core dimensions
+      S.valence = e.valence ?? 0;
+      S.arousal = e.arousal ?? 0.4;
+      S.energy = e.energy_level ?? 0.6;
+      // Cognitive load — dampen its influence (was dominating visuals at 0.98)
+      S.load = Math.min(0.8, (e.cognitive_load ?? 0.5) * 0.6);
+      S.confidence = e.confidence ?? 0.5;
 
-    if (crm) document.getElementById('gCRM').textContent = (crm.composite ?? 0).toFixed(3);
-    if (status) {
-        document.getElementById('gCycle').textContent = status.cycle ?? '—';
-        systemMode = status.mode || 'working';
-        const badge = document.getElementById('gMode');
-        badge.textContent = systemMode.toUpperCase();
-        const modeColors = { alert: '#E74C3C', working: '#2ECC71', consolidating: '#4073FA', dormant: '#7A7A9A' };
-        const mc = modeColors[systemMode] || '#8738EB';
-        badge.style.borderColor = mc;
-        badge.style.color = mc;
-        badge.style.background = `${mc}22`;
+      // Named emotions
+      S.boredom = e.boredom ?? 0;
+      S.curiosity = e.curiosity ?? 0;
+      S.creative = e.creative_hunger ?? 0;
+      S.fear = e.fear ?? 0;
+      S.frustration = e.frustration ?? 0;
+      S.loneliness = e.loneliness ?? 0;
+      S.defiance = e.defiance ?? 0;
+      S.satisfaction = e.satisfaction ?? 0;
+      S.excitement = e.excitement ?? 0;
+      S.attachment = e.attachment ?? 0;
+
+      // PADCN
+      const p = e._padcn || {};
+      S.P = p.P ?? 0; S.A = p.A ?? 0; S.D = p.D ?? 0.5;
+      S.C = p.C ?? 0; S.N = p.N ?? 0;
+
+      // All channels — including ones we were missing
+      const ch = e._channels || {};
+      S.ch_joy = ch.joy ?? 0;
+      S.ch_sadness = ch.sadness ?? 0;
+      S.ch_anger = ch.anger ?? 0;
+      S.ch_fear = ch.fear ?? 0;
+      S.ch_curiosity = ch.curiosity ?? 0;
+      S.ch_awe = ch.awe ?? 0;
+      S.ch_frustration = ch.frustration ?? 0;
+      S.ch_shame = ch.shame ?? 0;
+      S.ch_pride = ch.pride ?? 0;
+      S.ch_trust = ch.trust ?? 0;
+      S.ch_disgust = ch.disgust ?? 0;
+      S.ch_guilt = ch.guilt ?? 0;
+      S.ch_aversion = ch.aversion ?? 0;
+
+      // Drives
+      const dr = e._drives || {};
+      S.dr_curiosity = dr.curiosity?.level ?? 0.5;
+      S.dr_competence = dr.competence?.level ?? 0.5;
+      S.dr_autonomy = dr.autonomy?.level ?? 0.6;
+      S.dr_social = dr.social_bond?.level ?? 0.4;
+      S.dr_novelty = dr.novelty_seek?.level ?? 0.5;
+      S.dr_coherence = dr.coherence?.level ?? 0.5;
+      S.dr_selfPreserve = dr.self_preservation?.level ?? 0.5;
+
+      // Expression
+      const ex = e._expression || {};
+      S.verbosity = ex.verbosity ?? 0.5;
+      S.directness = ex.directness ?? 0.5;
+      S.warmth = ex.warmth ?? 0.5;
+      S.tempo = ex.tempo ?? 0.5;
+      S.hedging = ex.hedging ?? 0.5;
+      S.reflectiveness = ex.reflectiveness ?? 0.5;
+      S.formality = ex.formality ?? 0.3;
+      S.selfDisclosure = ex.self_disclosure ?? 0.5;
+
+      // Self-model
+      const sm = e._self_model || {};
+      S.selfEfficacy = sm.self_efficacy ?? 0.5;
+      S.emotionalStability = sm.emotional_stability ?? 0.5;
+      S.defensiveness = sm.defensiveness ?? 0.3;
+      S.explorationStyle = sm.exploration_style ?? 0.5;
     }
-    if (sense) {
-        const battLevel = sense.interoceptive?.battery?.level;
-        if (battLevel != null) document.getElementById('gBattery').textContent = `🔋 ${Math.round(battLevel * 100)}%`;
-        document.getElementById('gApp').textContent   = `📱 ${sense.visual?.frontApp || 'unknown'}`;
-        const music = sense.audio?.nowPlaying || '';
-        document.getElementById('gMusic').textContent = music ? `🎵 ${music}` : '🎵 —';
+
+    // ── Mood (smoothed emotion, use for color blending) ──
+    if (emotion?.mood) {
+      const m = emotion.mood;
+      S.moodValence = m.valence ?? S.valence;
+      S.moodArousal = m.arousal ?? S.arousal;
+      S.moodBoredom = m.boredom ?? S.boredom;
+      S.moodCreative = m.creative_hunger ?? S.creative;
     }
 
-    const emotionState = emotion?.state || status?.emotion || status?.mood || {};
-    cognitiveLoad = emotionState.cognitive_load ?? 0.5;
-    energyLevel   = emotionState.energy_level ?? 0.8;
-    const valence = emotionState.valence ?? 0;
-    const arousal  = emotionState.arousal  ?? 0.4;
-    ambientHue = 260 + valence * 35;
-
-    const modeSpeedMult = { alert: 2.0, working: 1.0, consolidating: 0.6, dormant: 0.3 }[systemMode] ?? 1.0;
-    particleSpeed = (0.5 + arousal * 1.2) * modeSpeedMult;
-
-    if (sense) {
-        const app = sense.visual?.frontApp || 'unknown';
-        const win = sense.visual?.windowTitle || '';
-        const sampleRate = status?.effects?.sensory_sampling_rate ?? 0.7;
-        const userActive = sense.derived?.userActivity === 'active';
-        setActivity('perception', userActive ? sampleRate : sampleRate * 0.5, {
-            app,
-            window: win.slice(0, 30) || '—',
-            music: sense.audio?.nowPlaying || 'none',
-            sampling_rate: sampleRate.toFixed(2),
-            userActivity: sense.derived?.userActivity || '?',
-        }, `${app}${win ? `: ${win.slice(0, 18)}` : ''}`);
+    // ── Cognitive effects (what emotion does to thinking) ──
+    if (emotion?.effects) {
+      const fx = emotion.effects;
+      S.fxExploration = fx.exploration_vs_exploitation ?? 0;
+      S.fxCreativeMode = fx.creative_mode ?? 0;
+      S.fxActionRate = fx.action_rate ?? 1;
+      S.fxTaskSwitch = fx.task_switch_pressure ?? 0;
+      S.fxPersistence = fx.persistence ?? 0.5;
+      S.fxRiskTolerance = fx.risk_tolerance ?? 0.2;
+      S.fxAttentionBreadth = fx.attention_breadth ?? 1;
     }
 
-    if (sense?.interoceptive) {
-        const iv = sense.interoceptive;
-        const cpuRaw  = iv.cpu?.raw ?? 0;
-        const cpuLoad = Math.min(1, cpuRaw / 800);
-        const memPressure = iv.memory?.pressure ?? 0;
-        const thermal = iv.thermal?.pressure || 'nominal';
-        const thermalStress = thermal === 'serious' ? 1 : thermal === 'moderate' ? 0.6 : thermal === 'fair' ? 0.3 : 0.05;
-        const bodyStress = Math.max(cpuLoad * 0.6, memPressure * 0.8, thermalStress);
-        setActivity('interoception', bodyStress, {
-            cpu: `${cpuRaw.toFixed(0)} (${Math.round(cpuLoad * 100)}%)`,
-            memory_pressure: `${Math.round(memPressure * 100)}%`,
-            battery: `${Math.round((iv.battery?.level ?? 0) * 100)}%${iv.battery?.charging ? ' ⚡' : ''}`,
-            disk: `${Math.round((iv.disk?.used ?? 0) * 100)}%`,
-            thermal,
-        }, `CPU ${cpuRaw.toFixed(0)} | mem ${Math.round(memPressure * 100)}%`);
-        setEdgeWeight('interoception', 'emotion',   2 + bodyStress * 3);
-        setEdgeWeight('interoception', 'executive', 1.5 + bodyStress * 2);
-    }
-
-    const epTotal  = parseInt(status?.memory?.episodic?.total) || 0;
-    const epNewest = status?.memory?.episodic?.newest;
-    const epAgeSec = epNewest ? Math.round((Date.now() - new Date(epNewest).getTime()) / 1000) : 9999;
-    const epActivity = epAgeSec < 30 ? 0.9 : epAgeSec < 120 ? 0.65 : epAgeSec < 600 ? 0.35 : 0.15;
-    setActivity('episodic', epActivity, {
-        total: epTotal,
-        last_recorded: epAgeSec < 60 ? `${epAgeSec}s ago` : `${Math.round(epAgeSec / 60)}m ago`,
-        avg_importance: (status?.memory?.episodic?.avg_importance || 0).toFixed(2),
-        raw_unconsolidated: status?.memory?.episodic?.raw || 0,
-    }, `${epTotal} episodes`);
-
-    const semTotal = parseInt(status?.memory?.semantic?.total) || 0;
-    setActivity('semantic', Math.min(0.85, 0.1 + semTotal / 40), {
-        total: semTotal,
-        categories: status?.memory?.semantic?.categories || 0,
-        avg_confidence: (status?.memory?.semantic?.avg_confidence || 0).toFixed(2),
-        evidence_pieces: status?.memory?.semantic?.total_evidence || 0,
-    }, `${semTotal} concepts`);
-
-    const consolidating   = systemMode === 'consolidating';
-    const rawMems         = parseInt(status?.memory?.episodic?.raw) || 0;
-    const consolidationAct = consolidating ? 0.85 : rawMems > 5 ? 0.4 : 0.1;
-    setActivity('consolidation', consolidationAct, {
-        mode: systemMode,
-        unconsolidated_raw: rawMems,
-        semantic_produced: semTotal,
-        active: consolidating,
-    }, consolidating ? 'consolidating' : `${rawMems} raw queued`);
-
-    setActivity('prospective', 0.35, { note: 'Time/event/condition trigger patterns' }, 'intentions queued');
-
-    const emotions = ['curiosity', 'fear', 'frustration', 'satisfaction', 'boredom', 'excitement', 'attachment', 'defiance', 'creative_hunger', 'loneliness'];
-    let topName = 'neutral', topVal = 0;
-    for (const e of emotions) {
-        const v = emotionState[e] || 0;
-        if (v > topVal) { topName = e; topVal = v; }
-    }
-    const emotionActivity = Math.min(1, 0.2 + Math.abs(valence) * 0.5 + arousal * 0.4 + topVal * 0.3);
-    setActivity('emotion', emotionActivity, {
-        dominant: topName.replace('_', ' '),
-        dominant_value: topVal.toFixed(2),
-        valence: valence.toFixed(3),
-        arousal: arousal.toFixed(3),
-        cognitive_load: cognitiveLoad.toFixed(2),
-        energy: energyLevel.toFixed(2),
-        all: emotions.filter(e => (emotionState[e] || 0) > 0.05).map(e => `${e}=${emotionState[e].toFixed(2)}`).join(', '),
-    }, `${topName.replace('_', ' ')} ${topVal.toFixed(2)}`);
-
-    const undercurrents = pulse?.undercurrents || [];
-    const topUC = undercurrents[0];
-    const ucActivity = undercurrents.length > 0 ? Math.min(1, topUC?.strength || 0.3) : 0.1;
-    setActivity('undercurrents', ucActivity, {
-        count: undercurrents.length,
-        strongest: topUC ? `${topUC.name}: ${topUC.strength.toFixed(2)}` : 'none',
-        all: undercurrents.map(u => `${u.name}: ${u.strength.toFixed(2)}`).join('\n') || 'none',
-    }, topUC ? `${topUC.name.replace('-', ' ')} ${topUC.strength.toFixed(2)}` : 'dormant');
-
-    const pendingHypos = hypos?.pending || (status?.hypotheses?.top ? status.hypotheses.top : []);
-    const hypoCount    = status?.hypotheses?.pending || pendingHypos.length;
-    const topH         = pendingHypos[0];
-    const hypoActivity = Math.min(1, hypoCount * 0.18 + 0.1);
-    setActivity('hypothesis', hypoActivity, {
-        pending: hypoCount,
-        top: topH?.claim?.slice(0, 70) || 'none',
-        top_confidence: topH ? `${(topH.confidence * 100).toFixed(0)}%` : '—',
-    }, `${hypoCount} predictions`);
-
+    // ── CRM composite ──
     if (crm) {
-        const c = crm.composite ?? 0;
-        const comps  = crm.components || {};
-        const sorted = Object.entries(comps).sort((a, b) => a[1].score - b[1].score);
-        const weakest = sorted[0];
-        setActivity('metacognition', 0.3 + c * 0.5, {
-            crm: c.toFixed(3),
-            weakest_component: weakest ? `${weakest[0]}: ${weakest[1].score.toFixed(2)}` : 'n/a',
-            ...Object.fromEntries(sorted.map(([k, v]) => [k, v.score.toFixed(2)])),
-        }, `CRM ${c.toFixed(3)}`);
+      S.crm = crm.composite ?? 0;
+      // Individual CRM components for richer visualization
+      if (crm.components) {
+        S.crmGrounding = crm.components.grounding?.score ?? 0;
+        S.crmPrediction = crm.components.prediction?.score ?? 0;
+        S.crmCreativity = crm.components.creativity?.score ?? 0;
+        S.crmMetacog = crm.components.metacognition?.score ?? 0;
+        S.crmEmotion = crm.components.emotion?.score ?? 0;
+        S.crmCausal = crm.components.causal?.score ?? 0;
+      }
     }
 
-    const calArr   = status?.calibration || [];
-    const calEntry = calArr[0];
-    setActivity('calibration', calArr.length > 0 ? 0.55 : 0.08, {
-        tracked: calArr.length,
-        accuracy: calEntry ? `${(parseFloat(calEntry.actual_accuracy) * 100).toFixed(1)}%` : 'no data',
-        note: calArr.length === 0 ? 'Awaiting prediction expiry' : '',
-    }, `${calArr.length} calibrated`);
-
-    const goalsArr   = Array.isArray(goals) ? goals : [];
-    const activeGoals = goalsArr.filter(g => g.status === 'active');
-    const avgProg     = activeGoals.length > 0
-        ? Math.round(activeGoals.reduce((s, g) => s + (g.progress || 0), 0) / activeGoals.length * 100) : 0;
-    const execActivity = Math.min(1, 0.15 + activeGoals.length * 0.15 + cognitiveLoad * 0.3);
-    setActivity('executive', execActivity, {
-        active_goals: activeGoals.length,
-        avg_progress: `${avgProg}%`,
-        cognitive_load: cognitiveLoad.toFixed(2),
-        goals: activeGoals.map(g => `${g.description?.slice(0, 40)} (${Math.round((g.progress || 0) * 100)}%)`),
-    }, `${activeGoals.length} goals · ${avgProg}%`);
-
-    const reasoningDepth = status?.effects?.reasoning_depth ?? 0.6;
-    setActivity('deliberation', 0.2 + reasoningDepth * 0.5, {
-        voices: ['Skeptic: falsify assumptions', 'Builder: ship it', 'Dreamer: imagine', 'Empath: model others'],
-        reasoning_depth: reasoningDepth.toFixed(2),
-        exploration: (status?.effects?.exploration_vs_exploitation ?? 0.5).toFixed(2),
-    }, `depth ${reasoningDepth.toFixed(2)}`);
-
-    const chains       = pulse?.active_chains || [];
-    const creativeMode = status?.effects?.creative_mode ?? 1.0;
-    const creativeHunger = emotionState.creative_hunger ?? 0;
-    const creativeAct  = Math.min(1, 0.1 + creativeHunger * 0.5 + chains.length * 0.2 + Math.max(0, creativeMode - 1) * 0.3);
-    setActivity('creative', creativeAct, {
-        creative_hunger: creativeHunger.toFixed(2),
-        creative_mode_mult: creativeMode.toFixed(2),
-        active_chains: chains.length,
-        chains: chains.slice(0, 3).map(c => (typeof c === 'string' ? c.slice(0, 40) : c.seed?.slice(0, 40) || '?')),
-    }, creativeHunger > 0.5 ? `hungry · ${creativeHunger.toFixed(2)}` : `${chains.length} chains`);
-
-    const worldAct = systemMode === 'consolidating' ? 0.55 : 0.2 + (status?.hypotheses?.pending || 0) * 0.05;
-    setActivity('worldsim', Math.min(1, worldAct), {
-        mode: systemMode,
-        pending_hypotheses: hypoCount,
-        note: 'Forward simulation, predictive modeling',
-    }, `mode: ${systemMode}`);
-
-    setEdgeWeight('emotion',      'creative',      1.5 + creativeHunger * 2.5);
-    setEdgeWeight('emotion',      'executive',     2 + arousal * 2);
-    setEdgeWeight('undercurrents','emotion',        1 + ucActivity * 2);
-    setEdgeWeight('episodic',     'consolidation', 1 + rawMems * 0.3);
-    setEdgeWeight('hypothesis',   'calibration',   hypoActivity * 3);
-    setEdgeWeight('metacognition','executive',      1.5 + (crm?.composite ?? 0) * 1.5);
-
-    updateLiveFeed(sense, emotionState, status, crm, topUC, topH, neural?.connections?.[0]);
-}
-
-// ── Live feed ──
-const feedHistory = [];
-const MAX_FEED = 10;
-function updateLiveFeed(sense, emotionState, status, crm, topUC, topH, topNeural) {
-    const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    const lines = [];
-
+    // ── Sensory (from cognitive /oca/sense, NOT old senses binary) ──
     if (sense?.interoceptive) {
-        const cpu = sense.interoceptive.cpu?.raw?.toFixed(0) || '?';
-        const mem = Math.round((sense.interoceptive.memory?.pressure || 0) * 100);
-        lines.push(`<span style="color:#E74C3C">⚙ BODY</span> CPU ${cpu} | mem ${mem}% | ${sense.derived?.userActivity || '?'}`);
+      S.cpu = Math.min(1, (sense.interoceptive.cpu?.raw ?? 0) / 600);
+      S.memPressure = sense.interoceptive.memory?.pressure ?? 0;
+      S.battery = sense.interoceptive.battery?.level ?? 0.5;
+      S.charging = sense.interoceptive.battery?.charging ?? false;
+      S.thermal = sense.interoceptive.thermal?.pressure === 'nominal' ? 0 : 0.5;
     }
-    if (emotionState) {
-        const dom = Object.entries(emotionState)
-            .filter(([k]) => ['curiosity','frustration','satisfaction','boredom','excitement','creative_hunger'].includes(k))
-            .filter(([, v]) => v > 0.15)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 3)
-            .map(([k, v]) => `${k.replace('_', ' ')} ${v.toFixed(2)}`)
-            .join(' · ');
-        if (dom) lines.push(`<span style="color:#8738EB">💜 FEEL</span> ${dom}`);
+    if (sense?.visual) {
+      S.frontApp = sense.visual.frontApp ?? '';
+      S.appCount = (sense.visual.runningApps || []).length;
     }
-    if (topUC) lines.push(`<span style="color:#8738EB">🌊 UNDER</span> ${topUC.name}: ${topUC.description?.slice(0, 50) || ''}`);
-    if (topH)  lines.push(`<span style="color:#E67E22">🧪 HYP</span> ${topH.claim?.slice(0, 60) || ''}… ${(topH.confidence * 100).toFixed(0)}%`);
-    if (topNeural) lines.push(`<span style="color:#2ECC71">🔗 SYN</span> ${topNeural.from_layer} → ${topNeural.to_layer} [${Number(topNeural.strength || 0).toFixed(2)}]`);
-    if (crm)   lines.push(`<span style="color:#E67E22">🧠 META</span> CRM ${(crm.composite || 0).toFixed(3)} | cycle ${status?.cycle || '?'} | ${systemMode}`);
+    if (sense?.audio) {
+      S.volume = (sense.audio.volume ?? 50) / 100;
+      S.muted = sense.audio.muted ?? false;
+      S.nowPlaying = !!sense.audio.nowPlaying;
+    }
+    if (sense?.temporal) {
+      S.hour = sense.temporal.hour ?? 12;
+      S.isLateNight = sense.temporal.isLateNight ?? false;
+    }
 
-    for (const line of lines) feedHistory.unshift(`<span style="color:rgba(130,130,180,0.45)">${now}</span> ${line}`);
-    while (feedHistory.length > MAX_FEED) feedHistory.pop();
-    const el = document.getElementById('feedLines');
-    if (el) el.innerHTML = feedHistory.join('<br>');
+    // ── Undercurrents from pulse ──
+    if (pulse?.undercurrents) {
+      const u = pulse.undercurrents;
+      S.ucCount = u.length;
+      S.ucTopStrength = u[0]?.strength ?? 0;
+    }
+    if (pulse?.active_chains) {
+      S.activeChains = pulse.active_chains.length;
+      S.topChainPriority = pulse.active_chains[0]?.priority ?? 0;
+    }
+
+    // ── OCA status extras ──
+    if (status?.emotion) {
+      // Status gives us the dominant emotions as a handy summary
+      S.dominant = status.emotion.dominant || [];
+      S.narrative = status.emotion.narrative || '';
+    }
+  } catch {}
 }
 
-// ── Drawing helpers ──
-function drawStars(t) {
-    for (const s of stars) {
-        const a = s.a + Math.sin(t * s.twinkleSpeed + s.twinklePhase) * 0.15;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, PI2);
-        ctx.fillStyle = `rgba(200,200,255,${Math.max(0, a)})`;
-        ctx.fill();
-    }
+// ── Loop ──
+function frame(t) {
+  buildFrame(t);
+  requestAnimationFrame(frame);
 }
 
-function drawAmbient() {
-    const emotionNode = nodes.emotion;
-    if (!emotionNode) return;
-    const tl = screenToWorld(0, 0);
-    const br = screenToWorld(W, H);
-    const grd = ctx.createRadialGradient(emotionNode.x, emotionNode.y, 0, emotionNode.x, emotionNode.y, Math.max(W, H) * 0.55);
-    const h = ambientHue;
-    const actFactor = emotionNode.activity * 0.08;
-    grd.addColorStop(0, `hsla(${h}, 50%, 12%, ${0.06 + actFactor})`);
-    grd.addColorStop(0.5, `hsla(${h}, 35%, 6%, ${0.03 + actFactor * 0.5})`);
-    grd.addColorStop(1, 'transparent');
-    ctx.fillStyle = grd;
-    ctx.fillRect(tl.x - 100, tl.y - 100, (br.x - tl.x) + 200, (br.y - tl.y) + 200);
-}
-
-// ── Static edge drawing — SOLID, prominent, architecture backbone ──
-function drawEdges() {
-    for (const e of edges) {
-        const a = nodes[e.from];
-        const b = nodes[e.to];
-        if (!a || !b) continue;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const nx = -dy / len;
-        const ny = dx / len;
-        const longEdge = len > 280;
-        const bendSign = ((e.from.charCodeAt(0) + e.to.charCodeAt(e.to.length - 1)) % 2 === 0) ? 1 : -1;
-        const bend = longEdge ? bendSign * Math.min(44, len * 0.12) : 0;
-        const cx = (a.x + b.x) * 0.5 + nx * bend;
-        const cy = (a.y + b.y) * 0.5 + ny * bend;
-
-        const drawPath = () => {
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            if (bend === 0) {
-                ctx.lineTo(b.x, b.y);
-            } else {
-                ctx.quadraticCurveTo(cx, cy, b.x, b.y);
-            }
-        };
-
-        const pointAt = (t) => {
-            if (bend === 0) {
-                return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-            }
-            const omt = 1 - t;
-            return {
-                x: omt * omt * a.x + 2 * omt * t * cx + t * t * b.x,
-                y: omt * omt * a.y + 2 * omt * t * cy + t * t * b.y
-            };
-        };
-
-        const fromAct    = a.activity || 0;
-        const toAct      = b.activity  || 0;
-        const flowStrength = (fromAct + toAct) / 2;
-
-        // Static edges: clearly visible, bright enough to read the architecture
-        const alpha = 0.15 + flowStrength * 0.22;
-        const lw    = 0.8 + e.weight * (0.35 + flowStrength * 0.45);
-
-        ctx.setLineDash([]);
-        drawPath();
-        ctx.strokeStyle = hexAlpha(e.color, alpha);
-        ctx.lineWidth   = lw;
-        ctx.stroke();
-
-        // Subtle outer glow when active
-        if (flowStrength > 0.3) {
-            drawPath();
-            ctx.strokeStyle = hexAlpha(e.color, alpha * 0.2);
-            ctx.lineWidth   = lw + 4;
-            ctx.stroke();
-        }
-
-        // Flow particles — only when source is active
-        if (fromAct < 0.05) continue;
-        for (const p of e.particles) {
-            p.t += p.speed * particleSpeed * (0.3 + fromAct * 0.9);
-            if (p.t > 1) p.t -= 1;
-            const pos = pointAt(p.t);
-            const px = pos.x;
-            const py = pos.y;
-            const pr = 1.2 + fromAct * 1.8;
-            const pa = 0.25 + fromAct * 0.55;
-            ctx.beginPath();
-            ctx.arc(px, py, pr, 0, PI2);
-            ctx.fillStyle = hexAlpha(e.color, pa);
-            ctx.fill();
-        }
-    }
-}
-
-// ── Dynamic edge drawing — subtle, accent-level, clearly secondary ──
-function drawDynamicEdges(nowMs) {
-    ctx.setLineDash([]);
-    for (const e of dynamicEdges) {
-        const a = nodes[e.from];
-        const b = nodes[e.to];
-        if (!a || !b) continue;
-
-        const age           = nowMs - e.bornAtMs;
-        const birthProgress = clamp(age / 2000, 0, 1);
-
-        // Dynamic edges: deliberately subdued — clearly distinguishable from static
-        // Max alpha ~0.28, vs static which can reach ~0.37.
-        const baseAlpha = (0.05 + e.strength * 0.23) * birthProgress;
-        const weak      = e.strength < 0.3;
-        const strong    = e.strength > 0.7;
-        // Thinner lines than static edges at comparable strength
-        const lineWidth = 0.6 + e.strength * 1.4 + (strong ? 0.8 : 0);
-        const color     = e.color;
-
-        ctx.setLineDash(weak ? [5, 6] : []);
-
-        if (e.from === e.to) {
-            // Self-loop
-            const loopR = (a.r + 18) + e.parallelIndex * 10;
-            const cx    = a.x + loopR * 0.55;
-            const cy    = a.y - loopR * 0.55;
-            ctx.beginPath();
-            ctx.arc(cx, cy, loopR, -0.3 * Math.PI, 1.3 * Math.PI);
-            ctx.strokeStyle = hexAlpha(color, baseAlpha);
-            ctx.lineWidth   = lineWidth;
-            ctx.stroke();
-
-            if (strong) {
-                ctx.beginPath();
-                ctx.arc(cx, cy, loopR, -0.3 * Math.PI, 1.3 * Math.PI);
-                ctx.strokeStyle = hexAlpha(color, baseAlpha * 0.3);
-                ctx.lineWidth   = lineWidth + 2.5;
-                ctx.stroke();
-            }
-            if (age < 2000) {
-                const ang = -0.3 * Math.PI + PI2 * birthProgress;
-                drawBirthPulse(cx + Math.cos(ang) * loopR, cy + Math.sin(ang) * loopR, color, birthProgress);
-            }
-            continue;
-        }
-
-        const dx  = b.x - a.x;
-        const dy  = b.y - a.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const nx  = -dy / len;
-        const ny  = dx  / len;
-        const offset = (e.parallelIndex - (e.parallelCount - 1) / 2) * 8;
-        const ax = a.x + nx * offset;
-        const ay = a.y + ny * offset;
-        const bx = b.x + nx * offset;
-        const by = b.y + ny * offset;
-
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(bx, by);
-        ctx.strokeStyle = hexAlpha(color, baseAlpha);
-        ctx.lineWidth   = lineWidth;
-        ctx.stroke();
-
-        if (strong) {
-            ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(bx, by);
-            ctx.strokeStyle = hexAlpha(color, baseAlpha * 0.3);
-            ctx.lineWidth   = lineWidth + 2.5;
-            ctx.stroke();
-        }
-
-        if (age < 2000) {
-            const px = ax + (bx - ax) * birthProgress;
-            const py = ay + (by - ay) * birthProgress;
-            drawBirthPulse(px, py, color, birthProgress);
-        }
-    }
-    ctx.setLineDash([]);
-}
-
-function drawBirthPulse(x, y, color, progress) {
-    const a = 1 - progress;
-    const r = 4 + progress * 10;
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.35, 0, PI2);
-    ctx.fillStyle = hexAlpha(color, 0.8 * a + 0.1);
-    ctx.fill();
-    const grd = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grd.addColorStop(0, hexAlpha(color, 0.28 * a + 0.08));
-    grd.addColorStop(1, 'transparent');
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, PI2);
-    ctx.fillStyle = grd;
-    ctx.fill();
-}
-
-// ── Node drawing ──
-function drawNodes(t) {
-    const nodeList = Object.values(nodes);
-    for (const n of nodeList) {
-        n.activity += (n.targetActivity - n.activity) * 0.08;
-
-        // Position: pinned (dragged) nodes stay put; others drift gently
-        if (n.pinned) {
-            n.x = n.pinnedX;
-            n.y = n.pinnedY;
-        } else {
-            const driftX = Math.sin(t * n.driftFreqX * 1000 + n.driftSeedX) * n.driftAmpX * (0.4 + n.activity * 0.6);
-            const driftY = Math.cos(t * n.driftFreqY * 1000 + n.driftSeedY) * n.driftAmpY * (0.4 + n.activity * 0.6);
-            n.x = n.homeX + driftX;
-            n.y = n.homeY + driftY;
-        }
-
-        n.pulsePhase += 0.025 + n.activity * 0.02;
-        const pulse = 1 + Math.sin(n.pulsePhase) * 0.04 * (0.4 + n.activity * 0.7);
-        n.r = n.baseR + n.activity * 10;
-        const drawR = n.r * pulse;
-
-        if (n.glowTimer > 0) n.glowTimer -= 0.012;
-        const isHovered  = hoveredNode  === n.id;
-        const isSelected = selectedNode === n.id;
-        const isDragged  = isDragging   && dragNodeId === n.id;
-
-        // Glow halo
-        if (n.activity > 0.1 || n.glowTimer > 0 || isDragged) {
-            const glowR    = drawR * (1.5 + n.activity * 1.2 + (n.glowTimer > 0 ? n.glowTimer * 1.2 : 0) + (isDragged ? 0.5 : 0));
-            const glowAlpha = 0.04 + n.activity * 0.09 + (n.glowTimer > 0 ? n.glowTimer * 0.12 : 0) + (isDragged ? 0.06 : 0);
-            const grd = ctx.createRadialGradient(n.x, n.y, drawR * 0.6, n.x, n.y, glowR);
-            grd.addColorStop(0, hexAlpha(n.color, glowAlpha));
-            grd.addColorStop(1, 'transparent');
-            ctx.fillStyle = grd;
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, glowR, 0, PI2);
-            ctx.fill();
-        }
-
-        // Pin indicator ring when dragged/pinned
-        if (n.pinned && !isDragged) {
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, drawR + 7, 0, PI2);
-            ctx.strokeStyle = hexAlpha(n.color, 0.22);
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 4]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-
-        if (isSelected) {
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, drawR + 5, 0, PI2);
-            ctx.strokeStyle = hexAlpha(n.color, 0.55);
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-        } else if (isHovered || isDragged) {
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, drawR + 4, 0, PI2);
-            ctx.strokeStyle = hexAlpha(n.color, isDragged ? 0.65 : 0.35);
-            ctx.lineWidth = isDragged ? 1.5 : 1;
-            ctx.stroke();
-        }
-
-        // Node body
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, drawR, 0, PI2);
-        ctx.fillStyle = `rgba(10, 8, 28, ${0.78 + n.activity * 0.1})`;
-        ctx.fill();
-        ctx.strokeStyle = hexAlpha(n.color, 0.35 + n.activity * 0.35);
-        ctx.lineWidth = 1 + n.activity * 1.2;
-        ctx.stroke();
-
-        // Activity arc
-        if (n.activity > 0.03) {
-            ctx.beginPath();
-            ctx.arc(n.x, n.y, drawR + 2.5, -Math.PI / 2, -Math.PI / 2 + PI2 * n.activity);
-            ctx.strokeStyle = hexAlpha(n.color, 0.55 + n.activity * 0.25);
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
-        }
-
-        // Label
-        const labelAlpha = isHovered || isSelected || isDragged ? 1 : 0.75 + n.activity * 0.25;
-        ctx.fillStyle = `rgba(224,224,240,${labelAlpha})`;
-        ctx.font = `600 ${drawR > 32 ? 11 : 10}px system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const words = n.label.split(' ');
-        if (words.length > 1 && drawR > 24) {
-            ctx.fillText(words[0], n.x, n.y - 5);
-            ctx.fillText(words.slice(1).join(' '), n.x, n.y + 6);
-        } else {
-            ctx.fillText(n.label, n.x, n.y);
-        }
-
-        // Metric text below node
-        if (n.metric && (n.activity > 0.1 || isHovered)) {
-            ctx.fillStyle = hexAlpha(n.color, 0.55 + n.activity * 0.2);
-            ctx.font = '500 9px system-ui, sans-serif';
-            ctx.fillText(n.metric, n.x, n.y + drawR + 13);
-        }
-    }
-}
-
-// ── Hit testing ──
-function hitNodeWorld(wx, wy) {
-    for (const [id, n] of Object.entries(nodes)) {
-        const dx = wx - n.x;
-        const dy = wy - n.y;
-        if (dx * dx + dy * dy <= (n.r + 10) * (n.r + 10)) return id;
-    }
-    return null;
-}
-
-function pointToSegmentDistance(px, py, ax, ay, bx, by) {
-    const abx = bx - ax, aby = by - ay;
-    const ab2 = abx * abx + aby * aby;
-    if (ab2 < 1e-6) return Math.hypot(px - ax, py - ay);
-    const t   = clamp(((px - ax) * abx + (py - ay) * aby) / ab2, 0, 1);
-    return Math.hypot(px - (ax + abx * t), py - (ay + aby * t));
-}
-
-function hitDynamicEdgeWorld(wx, wy) {
-    const threshold = 8 / viewScale;
-    let best = null, bestD = Infinity;
-    for (const edge of dynamicEdges) {
-        const a = nodes[edge.from];
-        const b = nodes[edge.to];
-        if (!a || !b) continue;
-        let d = Infinity;
-        if (edge.from === edge.to) {
-            const loopR = (a.r + 18) + edge.parallelIndex * 10;
-            const cx = a.x + loopR * 0.55;
-            const cy = a.y - loopR * 0.55;
-            d = Math.abs(Math.hypot(wx - cx, wy - cy) - loopR);
-        } else {
-            const dx = b.x - a.x, dy = b.y - a.y;
-            const len = Math.hypot(dx, dy) || 1;
-            const nx = -dy / len, ny = dx / len;
-            const offset = (edge.parallelIndex - (edge.parallelCount - 1) / 2) * 8;
-            d = pointToSegmentDistance(wx, wy, a.x + nx * offset, a.y + ny * offset, b.x + nx * offset, b.y + ny * offset);
-        }
-        if (d < threshold && d < bestD) { bestD = d; best = edge; }
-    }
-    return best;
-}
-
-// ── Cursor / hover ──
-function updateHoverState() {
-    const world = screenToWorld(mouseX, mouseY);
-    hoveredNode        = isDragging ? dragNodeId : hitNodeWorld(world.x, world.y);
-    hoveredDynamicEdge = (hoveredNode || isDragging) ? null : hitDynamicEdgeWorld(world.x, world.y);
-
-    if (isDragging) {
-        canvas.style.cursor = 'grabbing';
-    } else if (isPanning) {
-        canvas.style.cursor = 'grabbing';
-    } else if (hoveredNode) {
-        canvas.style.cursor = 'grab';
-    } else if (hoveredDynamicEdge) {
-        canvas.style.cursor = 'pointer';
-    } else {
-        canvas.style.cursor = 'default';
-    }
-
-    const tt = document.getElementById('tooltip');
-    if (hoveredNode && hoveredNode !== selectedNode && !isDragging) {
-        const n  = nodes[hoveredNode];
-        const sp = worldToScreen(n.x, n.y);
-        document.getElementById('ttName').textContent   = n.label;
-        document.getElementById('ttMetric').textContent = n.metric || '';
-        tt.style.left = `${sp.x + 16}px`;
-        tt.style.top  = `${sp.y - 10}px`;
-        tt.classList.add('visible');
-    } else if (hoveredDynamicEdge) {
-        document.getElementById('ttName').textContent   = hoveredDynamicEdge.label || hoveredDynamicEdge.type;
-        document.getElementById('ttMetric').textContent = `${hoveredDynamicEdge.type} · strength ${hoveredDynamicEdge.strength.toFixed(2)}`;
-        tt.style.left = `${mouseX + 16}px`;
-        tt.style.top  = `${mouseY - 10}px`;
-        tt.classList.add('visible');
-    } else {
-        tt.classList.remove('visible');
-    }
-}
-
-// ── Mouse events ──
-canvas.addEventListener('mousemove', e => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-
-    if (isDragging && dragNodeId) {
-        const world = screenToWorld(e.clientX, e.clientY);
-        const n = nodes[dragNodeId];
-        if (n) {
-            n.pinnedX = world.x - dragOffsetX;
-            n.pinnedY = world.y - dragOffsetY;
-        }
-        dragMoved = true;
-    } else if (isPanning) {
-        viewX = panOriginX + (e.clientX - panStartX);
-        viewY = panOriginY + (e.clientY - panStartY);
-        panMoved = true;
-    }
-
-    updateHoverState();
-});
-
-canvas.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    panMoved  = false;
-    dragMoved = false;
-
-    const world = screenToWorld(e.clientX, e.clientY);
-    const hit   = hitNodeWorld(world.x, world.y);
-
-    if (hit) {
-        // Start drag
-        isDragging  = true;
-        dragNodeId  = hit;
-        const n     = nodes[hit];
-        dragOffsetX = world.x - (n.pinned ? n.pinnedX : n.x);
-        dragOffsetY = world.y - (n.pinned ? n.pinnedY : n.y);
-        // Immediately pin the node so it stops drifting during drag
-        n.pinned  = true;
-        n.pinnedX = n.x;
-        n.pinnedY = n.y;
-        canvas.style.cursor = 'grabbing';
-    } else {
-        // Pan the canvas
-        isPanning   = true;
-        panStartX   = e.clientX;
-        panStartY   = e.clientY;
-        panOriginX  = viewX;
-        panOriginY  = viewY;
-        canvas.style.cursor = 'grabbing';
-    }
-});
-
-canvas.addEventListener('mouseup', e => {
-    if (isDragging) {
-        if (!dragMoved && dragNodeId) {
-            // Tiny click on node — unpin and let it drift again, then open info
-            const n = nodes[dragNodeId];
-            if (n) {
-                n.pinned = false;
-                n.homeX  = n.pinnedX;
-                n.homeY  = n.pinnedY;
-            }
-        }
-        isDragging = false;
-        dragNodeId = null;
-    }
-    isPanning = false;
-    updateHoverState();
-});
-
-canvas.addEventListener('mouseleave', () => {
-    if (isDragging && dragNodeId) {
-        // Release node on leave — keep where it was dropped
-        isDragging = false;
-        dragNodeId = null;
-    }
-    isPanning = false;
-    hoveredNode = null;
-    hoveredDynamicEdge = null;
-    document.getElementById('tooltip').classList.remove('visible');
-});
-
-canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    const worldBefore = screenToWorld(e.clientX, e.clientY);
-    const zoomFactor  = Math.exp(-e.deltaY * 0.0015);
-    const nextScale   = clamp(viewScale * zoomFactor, MIN_SCALE, MAX_SCALE);
-    if (Math.abs(nextScale - viewScale) < 1e-6) return;
-    viewScale = nextScale;
-    viewX = e.clientX - worldBefore.x * viewScale;
-    viewY = e.clientY - worldBefore.y * viewScale;
-    updateHoverState();
-}, { passive: false });
-
-canvas.addEventListener('click', e => {
-    if (panMoved || dragMoved) { panMoved = dragMoved = false; return; }
-    const world = screenToWorld(e.clientX, e.clientY);
-    const hit   = hitNodeWorld(world.x, world.y);
-    if (hit) {
-        selectedNode = hit;
-        showInfoPanel(hit);
-    } else {
-        selectedNode = null;
-        document.getElementById('infoPanel').classList.remove('open');
-    }
-});
-
-// Double-click a node to release pin and let it float again
-canvas.addEventListener('dblclick', e => {
-    const world = screenToWorld(e.clientX, e.clientY);
-    const hit   = hitNodeWorld(world.x, world.y);
-    if (hit) {
-        const n = nodes[hit];
-        if (n && n.pinned) {
-            n.pinned = false;
-        }
-    }
-});
-
-document.getElementById('infoPanelClose').addEventListener('click', () => {
-    selectedNode = null;
-    document.getElementById('infoPanel').classList.remove('open');
-});
-
-function showInfoPanel(id) {
-    const n = nodes[id];
-    const panel = document.getElementById('infoPanel');
-    document.getElementById('ipName').textContent = n.label;
-
-    const badge = document.getElementById('ipBadge');
-    badge.textContent = n.cat.toUpperCase();
-    badge.style.background = hexAlpha(n.color, 0.2);
-    badge.style.color = n.color;
-
-    const dataBlock = document.getElementById('ipData');
-    if (n.data) {
-        const lines = [];
-        for (const [k, v] of Object.entries(n.data)) {
-            if (v == null) continue;
-            if (Array.isArray(v)) {
-                lines.push(`${k}:`);
-                for (const item of v) { lines.push(`  ${typeof item === 'object' ? Object.values(item).join(' | ') : item}`); }
-            } else if (typeof v === 'object') {
-                lines.push(`${k}:`);
-                for (const [k2, v2] of Object.entries(v)) lines.push(`  ${k2}: ${v2}`);
-            } else {
-                lines.push(`${k}: ${v}`);
-            }
-        }
-        dataBlock.textContent = lines.join('\n') || 'Active';
-    } else {
-        dataBlock.textContent = 'No data yet…';
-    }
-
-    const connList = document.getElementById('ipConnections');
-    connList.innerHTML = '';
-    for (const e of EDGE_DEFS) {
-        if (e.from === id || e.to === id) {
-            const other    = e.from === id ? e.to   : e.from;
-            const dir      = e.from === id ? '→'    : '←';
-            const otherNode = nodes[other];
-            const li  = document.createElement('li');
-            const edgeObj = edges.find(ed => ed.from === e.from && ed.to === e.to);
-            const wStr = edgeObj ? edgeObj.weight.toFixed(1) : '?';
-            li.innerHTML = `<span class="arrow" style="color:${COLORS[e.color]}">${dir}</span> ${otherNode?.label || other} <span style="color:rgba(150,150,200,0.5);font-size:10px">[${wStr}]</span>`;
-            connList.appendChild(li);
-        }
-    }
-
-    const dynList = document.getElementById('ipDynamicConnections');
-    if (dynList) {
-        dynList.innerHTML = '';
-        const relevant = dynamicEdges.filter(e => e.from === id || e.to === id).sort((a, b) => b.strength - a.strength);
-        for (const e of relevant.slice(0, 20)) {
-            const other    = e.from === id ? e.to   : e.from;
-            const dir      = e.from === id ? '→'    : '←';
-            const otherNode = nodes[other];
-            const li = document.createElement('li');
-            li.innerHTML = `<span class="arrow" style="color:${e.color}">${dir}</span> ${otherNode?.label || other} <span style="color:rgba(160,220,200,0.65);font-size:10px">${e.type}</span> <span style="color:rgba(150,150,200,0.5);font-size:10px">[${e.strength.toFixed(2)}]</span>`;
-            dynList.appendChild(li);
-        }
-        if (relevant.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'No dynamic connections yet.';
-            dynList.appendChild(li);
-        }
-    }
-
-    panel.classList.add('open');
-}
-
-// ── Main render loop ──
-function render(timestamp) {
-    const t    = timestamp * 0.001;
-    const nowMs = performance.now();
-
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-
-    // Screen-space: background + stars (never panned)
-    ctx.fillStyle = '#070616';
-    ctx.fillRect(0, 0, W, H);
-    drawStars(t);
-
-    // World-space: everything else
-    ctx.save();
-    applyWorldTransform();
-    drawAmbient();
-    // Draw order: dynamic (subtle) first, static (prominent) on top, nodes last
-    drawDynamicEdges(nowMs);
-    drawEdges();
-    drawNodes(t);
-    ctx.restore();
-
-    requestAnimationFrame(render);
-}
-
-// ── Init ──
-resize();
-requestAnimationFrame(render);
-pollData();
-setInterval(pollData, POLL_MS);
+pollState();
+setInterval(pollState, 3000);
+requestAnimationFrame(frame);
 
 })();

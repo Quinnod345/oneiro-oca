@@ -21,7 +21,6 @@ const MAX_WORKING_MEMORY = 7;
 let previousPresence = 'unknown';
 let lastKnownFrontApp = 'unknown';
 let previousApp = null;
-let tickCount = 0;
 const OCA_LOOP_LOCK_FILE = process.env.OCA_LOCK_FILE || join(__dirname, 'private', 'cognitive-loop.lock');
 
 const MIN_CYCLE_MS = 5000;
@@ -30,8 +29,8 @@ let cycleInterval = 10000;
 
 // Cooldowns (in cycles)
 let dreamCooldown = 0;
+let consolidationCooldown = 0;
 let isConsolidating = false;
-let isTickLLMHeavy = false;  // true while think() is in an LLM-heavy section
 let metacognitionCooldown = 0;
 let simulationCooldown = 0;
 let creativeCooldown = 0;
@@ -49,18 +48,6 @@ let hypothesisGenerationMode = 'exploratory';
 const HYPOTHESIS_SLA_MINUTES = 25;
 const HYPOTHESIS_SLA_BATCH = 4;
 const HYPOTHESIS_SLA_CYCLES = 3;
-
-// Timeout wrapper for LLM calls in the tick — prevents indefinite hangs
-// (observed: c92 stalled 7,263s, c93 stalled 2,483s due to unguarded await)
-const LLM_TICK_TIMEOUT_MS = 120_000; // 2 minutes max per LLM call
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`tick-timeout: ${label} exceeded ${ms}ms`)), ms)
-    ),
-  ]);
-}
 
 function parseHypothesisPayload(rawText) {
   const raw = String(rawText || '').trim();
@@ -319,20 +306,7 @@ async function think() {
   }
   
   // ── 4. THINK ──────────────────────────────────────
-  // Skip oca.cycle() when consolidation is in-flight — they share the pg Pool
-  // and consolidate() holds connections for 40-100s, starving cycle queries.
-  tickCount++;
-  let result;
-  if (isConsolidating) {
-    result = { cycle: tickCount, elapsed: 0, emotion: {}, effects: {} };
-  } else {
-    result = await oca.cycle();
-    if (result) {
-      tickCount = result.cycle; // stay in sync with oca's internal counter
-    } else {
-      result = { cycle: tickCount, elapsed: 0, emotion: {}, effects: {} };
-    }
-  }
+  const result = await oca.cycle();
   const emotionState = oca.layers.emotion.getState();
   const effects = oca.layers.emotion.getCognitiveEffects();
   
@@ -425,11 +399,10 @@ async function think() {
     // GENERATIVE HYPOTHESIS ENGINE — forms its own predictions from observation
     // Not templates. Not rules. The system looks at everything it perceives and
     // generates novel, testable predictions. This is how it beats Lovelace.
-    if (pendingCount < 12 && hypothesisCooldown <= 0 && !isConsolidating) {
+    if (pendingCount < 12 && hypothesisCooldown <= 0) {
       hypothesisCooldown = 10; // generate new hypotheses every 10 cycles
-
+      
       try {
-        isTickLLMHeavy = true;
         const diagnostics = await oca.layers.hypothesis
           .diagnostics({ days: 7 })
           .catch(() => null);
@@ -512,7 +485,7 @@ async function think() {
           existingPredictions: recentHypos.map(h => h.claim).join('; '),
         };
         
-        const response = await withTimeout((await import('./llm.js')).default.messages.create({
+        const response = await (await import('./llm.js')).default.messages.create({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 600,
           system: `You are a hypothesis engine observing a computer. Form 1-2 TESTABLE predictions. Each must be verifiable later by checking concrete system state.
@@ -556,7 +529,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
             content: `Current observation:\n${JSON.stringify(contextSnapshot, null, 1)}`
           }],
           temperature: 0.8,
-        }), LLM_TICK_TIMEOUT_MS, 'hypothesis.generate');
+        });
         
         const hypotheses = parseHypothesisPayload(response.content?.[0]?.text);
         // Build a lightweight snapshot of current metric values for observability pre-flight.
@@ -639,11 +612,9 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         console.error('[oca] hypothesis generation error:', e.message);
         await addFallbackHypotheses();
         hypothesisCooldown = 20; // back off on error
-      } finally {
-        isTickLLMHeavy = false;
       }
     }
-
+    
     // Test overdue hypotheses BEFORE expiring them (so test() can still find them as 'pending')
     const { rows: overdue } = await pool.query(
       `SELECT id, claim, prediction, confidence FROM hypotheses 
@@ -669,40 +640,30 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       thermal: intero.thermal?.pressure || 'unknown',
       app_switches_15min: Number(switches[0]?.cnt || 0),
     };
-    // Test overdue hypotheses in parallel — each is independent
-    if (!isConsolidating && overdue.length > 0) {
-      const outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
-      const testResults = await Promise.allSettled(
-        overdue.map(h =>
-          withTimeout(
-            oca.layers.hypothesis.test(h.id, { description: outcomeDesc, observed: observedState }),
-            LLM_TICK_TIMEOUT_MS, 'hypothesis.test'
-          ).then(result => ({ h, result }))
-        )
-      );
-      for (const outcome of testResults) {
-        if (outcome.status === 'fulfilled') {
-          const { h, result } = outcome.value;
-          const mode = result.evaluation?.mode || 'unknown';
-          if (result.confirmed) {
-            oca.layers.emotion.processSuccess(0.6);
-            console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (mode=${mode}, surprise=${result.surprise?.toFixed(2)})`);
-          } else {
-            oca.layers.emotion.processSurprise(0.3, 'prediction', `Prediction: ${h.prediction}. Reality: ${outcomeDesc}`);
-            console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (mode=${mode}, reason=${result.evaluation?.reason || 'n/a'}, surprise=${result.surprise?.toFixed(2)})`);
-          }
+    for (const h of overdue) {
+      try {
+        // Build context-aware test outcome based on prediction type
+        const outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
+        const result = await oca.layers.hypothesis.test(h.id, {
+          description: outcomeDesc,
+          observed: observedState,
+        });
+        const mode = result.evaluation?.mode || 'unknown';
+        if (result.confirmed) {
+          oca.layers.emotion.processSuccess(0.6);
+          console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (mode=${mode}, surprise=${result.surprise?.toFixed(2)})`);
         } else {
-          // Find the hypothesis for this failed test — expire it
-          const idx = testResults.indexOf(outcome);
-          const h = overdue[idx];
-          await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
+          oca.layers.emotion.processSurprise(0.3, 'prediction', `Prediction: ${h.prediction}. Reality: ${outcomeDesc}`);
+          console.log(`[oca] ❌ hypothesis refuted: "${h.claim}" (mode=${mode}, reason=${result.evaluation?.reason || 'n/a'}, surprise=${result.surprise?.toFixed(2)})`);
         }
+      } catch (e) {
+        await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
       }
     }
 
     // Hypothesis SLA: close stale pending predictions on a bounded cadence so
     // evaluation coverage keeps climbing instead of leaving pending drift.
-    if (hypothesisSlaCooldown <= 0 && !isConsolidating) {
+    if (hypothesisSlaCooldown <= 0) {
       hypothesisSlaCooldown = HYPOTHESIS_SLA_CYCLES;
       const { rows: slaCandidates } = await pool.query(
         `SELECT id, claim, prediction
@@ -720,27 +681,21 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         [`${HYPOTHESIS_SLA_MINUTES} minutes`, HYPOTHESIS_SLA_BATCH]
       );
 
-      if (slaCandidates.length > 0) {
-        const slaOutcomeDesc = `SLA sweep snapshot: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
-        const slaResults = await Promise.allSettled(
-          slaCandidates.map(h =>
-            withTimeout(
-              oca.layers.hypothesis.test(h.id, { description: slaOutcomeDesc, observed: observedState }),
-              LLM_TICK_TIMEOUT_MS, 'hypothesis.test.sla'
-            )
-          )
-        );
-        let slaClosed = 0;
-        for (let i = 0; i < slaResults.length; i++) {
-          if (slaResults[i].status === 'fulfilled') {
-            slaClosed++;
-          } else {
-            await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [slaCandidates[i].id]).catch(() => {});
-          }
+      let slaClosed = 0;
+      for (const h of slaCandidates) {
+        try {
+          const outcomeDesc = `SLA sweep snapshot: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
+          await oca.layers.hypothesis.test(h.id, {
+            description: outcomeDesc,
+            observed: observedState,
+          });
+          slaClosed += 1;
+        } catch (e) {
+          await pool.query(`UPDATE hypotheses SET status = 'expired' WHERE id = $1`, [h.id]).catch(() => {});
         }
-        if (slaClosed > 0) {
-          console.log(`[oca] ⏱ hypothesis SLA closed ${slaClosed} stale pending predictions`);
-        }
+      }
+      if (slaClosed > 0) {
+        console.log(`[oca] ⏱ hypothesis SLA closed ${slaClosed} stale pending predictions`);
       }
     }
   }
@@ -772,10 +727,10 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   
   // ── 8. METACOGNITION (every 30 cycles) ────────────
   metacognitionCooldown = Math.max(0, metacognitionCooldown - 1);
-  if (metacognitionCooldown <= 0 && !isConsolidating) {
+  if (metacognitionCooldown <= 0) {
     metacognitionCooldown = 30;
     try {
-      const meta = await withTimeout(oca.reflect(), LLM_TICK_TIMEOUT_MS, 'metacognition.reflect');
+      const meta = await oca.reflect();
       
       // Record stuck states
       if (meta.stuck_issues && meta.stuck_issues.length > 0) {
@@ -897,11 +852,10 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   creativeCooldown = Math.max(0, creativeCooldown - 1);
   
   // Dream state: consolidating/working mode + creative hunger (lowered threshold, more modes)
-  // Skip LLM-heavy dreaming when consolidation is in flight (they share the LLM gateway/CLI lock)
-  if ((mode === 'consolidating' || mode === 'working') && emotionState.creative_hunger > 0.05 && dreamCooldown <= 0 && !isConsolidating) {
+  if ((mode === 'consolidating' || mode === 'working') && emotionState.creative_hunger > 0.05 && dreamCooldown <= 0) {
     console.log('[oca] 💭 entering dream state...');
     try {
-      const dream = await withTimeout(oca.create('dream'), LLM_TICK_TIMEOUT_MS, 'create.dream');
+      const dream = await oca.create('dream');
       if (dream) {
         console.log(`[oca] 💭 dreamed: ${dream.novelConnections?.length || 0} connections`);
         oca.layers.emotion.processSuccess('creative');
@@ -914,12 +868,12 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   }
   
   // Cross-domain connection: lower threshold, also trigger on boredom or creative_hunger
-  if (creativeCooldown <= 0 && !isConsolidating && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.1)) {
+  if (creativeCooldown <= 0 && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.1)) {
     creativeCooldown = 25;
     try {
       const semanticCount = (await pool.query('SELECT COUNT(*) FROM semantic_memory')).rows[0].count;
       if (parseInt(semanticCount) >= 2) {
-        const connection = await withTimeout(oca.create('connection'), LLM_TICK_TIMEOUT_MS, 'create.connection');
+        const connection = await oca.create('connection');
         if (connection) {
           console.log(`[oca] ✨ creative connection: novelty=${connection.noveltyScore?.toFixed(2)}`);
           oca.layers.emotion.processSuccess('creative');
@@ -935,7 +889,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     try {
       const { rows } = await pool.query('SELECT COUNT(*) FROM creative_artifacts WHERE creation_method = \'connection\'');
       if (parseInt(rows[0].count) >= 2) {
-        const transfer = await withTimeout(oca.create('transfer'), LLM_TICK_TIMEOUT_MS, 'create.transfer');
+        const transfer = await oca.create('transfer');
         if (transfer) {
           console.log(`[oca] 🔄 cross-domain transfer: novelty=${transfer.noveltyScore?.toFixed(2)}`);
         }
@@ -950,7 +904,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   if (dreamExecutionCooldown <= 0 && result.cycle % 20 === 0) {
     dreamExecutionCooldown = 30; // ~5 min at 10s cycles
     try {
-      const execResult = await withTimeout(dreamExecutor.executeDreams(), LLM_TICK_TIMEOUT_MS, 'dream-executor');
+      const execResult = await dreamExecutor.executeDreams();
       if (execResult.executed > 0) {
         console.log(`[oca] 🎯 dream execution: ${execResult.executed} dreams processed`);
         for (const r of (execResult.results || [])) {
@@ -968,7 +922,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   simulationCooldown = Math.max(0, simulationCooldown - 1);
   
   // Simulate on presence change OR periodically every 100 cycles
-  if (simulationCooldown <= 0 && !isConsolidating && ((presenceChanged && activity.presence === 'away') || result.cycle % 100 === 0)) {
+  if (simulationCooldown <= 0 && ((presenceChanged && activity.presence === 'away') || result.cycle % 100 === 0)) {
     simulationCooldown = 50;
     try {
       const simPrompt = presenceChanged && activity.presence === 'away'
@@ -986,7 +940,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         ? ['User returns within 30 minutes', 'User returns after 1+ hours', 'User does not return today']
         : ['User continues current activity', 'User switches to creative work', 'User takes a break', 'User goes to sleep'];
       
-      const sim = await withTimeout(oca.imagine(simPrompt, simContext, simOptions), LLM_TICK_TIMEOUT_MS, 'imagine.sim');
+      const sim = await oca.imagine(simPrompt, simContext, simOptions);
       if (sim?.id) {
         console.log(`[oca] 🌍 simulation: ${sim.predicted_states?.length || 0} predicted states`);
         oca.layers.emotion.processInformationGain(0.2);
@@ -997,7 +951,31 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     }
   }
   
-  // ── 12. CONSOLIDATION — runs on independent timer, see startConsolidationSchedule() ──
+  // ── 12. CONSOLIDATION ─────────────────────────────
+  consolidationCooldown = Math.max(0, consolidationCooldown - 1);
+
+  // Consolidate every 60 cycles in non-alert modes (or every 200 regardless)
+  // Guarded: skip if a previous consolidation LLM call is still in-flight
+  if (!isConsolidating && ((consolidationCooldown <= 0 && mode !== 'alert') || result.cycle % 200 === 0)) {
+    consolidationCooldown = 60;
+    isConsolidating = true;
+    // Fire non-blocking — consolidation makes an LLM call (50-70s) and must not stall the loop
+    oca.layers.consolidation.consolidate().then(consolidated => {
+      if (consolidated) {
+        const pCount = consolidated.principles?.length || 0;
+        const prCount = consolidated.procedures?.length || 0;
+        if (pCount + prCount > 0) {
+          console.log(`[oca] 📚 consolidated: ${pCount} principles, ${prCount} procedures`);
+          oca.layers.emotion.processSuccess('consolidation');
+        }
+      }
+    }).catch(e => {
+      console.error('[oca] consolidation error:', e.message);
+      consolidationCooldown = 120;
+    }).finally(() => {
+      isConsolidating = false;
+    });
+  }
 
   // ── 12.5 DAILY BENCHMARK SNAPSHOT ──────────────────
   benchmarkCooldown = Math.max(0, benchmarkCooldown - 1);
@@ -1005,10 +983,10 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
     const hour = now.getHours();
-    if (hour >= 3 && lastBenchmarkDate !== today && !isConsolidating) {
+    if (hour >= 3 && lastBenchmarkDate !== today) {
       benchmarkCooldown = 20;
       try {
-        const bench = await withTimeout(benchmarkHarness.runBenchmark({ runSource: 'scheduled' }), LLM_TICK_TIMEOUT_MS, 'benchmark');
+        const bench = await benchmarkHarness.runBenchmark({ runSource: 'scheduled' });
         if (bench?.stored) {
           const composite = Number(bench?.result?.composite);
           console.log(`[oca] 📈 benchmark stored: composite=${Number.isFinite(composite) ? composite.toFixed(3) : 'n/a'}`);
@@ -1025,10 +1003,10 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   
   // ── 12.7 AUTONOMIC SELF-MODIFICATION (every 200 cycles) ─
   autonomicCooldown = Math.max(0, autonomicCooldown - 1);
-  if (autonomicCooldown <= 0 && result.cycle >= 10 && !isConsolidating) {
+  if (autonomicCooldown <= 0 && result.cycle >= 10) {
     autonomicCooldown = 200; // ~30-60 min depending on cycle speed
     try {
-      const autoResult = await withTimeout(autonomic.runAutonomicCycle(), LLM_TICK_TIMEOUT_MS, 'autonomic');
+      const autoResult = await autonomic.runAutonomicCycle();
       if (autoResult.applied > 0) {
         console.log(`[oca] 🧬 autonomic: ${autoResult.applied} self-modifications applied`);
         oca.layers.emotion.processSuccess(0.7);
@@ -1122,22 +1100,15 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     appSwitched;
     
   if (isSignificant) {
-    // Get HID metrics from the sensory bridge
-    const currentHID = swiftSensory.getLatestHID ? swiftSensory.getLatestHID() : {};
-    
     await oca.experience('cognitive_cycle',
       `Cycle ${result.cycle} [${mode}]: ${activity.presence} (${visual.frontApp}), ` +
       `v=${emotionState.valence.toFixed(2)} a=${emotionState.arousal.toFixed(2)}, ` +
-      `goals=${goals.length}, battery=${(intero.battery.level*100).toFixed(0)}%` +
-      (currentHID.wpm ? `, wpm=${currentHID.wpm}` : ''),
+      `goals=${goals.length}, battery=${(intero.battery.level*100).toFixed(0)}%`,
       {
         activeApp: visual.frontApp,
-        activeWindow: visual.windowTitle || null,
         userPresence: activity.presence,
-        userActivity: currentHID.speed_class || null,
         interoceptive: { battery: intero.battery.level, cpu: intero.cpu.utilization },
         audioState: perception.audio,
-        hidMetrics: currentHID,
         importanceScore: presenceChanged ? 0.6 : appSwitched ? 0.4 : 0.2
       }
     ).catch(() => {});
@@ -1252,59 +1223,6 @@ async function protectCoreDrives() {
 }
 
 // ═══════════════════════════════════════════════════
-// INDEPENDENT CONSOLIDATION SCHEDULE
-// Runs on its own timer so the 50-70s LLM call never
-// blocks or couples to the main cognitive tick.
-// ═══════════════════════════════════════════════════
-
-const CONSOLIDATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-
-function startConsolidationSchedule() {
-  const run = () => {
-    if (isConsolidating) {
-      // Previous call still in-flight — skip this round
-      setTimeout(run, CONSOLIDATION_INTERVAL_MS);
-      return;
-    }
-    // Defer if think() is in an LLM-heavy section — they share the LLM
-    // gateway CLI lock, so running both causes 50-70s serialized stalls.
-    if (isTickLLMHeavy) {
-      setTimeout(run, 30000); // retry in 30s
-      return;
-    }
-    // Skip in alert mode — consolidation is low priority
-    const mode = oca.layers.executive.determineMode?.(
-      previousPresence,
-      oca.layers.emotion.getState(),
-      0 // goal count not critical for mode check
-    );
-    if (mode === 'alert') {
-      setTimeout(run, CONSOLIDATION_INTERVAL_MS);
-      return;
-    }
-    isConsolidating = true;
-    oca.layers.consolidation.consolidate().then(consolidated => {
-      if (consolidated) {
-        const pCount = consolidated.principles?.length || 0;
-        const prCount = consolidated.procedures?.length || 0;
-        if (pCount + prCount > 0) {
-          console.log(`[oca] 📚 consolidated: ${pCount} principles, ${prCount} procedures`);
-          oca.layers.emotion.processSuccess('consolidation');
-        }
-      }
-    }).catch(e => {
-      console.error('[oca] consolidation error:', e.message);
-    }).finally(() => {
-      isConsolidating = false;
-      setTimeout(run, CONSOLIDATION_INTERVAL_MS);
-    });
-  };
-  // First consolidation after a short initial delay (60s) to let the system warm up
-  setTimeout(run, 60 * 1000);
-  console.log('[oca] 📚 consolidation schedule started (every 10m, independent of tick)');
-}
-
-// ═══════════════════════════════════════════════════
 // STARTUP
 // ═══════════════════════════════════════════════════
 
@@ -1366,11 +1284,8 @@ async function start() {
     }
   } catch {}
   
-  // Start consolidation on its own independent timer
-  startConsolidationSchedule();
-
   console.log('[oca] cognitive loop starting...');
-
+  
   const loop = async () => {
     try {
       await think();

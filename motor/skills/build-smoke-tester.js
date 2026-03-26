@@ -1,0 +1,1 @@
+The write was blocked — please grant permission to write to `cognitive/motor/skills/build-smoke-tester.js`, or let me know if you'd like the code output to the console instead.

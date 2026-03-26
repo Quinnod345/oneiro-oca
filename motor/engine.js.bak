@@ -3,6 +3,7 @@
 import { execSync } from 'child_process';
 import { pool, emit } from '../event-bus.js';
 import { startPrediction, completePrediction } from '../prediction-ledger.js';
+import { checkCapabilityMiss } from './skills/capability-miss-detector.js';
 
 async function runMotorAction(actionType, actionDetails, predictionConfig, execute) {
   const {
@@ -55,6 +56,15 @@ async function runMotorAction(actionType, actionDetails, predictionConfig, execu
       predictionError: 1,
       metadata: { motorCommandId },
     });
+    const msg = e.message?.toLowerCase() || '';
+    if (msg.includes('unknown task type') || msg.includes('skill not found')) {
+      await emit('capability_gap_detected', 'motor', {
+        task_type: actionType,
+        skill_name: actionDetails?.skill || actionDetails?.action || actionType,
+        context: actionDetails,
+      }, { priority: 0.7 }).catch(() => null);
+    }
+    await checkCapabilityMiss(e.message, actionType).catch(() => null);
     throw e;
   }
 }
