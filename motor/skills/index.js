@@ -1,3 +1,4 @@
+export { default as xPost } from './x-post.js';
 export { default as xPostSelfBuildMetrics } from './x-post-self-build-metrics.js';
 export { default as xPostFailurePostmortem } from './x-post-failure-postmortem.js';
 export { default as xPostBuildFailure } from './x-post-build-failure.js';
@@ -11,3 +12,4 @@ export { default as xPostCounterfactualAnalysis } from './x-post-counterfactual-
 export { default as xPostSelfBuildLoopMetrics } from './x-post-self-build-loop-metrics.js';
 export { default as xPostSelfBuildDeepDive } from './x-post-self-build-deep-dive.js';
 export { default as xPostCounterfactualReasoning } from './x-post-counterfactual-reasoning.js';
+export { default as xPostBuildInPublic } from './x-post-build-in-public.js';
