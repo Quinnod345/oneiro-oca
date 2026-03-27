@@ -6,6 +6,18 @@ import oca from './index.js';
 
 // Process an inbound message from OpenClaw (Telegram, Discord, etc.)
 export async function processInbound(message, sender = 'Quinn', channel = 'telegram') {
+  // 0. Index into RAG conversation log
+  try {
+    const { indexTurn } = await import('../conversation-indexer.js');
+    await indexTurn({
+      source: sender.toLowerCase().includes('quinn') ? 'quinn' : sender.toLowerCase(),
+      channel,
+      content: message,
+      feeling: 'receiving-message',
+      intensity: computeMessageImportance(message, sender),
+    });
+  } catch {}
+
   // 1. Store as episodic memory
   await oca.experience('conversation', `[${channel}] ${sender}: ${message}`, {
     participants: [sender, 'Oneiro'],
@@ -40,6 +52,18 @@ export async function processInbound(message, sender = 'Quinn', channel = 'teleg
 
 // Process an outbound response from OpenClaw (what I said)
 export async function processOutbound(response, channel = 'telegram') {
+  // Index into RAG conversation log
+  try {
+    const { indexTurn } = await import('../conversation-indexer.js');
+    await indexTurn({
+      source: 'oneiro',
+      channel,
+      content: response.slice(0, 2000),
+      feeling: 'responding',
+      intensity: 0.4,
+    });
+  } catch {}
+
   await oca.experience('conversation', `[${channel}] Oneiro: ${response.slice(0, 500)}`, {
     participants: ['Quinn', 'Oneiro'],
     userPresence: 'present',
