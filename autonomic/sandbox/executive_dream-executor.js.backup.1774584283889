@@ -25,7 +25,7 @@ function resolveOCAPath(relativePath) {
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 2;
-const TASK_TIMEOUT_MS = 900_000;
+const TASK_TIMEOUT_MS = 1_800_000;
 const SELF_BUILD_TIMEOUT_MS = 1_800_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
@@ -85,11 +85,6 @@ async function verifyDreamRelevance(dream) {
     return { relevant: true };
   }
 
-  // Skip verification for dreams with moderate code references (likely executable)
-  if (refs.files.length <= 8 && refs.patterns.length <= 16) {
-    return { relevant: true };
-  }
-
   // Read referenced files (cap total to avoid huge prompts)
   const fileSnippets = [];
   let totalChars = 0;
@@ -136,7 +131,7 @@ Respond with JSON only:
 
   try {
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 90000)
+      setTimeout(() => reject(new Error('Verification timeout')), 180000)
     );
     
     const response = await Promise.race([
@@ -164,8 +159,8 @@ Respond with JSON only:
     console.warn(`[dream-executor] verify failed for dream #${dream.id}: ${e.message}`);
   }
 
-  // On failure, assume relevant (better to attempt execution than discard valid dreams)
-  return { relevant: true, reasoning: 'verification failed - assuming relevant to avoid false negatives' };
+  // On failure, assume relevant (don't block execution)
+  return { relevant: true };
 }
 
 // Fetch post history from x_posts table for thinker context

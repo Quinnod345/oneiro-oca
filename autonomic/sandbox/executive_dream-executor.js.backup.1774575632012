@@ -26,7 +26,7 @@ const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 2;
 const TASK_TIMEOUT_MS = 900_000;
-const SELF_BUILD_TIMEOUT_MS = 1_800_000;
+const SELF_BUILD_TIMEOUT_MS = 720_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
 // Track what we've built this session to avoid infinite loops
@@ -82,11 +82,6 @@ async function verifyDreamRelevance(dream) {
   const refs = extractCodeReferences(dream.content);
   if (refs.files.length === 0 && refs.patterns.length === 0) {
     // No code references — can't verify, assume relevant
-    return { relevant: true };
-  }
-
-  // Skip verification for dreams with moderate code references (likely executable)
-  if (refs.files.length <= 8 && refs.patterns.length <= 16) {
     return { relevant: true };
   }
 
@@ -164,8 +159,8 @@ Respond with JSON only:
     console.warn(`[dream-executor] verify failed for dream #${dream.id}: ${e.message}`);
   }
 
-  // On failure, assume relevant (better to attempt execution than discard valid dreams)
-  return { relevant: true, reasoning: 'verification failed - assuming relevant to avoid false negatives' };
+  // On failure, assume relevant (don't block execution)
+  return { relevant: true };
 }
 
 // Fetch post history from x_posts table for thinker context
