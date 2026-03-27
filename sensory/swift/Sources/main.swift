@@ -481,19 +481,20 @@ class AudioMonitor {
     }
     
     func checkNowPlaying() {
-        // Use MediaRemote framework (private but available)
-        // For now, check Music.app via AppleScript
+        // Check Music.app ONLY if it's already running — never launch it
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", """
             try
-                tell application "Music"
-                    if player state is playing then
-                        set t to name of current track
-                        set a to artist of current track
-                        return t & " — " & a
-                    end if
-                end tell
+                if application "Music" is running then
+                    tell application "Music"
+                        if player state is playing then
+                            set t to name of current track
+                            set a to artist of current track
+                            return t & " — " & a
+                        end if
+                    end tell
+                end if
             end try
             return ""
         """]

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // OCA Cognitive Loop — the continuous thinking process
 // Replaces mind.js ponder cycle with grounded, hypothesis-driven cognition
+// Also bootstraps the HTTP API (port 3333) — this IS the sole primary process.
 import { pool, emit, on } from './event-bus.js';
 import oca from './index.js';
 import prospective from './memory/prospective.js';
@@ -14,6 +15,7 @@ import { execSync } from 'child_process';
 import { acquireProcessLock, releaseProcessLock } from '../process-lock.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+const PORT = 3333;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1318,6 +1320,16 @@ async function start() {
   console.log('[oca] initializing all layers...');
   
   await oca.init();
+
+  // ─── HTTP API server (replaces mind.js api.js) ───
+  try {
+    const { app: apiApp } = await import('../api.js');
+    apiApp.listen(PORT, () => {
+      console.log(`[oca] 🌐 API running on http://localhost:${PORT}`);
+    });
+  } catch (e) {
+    console.error('[oca] ⚠️ HTTP API failed to start:', e.message);
+  }
   
   // Start Swift sensory binary
   await swiftSensory.ensureTable();

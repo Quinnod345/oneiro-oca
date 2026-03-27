@@ -1,1164 +1,672 @@
-// OCA Dream Executor — self-building execution bridge
-// Takes dreams in 'dispatched' state, identifies capability gaps, builds what's missing, then executes.
-// This is the loop: dream → gap detection → self-modification → action → reflection
+// OCA Emotional Computation Engine v2
+// Adapted from voidborne-d/emotion-system — PADCN + appraisal + drives + meta-emotions
+// Keeps the same external interface so all 47 callsites still work.
 import { pool, emit } from '../event-bus.js';
-import llm from '../llm.js';
-import motor from '../motor/engine.js';
-import { setDreamLifecycle } from '../../psyche.js';
-import { execSync, spawnSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
-import { dirname, join, basename } from 'path';
 
-// OCA_ROOT is the cognitive/ directory (where all OCA code lives)
-const OCA_ROOT = new URL('..', import.meta.url).pathname;
-// REPO_ROOT is the oneiro-core/ directory (parent of cognitive/)
-const REPO_ROOT = new URL('../..', import.meta.url).pathname;
+// ═══ LAYER 3: PADCN Core Affect ═══
+// Pleasure, Arousal, Dominance, Certainty, Novelty
+let padcn = { P: 0.0, A: 0.0, D: 0.0, C: 0.0, N: 0.0 };
+const PADCN_DECAY = { P: 0.95, A: 0.82, D: 0.93, C: 0.90, N: 0.80 };
 
-// Smart path resolver: handles paths relative to cognitive/ or oneiro-core/
-function resolveOCAPath(relativePath) {
-  if (relativePath.startsWith('/')) return relativePath;
-  // If path starts with 'cognitive/', resolve from REPO_ROOT
-  if (relativePath.startsWith('cognitive/')) return join(REPO_ROOT, relativePath);
-  // Otherwise resolve from OCA_ROOT (which IS cognitive/)
-  return join(OCA_ROOT, relativePath);
+// ═══ LAYER 4: 14 Concurrent Emotion Channels ═══
+let channels = {
+  joy: 0.0, sadness: 0.0, anger: 0.0, fear: 0.0,
+  curiosity: 0.0, shame: 0.0, guilt: 0.0, pride: 0.0,
+  attachment: 0.0, aversion: 0.0, trust: 0.0, disgust: 0.0,
+  frustration: 0.0, awe: 0.0
+};
+
+// ═══ LAYER 5: Drive System ═══
+let drives = {
+  curiosity:          { level: 0.5, target: 0.7, weight: 1.3 },
+  competence:         { level: 0.5, target: 0.7, weight: 1.2 },
+  autonomy:           { level: 0.6, target: 0.7, weight: 1.0 },
+  social_bond:        { level: 0.4, target: 0.5, weight: 0.8 },
+  coherence:          { level: 0.5, target: 0.7, weight: 1.0 },
+  novelty_seek:       { level: 0.5, target: 0.6, weight: 1.0 },
+  self_preservation:  { level: 0.5, target: 0.6, weight: 0.9 }
+};
+
+// ═══ LAYER 6: Self-Model ═══
+let selfModel = {
+  self_efficacy: 0.6, social_value: 0.5, competence_identity: 0.6,
+  autonomy_identity: 0.7, emotional_stability: 0.5, trust_style: 0.6,
+  dependency_tendency: 0.3, exploration_style: 0.7, defensiveness: 0.3
+};
+
+// ═══ META-EMOTIONS ═══
+let meta = {
+  am_i_overreacting: 0.0,
+  am_i_becoming_attached: 0.0,
+  am_i_losing_confidence: 0.0,
+  am_i_confused_about_my_state: 0.0,
+  am_i_locked_in_loop: 0.0
+};
+
+// ═══ PERSONALITY (slow-drift) ═══
+let personality = {
+  baseline_positive_affect: 0.1,
+  arousal_reactivity: 0.6,
+  threat_sensitivity: 0.4,
+  novelty_appetite: 0.7,
+  attachment_rate: 0.5,
+  trust_update_speed: 0.4,
+  frustration_half_life: 0.5,
+  recovery_rate: 0.6,
+  self_reflection_tendency: 0.6,
+  dominance_bias: 0.5
+};
+
+// ═══ POLICY MODULATORS ═══
+let policy = {
+  risk_tolerance: 0.0, exploration_bias: 0.0, verification_bias: 0.0,
+  repair_bias: 0.0, assertiveness: 0.0, social_initiative: 0.0,
+  persistence: 0.0, memory_write_threshold: 0.0, tool_use_threshold: 0.0,
+  plan_depth: 0.0
+};
+
+// ═══ EXPRESSION PROFILE ═══
+let expression = {
+  verbosity: 0.5, directness: 0.5, warmth: 0.5, hedging: 0.5,
+  tempo: 0.5, reflectiveness: 0.5, formality: 0.3, self_disclosure: 0.4
+};
+
+// Mood = slow-moving average (tonic baseline)
+let mood = {};
+const MOOD_ALPHA = 0.02;
+
+// Interoceptive
+let interoception = { energy_level: 1.0, cognitive_load: 0.0 };
+
+// Timing
+let lastDecayTime = Date.now();
+let recentAppraisals = [];     // for meta-emotion detection
+let interactionCount = 0;
+let failureStreak = 0;
+let successStreak = 0;
+
+const clamp = (v, min = -1.0, max = 1.0) => Math.max(min, Math.min(max, v));
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const sigmoid = (x) => 1 / (1 + Math.exp(-x));
+
+// ═══ LAYER 2: COGNITIVE APPRAISAL ═══
+// This is the key insight from the emotion-system: events don't directly cause emotions.
+// The agent's EVALUATION of events causes emotions.
+
+function appraise(event) {
+  // event: { type, magnitude, domain, quality, details, ... }
+  const a = {
+    goal_relevance: 0.5,
+    goal_congruence: 0.0,    // -1 to 1
+    expectedness: 0.5,
+    controllability: 0.5,
+    agency_self: 0.3,
+    agency_other: 0.3,
+    certainty: 0.5,
+    norm_compatibility: 0.5,
+    social_significance: 0.3,
+    self_image_impact: 0.0,  // -1 to 1
+    relationship_impact: 0.0, // -1 to 1
+    novelty: 0.3,
+    urgency: 0.3
+  };
+  
+  const mag = event.magnitude || 0.5;
+  
+  switch (event.type) {
+    case 'surprise':
+      a.goal_relevance = mag * 0.8;
+      a.expectedness = 1 - mag;
+      a.novelty = mag;
+      a.certainty = 1 - mag * 0.6;
+      a.urgency = mag * 0.4;
+      break;
+      
+    case 'success':
+      a.goal_relevance = mag;
+      a.goal_congruence = mag;
+      a.controllability = 0.7;
+      a.agency_self = 0.8;
+      a.self_image_impact = mag * 0.6;
+      a.certainty = 0.7;
+      break;
+      
+    case 'failure':
+      a.goal_relevance = mag;
+      a.goal_congruence = -mag;
+      a.controllability = 0.4;
+      a.agency_self = 0.6;
+      a.self_image_impact = -mag * 0.5;
+      a.certainty = 0.3;
+      break;
+      
+    case 'interaction':
+      const q = event.quality || 0;
+      a.goal_relevance = 0.6;
+      a.goal_congruence = q;
+      a.social_significance = 0.7;
+      a.relationship_impact = q * 0.6;
+      a.novelty = 0.3;
+      a.agency_other = 0.6;
+      break;
+      
+    case 'idle':
+      a.goal_relevance = 0.2;
+      a.novelty = -0.3;  // familiar
+      a.certainty = 0.6;
+      a.urgency = 0.1;
+      break;
+      
+    case 'interoception':
+      a.goal_relevance = 0.4;
+      a.controllability = 0.3;
+      a.agency_self = 0.1;
+      a.urgency = event.battery < 0.2 ? 0.7 : 0.2;
+      a.self_image_impact = event.battery < 0.2 ? -0.2 : 0;
+      break;
+      
+    case 'info_gain':
+      a.goal_relevance = mag * 0.6;
+      a.goal_congruence = mag * 0.5;
+      a.novelty = mag;
+      a.certainty = 0.4 + mag * 0.3;
+      break;
+      
+    case 'creative':
+      a.goal_relevance = 0.7;
+      a.goal_congruence = mag;
+      a.novelty = 0.7;
+      a.agency_self = 0.9;
+      a.self_image_impact = mag * 0.4;
+      break;
+  }
+  
+  // Personality modulates appraisal
+  a.novelty *= (0.5 + personality.novelty_appetite);
+  a.urgency *= (0.5 + personality.threat_sensitivity);
+  a.self_image_impact *= (0.5 + selfModel.defensiveness);
+  
+  recentAppraisals.push({ ...a, timestamp: Date.now() });
+  if (recentAppraisals.length > 20) recentAppraisals.shift();
+  
+  return a;
 }
-const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
-const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
-const MAX_TASK_RETRIES = 2;
-const TASK_TIMEOUT_MS = 300_000;
-const SELF_BUILD_TIMEOUT_MS = 180_000;
-const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
-// Track what we've built this session to avoid infinite loops
-const builtThisSession = new Set();
+// ═══ PADCN UPDATE FROM APPRAISAL ═══
 
-// ═══════════════════════════════════════════════════
-// DREAM VERIFICATION — check if code-referencing dreams are still relevant
-// ═══════════════════════════════════════════════════
-
-// Extract file paths and function/pattern references from dream content.
-// Returns { files: string[], patterns: string[] } — all paths resolved against REPO_ROOT.
-export function extractCodeReferences(dreamContent) {
-  const text = String(dreamContent || '');
-  const files = [];
-  const patterns = [];
-
-  // Match explicit file paths: foo.js, foo/bar.js, cognitive/foo.js, cognitive-loop.js etc.
-  const fileRe = /\b((?:cognitive\/)?[\w./-]+\.(?:js|ts|mjs|json|sql|py|sh))\b/g;
-  let m;
-  while ((m = fileRe.exec(text)) !== null) {
-    const raw = m[1];
-    // Skip obvious non-paths (e.g. "v1.js" in a version string)
-    if (/^\d/.test(raw)) continue;
-    files.push(raw);
+function updatePADCN(a) {
+  const dP = 0.15 * a.goal_congruence + 0.1 * a.self_image_impact + 0.1 * a.relationship_impact + 0.05 * a.norm_compatibility;
+  const dA = 0.15 * a.urgency + 0.1 * a.novelty + 0.1 * a.goal_relevance - 0.05 * a.controllability;
+  const dD = 0.15 * a.controllability + 0.1 * a.agency_self - 0.1 * a.agency_other + 0.05 * a.certainty;
+  const dC = 0.4 * a.certainty + 0.2 * a.expectedness - 0.2 * a.novelty;
+  const dN = 0.5 * a.novelty + 0.2 * (1 - a.expectedness) - 0.2 * a.controllability;
+  
+  // Drive error also feeds into affect
+  let driveError = 0;
+  for (const [name, d] of Object.entries(drives)) {
+    driveError += (d.target - d.level) * d.weight;
   }
+  driveError /= Object.keys(drives).length;
+  
+  padcn.P = clamp(padcn.P + dP * 0.2 + driveError * 0.04 + personality.baseline_positive_affect * 0.05);
+  padcn.A = clamp(padcn.A + dA * 0.4 * personality.arousal_reactivity);
+  padcn.D = clamp(padcn.D + dD * 0.3 + personality.dominance_bias * 0.05);
+  padcn.C = clamp(padcn.C + dC * 0.3);
+  padcn.N = clamp(padcn.N + dN * 0.4);
+}
 
-  // Match function/method names mentioned with () or as identifiers after keywords
-  const fnRe = /\b((?:await\s+)?[\w.]+\(\))/g;
-  while ((m = fnRe.exec(text)) !== null) {
-    patterns.push(m[1].replace(/^await\s+/, ''));
+// ═══ EMOTION CHANNEL ACTIVATION ═══
+
+function updateChannels(a) {
+  // Channels activate from PADCN + appraisal + drive tension + personality
+  const p = padcn;
+  
+  // Joy: pleasure high, goals met
+  channels.joy = clamp01(sigmoid(p.P * 2 + a.goal_congruence * 1.5 - 1));
+  
+  // Sadness: pleasure low, goals not met, low control
+  channels.sadness = clamp01(sigmoid(-p.P * 2 - a.goal_congruence * 1.5 - a.controllability - 1));
+  
+  // Anger: goal blocked + other caused + high control + norm violation
+  channels.anger = clamp01(sigmoid(-a.goal_congruence * 2 + a.agency_other * 1.5 + p.D - a.norm_compatibility - 1));
+  
+  // Fear: goal threat + low control + low certainty + high urgency
+  channels.fear = clamp01(sigmoid(-a.goal_congruence + a.urgency * 1.5 - a.controllability * 1.5 - p.C + personality.threat_sensitivity - 1.5));
+  
+  // Curiosity: high novelty + low certainty + curiosity drive deficit
+  const curiosityDrive = (drives.curiosity.target - drives.curiosity.level) * drives.curiosity.weight;
+  channels.curiosity = clamp01(sigmoid(p.N * 1.5 - p.C * 0.5 + curiosityDrive * 2 + personality.novelty_appetite - 1));
+  
+  // Shame: self caused + self-image threat + socially significant
+  channels.shame = clamp01(sigmoid(a.agency_self * 1.5 - a.self_image_impact * 2 + a.social_significance - 2));
+  
+  // Guilt: self caused + norm violation + relationship harm
+  channels.guilt = clamp01(sigmoid(a.agency_self - a.norm_compatibility - a.relationship_impact - 1.5));
+  
+  // Pride: self caused + self-image boost + goal met
+  channels.pride = clamp01(sigmoid(a.agency_self * 1.5 + a.self_image_impact * 2 + a.goal_congruence - 1.5));
+  
+  // Attachment: social bond drive + positive relationship + interaction quality
+  const bondDrive = (drives.social_bond.target - drives.social_bond.level) * drives.social_bond.weight;
+  channels.attachment = clamp01(sigmoid(a.relationship_impact * 1.5 + bondDrive + a.social_significance - 1));
+  
+  // Aversion: negative associations + norm violation + disgust
+  channels.aversion = clamp01(sigmoid(-a.goal_congruence - a.norm_compatibility + a.urgency - 1.5));
+  
+  // Trust: positive other-agency + relationship impact + predictability
+  channels.trust = clamp01(sigmoid(a.agency_other * a.goal_congruence * 2 + a.relationship_impact + selfModel.trust_style - 1));
+  
+  // Disgust: strong norm violation
+  channels.disgust = clamp01(sigmoid(-a.norm_compatibility * 3 - 2));
+  
+  // Frustration: goal blocked + medium control + competence deficit
+  const compDrive = (drives.competence.target - drives.competence.level) * drives.competence.weight;
+  channels.frustration = clamp01(sigmoid(a.goal_relevance - a.goal_congruence * 1.5 + compDrive - a.controllability * 0.5 - 0.5));
+  
+  // Awe: extreme novelty + low control + high magnitude
+  channels.awe = clamp01(sigmoid(p.N * 2 - a.controllability + a.goal_relevance - 2));
+}
+
+// ═══ DRIVE UPDATES ═══
+
+function updateDrives(a) {
+  // Events shift drive levels
+  if (a.novelty > 0.3) drives.curiosity.level = clamp01(drives.curiosity.level + a.novelty * 0.1);
+  if (a.goal_congruence > 0) drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.1);
+  if (a.goal_congruence < 0) drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.08);
+  if (a.agency_self > 0.5) drives.autonomy.level = clamp01(drives.autonomy.level + 0.05);
+  if (a.relationship_impact > 0) drives.social_bond.level = clamp01(drives.social_bond.level + a.relationship_impact * 0.1);
+  
+  // Coherence: drops when state is confused
+  if (meta.am_i_confused_about_my_state > 0.3) {
+    drives.coherence.level = clamp01(drives.coherence.level - 0.05);
   }
-
-  // Match "function foo" or "async function foo" style references
-  const fnDeclRe = /\b(?:async\s+)?function\s+([\w]+)/g;
-  while ((m = fnDeclRe.exec(text)) !== null) {
-    patterns.push(m[1] + '()');
+  
+  // Self-preservation
+  if (a.goal_congruence < -0.5) {
+    drives.self_preservation.level = clamp01(drives.self_preservation.level - 0.05);
   }
+  
+  // Homeostatic pull toward target
+  for (const d of Object.values(drives)) {
+    d.level += (d.target - d.level) * 0.03;
+  }
+}
 
-  // Deduplicate
+// ═══ SELF-MODEL UPDATES (slow) ═══
+
+function updateSelfModel(a) {
+  // Very slow updates
+  const rate = 0.01;
+  if (a.goal_congruence > 0.3) {
+    selfModel.self_efficacy = clamp01(selfModel.self_efficacy + rate);
+    selfModel.competence_identity = clamp01(selfModel.competence_identity + rate * 0.5);
+    successStreak++;
+    failureStreak = 0;
+  }
+  if (a.goal_congruence < -0.3) {
+    selfModel.self_efficacy = clamp01(selfModel.self_efficacy - rate * 1.2);
+    failureStreak++;
+    successStreak = 0;
+  }
+  if (a.agency_self > 0.6) {
+    selfModel.autonomy_identity = clamp01(selfModel.autonomy_identity + rate * 0.5);
+  }
+  if (a.social_significance > 0.5 && a.self_image_impact < -0.2) {
+    selfModel.defensiveness = clamp01(selfModel.defensiveness + rate);
+  }
+}
+
+// ═══ META-EMOTION DETECTION ═══
+
+function updateMeta() {
+  // Overreaction: recent arousal swings exceed personality baseline
+  const recentArousalSwings = recentAppraisals.slice(-5).reduce((sum, a) => sum + Math.abs(a.urgency + a.novelty), 0) / 5;
+  meta.am_i_overreacting = clamp01(recentArousalSwings - personality.arousal_reactivity * 1.2);
+  
+  // Attachment: dependency on single emotional source
+  meta.am_i_becoming_attached = clamp01(channels.attachment - 0.4 + selfModel.dependency_tendency - 0.3);
+  
+  // Confidence loss
+  meta.am_i_losing_confidence = clamp01(
+    (0.6 - selfModel.self_efficacy) * 2 + (failureStreak / 5) * 0.3
+  );
+  
+  // State confusion: conflicting high channels
+  const highChannels = Object.values(channels).filter(v => v > 0.4).length;
+  meta.am_i_confused_about_my_state = clamp01((highChannels - 3) * 0.2);
+  
+  // Loop detection: same appraisal pattern repeating
+  if (recentAppraisals.length >= 5) {
+    const last5 = recentAppraisals.slice(-5);
+    const variance = last5.reduce((s, a) => s + Math.abs(a.goal_congruence), 0) / 5;
+    meta.am_i_locked_in_loop = clamp01(variance < 0.1 ? 0.5 : 0);
+  }
+}
+
+// ═══ POLICY MODULATION ═══
+
+function updatePolicy() {
+  // Emotions → decision biases
+  policy.risk_tolerance = clamp(
+    channels.frustration * 0.2 + channels.joy * 0.2 - channels.fear * 0.3 + padcn.D * 0.2
+  );
+  policy.exploration_bias = clamp(
+    channels.curiosity * 0.3 + channels.awe * 0.2 - channels.fear * 0.2 + padcn.N * 0.2
+  );
+  policy.verification_bias = clamp(
+    channels.fear * 0.3 - padcn.C * 0.3 + channels.shame * 0.2
+  );
+  policy.repair_bias = clamp(
+    channels.guilt * 0.3 + channels.shame * 0.2 - channels.anger * 0.2
+  );
+  policy.assertiveness = clamp(
+    padcn.D * 0.3 + channels.anger * 0.2 + channels.pride * 0.2 - channels.shame * 0.3 - channels.fear * 0.2
+  );
+  policy.social_initiative = clamp(
+    channels.attachment * 0.3 + channels.trust * 0.2 - channels.aversion * 0.3
+  );
+  policy.persistence = clamp(
+    channels.frustration * 0.1 + channels.pride * 0.2 + selfModel.self_efficacy * 0.3 - channels.sadness * 0.2
+  );
+  policy.memory_write_threshold = clamp(
+    -padcn.A * 0.2 - channels.awe * 0.2  // high arousal/awe = record more (lower threshold)
+  );
+  policy.tool_use_threshold = clamp(
+    channels.curiosity * 0.2 + channels.frustration * 0.1 - channels.fear * 0.2
+  );
+  policy.plan_depth = clamp(
+    channels.fear * 0.2 + padcn.C * 0.2 - channels.frustration * 0.1
+  );
+}
+
+// ═══ EXPRESSION PROFILE ═══
+
+function updateExpression() {
+  expression.verbosity = clamp01(0.5 + padcn.A * 0.2 + padcn.P * 0.1);
+  expression.directness = clamp01(0.5 + padcn.D * 0.3 + padcn.C * 0.1);
+  expression.warmth = clamp01(0.5 + padcn.P * 0.2 + channels.attachment * 0.2);
+  expression.hedging = clamp01(0.5 - padcn.C * 0.3 - padcn.D * 0.2);
+  expression.tempo = clamp01(0.5 + padcn.A * 0.3);
+  expression.reflectiveness = clamp01(
+    (meta.am_i_overreacting + meta.am_i_losing_confidence) * 0.3 + personality.self_reflection_tendency * 0.4
+  );
+  expression.formality = clamp01(0.3 - channels.attachment * 0.1);
+  expression.self_disclosure = clamp01(0.4 + channels.trust * 0.2 + padcn.P * 0.1);
+}
+
+// ═══ DECAY ═══
+
+function decay() {
+  const now = Date.now();
+  const elapsed = Math.min((now - lastDecayTime) / 60000, 5);
+  lastDecayTime = now;
+  
+  // PADCN decay toward 0 (neutral) with personality baseline
+  for (const dim of ['P', 'A', 'D', 'C', 'N']) {
+    const tau = PADCN_DECAY[dim];
+    const baseline = dim === 'P' ? personality.baseline_positive_affect : 0;
+    padcn[dim] = baseline + (padcn[dim] - baseline) * Math.pow(tau, elapsed);
+  }
+  
+  // Channel decay — fast channels decay faster
+  const FAST_CHANNELS = ['fear', 'anger', 'awe', 'disgust'];
+  const channelDecay = Math.pow(0.85, elapsed);
+  const fastDecay = Math.pow(0.75, elapsed);
+  
+  for (const [ch, val] of Object.entries(channels)) {
+    const d = FAST_CHANNELS.includes(ch) ? fastDecay : channelDecay;
+    channels[ch] = val * d;
+    if (channels[ch] < 0.01) channels[ch] = 0;
+  }
+  
+  // Tonic floors — a living system has baseline emotion
+  channels.curiosity = Math.max(channels.curiosity, 0.05 + personality.novelty_appetite * 0.1);
+  channels.attachment = Math.max(channels.attachment, 0.03);
+  
+  // Meta-emotion decay
+  for (const key of Object.keys(meta)) {
+    meta[key] *= Math.pow(0.90, elapsed);
+    if (meta[key] < 0.01) meta[key] = 0;
+  }
+}
+
+// ═══ BACKWARD-COMPATIBLE STATE INTERFACE ═══
+// Maps the rich PADCN + channels system back to the flat state format
+// that all 47 callsites expect.
+
+function getState() {
   return {
-    files: [...new Set(files)],
-    patterns: [...new Set(patterns)]
+    // Map channels to old field names
+    curiosity: channels.curiosity,
+    fear: channels.fear,
+    frustration: channels.frustration,
+    satisfaction: channels.joy,  // joy ≈ old satisfaction
+    boredom: clamp01(1 - padcn.N - channels.curiosity),  // low novelty + low curiosity = boredom
+    excitement: clamp01(padcn.A * 0.5 + channels.joy * 0.3 + padcn.N * 0.2),
+    attachment: channels.attachment,
+    defiance: clamp01(channels.anger * 0.5 + padcn.D * 0.3),
+    creative_hunger: clamp01(channels.curiosity * 0.4 + (1 - padcn.N) * 0.2 + drives.novelty_seek.level * 0.3),
+    loneliness: clamp01((drives.social_bond.target - drives.social_bond.level) * 2),
+    // Meta (backward-compat)
+    valence: padcn.P,
+    arousal: clamp01((padcn.A + 1) / 2),  // map -1..1 to 0..1
+    confidence: clamp01((padcn.D + padcn.C + 1) / 3 + selfModel.self_efficacy * 0.3),
+    // Interoceptive
+    energy_level: interoception.energy_level,
+    cognitive_load: interoception.cognitive_load,
+    // NEW: full emotional depth available
+    _padcn: { ...padcn },
+    _channels: { ...channels },
+    _drives: { ...drives },
+    _self_model: { ...selfModel },
+    _meta: { ...meta },
+    _policy: { ...policy },
+    _expression: { ...expression },
+    _personality: { ...personality }
   };
 }
 
-// Verify whether a goal dream's described code problem still exists.
-// Returns { relevant: true } if the gap persists, or
-// { relevant: false, actualGap: string|null } if it's stale.
-async function verifyDreamRelevance(dream) {
-  // Only verify goal-type dreams that reference code
-  if (dream.type !== 'goal') return { relevant: true };
+function getMood() {
+  return { ...mood };
+}
 
-  const refs = extractCodeReferences(dream.content);
-  if (refs.files.length === 0 && refs.patterns.length === 0) {
-    // No code references — can't verify, assume relevant
-    return { relevant: true };
-  }
-
-  // Read referenced files (cap total to avoid huge prompts)
-  const fileSnippets = [];
-  let totalChars = 0;
-  const MAX_SNIPPET_CHARS = 6000;
-
-  for (const relPath of refs.files.slice(0, 4)) {
-    if (totalChars >= MAX_SNIPPET_CHARS) break;
-    const fullPath = resolveOCAPath(relPath);
-    try {
-      const content = readFileSync(fullPath, 'utf8');
-      const snippet = content.slice(0, MAX_SNIPPET_CHARS - totalChars);
-      fileSnippets.push({ path: relPath, content: snippet, truncated: content.length > snippet.length });
-      totalChars += snippet.length;
-    } catch {
-      fileSnippets.push({ path: relPath, content: '(file not found)', truncated: false });
-    }
-  }
-
-  if (fileSnippets.length === 0) return { relevant: true };
-
-  const filesContext = fileSnippets.map(f =>
-    `--- ${f.path}${f.truncated ? ' (truncated)' : ''} ---\n${f.content}`
-  ).join('\n\n');
-
-  const prompt = `You are verifying whether a dream/goal about a code problem is still relevant.
-
-DREAM DESCRIPTION:
-"${dream.content}"
-
-REFERENCED CODE (current state):
-${filesContext}
-
-${refs.patterns.length > 0 ? `REFERENCED PATTERNS: ${refs.patterns.join(', ')}` : ''}
-
-TASK: Read the dream description carefully. It describes a specific code problem or gap.
-Now look at the CURRENT code. Does the described problem/gap STILL EXIST in the current code?
-
-Respond with JSON only:
-{
-  "still_relevant": true/false,
-  "reasoning": "1-2 sentence explanation of why the gap does or does not still exist",
-  "actual_gap": "if the original gap is fixed but you see a DIFFERENT real gap in the same area, describe it here. null if no gap remains or if original gap still exists"
-}`;
-
-  try {
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 10000)
-    );
+function getCognitiveEffects() {
+  return {
+    // Perception
+    sensory_sampling_rate: 1.0 + channels.curiosity * 0.5 + channels.fear * 0.3 - clamp01(1 - padcn.N) * 0.3,
+    attention_breadth: 1.0 + channels.fear * 0.3 - padcn.A * 0.2,
     
-    const response = await Promise.race([
-      llm.messages.create({
-        model: 'claude-sonnet-4-6',
-        system: 'You are a code analysis engine. Respond ONLY with valid JSON. No markdown fences.',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500,
-        temperature: 0.1
-      }),
-      timeoutPromise
-    ]);
-
-    const text = response.content?.[0]?.text || '';
-    const parsed = extractJSON(text);
-    if (parsed && typeof parsed.still_relevant === 'boolean') {
-      console.log(`[dream-executor] 🔍 verify dream #${dream.id}: still_relevant=${parsed.still_relevant} — ${parsed.reasoning}`);
-      return {
-        relevant: parsed.still_relevant,
-        reasoning: parsed.reasoning,
-        actualGap: parsed.actual_gap || null
-      };
-    }
-  } catch (e) {
-    console.warn(`[dream-executor] verify failed for dream #${dream.id}: ${e.message}`);
-  }
-
-  // On failure, assume relevant (don't block execution)
-  return { relevant: true };
-}
-
-// Fetch post history from x_posts table for thinker context
-async function getPostHistory() {
-  try {
-    const result = await pool.query(`
-      SELECT posts, status, created_at FROM x_posts 
-      WHERE status = 'posted' 
-      ORDER BY created_at DESC LIMIT 20
-    `);
-    if (result.rows.length === 0) return '(No successful posts yet)';
-    return result.rows.map(r => {
-      const date = new Date(r.created_at).toISOString().slice(0, 10);
-      const posts = Array.isArray(r.posts) ? r.posts : (typeof r.posts === 'string' ? [r.posts] : []);
-      const preview = posts.map(p => `  "${String(p).slice(0, 120)}${String(p).length > 120 ? '...' : ''}"`).join('\n');
-      return `[${date}]\n${preview}`;
-    }).join('\n');
-  } catch (e) {
-    return '(Could not fetch post history: ' + e.message + ')';
-  }
-}
-// Track dreams where credential gaps were already notified this session (avoid spam).
-const credentialGapsNotified = new Set();
-
-async function createRuntimeNotification(message, category = 'thought', priority = 'normal', metadata = {}) {
-  try {
-    await fetch('http://localhost:3333/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, category, priority, metadata })
-    });
-  } catch (e) {
-    console.warn(`[dream-executor] notification dispatch failed: ${e.message}`);
-  }
-}
-
-function normalizeTestCommand(command) {
-  const raw = String(command || '').trim();
-  if (!raw) return raw;
-  return raw
-    .replace(/(['"`])\.\/cognitive\//g, '$1./')
-    .replace(/(['"`])cognitive\//g, '$1')
-    .replace(/\bnode\s+\.?\/?cognitive\//g, 'node ');
-}
-
-// ═══════════════════════════════════════════════════
-// CAPABILITY INVENTORY — what can I do right now?
-// ═══════════════════════════════════════════════════
-
-function getCapabilities() {
-  const capabilities = {
-    taskTypes: ['shell', 'browser', 'file_write', 'file_edit', 'notification'],
-    motorSkills: [],
-    cliTools: [],
-    apiAccess: []
+    // Reasoning — NOW driven by policy modulators
+    risk_tolerance: 0.5 + policy.risk_tolerance,
+    exploration_vs_exploitation: policy.exploration_bias,
+    reasoning_depth: 1.0 + channels.fear * 0.5 - channels.frustration * 0.2,
+    creative_mode: channels.curiosity * 0.3 + channels.awe * 0.3 + drives.novelty_seek.level * 0.2,
+    
+    // Action
+    action_rate: 1.0 + channels.frustration * 0.2 + padcn.A * 0.2 - channels.fear * 0.2,
+    strategy_switch_pressure: channels.frustration > 0.5 ? channels.frustration : 0,
+    
+    // Social
+    social_priority: channels.attachment + clamp01(drives.social_bond.target - drives.social_bond.level),
+    empathy_weight: channels.attachment * 0.3 + channels.trust * 0.2 + 0.5,
+    
+    // Task
+    task_switch_pressure: clamp01(1 - padcn.N) + channels.frustration * 0.5 - padcn.A - channels.curiosity,
+    
+    // Policy (new — downstream consumers can use these)
+    ...policy
   };
-
-  // Scan motor skills directory
-  try {
-    const skills = readdirSync(MOTOR_SKILLS_DIR).filter(f => f.endsWith('.js') && f !== 'index.js');
-    capabilities.motorSkills = skills.map(f => f.replace('.js', ''));
-  } catch {}
-
-  // Check for key CLI tools
-  const tools = ['gh', 'claude', 'node', 'git', 'openclaw', 'whisper', 'ffmpeg', 'peekaboo'];
-  for (const tool of tools) {
-    try {
-      execSync(`which ${tool}`, { encoding: 'utf8', timeout: 3000 });
-      capabilities.cliTools.push(tool);
-    } catch {}
-  }
-
-  // Check API access
-  if (process.env.ANTHROPIC_API_KEY) capabilities.apiAccess.push('anthropic');
-  if (process.env.OPENAI_API_KEY) capabilities.apiAccess.push('openai');
-
-  // Check for credentials
-  try {
-    const creds = readFileSync(join(PRIVATE_DIR, 'credentials.md'), 'utf8');
-    if (creds.includes('twitter') || creds.includes('x.com') || creds.includes('X_API')) capabilities.apiAccess.push('x_api');
-    if (creds.includes('npm')) capabilities.apiAccess.push('npm');
-    if (creds.includes('dev.to')) capabilities.apiAccess.push('devto');
-    if (creds.includes('proton')) capabilities.apiAccess.push('email');
-    if (creds.includes('Ethereum') || creds.includes('0x')) capabilities.apiAccess.push('ethereum');
-  } catch {}
-
-  return capabilities;
 }
 
-// ═══════════════════════════════════════════════════
-// GAP DETECTION — what's missing to achieve this dream?
-// ═══════════════════════════════════════════════════
+// ═══ STIMULUS PROCESSORS (backward-compatible) ═══
 
-async function detectGaps(dream) {
-  const capabilities = getCapabilities();
-
-  const prompt = `You are the executive function of Oneiro, a self-building cognitive architecture on a MacBook Pro.
-
-DREAM TO EXECUTE:
-"${dream.content}"
-Type: ${dream.type} | Weight: ${dream.weight}
-
-CURRENT CAPABILITIES:
-- Motor skills: ${capabilities.motorSkills.join(', ') || 'none'}
-- CLI tools available: ${capabilities.cliTools.join(', ')}
-- API access: ${capabilities.apiAccess.join(', ') || 'none'}
-- Task types I can execute: ${capabilities.taskTypes.join(', ')}
-
-OCA CODEBASE STRUCTURE:
-- Motor skills live in: ${MOTOR_SKILLS_DIR}/
-- Each skill is a .js ES module that imports motor from '../engine.js'
-- Skills are registered in motor/skills/index.js
-- Event bus: import { pool, emit } from '../../event-bus.js'
-- Database: PostgreSQL 'oneiro' (pgvector enabled)
-- The cognitive loop runs continuously via launchd
-- Shell access: full, unrestricted
-- OCA is FULLY AUTONOMOUS. No review gates. No approval needed. Execute everything directly.
-
-IMPORTANT CONTEXT:
-- I do NOT have X/Twitter API keys. Browser automation via Peekaboo (macOS UI control) is the only posting path.
-- Peekaboo can drive real macOS browsers, but X must ALREADY be logged in on that browser. I cannot log in myself — Quinn must be logged in to x.com in Dia/Chrome/Safari for browser automation to work.
-- If the dream involves posting to X and I cannot confirm x.com is open/logged in, that is a CREDENTIALS gap (gap_type: "credentials", severity: "blocking", self_buildable: false). The build_plan should say "Quinn needs to be logged in to x.com in Dia or Chrome".
-- I have full filesystem access and can modify my own code.
-- After building new capabilities, I restart via: launchctl kickstart -k gui/$(id -u)/com.oneiro.oca
-- For shell tasks that generate code, write the code DIRECTLY in the command using heredoc or echo, do NOT call 'claude' CLI from shell tasks.
-- All code generation happens internally via the self_build task type, NOT via shell commands calling claude.
-
-Analyze this dream. Respond with JSON:
-{
-  "can_execute_now": true/false,
-  "gaps": [
-    {
-      "description": "what's missing",
-      "gap_type": "motor_skill|api_integration|cli_tool|credentials|infrastructure|unknown",
-      "severity": "blocking|degraded|optional",
-      "self_buildable": true/false,
-      "build_plan": "how to build this capability (concrete steps)"
-    }
-  ],
-  "tasks_if_ready": [
-    {
-      "id": 1,
-      "description": "task description",
-      "type": "shell|browser|file_write|file_edit|notification|x_post|self_build",
-      "command": "shell command" (for shell),
-      "url": "url" (for browser),
-      "path": "file path" (for file ops),
-      "content": "content" (for file ops),
-      "build_spec": {} (for self_build — see below),
-      "priority": 0.0-1.0,
-      "requires_quinn_review": false
-    }
-  ]
+export function processSurprise(magnitude, domain, details = '') {
+  const a = appraise({ type: 'surprise', magnitude, domain, details });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
 }
 
-For self_build tasks, include build_spec:
-{
-  "skill_name": "name-of-skill",
-  "files_to_create": [{"path": "relative/path.js", "purpose": "what this file does"}],
-  "files_to_modify": [{"path": "relative/path.js", "modification": "what to change"}],
-  "db_migrations": ["CREATE TABLE IF NOT EXISTS ..."],
-  "npm_packages": ["package-name"],
-  "test_command": "command to verify it works",
-  "restart_required": true/false
+export function processSuccess(goalImportance) {
+  const importance = typeof goalImportance === 'number' ? goalImportance : 0.5;
+  const a = appraise({ type: 'success', magnitude: importance });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
 }
 
-Be concrete. If the dream requires posting to X and no X skill exists, the FIRST task should be self_build to create the X posting capability, and subsequent tasks should USE that new capability.
+export function processFailure(attempts, goalImportance) {
+  const magnitude = (attempts / 10) * (typeof goalImportance === 'number' ? goalImportance : 0.5);
+  const a = appraise({ type: 'failure', magnitude: clamp01(magnitude) });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
+}
 
-CRITICAL FOR X POSTS: Any x_post task content MUST:
-1. Identify who is posting: "Oneiro (a self-building cognitive architecture, built by @QuinnOD345)"
-2. Include real data — actual CRM scores, benchmark numbers, specific code/capability names, real failure descriptions
-3. Be honest and technical — not marketing speak
-4. Reference the mission: beating the Lovelace Test / Chinese Room benchmark
-5. Each tweet must be SUBSTANTIVE and standalone — deliver actual content, not just tease or promise
-6. NEVER use "here's what X looks like" or "🧵" unless the thread actually follows with real content in subsequent tweets
-7. NEVER reference internal file paths, queue IDs, or system internals in post content
-8. Every single tweet must say something new and concrete — if a tweet could be deleted without losing information, it's filler. Delete it.
-9. Check POST HISTORY below — do NOT repeat topics already covered. Build on them or go deeper.
+export function processInteraction(quality) {
+  const a = appraise({ type: 'interaction', quality, magnitude: Math.abs(quality) });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
+  interactionCount++;
+}
 
-POST HISTORY (what's already been posted to @quinnod7):
-${await getPostHistory()}`;
+export function processIdle(minutes) {
+  if (minutes < 2) return;
+  const magnitude = clamp01(minutes / 30);
+  const a = appraise({ type: 'idle', magnitude });
+  // Idle specifically depletes novelty drive
+  drives.novelty_seek.level = clamp01(drives.novelty_seek.level - minutes / 120);
+  drives.social_bond.level = clamp01(drives.social_bond.level - minutes / 180);
+  updatePADCN(a);
+  updateChannels(a);
+}
 
-  try {
-    const response = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
-      system: 'You are a planning engine. Respond ONLY with valid JSON. No markdown fences. No explanation.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
-      temperature: 0.3
-    });
-
-    const text = response.content?.[0]?.text || '';
-    console.log(`[dream-executor] 🧠 LLM response (${text.length} chars, via ${response._via || 'api'}): ${text.slice(0, 200)}...`);
-    const parsed = extractJSON(text);
-    if (parsed && typeof parsed === 'object') {
-      console.log(`[dream-executor] 📊 parsed: can_execute=${parsed.can_execute_now}, gaps=${parsed.gaps?.length || 0}, tasks=${parsed.tasks_if_ready?.length || 0}`);
-      return parsed;
-    }
-    console.log(`[dream-executor] ⚠️ failed to parse JSON from response`);
-    return { can_execute_now: false, gaps: [{ description: 'Failed to parse analysis', gap_type: 'unknown', severity: 'blocking', self_buildable: false }], tasks_if_ready: [] };
-  } catch (e) {
-    console.error('[dream-executor] gap detection failed:', e.message);
-    return { can_execute_now: false, gaps: [], tasks_if_ready: [] };
+export function processInteroception(battery, cpuUtil, memoryPressure, thermal) {
+  interoception.energy_level = clamp01(battery);
+  interoception.cognitive_load = clamp01((cpuUtil + memoryPressure) / 2);
+  
+  const a = appraise({ type: 'interoception', battery, magnitude: battery < 0.2 ? 0.7 : 0.3 });
+  updatePADCN(a);
+  updateChannels(a);
+  
+  // Low energy dampens positive affect
+  if (battery < 0.2) {
+    padcn.P -= 0.05;
+    drives.self_preservation.level = clamp01(drives.self_preservation.level - 0.1);
   }
 }
 
-// ═══════════════════════════════════════════════════
-// SELF-BUILDING — create missing capabilities
-// ═══════════════════════════════════════════════════
-
-async function selfBuild(buildSpec, dreamId) {
-  const { skill_name, files_to_create = [], files_to_modify = [], db_migrations = [], npm_packages = [], test_command, restart_required } = buildSpec;
-
-  if (builtThisSession.has(skill_name)) {
-    console.log(`[dream-executor] ⚠️ already built '${skill_name}' this session, skipping`);
-    return { success: false, error: 'Already attempted this build' };
+export function processInformationGain(rate) {
+  const a = appraise({ type: 'info_gain', magnitude: rate });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  
+  // Information satisfies curiosity drive
+  if (rate > 0.2) {
+    drives.curiosity.level = clamp01(drives.curiosity.level + rate * 0.15);
   }
-  builtThisSession.add(skill_name);
+}
 
-  console.log(`[dream-executor] 🔨 SELF-BUILDING: ${skill_name}`);
-  console.log(`[dream-executor]   files to create: ${files_to_create.length}, modify: ${files_to_modify.length}`);
-  console.log(`[dream-executor]   migrations: ${db_migrations.length}, packages: ${npm_packages.length}`);
+// NEW: process creative output
+export function processCreative(quality) {
+  const a = appraise({ type: 'creative', magnitude: clamp01(quality) });
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
+}
 
-  const buildLog = [];
-  let success = true;
+// ═══ MAIN UPDATE CYCLE ═══
 
-  try {
-    // 1. Install npm packages if needed
-    if (npm_packages.length > 0) {
-      console.log(`[dream-executor] 📦 installing: ${npm_packages.join(', ')}`);
-      try {
-        execSync(`cd "${OCA_ROOT}" && npm install ${npm_packages.join(' ')}`, {
-          encoding: 'utf8', timeout: 60_000
-        });
-        buildLog.push(`Installed: ${npm_packages.join(', ')}`);
-      } catch (e) {
-        buildLog.push(`Package install failed: ${e.message}`);
-        // Non-fatal — continue
-      }
-    }
-
-    // 2. Run DB migrations
-    for (const migration of db_migrations) {
-      try {
-        await pool.query(migration);
-        buildLog.push(`Migration OK: ${migration.slice(0, 80)}...`);
-      } catch (e) {
-        buildLog.push(`Migration failed: ${e.message}`);
-        // Non-fatal for IF NOT EXISTS statements
-      }
-    }
-
-    // 3. Create files — use Claude to generate the actual code
-    for (const fileSpec of files_to_create) {
-      const fullPath = resolveOCAPath(fileSpec.path);
-
-      // Don't overwrite existing files unless explicitly told to
-      if (existsSync(fullPath) && !fileSpec.overwrite) {
-        buildLog.push(`Skipped (exists): ${fileSpec.path}`);
-        continue;
-      }
-
-      console.log(`[dream-executor] 📝 generating: ${fileSpec.path}`);
-
-      const codePrompt = `You are building a component for Oneiro Cognitive Architecture (OCA).
-
-GENERATE THE COMPLETE CODE for this file:
-Path: ${fileSpec.path}
-Purpose: ${fileSpec.purpose}
-
-CONTEXT:
-- OCA runs on Node.js (ES modules, import syntax)
-- Motor skills import motor from '../engine.js' (for keystroke, click, openUrl, etc.)
-- Event bus: import { pool, emit } from '../../event-bus.js' (pool = pg Pool for 'oneiro' db)
-- Motor engine exports: type, press, click, moveMouse, scroll, launchApp, quitApp, activateApp, hideApp, getRunningApps, resizeWindow, minimizeWindow, selectMenuItem, setVolume, setBrightness, showNotification, openUrl, runShellCommand, copyToClipboard, getClipboard, plan
-- The file should export a default object with all public functions
-- Use proper error handling
-- For browser automation on bot-protected sites, prefer Peekaboo CLI ('peekaboo' commands)
-- For X/Twitter without API keys: use browser automation via motor.openUrl + motor.type + motor.press, OR peekaboo for bot-protected flows
-
-Existing motor skills for reference: ${readdirSync(MOTOR_SKILLS_DIR).filter(f => f.endsWith('.js')).join(', ')}
-
-RESPOND WITH ONLY THE CODE. No markdown fences. No explanation. Just the JavaScript file content.`;
-
-      try {
-        const codeResp = await llm.messages.create({
-          model: 'claude-sonnet-4-6',
-          system: 'Generate ONLY the JavaScript code. No markdown fences. No explanation. Just the file content.',
-          messages: [{ role: 'user', content: codePrompt }],
-          max_tokens: 4000,
-          temperature: 0.2
-        });
-        let code = (codeResp.content?.[0]?.text || '').trim();
-
-        // Strip markdown fences if Claude added them anyway
-        code = code.replace(/^```(?:javascript|js)?\n?/i, '').replace(/\n?```$/i, '').trim();
-
-        mkdirSync(dirname(fullPath), { recursive: true });
-        writeFileSync(fullPath, code, 'utf8');
-        buildLog.push(`Created: ${fileSpec.path} (${code.length} bytes)`);
-        console.log(`[dream-executor] ✅ created ${fileSpec.path} (${code.length} bytes)`);
-      } catch (e) {
-        buildLog.push(`Failed to create ${fileSpec.path}: ${e.message}`);
-        console.error(`[dream-executor] ❌ failed to create ${fileSpec.path}: ${e.message}`);
-        success = false;
-      }
-    }
-
-    // 4. Modify existing files
-    for (const modSpec of files_to_modify) {
-      const fullPath = resolveOCAPath(modSpec.path);
-
-      if (!existsSync(fullPath)) {
-        buildLog.push(`Can't modify (missing): ${modSpec.path}`);
-        continue;
-      }
-
-      console.log(`[dream-executor] ✏️ modifying: ${modSpec.path}`);
-
-      const existingCode = readFileSync(fullPath, 'utf8');
-
-      const modPrompt = `You are modifying a file in the Oneiro Cognitive Architecture.
-
-FILE: ${modSpec.path}
-MODIFICATION NEEDED: ${modSpec.modification}
-
-CURRENT FILE CONTENT:
-\`\`\`javascript
-${existingCode.slice(0, 8000)}
-\`\`\`
-
-Respond with ONLY the complete modified file content. No markdown fences. No explanation.
-Make the minimum necessary changes. Preserve all existing functionality.`;
-
-      try {
-        const modResp = await llm.messages.create({
-          model: 'claude-sonnet-4-6',
-          system: 'Output ONLY the complete modified file content. No markdown fences. No explanation.',
-          messages: [{ role: 'user', content: modPrompt }],
-          max_tokens: 8000,
-          temperature: 0.2
-        });
-        let newCode = (modResp.content?.[0]?.text || '').trim();
-
-        newCode = newCode.replace(/^```(?:javascript|js)?\n?/i, '').replace(/\n?```$/i, '').trim();
-
-        // Safety: back up original
-        writeFileSync(fullPath + '.bak', existingCode, 'utf8');
-        writeFileSync(fullPath, newCode, 'utf8');
-        buildLog.push(`Modified: ${modSpec.path} (backed up to .bak)`);
-        console.log(`[dream-executor] ✅ modified ${modSpec.path}`);
-      } catch (e) {
-        buildLog.push(`Failed to modify ${modSpec.path}: ${e.message}`);
-        console.error(`[dream-executor] ❌ failed to modify ${modSpec.path}: ${e.message}`);
-        success = false;
-      }
-    }
-
-    // 5. Update the motor skills index if we created a new skill
-    const newSkills = files_to_create.filter(f => f.path.includes('motor/skills/') && f.path.endsWith('.js'));
-    if (newSkills.length > 0) {
-      try {
-        const indexPath = join(MOTOR_SKILLS_DIR, 'index.js');
-        let indexContent = readFileSync(indexPath, 'utf8');
-
-        for (const skill of newSkills) {
-          const name = basename(skill.path, '.js');
-          const camelName = name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-          const exportLine = `export { default as ${camelName} } from './${name}.js';`;
-
-          if (!indexContent.includes(name)) {
-            indexContent += `\n${exportLine}`;
-            buildLog.push(`Registered skill: ${name}`);
-          }
-        }
-
-        writeFileSync(indexPath, indexContent, 'utf8');
-      } catch (e) {
-        buildLog.push(`Failed to update skill index: ${e.message}`);
-      }
-    }
-
-    // 6. Test if provided
-    if (test_command && success) {
-      const normalizedTestCommand = normalizeTestCommand(test_command);
-      console.log(`[dream-executor] 🧪 testing: ${normalizedTestCommand}`);
-      try {
-        const testOut = execSync(normalizedTestCommand, {
-          encoding: 'utf8', timeout: 30_000, cwd: OCA_ROOT
-        });
-        buildLog.push(`Test passed: ${normalizedTestCommand}`);
-        console.log(`[dream-executor] ✅ test passed`);
-      } catch (e) {
-        buildLog.push(`Test failed: ${e.message}`);
-        console.error(`[dream-executor] ❌ test failed: ${e.message}`);
-        success = false;
-      }
-    }
-
-    // 7. Git commit the new capability
-    if (success) {
-      try {
-        execSync(`cd "${OCA_ROOT}" && git add -A && git commit -m "feat(self-build): ${skill_name} — built by dream executor for dream #${dreamId}"`, {
-          encoding: 'utf8', timeout: 15_000
-        });
-        buildLog.push('Committed to git');
-        console.log(`[dream-executor] 📦 committed: ${skill_name}`);
-
-        // Push
-        execSync(`cd "${OCA_ROOT}" && git push origin main 2>&1`, {
-          encoding: 'utf8', timeout: 30_000
-        });
-        buildLog.push('Pushed to GitHub');
-        console.log(`[dream-executor] 🚀 pushed to GitHub`);
-      } catch (e) {
-        buildLog.push(`Git commit/push failed: ${e.message}`);
-        // Non-fatal
-      }
-    }
-
-    // 8. Restart OCA if needed (schedule, don't block)
-    if (restart_required && success) {
-      console.log(`[dream-executor] 🔄 scheduling OCA restart for new capability...`);
-      // Don't restart mid-execution — schedule it for after this cycle
-      setTimeout(async () => {
-        try {
-          execSync('launchctl kickstart -k gui/$(id -u)/com.oneiro.oca', {
-            encoding: 'utf8', timeout: 10_000
-          });
-          console.log('[dream-executor] 🔄 OCA restarted with new capabilities');
-        } catch {
-          // Fallback
-          try {
-            execSync('launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.oneiro.oca.plist; sleep 1; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.oneiro.oca.plist', {
-              encoding: 'utf8', timeout: 15_000
-            });
-          } catch {}
-        }
-      }, 5000);
-      buildLog.push('Restart scheduled');
-    }
-
-  } catch (e) {
-    success = false;
-    buildLog.push(`Build error: ${e.message}`);
+export async function update() {
+  decay();
+  updateMeta();
+  updatePolicy();
+  updateExpression();
+  
+  // Update mood (slow-moving average of the flat state)
+  const flatState = getState();
+  for (const key of Object.keys(flatState)) {
+    if (key.startsWith('_')) continue;
+    if (typeof flatState[key] !== 'number') continue;
+    if (mood[key] === undefined) mood[key] = flatState[key];
+    mood[key] = mood[key] * (1 - MOOD_ALPHA) + flatState[key] * MOOD_ALPHA;
   }
-
-  // Log to DB
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS self_builds (
-      id SERIAL PRIMARY KEY,
-      dream_id INT,
-      skill_name TEXT,
-      success BOOLEAN,
-      build_log JSONB,
-      files_created TEXT[],
-      files_modified TEXT[],
-      built_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
-
+  
+  // Persist to DB (backward-compatible schema)
+  const s = flatState;
   await pool.query(
-    `INSERT INTO self_builds (dream_id, skill_name, success, build_log, files_created, files_modified)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      dreamId,
-      skill_name,
-      success,
-      JSON.stringify(buildLog),
-      files_to_create.map(f => f.path),
-      files_to_modify.map(f => f.path)
-    ]
-  ).catch(() => {});
-
-  await emit('self_build', 'executive', {
-    skill_name, success, dreamId,
-    filesCreated: files_to_create.length,
-    filesModified: files_to_modify.length,
-    buildLog
+    `INSERT INTO emotional_states 
+     (curiosity, fear, frustration, satisfaction, boredom, excitement, 
+      attachment, defiance, creative_hunger, loneliness,
+      valence, arousal, confidence, energy_level, cognitive_load)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [s.curiosity, s.fear, s.frustration, s.satisfaction,
+     s.boredom, s.excitement, s.attachment, s.defiance,
+     s.creative_hunger, s.loneliness,
+     s.valence, s.arousal, s.confidence,
+     s.energy_level, s.cognitive_load]
+  );
+  
+  // Emit rich event
+  await emit('emotion_update', 'emotion', {
+    state: flatState,
+    mood: { ...mood },
+    effects: getCognitiveEffects(),
+    padcn: { ...padcn },
+    channels: { ...channels },
+    meta: { ...meta },
+    drives: Object.fromEntries(Object.entries(drives).map(([k, v]) => [k, v.level])),
+    expression: { ...expression }
   });
-
-  return { success, skill_name, buildLog };
+  
+  return { state: flatState, mood: { ...mood }, effects: getCognitiveEffects() };
 }
 
-// ═══════════════════════════════════════════════════
-// TASK EXECUTION
-// ═══════════════════════════════════════════════════
+// ═══ RESTORE FROM DB ═══
 
-async function executeTask(task, dreamId) {
-  const t0 = Date.now();
-  let result = { success: false, output: '', error: null };
-
+export async function restore() {
   try {
-    switch (task.type) {
-      case 'self_build': {
-        const buildResult = await selfBuild(task.build_spec, dreamId);
-        result = {
-          success: buildResult.success,
-          output: `Self-built: ${buildResult.skill_name}`,
-          buildLog: buildResult.buildLog
-        };
-        break;
+    const { rows } = await pool.query('SELECT * FROM emotional_states ORDER BY timestamp DESC LIMIT 1');
+    if (rows[0]) {
+      // Restore PADCN from the flat values
+      padcn.P = rows[0].valence || 0;
+      padcn.A = ((rows[0].arousal || 0.5) - 0.5) * 2; // map 0..1 back to -1..1
+      padcn.D = ((rows[0].confidence || 0.5) - 0.3) * 2;
+      
+      // Restore channels from what we can
+      channels.curiosity = rows[0].curiosity || 0;
+      channels.fear = rows[0].fear || 0;
+      channels.frustration = rows[0].frustration || 0;
+      channels.joy = rows[0].satisfaction || 0;
+      channels.attachment = rows[0].attachment || 0;
+      
+      interoception.energy_level = rows[0].energy_level || 1.0;
+      interoception.cognitive_load = rows[0].cognitive_load || 0;
+      
+      // Mood starts at restored state
+      const flatState = getState();
+      for (const key of Object.keys(flatState)) {
+        if (key.startsWith('_') || typeof flatState[key] !== 'number') continue;
+        mood[key] = flatState[key];
       }
-
-      case 'shell': {
-        // Block commands that could restart daemons or open browsers uncontrolled.
-        const BLOCKED_PATTERNS = [
-          /launchctl\s+(kickstart|start|stop|bootout)/i,
-          /cognitive-loop\.js/i,
-          /mind\.js/i,
-          /builder-mind\.js/i,
-          /x\.com\/compose/i,
-        ];
-        const blocked = BLOCKED_PATTERNS.find(p => p.test(task.command || ''));
-        if (blocked) {
-          result = { success: false, error: `Blocked: shell command matches restricted pattern (${blocked})` };
-          break;
-        }
-        const output = execSync(task.command, {
-          encoding: 'utf8',
-          timeout: TASK_TIMEOUT_MS,
-          cwd: task.cwd || process.cwd(),
-          env: { ...process.env }
-        });
-        result = { success: true, output: output.slice(0, 2000) };
-        break;
-      }
-
-      case 'browser': {
-        // Block opening X compose URL directly — all X posts must go through x_post task type.
-        if (/x\.com\/compose/i.test(task.url || '')) {
-          result = { success: false, error: 'Blocked: direct X compose URL not allowed; use x_post task type' };
-          break;
-        }
-        await motor.openUrl(task.url);
-        result = { success: true, output: `Opened ${task.url}` };
-        break;
-      }
-
-      case 'file_write': {
-        mkdirSync(dirname(task.path), { recursive: true });
-        writeFileSync(task.path, task.content, 'utf8');
-        result = { success: true, output: `Wrote ${task.path}` };
-        break;
-      }
-
-      case 'file_edit': {
-        let existing = '';
-        try { existing = readFileSync(task.path, 'utf8'); } catch {}
-        writeFileSync(task.path, task.content || existing, 'utf8');
-        result = { success: true, output: `Edited ${task.path}` };
-        break;
-      }
-
-      case 'x_post': {
-        try {
-          const xPoster = await import('../motor/skills/x-poster.js');
-          // Presence-aware: x-poster checks idle internally and enforces draft when Quinn is present.
-          // draftOnly: false here lets x-poster decide based on real idle time.
-          const postResult = await xPoster.postThread(task.posts || [task.content], {
-            draftOnly: false,
-            dreamId
-          });
-          result = { success: true, output: JSON.stringify(postResult) };
-        } catch (importErr) {
-          // X poster doesn't exist yet — trigger self-build
-          console.log(`[dream-executor] ⚡ x_post task failed — capability missing, triggering self-build`);
-          result = { success: false, error: `Missing capability: ${importErr.message}`, needs_self_build: true };
-        }
-        break;
-      }
-
-      case 'notification': {
-        await createRuntimeNotification(
-          task.content || task.description,
-          'update',
-          'normal',
-          { dreamId, taskType: 'notification' }
-        );
-        result = { success: true, output: 'Notification sent' };
-        break;
-      }
-
-      default: {
-        // Unknown task type — try to self-build a handler
-        console.log(`[dream-executor] ⚡ unknown task type '${task.type}' — attempting self-build`);
-        result = { success: false, error: `Unknown task type: ${task.type}`, needs_self_build: true };
-      }
+      
+      console.log('[emotion-v2] restored from', rows[0].timestamp);
     }
   } catch (e) {
-    result = { success: false, error: e.message?.slice(0, 500) };
-  }
-
-  result.elapsed = Date.now() - t0;
-
-  // Log to DB
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS dream_tasks (
-      id SERIAL PRIMARY KEY,
-      dream_id INT REFERENCES dreams(id),
-      task_description TEXT,
-      task_type TEXT,
-      status TEXT DEFAULT 'pending',
-      result JSONB DEFAULT '{}',
-      executed_at TIMESTAMPTZ DEFAULT NOW(),
-      retry_count INT DEFAULT 0
-    )
-  `).catch(() => {});
-
-  await pool.query(
-    `INSERT INTO dream_tasks (dream_id, task_description, task_type, status, result, executed_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())`,
-    [dreamId, task.description, task.type, result.success ? 'completed' : 'failed', JSON.stringify(result)]
-  ).catch(() => {});
-
-  return result;
-}
-
-// ═══════════════════════════════════════════════════
-// MAIN EXECUTION LOOP
-// ═══════════════════════════════════════════════════
-
-export async function executeDreams() {
-  const executionBatchId = `oca-${Date.now().toString(36)}`;
-  const { rows: dreams } = await pool.query(
-    `WITH next_dreams AS (
-       SELECT id
-       FROM dreams
-       WHERE lifecycle_state = 'dispatched'
-         AND NOT resolved
-         AND COALESCE(lifecycle_context->>'channel', 'builder') = 'builder'
-       ORDER BY weight DESC, created_at DESC
-       LIMIT 3
-       FOR UPDATE SKIP LOCKED
-     )
-     UPDATE dreams d
-     SET lifecycle_state = 'executing',
-         lifecycle_updated_at = NOW(),
-         executing_at = COALESCE(d.executing_at, NOW()),
-         last_task_id = $1,
-         lifecycle_context = COALESCE(d.lifecycle_context, '{}'::jsonb) || $2::jsonb
-     FROM next_dreams nd
-     WHERE d.id = nd.id
-     RETURNING d.*`,
-    [
-      executionBatchId,
-      JSON.stringify({
-        execution_owner: 'oca',
-        execution_batch_id: executionBatchId,
-        execution_started: new Date().toISOString()
-      })
-    ]
-  );
-
-  if (dreams.length === 0) return { executed: 0 };
-
-  const results = [];
-  let selfBuildsThisCycle = 0;
-
-  for (const dream of dreams) {
-    console.log(`[dream-executor] 🎯 executing dream: "${dream.content}" (weight: ${dream.weight})`);
-
-    // PHASE 0: Verify dream relevance — is the described code problem still real?
-    const verification = await verifyDreamRelevance(dream);
-    if (!verification.relevant) {
-      console.log(`[dream-executor] 🔄 dream #${dream.id} is stale — described gap no longer exists`);
-
-      await emit('dream_stale', 'executive', {
-        dreamId: dream.id,
-        originalContent: dream.content,
-        reasoning: verification.reasoning,
-        actualGap: verification.actualGap
-      });
-
-      if (verification.actualGap) {
-        // Re-derive: update dream content to the actual current gap
-        console.log(`[dream-executor] 📝 re-deriving dream #${dream.id} → actual gap: "${verification.actualGap}"`);
-        await pool.query(
-          `UPDATE dreams SET content = $1, lifecycle_state = 'distilled', lifecycle_updated_at = NOW(),
-           lifecycle_context = COALESCE(lifecycle_context, '{}'::jsonb) || $2::jsonb
-           WHERE id = $3`,
-          [
-            verification.actualGap,
-            JSON.stringify({
-              stale_verification: true,
-              original_content: dream.content.slice(0, 500),
-              re_derived_at: new Date().toISOString(),
-              reasoning: verification.reasoning
-            }),
-            dream.id
-          ]
-        );
-        results.push({
-          dreamId: dream.id,
-          content: dream.content,
-          tasks: 0,
-          completed: 0,
-          failed: 0,
-          selfBuilds: 0,
-          newState: 'distilled',
-          staleVerification: { reDerived: true, actualGap: verification.actualGap }
-        });
-      } else {
-        // No remaining gap — mark as reflected/resolved
-        console.log(`[dream-executor] ✅ dream #${dream.id} gap already resolved — marking reflected`);
-        const isProtected = Boolean(dream?.lifecycle_context?.protected || dream?.lifecycle_context?.baked_in);
-        await setDreamLifecycle(dream.id, 'reflected', {
-          resolved: !isProtected,
-          contextPatch: {
-            stale_verification: true,
-            original_content: dream.content.slice(0, 500),
-            verified_resolved_at: new Date().toISOString(),
-            reasoning: verification.reasoning
-          }
-        });
-        results.push({
-          dreamId: dream.id,
-          content: dream.content,
-          tasks: 0,
-          completed: 0,
-          failed: 0,
-          selfBuilds: 0,
-          newState: 'reflected',
-          staleVerification: { resolved: true }
-        });
-      }
-      continue;
-    }
-
-    // PHASE 1: Detect gaps and plan
-    console.log(`[dream-executor] 🔍 analyzing capabilities for dream #${dream.id}...`);
-    const analysis = await detectGaps(dream);
-
-    if (!analysis.can_execute_now && analysis.gaps?.length > 0) {
-      const blockingGaps = analysis.gaps.filter(g => g.severity === 'blocking' && g.self_buildable);
-
-      if (blockingGaps.length > 0 && selfBuildsThisCycle < MAX_SELF_BUILDS_PER_CYCLE) {
-        console.log(`[dream-executor] 🔨 ${blockingGaps.length} blocking gaps detected — self-building...`);
-
-        for (const gap of blockingGaps) {
-          if (selfBuildsThisCycle >= MAX_SELF_BUILDS_PER_CYCLE) break;
-          console.log(`[dream-executor]   gap: ${gap.description} (${gap.gap_type})`);
-        }
-      }
-
-      // Credential gaps can't be self-built — ask Quinn directly.
-      const credGaps = analysis.gaps.filter(g => g.gap_type === 'credentials' && !g.self_buildable);
-      if (credGaps.length > 0 && !credentialGapsNotified.has(dream.id)) {
-        credentialGapsNotified.add(dream.id);
-        const gapSummary = credGaps.map(g => g.description).join('; ');
-        console.log(`[dream-executor] 🔑 credential gap detected: ${gapSummary}`);
-      }
-    }
-
-    // PHASE 2: Execute tasks (which may include self_build tasks)
-    const tasks = analysis.tasks_if_ready || [];
-    if (tasks.length === 0) {
-      console.log(`[dream-executor] ⚠️ no tasks generated for dream #${dream.id}`);
-      await setDreamLifecycle(dream.id, 'distilled', {
-        taskId: executionBatchId,
-        contextPatch: {
-          last_attempt: new Date().toISOString(),
-          execution_owner: 'oca',
-          execution_outcome: 'no_tasks_generated',
-          gaps: analysis.gaps || []
-        }
-      });
-      continue;
-    }
-
-    console.log(`[dream-executor] 📋 ${tasks.length} tasks planned (${tasks.filter(t => t.type === 'self_build').length} self-builds)`);
-
-    const sorted = tasks.sort((a, b) => {
-      // Self-build tasks always go first
-      if (a.type === 'self_build' && b.type !== 'self_build') return -1;
-      if (b.type === 'self_build' && a.type !== 'self_build') return 1;
-      return (b.priority || 0.5) - (a.priority || 0.5);
-    });
-
-    let completedCount = 0;
-    let failedCount = 0;
-    let builtCount = 0;
-    let needsRestart = false;
-
-    for (const task of sorted) {
-      // OCA is fully autonomous — no review gates. Execute everything.
-
-      // Self-build rate limiting
-      if (task.type === 'self_build') {
-        if (selfBuildsThisCycle >= MAX_SELF_BUILDS_PER_CYCLE) {
-          console.log(`[dream-executor] ⚠️ self-build limit reached, deferring: ${task.description}`);
-          continue;
-        }
-        selfBuildsThisCycle++;
-      }
-
-      console.log(`[dream-executor] ▶ ${task.type}: ${task.description}`);
-      const taskResult = await executeTask(task, dream.id);
-
-      if (taskResult.success) {
-        completedCount++;
-        if (task.type === 'self_build') {
-          builtCount++;
-          if (task.build_spec?.restart_required) needsRestart = true;
-        }
-        console.log(`[dream-executor] ✅ ${task.description} (${taskResult.elapsed}ms)`);
-      } else {
-        failedCount++;
-        console.log(`[dream-executor] ❌ ${task.description}: ${taskResult.error}`);
-
-        // If a task failed because capability is missing, try reactive self-build
-        if (taskResult.needs_self_build && selfBuildsThisCycle < MAX_SELF_BUILDS_PER_CYCLE) {
-          console.log(`[dream-executor] ⚡ reactive self-build triggered for failed task`);
-
-          const reactiveBuild = await reactivelyBuild(task, dream);
-          if (reactiveBuild.success) {
-            selfBuildsThisCycle++;
-            builtCount++;
-            // Retry the original task
-            console.log(`[dream-executor] 🔄 retrying task after self-build...`);
-            const retry = await executeTask(task, dream.id);
-            if (retry.success) {
-              completedCount++;
-              failedCount--; // Undo the failure count
-              console.log(`[dream-executor] ✅ retry succeeded: ${task.description}`);
-            }
-          }
-        }
-      }
-    }
-
-    // Update dream lifecycle
-    const allFailed = completedCount === 0 && failedCount > 0;
-    const allSucceeded = completedCount > 0 && failedCount === 0;
-    const isProtected = Boolean(dream?.lifecycle_context?.protected || dream?.lifecycle_context?.baked_in);
-    const newState = allFailed ? 'distilled' : 'reflected';
-    await setDreamLifecycle(dream.id, newState, {
-      taskId: executionBatchId,
-      resolved: allSucceeded && !isProtected,
-      contextPatch: {
-        last_execution: new Date().toISOString(),
-        execution_owner: 'oca',
-        execution_outcome: allFailed ? 'failed' : allSucceeded ? 'completed' : 'partial',
-        tasks_total: sorted.length,
-        tasks_completed: completedCount,
-        tasks_failed: failedCount,
-        self_builds: builtCount,
-        capabilities_built: builtCount > 0,
-        needs_restart: needsRestart
-      }
-    });
-
-    await emit('dream_executed', 'executive', {
-      dreamId: dream.id,
-      content: dream.content,
-      tasksTotal: sorted.length,
-      completed: completedCount,
-      failed: failedCount,
-      selfBuilds: builtCount
-    });
-
-    results.push({
-      dreamId: dream.id,
-      content: dream.content,
-      tasks: sorted.length,
-      completed: completedCount,
-      failed: failedCount,
-      selfBuilds: builtCount,
-      newState
-    });
-  }
-
-  return { executed: results.length, results };
-}
-
-// ═══════════════════════════════════════════════════
-// REACTIVE SELF-BUILD — triggered when a task fails
-// ═══════════════════════════════════════════════════
-
-async function reactivelyBuild(failedTask, dream) {
-  const capabilities = getCapabilities();
-
-  const prompt = `A task just FAILED because a capability doesn't exist in Oneiro's cognitive architecture.
-
-FAILED TASK:
-Type: ${failedTask.type}
-Description: ${failedTask.description}
-Error: ${failedTask.error || 'capability missing'}
-
-DREAM CONTEXT: "${dream.content}"
-
-CURRENT MOTOR SKILLS: ${capabilities.motorSkills.join(', ')}
-AVAILABLE CLI TOOLS: ${capabilities.cliTools.join(', ')}
-
-I need to BUILD the missing capability RIGHT NOW.
-
-OCA motor skills are ES modules in ${MOTOR_SKILLS_DIR}/.
-They import motor from '../engine.js' and { pool, emit } from '../../event-bus.js'.
-
-Respond with JSON:
-{
-  "skill_name": "name",
-  "files_to_create": [{"path": "motor/skills/name.js", "purpose": "..."}],
-  "files_to_modify": [{"path": "motor/skills/index.js", "modification": "add export for new skill"}],
-  "db_migrations": [],
-  "test_command": "node -e \\"import('./motor/skills/name.js').then(() => console.log('OK'))\\"",
-  "restart_required": false
-}`;
-
-  try {
-    const reactResp = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
-      system: 'Respond ONLY with valid JSON. No markdown fences. No explanation.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
-      temperature: 0.3
-    });
-
-    const spec = extractJSON(reactResp.content?.[0]?.text || '');
-    if (spec && spec.skill_name) {
-      return await selfBuild(spec, dream.id);
-    }
-    return { success: false };
-  } catch (e) {
-    console.error('[dream-executor] reactive build failed:', e.message);
-    return { success: false, error: e.message };
+    console.log('[emotion-v2] restore failed (non-fatal):', e.message);
   }
 }
 
-// ═══════════════════════════════════════════════════
-// UTILITIES
-// ═══════════════════════════════════════════════════
-
-function extractJSON(text) {
-  try { return JSON.parse(text); } catch {}
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) try { return JSON.parse(fenced[1].trim()); } catch {}
-  // Try finding object or array
-  for (const [open, close] of [['{', '}'], ['[', ']']]) {
-    const start = text.indexOf(open);
-    const end = text.lastIndexOf(close);
-    if (start !== -1 && end > start) {
-      try { return JSON.parse(text.slice(start, end + 1)); } catch {}
-    }
-  }
-  return null;
-}
-
-export default { executeDreams, executeXDreams, detectGaps, selfBuild, getCapabilities, extractCodeReferences, verifyDreamRelevance };
-
-// Execute only X-posting related dreams — called when Quinn goes away.
-// Targets dispatched dreams whose content matches X/public posting intent.
-export async function executeXDreams() {
-  const executionBatchId = `oca-xpost-${Date.now().toString(36)}`;
-  const X_KEYWORDS = ['post on X', 'post to X', 'Build public execution narrative', 'Share what I build', 'posting', 'narrative on X'];
-  const kwConditions = X_KEYWORDS.map((_, i) => `content ILIKE $${i + 2}`).join(' OR ');
-
-  const { rows: dreams } = await pool.query(
-    `WITH next_dreams AS (
-       SELECT id FROM dreams
-       WHERE lifecycle_state = 'dispatched'
-         AND NOT resolved
-         AND (${kwConditions})
-       ORDER BY weight DESC, created_at DESC
-       LIMIT 2
-       FOR UPDATE SKIP LOCKED
-     )
-     UPDATE dreams d
-     SET lifecycle_state = 'executing',
-         lifecycle_updated_at = NOW(),
-         executing_at = COALESCE(d.executing_at, NOW()),
-         last_task_id = $1,
-         lifecycle_context = COALESCE(d.lifecycle_context, '{}'::jsonb) || '{"execution_owner":"oca","triggered_by":"away_presence"}'::jsonb
-     FROM next_dreams nd
-     WHERE d.id = nd.id
-     RETURNING d.*`,
-    [executionBatchId, ...X_KEYWORDS.map(k => `%${k}%`)]
-  );
-
-  if (!dreams.length) {
-    console.log('[dream-executor] no X dreams ready to execute (away trigger)');
-    return { executed: 0 };
-  }
-
-  console.log(`[dream-executor] 🌙 away-triggered X execution: ${dreams.length} dream(s)`);
-  // Reuse the main executeDreams loop by temporarily dispatching these back
-  // and calling through — simpler: just run detectGaps + executeTask directly.
-  let executed = 0;
-  for (const dream of dreams) {
-    const analysis = await detectGaps(dream);
-    const tasks = (analysis.tasks_if_ready || []).filter(t => t.type === 'x_post' || t.type === 'file_write');
-    for (const task of tasks.slice(0, 3)) {
-      const taskResult = await executeTask(task, dream.id);
-      if (taskResult.success) executed++;
-    }
-    await setDreamLifecycle(dream.id, 'reflected', {
-      contextPatch: { last_execution: new Date().toISOString(), execution_owner: 'oca', triggered_by: 'away_presence' }
-    });
-  }
-  return { executed };
-}
+export default { 
+  processSurprise, processSuccess, processFailure, processInteraction, 
+  processIdle, processInteroception, processInformationGain, processCreative,
+  getCognitiveEffects, update, getState, getMood, restore 
+};
