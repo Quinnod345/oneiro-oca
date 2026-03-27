@@ -116,7 +116,7 @@ export async function upsertNeuralConnection({
   return rows[0] || null;
 }
 
-export async function ingestCoOccurrenceConnections({ windowSeconds = 45, maxPairs = 40 } = {}) {
+export async function ingestCoOccurrenceConnections({ windowSeconds = 20, maxPairs = 40 } = {}) {
   const { rows } = await pool.query(
     `WITH recent AS (
        SELECT id, source_layer, timestamp
@@ -131,7 +131,7 @@ export async function ingestCoOccurrenceConnections({ windowSeconds = 45, maxPai
      JOIN recent b
        ON a.id < b.id
       AND a.source_layer <> b.source_layer
-      AND ABS(EXTRACT(EPOCH FROM (a.timestamp - b.timestamp))) <= 8
+      AND ABS(EXTRACT(EPOCH FROM (a.timestamp - b.timestamp))) <= 3
      GROUP BY 1, 2
      ORDER BY co_count DESC
      LIMIT $2`,
@@ -140,13 +140,13 @@ export async function ingestCoOccurrenceConnections({ windowSeconds = 45, maxPai
 
   let createdOrUpdated = 0;
   for (const r of rows) {
-    const delta = clamp(r.co_count * 0.05, 0.05, 0.25);
+    const delta = clamp(r.co_count * 0.03, 0.03, 0.2);
     const result = await upsertNeuralConnection({
       fromLayer: r.layer_a,
       toLayer: r.layer_b,
       connectionType: 'co_occurrence',
       strengthDelta: delta,
-      baseStrength: 0.45,
+      baseStrength: 0.4,
       label: `${r.layer_a} ↔ ${r.layer_b}`,
       metadata: { co_count: r.co_count, window_seconds: windowSeconds },
     });

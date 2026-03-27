@@ -13,3 +13,5 @@ export { default as xPostSelfBuildLoopMetrics } from './x-post-self-build-loop-m
 export { default as xPostSelfBuildDeepDive } from './x-post-self-build-deep-dive.js';
 export { default as xPostCounterfactualReasoning } from './x-post-counterfactual-reasoning.js';
 export { default as xPostBuildInPublic } from './x-post-build-in-public.js';
+export { default as xPostSelfBuildLoopDeepDive } from './x-post-self-build-loop-deep-dive.js';
+export { default as xPostCrmDimensionGap } from './x-post-crm-dimension-gap.js';
