@@ -28,3 +28,4 @@ export { default as xPostThreadFailureData } from './x-post-thread-failure-data.
 export { default as xPostCrmDimensionBreakdown } from './x-post-crm-dimension-breakdown.js';
 export { default as xPostThreadReplyChineseRoom } from './x-post-thread-reply-chinese-room.js';
 export { default as xPostPredictionDimensionDeepDive } from './x-post-prediction-dimension-deep-dive.js';
+export { default as xPostCounterfactualScore } from './x-post-counterfactual-score.js';
