@@ -25,3 +25,6 @@ export { default as xPostPredictionFailureTaxonomy } from './x-post-prediction-f
 export { default as xPostThreadReply } from './x-post-thread-reply.js';
 export { default as xPostBuildSpecDeepDive } from './x-post-build-spec-deep-dive.js';
 export { default as xPostThreadFailureData } from './x-post-thread-failure-data.js';
+export { default as xPostCrmDimensionBreakdown } from './x-post-crm-dimension-breakdown.js';
+export { default as xPostThreadReplyChineseRoom } from './x-post-thread-reply-chinese-room.js';
+export { default as xPostPredictionDimensionDeepDive } from './x-post-prediction-dimension-deep-dive.js';
