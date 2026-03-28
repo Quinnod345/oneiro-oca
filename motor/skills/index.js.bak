@@ -30,3 +30,4 @@ export { default as xPostThreadReplyChineseRoom } from './x-post-thread-reply-ch
 export { default as xPostPredictionDimensionDeepDive } from './x-post-prediction-dimension-deep-dive.js';
 export { default as xPostCounterfactualScore } from './x-post-counterfactual-score.js';
 export { default as xPostStandaloneCounterfactual } from './x-post-standalone-counterfactual.js';
+export { default as xPostMetacognitionDeepDive } from './x-post-metacognition-deep-dive.js';
