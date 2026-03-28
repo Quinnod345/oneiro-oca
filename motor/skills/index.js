@@ -19,3 +19,9 @@ export { default as xThreadSelfBuildMetrics } from './x-thread-self-build-metric
 export { default as xPostSelfBuildLoopMechanics } from './x-post-self-build-loop-mechanics.js';
 export { default as xPostThreadMetrics } from './x-post-thread-metrics.js';
 export { default as xPostThreadFailureStory } from './x-post-thread-failure-story.js';
+export { default as xPostPredictionDimensionAnalysis } from './x-post-prediction-dimension-analysis.js';
+export { default as xPostBuildFailureDeepDive } from './x-post-build-failure-deep-dive.js';
+export { default as xPostPredictionFailureTaxonomy } from './x-post-prediction-failure-taxonomy.js';
+export { default as xPostThreadReply } from './x-post-thread-reply.js';
+export { default as xPostBuildSpecDeepDive } from './x-post-build-spec-deep-dive.js';
+export { default as xPostThreadFailureData } from './x-post-thread-failure-data.js';
