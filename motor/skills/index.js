@@ -34,3 +34,4 @@ export { default as xPostMetacognitionDeepDive } from './x-post-metacognition-de
 export { default as xPostStandalone } from './x-post-standalone.js';
 export { default as xPostBuildFailureData } from './x-post-build-failure-data.js';
 export { default as xPostPredictionDimensionFailure } from './x-post-prediction-dimension-failure.js';
+export { default as xPostSelfBuildLoopFailures } from './x-post-self-build-loop-failures.js';
