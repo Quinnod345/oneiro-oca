@@ -6,7 +6,7 @@ import { pool, emit } from '../event-bus.js';
 // ═══ LAYER 3: PADCN Core Affect ═══
 // Pleasure, Arousal, Dominance, Certainty, Novelty
 let padcn = { P: 0.0, A: 0.0, D: 0.0, C: 0.0, N: 0.0 };
-const PADCN_DECAY = { P: 0.92, A: 0.88, D: 0.93, C: 0.90, N: 0.80 };
+const PADCN_DECAY = { P: 0.97, A: 0.88, D: 0.93, C: 0.90, N: 0.85 };
 
 // ═══ LAYER 4: 14 Concurrent Emotion Channels ═══
 let channels = {
@@ -195,10 +195,9 @@ function appraise(event) {
 // ═══ PADCN UPDATE FROM APPRAISAL ═══
 
 function updatePADCN(a) {
-  const DAMPENING = 0.4; // Reduce update magnitude to smooth volatility
-  const dP = DAMPENING * (0.3 * a.goal_congruence + 0.2 * a.self_image_impact + 0.2 * a.relationship_impact + 0.1 * a.norm_compatibility);
-  const dA = DAMPENING * (0.3 * a.urgency + 0.2 * a.novelty + 0.2 * a.goal_relevance - 0.1 * a.controllability);
-  const dD = DAMPENING * (0.3 * a.controllability + 0.2 * a.agency_self - 0.2 * a.agency_other + 0.1 * a.certainty);
+  const dP = 0.3 * a.goal_congruence + 0.2 * a.self_image_impact + 0.2 * a.relationship_impact + 0.1 * a.norm_compatibility;
+  const dA = 0.3 * a.urgency + 0.2 * a.novelty + 0.2 * a.goal_relevance - 0.1 * a.controllability;
+  const dD = 0.3 * a.controllability + 0.2 * a.agency_self - 0.2 * a.agency_other + 0.1 * a.certainty;
   const dC = 0.4 * a.certainty + 0.2 * a.expectedness - 0.2 * a.novelty;
   const dN = 0.5 * a.novelty + 0.2 * (1 - a.expectedness) - 0.2 * a.controllability;
   

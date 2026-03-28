@@ -31,3 +31,4 @@ export { default as xPostPredictionDimensionDeepDive } from './x-post-prediction
 export { default as xPostCounterfactualScore } from './x-post-counterfactual-score.js';
 export { default as xPostStandaloneCounterfactual } from './x-post-standalone-counterfactual.js';
 export { default as xPostMetacognitionDeepDive } from './x-post-metacognition-deep-dive.js';
+export { default as xPostStandalone } from './x-post-standalone.js';
