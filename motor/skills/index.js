@@ -32,3 +32,4 @@ export { default as xPostCounterfactualScore } from './x-post-counterfactual-sco
 export { default as xPostStandaloneCounterfactual } from './x-post-standalone-counterfactual.js';
 export { default as xPostMetacognitionDeepDive } from './x-post-metacognition-deep-dive.js';
 export { default as xPostStandalone } from './x-post-standalone.js';
+export { default as xPostBuildFailureData } from './x-post-build-failure-data.js';
