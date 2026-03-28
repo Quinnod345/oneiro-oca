@@ -17,3 +17,4 @@ export { default as xPostSelfBuildLoopDeepDive } from './x-post-self-build-loop-
 export { default as xPostCrmDimensionGap } from './x-post-crm-dimension-gap.js';
 export { default as xThreadSelfBuildMetrics } from './x-thread-self-build-metrics.js';
 export { default as xPostSelfBuildLoopMechanics } from './x-post-self-build-loop-mechanics.js';
+export { default as xPostThreadMetrics } from './x-post-thread-metrics.js';
