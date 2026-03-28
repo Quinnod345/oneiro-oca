@@ -36,3 +36,4 @@ export { default as xPostBuildFailureData } from './x-post-build-failure-data.js
 export { default as xPostPredictionDimensionFailure } from './x-post-prediction-dimension-failure.js';
 export { default as xPostSelfBuildLoopFailures } from './x-post-self-build-loop-failures.js';
 export { default as xPostCrmPredictionBreakdown } from './x-post-crm-prediction-breakdown.js';
+export { default as xPostLovelaceAssessment } from './x-post-lovelace-assessment.js';
