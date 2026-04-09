@@ -68,3 +68,4 @@ export { default as xPostSelfBuildLoopMetricsSkill } from './x-post-self-build-l
 export { default as xPostRollbackDeepDive } from './x-post-rollback-deep-dive.js';
 export { default as xPostPredictionDimensionBreakdown } from './x-post-prediction-dimension-breakdown.js';
 export { default as xPostStandaloneCounterfactualDeepDive } from './x-post-standalone-counterfactual-deep-dive.js';
+export { default as 'x-post-self-build-pipeline' } from './x-post-self-build-pipeline.js';
