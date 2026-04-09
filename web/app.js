@@ -555,14 +555,35 @@ const LAYER_COLORS = {
 const LAYER_LABELS = { sensory:'Sensory',emotion:'Emotion',hypothesis:'Hypothesis',memory:'Memory',executive:'Executive',creative:'Creative',metacognition:'Meta',motor:'Motor' };
 
 async function updateHeatmap() {
-    const data = await f('/oca/neural-bus/full');
-    if (!data || !data.workspace) return;
-
     const canvas = document.getElementById('heatmapCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
+
+    // High-DPI scaling
+    const dpr = window.devicePixelRatio || 1;
+    const displayW = 700;
+    const displayH = 700;
+    if (canvas.width !== displayW * dpr) {
+        canvas.width = displayW * dpr;
+        canvas.height = displayH * dpr;
+        canvas.style.width = displayW + 'px';
+        canvas.style.height = displayH + 'px';
+        ctx.scale(dpr, dpr);
+    }
+    const W = displayW;
+    const H = displayH;
+
+    const data = await f('/oca/neural-bus/full');
+    if (!data || !data.workspace) {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#08080C';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(107,101,117,0.4)';
+        ctx.font = '12px "DM Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Waiting for neural bus data...', W/2, H/2);
+        return;
+    }
     const cx = W / 2;
     const cy = H / 2;
     const R = Math.min(W, H) * 0.38; // main ring radius
