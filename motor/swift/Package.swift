@@ -2,21 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "oneiro-sensory",
+    name: "oneiro-motor",
     platforms: [.macOS(.v14)],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "oneiro-sensory",
+            name: "oneiro-motor",
             path: "Sources",
             linkerSettings: [
                 .linkedFramework("Cocoa"),
-                .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("CoreGraphics"),
-                .linkedFramework("AVFoundation"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("IOKit"),
-                .linkedFramework("Speech"),
             ]
         )
     ]

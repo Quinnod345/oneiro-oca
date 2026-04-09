@@ -213,6 +213,19 @@ export async function evaluateSimulation(simulationId, actualOutcome) {
     metadata: { accuracy },
   });
 
+  // B3: Update world_model.prediction_accuracy (SPEC §2.8 maintenance)
+  // EMA so recent accuracy weighs more than historical
+  if (sim.description) {
+    try {
+      await pool.query(
+        `UPDATE world_model SET prediction_accuracy =
+           COALESCE(prediction_accuracy * 0.9 + $1 * 0.1, $1)
+         WHERE entity = $2 OR domain = $2`,
+        [accuracy, sim.purpose || sim.description?.slice(0, 100)]
+      );
+    } catch {}
+  }
+
   await emit('simulation_result', 'simulation', {
     simulationId,
     accuracy,

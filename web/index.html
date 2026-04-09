@@ -4,194 +4,173 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Oneiro — Cognitive Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="ambient">
-        <div class="orb orb-purple"></div>
-        <div class="orb orb-blue"></div>
+
+<!-- ═══ IDENTITY BAR ═══ -->
+<header class="identity-bar">
+    <div class="id-left">
+        <span class="id-name">ONEIRO</span>
+        <span class="id-separator">|</span>
+        <span class="id-continuity" id="continuityBadge">loading</span>
+        <span class="id-separator">|</span>
+        <span class="id-optime" id="opTime">—h</span>
     </div>
-
-    <header>
-        <div class="header-left">
-            <span class="moon">🌑</span>
-            <span class="title">ONEIRO</span>
-            <a href="neural.html" style="font-size:11px;color:#8738EB;text-decoration:none;opacity:0.7;margin-left:12px;">Neural Map →</a>
+    <div class="id-center">
+        <div class="id-mode" id="modeIndicator">
+            <span class="mode-dot" id="modeDot"></span>
+            <span class="mode-label" id="modeLabel">—</span>
         </div>
-        <div class="header-right">
-            <button class="notif-bell" id="notifBell" onclick="toggleNudgeOverlay()" title="Nudges">
-                🔔
-                <span class="notif-badge" id="notifBadge" style="display:none">0</span>
-            </button>
-            <div class="connection-indicator">
-                <span class="dot" id="connDot"></span>
-                <span class="conn-text" id="connText">connecting</span>
-            </div>
-        </div>
-    </header>
-
-    <!-- Nudge overlay (slides in from right) -->
-    <div class="nudge-overlay" id="nudgeOverlay">
-        <div class="nudge-overlay-header">
-            <span class="nudge-overlay-title">🔔 Nudges</span>
-            <button class="nudge-overlay-close" onclick="toggleNudgeOverlay()">✕</button>
-        </div>
-        <div class="nudge-compose">
-            <div class="nudge-compose-label">Bias The Mind</div>
-            <div class="nudge-compose-row">
-                <input type="text" id="overlayNudgeInput" class="nudge-compose-input" placeholder="Nudge Oneiro without giving a directive…">
-                <button class="nudge-compose-btn" onclick="sendNudgeFromInput('overlayNudgeInput')" title="Send nudge">↑</button>
-            </div>
-        </div>
-        <div class="nudge-overlay-feed" id="nudgeOverlayFeed">
-            <div class="nudge-empty">No nudges yet</div>
+        <div class="id-load" id="loadGauge" title="Cognitive Load">
+            <div class="load-fill" id="loadFill"></div>
         </div>
     </div>
-    <div class="nudge-overlay-backdrop" id="nudgeBackdrop" onclick="toggleNudgeOverlay()"></div>
+    <div class="id-right">
+        <span class="id-body" id="bodyOwnership">—</span>
+        <span class="id-separator">|</span>
+        <div class="id-conn">
+            <span class="conn-dot" id="connDot"></span>
+            <span class="conn-label" id="connLabel">offline</span>
+        </div>
+        <a href="neural.html" class="id-neural-link">Neural Map</a>
+    </div>
+</header>
 
-    <main>
-        <div class="grid">
-            <!-- CRM Panel -->
-            <section class="panel crm-panel">
-                <h2>Chinese Room Meter</h2>
-                <div class="crm-content">
-                    <div class="crm-ring-container">
-                        <svg class="crm-ring" viewBox="0 0 120 120">
-                            <circle class="ring-bg" cx="60" cy="60" r="52" />
-                            <circle class="ring-fg" id="crmRing" cx="60" cy="60" r="52" />
-                        </svg>
-                        <div class="crm-score" id="crmScore">—</div>
-                    </div>
-                    <div class="crm-interpretation" id="crmInterpretation"></div>
-                    <div class="crm-components" id="crmComponents"></div>
-                </div>
-            </section>
+<!-- ═══ MAIN: TWO-COLUMN ═══ -->
+<main class="main-grid">
 
-            <!-- PADCN Core Affect -->
-            <section class="panel padcn-panel">
-                <h2>Core Affect (PADCN)</h2>
+    <!-- LEFT COLUMN: Anti-Decay -->
+    <aside class="col-decay">
+        <section class="decay-hero">
+            <div class="decay-hero-header">
+                <h1 class="section-title">Chinese Room Meter</h1>
+                <span class="decay-verdict" id="decayVerdict">—</span>
+            </div>
+            <div class="crm-score-large" id="crmScoreLarge">—</div>
+            <div class="crm-interpretation" id="crmInterpretation"></div>
+        </section>
+
+        <section class="decay-trends">
+            <h2 class="subsection-title">CRM Trend</h2>
+            <div class="trend-horizons" id="trendHorizons"></div>
+        </section>
+
+        <section class="decay-components">
+            <h2 class="subsection-title">Components</h2>
+            <div class="component-list" id="componentList"></div>
+        </section>
+
+        <section class="decay-failures">
+            <h2 class="subsection-title">Failure Conditions</h2>
+            <div class="failure-list" id="failureList">
+                <div class="empty-state">No active failures</div>
+            </div>
+        </section>
+
+        <section class="decay-maintenance">
+            <h2 class="subsection-title">Maintenance Loop</h2>
+            <div class="maintenance-grid" id="maintenanceGrid"></div>
+        </section>
+    </aside>
+
+    <!-- RIGHT COLUMN: Cognitive State -->
+    <div class="col-state">
+        <div class="state-grid">
+
+            <!-- PADCN -->
+            <section class="card card-padcn">
+                <h2 class="card-title">Core Affect</h2>
                 <div class="padcn-dims" id="padcnDims"></div>
             </section>
 
-            <!-- Emotion Channels (14ch) -->
-            <section class="panel channels-panel">
-                <h2>Emotion Channels</h2>
+            <!-- Emotion Channels -->
+            <section class="card card-emotion">
+                <h2 class="card-title">Emotion</h2>
                 <div class="emotion-meta" id="emotionMeta"></div>
                 <div class="emotion-bars" id="emotionBars"></div>
             </section>
 
-            <!-- Drives -->
-            <section class="panel drives-panel">
-                <h2>Drives</h2>
-                <div class="drives-list" id="drivesList"></div>
-            </section>
-
-            <!-- Meta-Emotions -->
-            <section class="panel meta-panel">
-                <h2>Meta-Emotions</h2>
-                <div class="meta-list" id="metaList"></div>
-            </section>
-
-            <!-- Self-Model -->
-            <section class="panel self-panel">
-                <h2>Self-Model</h2>
-                <div class="self-list" id="selfList"></div>
-            </section>
-
-            <!-- Policy Modulators -->
-            <section class="panel policy-panel">
-                <h2>Policy Modulators</h2>
-                <div class="policy-list" id="policyList"></div>
-            </section>
-
-            <!-- Expression Profile -->
-            <section class="panel expression-panel">
-                <h2>Expression Profile</h2>
-                <div class="expression-list" id="expressionList"></div>
-            </section>
-
-            <!-- Body Mode -->
-            <section class="panel body-panel">
-                <h2>Body Ownership</h2>
-                <div class="body-mode" id="bodyMode">
-                    <span class="body-icon">—</span>
-                    <span class="body-label">—</span>
-                </div>
-            </section>
-
             <!-- Working Memory -->
-            <section class="panel memory-panel">
-                <h2>Working Memory</h2>
-                <div class="memory-slots" id="memorySlots"></div>
-            </section>
-
-            <!-- Goals -->
-            <section class="panel goals-panel">
-                <h2>Active Goals</h2>
-                <div class="goals-list" id="goalsList"></div>
-            </section>
-
-            <!-- Dreams -->
-            <section class="panel dreams-panel">
-                <h2>Dreams (Emotion-Led)</h2>
-                <div class="dream-meta" id="dreamMeta">loading…</div>
-                <div class="dream-list" id="dreamList"></div>
-                <button class="dream-act-btn" id="dreamActBtn">Act On Dreams Now</button>
+            <section class="card card-wm">
+                <h2 class="card-title">Working Memory <span class="card-count" id="wmCount">0/7</span></h2>
+                <div class="wm-slots" id="wmSlots">
+                    <div class="empty-state">Empty</div>
+                </div>
             </section>
 
             <!-- Hypotheses -->
-            <section class="panel hypo-panel">
-                <h2>Hypotheses</h2>
-                <div class="hypo-list" id="hypoList"></div>
+            <section class="card card-hypo">
+                <h2 class="card-title">Hypotheses</h2>
+                <div class="hypo-list" id="hypoList">
+                    <div class="empty-state">None pending</div>
+                </div>
+            </section>
+
+            <!-- Goals -->
+            <section class="card card-goals">
+                <h2 class="card-title">Goals</h2>
+                <div class="goals-list" id="goalsList">
+                    <div class="empty-state">No active goals</div>
+                </div>
+            </section>
+
+            <!-- Dreams -->
+            <section class="card card-dreams">
+                <h2 class="card-title">Dreams</h2>
+                <div class="dream-list" id="dreamList">
+                    <div class="empty-state">No active dreams</div>
+                </div>
+            </section>
+
+            <!-- Metacognition -->
+            <section class="card card-meta">
+                <h2 class="card-title">Metacognition</h2>
+                <div class="meta-content" id="metaContent">
+                    <div class="empty-state">—</div>
+                </div>
+            </section>
+
+            <!-- Drives -->
+            <section class="card card-drives">
+                <h2 class="card-title">Drives</h2>
+                <div class="drives-list" id="drivesList"></div>
             </section>
 
             <!-- Perception -->
-            <section class="panel perception-panel">
-                <h2>Perception</h2>
-                <div class="perception-data" id="perceptionData"></div>
-                <div class="visual-memory-latest" id="visualMemoryLatest"></div>
-                <div class="visual-memory-search">
-                    <input type="text" id="visualSearchInput" placeholder="Search visual memory (e.g. stripe docs tab)">
-                    <button id="visualSearchBtn" class="visual-search-btn">Search</button>
-                </div>
-                <div class="visual-search-results" id="visualSearchResults"></div>
-            </section>
-
-            <!-- Nudges -->
-            <section class="panel nudges-panel">
-                <h2>Nudges</h2>
-                <div class="nudge-compose nudge-compose-panel">
-                    <div class="nudge-compose-label">Bias The Mind</div>
-                    <div class="nudge-compose-row">
-                        <input type="text" id="panelNudgeInput" class="nudge-compose-input" placeholder="Nudge Oneiro without giving a directive…">
-                        <button class="nudge-compose-btn" onclick="sendNudgeFromInput('panelNudgeInput')" title="Send nudge">↑</button>
-                    </div>
-                </div>
-                <div class="nudges-list" id="nudgesList">
-                    <div class="nudge-empty">No nudges yet</div>
+            <section class="card card-perception">
+                <h2 class="card-title">Perception</h2>
+                <div class="perception-data" id="perceptionData">
+                    <div class="empty-state">—</div>
                 </div>
             </section>
 
-            <!-- Trader Mind -->
-            <section class="panel trader-panel" style="grid-column: span 2;">
-                <h2>💰 Trader Mind</h2>
-                <div id="traderContent" style="font-family: monospace; font-size: 12px; color: #aaa;">loading...</div>
+            <!-- Cohabitation -->
+            <section class="card card-cohab">
+                <h2 class="card-title">Cohabitation</h2>
+                <div class="cohab-content" id="cohabContent">
+                    <div class="empty-state">—</div>
+                </div>
             </section>
 
-            <!-- Chat -->
-            <section class="panel chat-panel">
-                <h2>Chat</h2>
-                <div class="chat-messages" id="chatMessages">
-                    <div class="chat-empty">Send a message to Oneiro…</div>
-                </div>
-                <div class="chat-input-area">
-                    <input type="text" id="chatInput" placeholder="Message Oneiro…" autocomplete="off">
-                    <button id="chatSend" class="send-btn">↑</button>
-                </div>
-            </section>
         </div>
-    </main>
+    </div>
+</main>
 
-    <script src="app.js"></script>
+<!-- ═══ BOTTOM: CHAT ═══ -->
+<footer class="chat-zone">
+    <div class="chat-messages" id="chatMessages">
+        <div class="empty-state chat-empty">Send a message to Oneiro</div>
+    </div>
+    <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Message Oneiro..." autocomplete="off">
+        <button id="chatSend" class="chat-send-btn" aria-label="Send">&#8593;</button>
+    </div>
+</footer>
+
+<script src="app.js"></script>
 </body>
 </html>

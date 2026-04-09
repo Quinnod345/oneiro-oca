@@ -166,4 +166,72 @@ export async function runCycle() {
   };
 }
 
-export default { detectStuck, checkCalibration, recordBias, traceReasoning, evaluateTrace, runCycle };
+// B4: Self-accuracy tracking (SPEC §2.8 — metacognition monitors itself)
+// Track whether interventions actually resolved the issues they targeted
+export async function trackInterventionOutcome(observationId, wasEffective, notes = '') {
+  try {
+    await pool.query(
+      `UPDATE metacognitive_observations SET
+         intervention_applied = TRUE,
+         intervention_result = $1
+       WHERE id = $2`,
+      [wasEffective ? `effective: ${notes}` : `ineffective: ${notes}`, observationId]
+    );
+  } catch {}
+}
+
+export async function selfAccuracy() {
+  try {
+    const { rows: [stats] } = await pool.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE intervention_applied) AS total,
+         COUNT(*) FILTER (WHERE intervention_result LIKE 'effective%') AS effective,
+         COUNT(*) FILTER (WHERE intervention_result LIKE 'ineffective%') AS ineffective
+       FROM metacognitive_observations
+       WHERE timestamp > NOW() - INTERVAL '30 days'`
+    );
+    const total = Number(stats.total) || 0;
+    const effective = Number(stats.effective) || 0;
+    return {
+      total_interventions: total,
+      effective,
+      accuracy: total > 0 ? effective / total : null,
+      period: '30d'
+    };
+  } catch {
+    return { total_interventions: 0, effective: 0, accuracy: null, period: '30d' };
+  }
+}
+
+// Sweep: check if past stuck-detection interventions resolved
+export async function sweepInterventionOutcomes() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, description, evidence, timestamp
+       FROM metacognitive_observations
+       WHERE observation_type = 'stuck_state'
+         AND intervention_applied IS NOT TRUE
+         AND timestamp < NOW() - INTERVAL '30 minutes'
+       ORDER BY timestamp DESC LIMIT 5`
+    );
+    let resolved = 0;
+    for (const obs of rows) {
+      // Check if the stuck condition no longer holds
+      const current = await detectStuck();
+      const stillStuck = current.some(s =>
+        s.type === (obs.evidence?.type || '') || s.description === obs.description
+      );
+      await trackInterventionOutcome(obs.id, !stillStuck,
+        stillStuck ? 'condition persists' : 'condition resolved');
+      if (!stillStuck) resolved++;
+    }
+    return { checked: rows.length, resolved };
+  } catch {
+    return { checked: 0, resolved: 0 };
+  }
+}
+
+export default {
+  detectStuck, checkCalibration, recordBias, traceReasoning, evaluateTrace,
+  runCycle, trackInterventionOutcome, selfAccuracy, sweepInterventionOutcomes
+};

@@ -45,9 +45,11 @@ async function updateExisting({
   label,
   metadata,
 }) {
+  // Bounded update: use diminishing returns as strength approaches 1.0
+  // New formula: strength + delta * (1 - strength) -- asymptotically approaches 1.0
   const { rows } = await pool.query(
     `UPDATE neural_connections
-     SET strength = LEAST(1.0, GREATEST(strength, $6) + $5),
+     SET strength = LEAST(0.95, strength + $5 * (1.0 - strength)),
          activation_count = activation_count + 1,
          last_activated = NOW(),
          label = COALESCE($7, label),
@@ -254,15 +256,21 @@ export async function ingestFallbackCoOccurrence({ status = {}, sense = null, ma
 }
 
 export async function maintainSynapses() {
+  // Continuous decay: ALL connections decay every cycle, not just stale ones
+  // Active connections regrow faster than they decay; inactive ones fade
   const decay = await pool.query(
     `UPDATE neural_connections
-     SET strength = GREATEST(0.0, strength * 0.98)
-     WHERE last_activated < NOW() - INTERVAL '1 hour'`
+     SET strength = GREATEST(0.0, strength * 0.995)`
+  );
+  // Stronger decay for connections that haven't been activated recently
+  const staleDec = await pool.query(
+    `UPDATE neural_connections
+     SET strength = GREATEST(0.0, strength * 0.97)
+     WHERE last_activated < NOW() - INTERVAL '30 minutes'`
   );
   const prune = await pool.query(
-    `DELETE FROM neural_connections
-     WHERE strength < 0.05`
+    `DELETE FROM neural_connections WHERE strength < 0.05`
   );
-  return { decayed: decay.rowCount, pruned: prune.rowCount };
+  return { decayed: decay.rowCount, stale_decayed: staleDec.rowCount, pruned: prune.rowCount };
 }
 

@@ -70,12 +70,15 @@ export async function consolidate() {
   
   let episodesReviewed = 0, semanticCreated = 0, proceduralUpdated = 0, contradictionUpdates = 0, episodesPruned = 0;
   
-  // 1. REPLAY: Get unconsolidated episodic memories
+  // 1. REPLAY: Get unconsolidated episodic memories (larger batch for faster backlog processing)
+  const BATCH_SIZE = 200;
+  const LLM_SAMPLE_SIZE = 20; // send summaries of these to LLM; mark all BATCH_SIZE as reviewed
   const { rows: rawEpisodes } = await pool.query(
     `SELECT * FROM episodic_memory 
      WHERE consolidation_status = 'raw'
      ORDER BY importance_score DESC
-     LIMIT 100`
+     LIMIT $1`,
+    [BATCH_SIZE]
   );
   episodesReviewed = rawEpisodes.length;
   
@@ -84,45 +87,57 @@ export async function consolidate() {
     return { episodesReviewed: 0, semanticCreated: 0, proceduralUpdated: 0, episodesPruned: 0 };
   }
   
-  // 2. EXTRACT PATTERNS: Use LLM to find patterns across episodes
-  const episodeSummaries = rawEpisodes.slice(0, 30).map(e => 
+  // 2. EXTRACT PATTERNS: Sample representative episodes for LLM analysis
+  // Take highest importance ones for LLM, mark entire batch as reviewed
+  const sampled = rawEpisodes.slice(0, LLM_SAMPLE_SIZE);
+  const episodeSummaries = sampled.map(e => 
     `[${e.timestamp}] (${e.event_type}) ${e.content.slice(0, 200)} [valence:${e.emotional_valence}, surprise:${e.surprise_magnitude}]`
   ).join('\n');
   
   try {
     const response = await llm.messages.create({
       model: 'claude-sonnet-4-6',
-      system: `You are a memory consolidation engine. Given a list of episodic memories, extract:
-1. PRINCIPLES: General knowledge/rules that can be abstracted (e.g., "Quinn prefers direct communication")
-2. PROCEDURES: Repeated action patterns that could become automatic skills (e.g., "when seeing error X, do Y")
-3. CONNECTIONS: Causal links between events (e.g., "high typing speed correlates with frustration")
+      system: `You are a memory consolidation engine. Given episodic memories, extract durable knowledge.
 
-You MUST respond in valid JSON only, no other text:
+RESPOND IN VALID JSON ONLY. Keep evidence_episodes as short numeric IDs only. Be concise.
 {
-  "principles": [{"concept": "...", "category": "...", "evidence_episodes": [ids], "confidence": 0.0-1.0}],
-  "procedures": [{"trigger": {...}, "actions": [...], "domain": "..."}],
-  "connections": [{"cause": "...", "effect": "...", "mechanism": "...", "confidence": 0.0-1.0}],
-  "contradictions": [{"concept": "...", "contradicts": "...", "reason": "...", "evidence_episodes": [ids], "confidence": 0.0-1.0}]
-}`,
+  "principles": [{"concept": "one sentence", "category": "short_tag", "confidence": 0.0-1.0}],
+  "procedures": [{"trigger": {"key":"value"}, "actions": ["step1"], "domain": "tag"}],
+  "connections": [{"cause": "short", "effect": "short", "mechanism": "short", "confidence": 0.5}],
+  "contradictions": [{"concept": "short", "contradicts": "short", "reason": "short", "confidence": 0.5}]
+}
+
+Extract 3-8 principles, 0-3 procedures, 0-3 connections. DO NOT include long evidence arrays. Keep total response under 800 tokens.`,
       messages: [
         { role: 'user', content: episodeSummaries }
       ],
       temperature: 0.3,
-      max_tokens: 1024
+      max_tokens: 2048
     });
     
-    const extracted = parseConsolidationPayload(response.content?.[0]?.text);
-    
+    const rawText = response.content?.[0]?.text || '';
+    const extracted = parseConsolidationPayload(rawText);
+
+    if (extracted.principles.length === 0 && extracted.procedures.length === 0 && extracted.connections.length === 0) {
+      console.log('[consolidation] LLM returned no extractable patterns. Raw response (first 300 chars):', rawText.slice(0, 300));
+    } else {
+      console.log(`[consolidation] extracted: ${extracted.principles.length} principles, ${extracted.procedures.length} procedures, ${extracted.connections.length} connections, ${extracted.contradictions.length} contradictions`);
+    }
+
     // 3. ABSTRACT: Create semantic memories from principles
     if (extracted.principles) {
       for (const p of extracted.principles) {
-        const result = await semantic.learn(p.concept, {
-          category: p.category,
-          sourceType: 'abstraction',
-          sourceEpisodes: p.evidence_episodes || [],
-          confidence: p.confidence || 0.5
-        });
-        if (result.action === 'created') semanticCreated++;
+        try {
+          const result = await semantic.learn(p.concept, {
+            category: p.category,
+            sourceType: 'abstraction',
+            sourceEpisodes: p.evidence_episodes || [],
+            confidence: p.confidence || 0.5
+          });
+          if (result.action === 'created' || result.action === 'updated') semanticCreated++;
+        } catch (e) {
+          console.error('[consolidation] semantic.learn failed:', e.message?.slice(0, 100));
+        }
       }
     }
     
@@ -215,14 +230,35 @@ You MUST respond in valid JSON only, no other text:
     }
   } catch (e) {
     console.error('[consolidation] extraction failed:', e.message);
+    // DO NOT mark as reviewed when extraction fails -- leave as raw for retry
+    await pool.query(
+      `INSERT INTO consolidation_log (completed_at, episodes_reviewed, semantic_created, procedural_updated, episodes_pruned, notes)
+       VALUES (NOW(), $1, 0, 0, 0, $2)`,
+      [episodesReviewed, `Extraction failed: ${e.message?.slice(0, 200)}`]
+    );
+    const elapsed = ((Date.now() - startedAt.getTime()) / 1000).toFixed(1);
+    console.log(`[consolidation] FAILED in ${elapsed}s: ${episodesReviewed} episodes left as raw for retry`);
+    return { episodesReviewed, semanticCreated: 0, proceduralUpdated: 0, episodesPruned: 0, failed: true };
   }
-  
-  // 6. MARK REVIEWED
+
+  // QUALITY GATE: only mark as reviewed if we actually extracted something
+  const extracted_anything = semanticCreated > 0 || proceduralUpdated > 0 || contradictionUpdates > 0;
   const reviewedIds = rawEpisodes.map(e => e.id);
-  await pool.query(
-    `UPDATE episodic_memory SET consolidation_status = 'reviewed' WHERE id = ANY($1)`,
-    [reviewedIds]
-  );
+
+  if (extracted_anything) {
+    await pool.query(
+      `UPDATE episodic_memory SET consolidation_status = 'reviewed' WHERE id = ANY($1)`,
+      [reviewedIds]
+    );
+  } else {
+    // LLM returned valid but empty -- mark as reviewed anyway to avoid infinite loops
+    // but log the empty extraction
+    await pool.query(
+      `UPDATE episodic_memory SET consolidation_status = 'reviewed' WHERE id = ANY($1)`,
+      [reviewedIds]
+    );
+    console.log('[consolidation] warning: LLM returned no patterns from', episodesReviewed, 'episodes');
+  }
   
   // 7. REFRESH IMPORTANCE
   await episodic.refreshImportance(200);

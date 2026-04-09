@@ -148,6 +148,41 @@ export async function evaluateDeliberation(deliberationId, outcome, rightPerspec
   );
 }
 
+// Auto-evaluate unresolved deliberations (SPEC §2.8 maintenance loop)
+export async function sweepUnresolvedDeliberations(limit = 3) {
+  const { rows } = await pool.query(
+    `SELECT id, decision, resolution, skeptic_argument, builder_argument, dreamer_argument, empath_argument
+     FROM deliberations
+     WHERE outcome IS NULL AND completed_at < NOW() - INTERVAL '1 hour'
+     ORDER BY completed_at ASC LIMIT $1`,
+    [limit]
+  );
+
+  let evaluated = 0;
+  for (const d of rows) {
+    try {
+      const response = await llm.messages.create({
+        model: 'claude-sonnet-4-6',
+        system: 'You evaluate past decisions. Given a decision and the perspectives that argued, determine which perspective was most accurate based on what likely happened. Reply as JSON: {"outcome":"brief description","right_perspective":"skeptic|builder|dreamer|empath","lesson":"one sentence"}',
+        messages: [{
+          role: 'user',
+          content: `Decision: ${d.decision}\nResolution: ${d.resolution}\nSkeptic: ${(d.skeptic_argument || '').slice(0, 200)}\nBuilder: ${(d.builder_argument || '').slice(0, 200)}\nDreamer: ${(d.dreamer_argument || '').slice(0, 200)}\nEmpath: ${(d.empath_argument || '').slice(0, 200)}`
+        }],
+        max_tokens: 200,
+        temperature: 0.3
+      });
+      const text = response.content[0].text;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        await evaluateDeliberation(d.id, parsed.outcome, parsed.right_perspective, parsed.lesson);
+        evaluated++;
+      }
+    } catch {}
+  }
+  return { swept: rows.length, evaluated };
+}
+
 // Get perspective accuracy stats
 export async function perspectiveStats() {
   const { rows } = await pool.query(

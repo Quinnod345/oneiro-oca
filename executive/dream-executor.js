@@ -25,7 +25,7 @@ function resolveOCAPath(relativePath) {
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 4;
-const TASK_TIMEOUT_MS = 300_000;
+const TASK_TIMEOUT_MS = 480_000;
 const SELF_BUILD_TIMEOUT_MS = 300_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
@@ -86,7 +86,7 @@ async function verifyDreamRelevance(dream) {
   }
 
   // Skip verification for dreams with moderate code references (likely executable)
-  if (refs.files.length <= 35 && refs.patterns.length <= 70) {
+  if (refs.files.length <= 60 && refs.patterns.length <= 120) {
     return { relevant: true };
   }
 
@@ -189,6 +189,9 @@ async function getPostHistory() {
 }
 // Track dreams where credential gaps were already notified this session (avoid spam).
 const credentialGapsNotified = new Set();
+
+// Ensure dreams don't get stuck in intermediate states
+const EXECUTION_TIMEOUT_MS = 300000; // 5 minutes max per dream
 
 async function createRuntimeNotification(message, category = 'thought', priority = 'normal', metadata = {}) {
   try {

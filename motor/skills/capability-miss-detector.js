@@ -1,5 +1,5 @@
 // Stub: capability-miss-detector.js
-// Auto-created to unblock mind.js startup
+// Auto-created to unblock OCA startup
 
 export function checkCapabilityMiss() {
   return null;

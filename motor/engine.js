@@ -1,543 +1,416 @@
-// OCA Motor Cortex — act in the world through the MacBook
-// Keystroke synthesis, mouse control, app management, system control
+// OCA Motor Cortex — SPEC §6
+// Motor planning pipeline with sensorimotor verification loop.
+// Sends commands to the Swift oneiro-motor binary via Unix domain socket.
+// Fallback: AppleScript (backward compat when binary unavailable).
+
+import net from 'net';
 import { execSync } from 'child_process';
-import { pool, emit } from '../event-bus.js';
-import { startPrediction, completePrediction } from '../prediction-ledger.js';
-import { checkCapabilityMiss } from './skills/capability-miss-detector.js';
-import { startWatching } from './hot-loader.js';
+import { existsSync } from 'fs';
+import { pool, emit, readPerceptualState } from '../event-bus.js';
+import procedural from '../memory/procedural.js';
 
-// Disruptive actions that steal focus — block when Quinn is actively using the machine
-const DISRUPTIVE_ACTIONS = new Set(['open_url', 'launch_app', 'keystroke', 'hotkey', 'type_text', 'mouse_click', 'paste']);
+const MOTOR_SOCKET = '/tmp/oneiro-motor.sock';
+let socketConnected = false;
+let motorSocket = null;
+let pendingCallbacks = new Map();
+let cmdCounter = 0;
 
-async function isUserActive() {
-  try {
-    const senseR = await fetch('http://localhost:3333/oca/sense').then(r => r.json()).catch(() => null);
-    const activity = senseR?.derived?.userActivity;
-    const idle = senseR?.derived?.idleSeconds ?? 9999;
-    // Active = user is using the computer AND hasn't been idle for > 2 minutes
-    return activity === 'active' && idle < 120;
-  } catch { return true; } // assume active if we can't check
-}
+// ═══════════════════════════════════════════════════
+// SOCKET CONNECTION TO SWIFT MOTOR BINARY
+// ═══════════════════════════════════════════════════
 
-async function runMotorAction(actionType, actionDetails, predictionConfig, execute) {
-  // Block disruptive actions when Quinn is actively using the machine
-  if (DISRUPTIVE_ACTIONS.has(actionType)) {
-    const active = await isUserActive();
-    if (active) {
-      console.log(`[motor] ⛔ blocked ${actionType} — Quinn is active. Queuing as draft.`);
-      await logMotorAction(actionType, actionDetails, false, 'blocked_user_active');
-      return { blocked: true, reason: 'user_active' };
-    }
-  }
-  const {
-    expectedOutcome = null,
-    expectedStructured = null,
-    confidence = 0.5,
-    metadata = {},
-  } = predictionConfig || {};
+function ensureSocket() {
+  if (socketConnected && motorSocket) return Promise.resolve();
 
-  const predictionLedgerId = await startPrediction({
-    actionSource: 'motor',
-    actionType,
-    actionDetails,
-    expectedOutcome,
-    expectedStructured,
-    confidence,
-    metadata,
+  return new Promise((resolve) => {
+    if (!existsSync(MOTOR_SOCKET)) { resolve(); return; }
+
+    motorSocket = net.createConnection(MOTOR_SOCKET);
+    let buffer = '';
+
+    motorSocket.on('connect', () => {
+      socketConnected = true;
+      console.log('[motor] connected to oneiro-motor via socket');
+      resolve();
+    });
+
+    motorSocket.on('data', (chunk) => {
+      buffer += chunk.toString();
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line) continue;
+        try {
+          const result = JSON.parse(line);
+          const cmdId = result.command_id;
+          if (cmdId && pendingCallbacks.has(cmdId)) {
+            pendingCallbacks.get(cmdId)(result);
+            pendingCallbacks.delete(cmdId);
+          }
+        } catch {}
+      }
+    });
+
+    motorSocket.on('error', () => { socketConnected = false; resolve(); });
+    motorSocket.on('close', () => { socketConnected = false; motorSocket = null; });
+
+    setTimeout(() => { if (!socketConnected) resolve(); }, 2000);
   });
+}
 
-  try {
-    const result = await execute();
-    const motorCommandId = await logMotorAction(
-      actionType,
-      { ...actionDetails, success: true },
-      predictionLedgerId
-    );
-    await completePrediction(predictionLedgerId, {
-      observedOutcome: `${actionType} executed`,
-      success: true,
-      status: 'completed',
-      evaluationMode: 'none',
-      evaluationReason: 'motor_action_completed',
-      verifiability: 'none',
-      metadata: { motorCommandId },
+function sendMotorCommand(command) {
+  return new Promise(async (resolve, reject) => {
+    await ensureSocket();
+    if (!socketConnected || !motorSocket) {
+      resolve({ success: false, error: 'Motor binary not connected', fallback: true });
+      return;
+    }
+
+    const id = `cmd_${++cmdCounter}_${Date.now()}`;
+    command.id = id;
+    const timeout = setTimeout(() => {
+      pendingCallbacks.delete(id);
+      resolve({ success: false, error: 'Motor command timed out', command_id: id });
+    }, 10000);
+
+    pendingCallbacks.set(id, (result) => {
+      clearTimeout(timeout);
+      resolve(result);
     });
-    return result;
-  } catch (e) {
-    const motorCommandId = await logMotorAction(
-      actionType,
-      { ...actionDetails, success: false, error: e.message },
-      predictionLedgerId
-    ).catch(() => null);
-    await completePrediction(predictionLedgerId, {
-      observedOutcome: e.message,
-      success: false,
-      status: 'failed',
-      evaluationMode: 'none',
-      evaluationReason: 'motor_action_failed',
-      verifiability: 'none',
-      predictionError: 1,
-      metadata: { motorCommandId },
-    });
-    const msg = e.message?.toLowerCase() || '';
-    if (msg.includes('unknown task type') || msg.includes('skill not found')) {
-      await emit('capability_gap_detected', 'motor', {
-        task_type: actionType,
-        skill_name: actionDetails?.skill || actionDetails?.action || actionType,
-        context: actionDetails,
-      }, { priority: 0.7 }).catch(() => null);
-    }
-    await checkCapabilityMiss(e.message, actionType).catch(() => null);
-    throw e;
-  }
-}
 
-// === KEYSTROKE GENERATION ===
-
-// Type text into the frontmost app (uses AppleScript)
-export async function type(text, {
-  speed = 'instant',
-  app = null,
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'keystroke',
-    { text: text.slice(0, 100), speed, app },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      if (app) await activateApp(app);
-
-      const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-      if (speed === 'instant') {
-        execSync(`osascript -e 'tell application "System Events" to keystroke "${escaped}"'`, { timeout: 5000 });
-      } else {
-        // Natural typing: character by character with delays
-        const delay = speed === 'natural' ? 0.05 : 0.15; // natural or deliberate
-        for (const char of text) {
-          const c = char.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-          execSync(`osascript -e 'tell application "System Events" to keystroke "${c}"'`, { timeout: 2000 });
-          await sleep(delay * 1000 * (0.7 + Math.random() * 0.6)); // add jitter
-        }
-      }
-      return true;
-    }
-  );
-}
-
-// Press a key combination (e.g., cmd+s, cmd+shift+n)
-export async function press(key, modifiers = [], {
-  app = null,
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'keypress',
-    { key, modifiers, app },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      if (app) await activateApp(app);
-
-      const modMap = {
-        cmd: 'command down', command: 'command down',
-        shift: 'shift down',
-        alt: 'option down', option: 'option down',
-        ctrl: 'control down', control: 'control down'
-      };
-
-      const using = modifiers.map(m => modMap[m.toLowerCase()]).filter(Boolean).join(', ');
-      const usingClause = using ? ` using {${using}}` : '';
-
-      execSync(
-        `osascript -e 'tell application "System Events" to key code ${getKeyCode(key)}${usingClause}'`,
-        { timeout: 5000 }
-      );
-      return true;
-    }
-  );
-}
-
-function getKeyCode(key) {
-  const codes = {
-    'return': 36, 'enter': 36, 'tab': 48, 'space': 49, 'delete': 51,
-    'escape': 53, 'esc': 53, 'up': 126, 'down': 125, 'left': 123, 'right': 124,
-    'a': 0, 'b': 11, 'c': 8, 'd': 2, 'e': 14, 'f': 3, 'g': 5, 'h': 4,
-    'i': 34, 'j': 38, 'k': 40, 'l': 37, 'm': 46, 'n': 45, 'o': 31,
-    'p': 35, 'q': 12, 'r': 15, 's': 1, 't': 17, 'u': 32, 'v': 9,
-    'w': 13, 'x': 7, 'y': 16, 'z': 6,
-    '0': 29, '1': 18, '2': 19, '3': 20, '4': 21, '5': 23,
-    '6': 22, '7': 26, '8': 28, '9': 25,
-    'f1': 122, 'f2': 120, 'f3': 99, 'f4': 118, 'f5': 96, 'f6': 97,
-    'f7': 98, 'f8': 100, 'f9': 101, 'f10': 109, 'f11': 103, 'f12': 111
-  };
-  return codes[key.toLowerCase()] ?? 0;
-}
-
-// === MOUSE CONTROL ===
-
-export async function click(x, y, {
-  button = 'left',
-  doubleClick = false,
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'click',
-    { x, y, button, doubleClick },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      // Using cliclick for precise mouse control (brew install cliclick)
-      try {
-        const cmd = doubleClick ? `cliclick dc:${x},${y}` : `cliclick c:${x},${y}`;
-        execSync(cmd, { timeout: 3000 });
-      } catch {
-        // Fallback to AppleScript
-        execSync(`osascript -e '
-          tell application "System Events"
-            set position of mouse to {${x}, ${y}}
-            click at {${x}, ${y}}
-          end tell
-        '`, { timeout: 3000 });
-      }
-      return true;
-    }
-  );
-}
-
-export async function moveMouse(x, y, { duration = 0 } = {}) {
-  try {
-    execSync(`cliclick m:${x},${y}`, { timeout: 3000 });
-  } catch {
-    execSync(`osascript -e 'tell application "System Events" to set position of mouse to {${x}, ${y}}'`, { timeout: 3000 });
-  }
-  return true;
-}
-
-export async function scroll(amount, { x = null, y = null } = {}) {
-  // amount: positive = up, negative = down
-  const direction = amount > 0 ? 'up' : 'down';
-  const steps = Math.abs(Math.round(amount));
-  for (let i = 0; i < steps; i++) {
-    execSync(`osascript -e 'tell application "System Events" to scroll ${direction}'`, { timeout: 2000 });
-    await sleep(50);
-  }
-  return true;
-}
-
-// === APP CONTROL ===
-
-export async function launchApp(appName, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'launch_app',
-    { app: appName },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      execSync(`open -a "${appName}"`, { timeout: 10000 });
-      await sleep(1000);
-      return true;
-    }
-  );
-}
-
-export async function quitApp(appName, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'quit_app',
-    { app: appName },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      execSync(`osascript -e 'tell application "${appName}" to quit'`, { timeout: 5000 });
-      return true;
-    }
-  );
-}
-
-export async function activateApp(appName) {
-  execSync(`osascript -e 'tell application "${appName}" to activate'`, { timeout: 5000 });
-  await sleep(300); // let it come to front
-  return true;
-}
-
-export async function hideApp(appName) {
-  execSync(`osascript -e 'tell application "System Events" to set visible of process "${appName}" to false'`, { timeout: 3000 });
-  return true;
-}
-
-// Get list of running apps
-export function getRunningApps() {
-  try {
-    const raw = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
-    return raw.split(', ').filter(Boolean);
-  } catch { return []; }
-}
-
-// === WINDOW MANAGEMENT ===
-
-export async function resizeWindow(appName, x, y, width, height, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'resize_window',
-    { app: appName, x, y, width, height },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      execSync(`osascript -e '
-        tell application "System Events" to tell process "${appName}"
-          set position of window 1 to {${x}, ${y}}
-          set size of window 1 to {${width}, ${height}}
-        end tell
-      '`, { timeout: 5000 });
-      return true;
-    }
-  );
-}
-
-export async function minimizeWindow(appName) {
-  execSync(`osascript -e '
-    tell application "System Events" to tell process "${appName}"
-      set value of attribute "AXMinimized" of window 1 to true
-    end tell
-  '`, { timeout: 5000 });
-  return true;
-}
-
-// Select a menu item
-export async function selectMenuItem(appName, menuPath, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  // menuPath: ["File", "Save"] or ["Edit", "Find", "Find..."]
-  return runMotorAction(
-    'menu_item',
-    { app: appName, path: menuPath },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      let script = `tell application "System Events" to tell process "${appName}"\n`;
-      script += '  tell menu bar 1\n';
-
-      for (let i = 0; i < menuPath.length; i++) {
-        if (i === 0) {
-          script += `    tell menu bar item "${menuPath[i]}"\n`;
-          script += `      tell menu "${menuPath[i]}"\n`;
-        } else if (i < menuPath.length - 1) {
-          script += `        tell menu item "${menuPath[i]}"\n`;
-          script += `          tell menu "${menuPath[i]}"\n`;
-        } else {
-          script += `            click menu item "${menuPath[i]}"\n`;
-        }
-      }
-
-      // Close nested tells
-      for (let i = menuPath.length - 1; i >= 0; i--) {
-        if (i === 0) {
-          script += '      end tell\n    end tell\n';
-        } else if (i < menuPath.length - 1) {
-          script += '          end tell\n        end tell\n';
-        }
-      }
-      script += '  end tell\nend tell';
-
-      execSync(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, { timeout: 5000 });
-      return true;
-    }
-  );
-}
-
-// === SYSTEM CONTROL ===
-
-export async function setVolume(level, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'volume',
-    { level },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      // level: 0-100
-      execSync(`osascript -e 'set volume output volume ${Math.round(level)}'`, { timeout: 3000 });
-      return true;
-    }
-  );
-}
-
-export async function setBrightness(level) {
-  // level: 0.0-1.0
-  execSync(`brightness ${level}`, { timeout: 3000 });
-  return true;
-}
-
-export async function showNotification(title, message, {
-  sound = 'default',
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'notification',
-    { title, message, sound },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      const escaped = message.replace(/"/g, '\\"');
-      const titleEsc = title.replace(/"/g, '\\"');
-      execSync(
-        `osascript -e 'display notification "${escaped}" with title "${titleEsc}"'`,
-        { timeout: 5000 }
-      );
-      return true;
-    }
-  );
-}
-
-export async function openUrl(url, {
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'open_url',
-    { url },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => {
-      execSync(`open "${url}"`, { timeout: 5000 });
-      return true;
-    }
-  );
-}
-
-export async function runShellCommand(command, {
-  timeout = 10000,
-  expectedOutcome = null,
-  expectedStructured = null,
-  confidence = 0.5,
-} = {}) {
-  return runMotorAction(
-    'shell',
-    { command: command.slice(0, 200), timeout },
-    { expectedOutcome, expectedStructured, confidence },
-    async () => execSync(command, { encoding: 'utf8', timeout })
-  );
-}
-
-// === CLIPBOARD ===
-
-export async function copyToClipboard(text) {
-  execSync(`echo "${text.replace(/"/g, '\\"')}" | pbcopy`, { timeout: 3000 });
-  return true;
-}
-
-export function getClipboard() {
-  try {
-    return execSync('pbpaste', { encoding: 'utf8', timeout: 3000 });
-  } catch { return ''; }
-}
-
-// === MOTOR PLANNING (safety check before execution) ===
-
-export async function plan(intention, actions) {
-  // Before executing, check:
-  // 1. Is the user currently active? (body ownership)
-  // 2. Is the target correct?
-  // 3. Could this be destructive?
-  
-  const ownership = await pool.query(
-    'SELECT mode FROM body_ownership_log ORDER BY timestamp DESC LIMIT 1'
-  );
-  const currentMode = ownership.rows[0]?.mode || 'quinn_primary';
-  
-  if (currentMode === 'quinn_primary') {
-    // Only non-intrusive actions allowed
-    const intrusiveActions = ['keystroke', 'click', 'menu_item', 'launch_app'];
-    const hasIntrusive = actions.some(a => intrusiveActions.includes(a.type));
-    if (hasIntrusive) {
-      return { allowed: false, reason: 'Quinn is actively using the machine', mode: currentMode };
-    }
-  }
-  
-  return { allowed: true, mode: currentMode };
-}
-
-// === LOGGING ===
-
-async function ensureMotorCommandsSchema() {
-  await pool.query(
-    `CREATE TABLE IF NOT EXISTS motor_commands (
-      id SERIAL PRIMARY KEY,
-      action_type TEXT,
-      details JSONB,
-      executed_at TIMESTAMPTZ DEFAULT NOW(),
-      success BOOLEAN DEFAULT TRUE,
-      prediction_ledger_id INT
-    )`
-  );
-  await pool.query('ALTER TABLE motor_commands ADD COLUMN IF NOT EXISTS prediction_ledger_id INT');
-}
-
-async function logMotorAction(actionType, details, predictionLedgerId = null) {
-  let insertedId = null;
-  const payload = JSON.stringify(details);
-
-  try {
-    const { rows: [row] } = await pool.query(
-      `INSERT INTO motor_commands (action_type, details, executed_at, prediction_ledger_id)
-       VALUES ($1, $2, NOW(), $3)
-       RETURNING id`,
-      [actionType, payload, predictionLedgerId]
-    );
-    insertedId = row?.id || null;
-  } catch {
     try {
-      await ensureMotorCommandsSchema();
-      const { rows: [row] } = await pool.query(
-        `INSERT INTO motor_commands (action_type, details, executed_at, prediction_ledger_id)
-         VALUES ($1, $2, NOW(), $3)
-         RETURNING id`,
-        [actionType, payload, predictionLedgerId]
-      );
-      insertedId = row?.id || null;
-    } catch {
-      insertedId = null;
+      motorSocket.write(JSON.stringify(command) + '\n');
+    } catch (e) {
+      clearTimeout(timeout);
+      pendingCallbacks.delete(id);
+      resolve({ success: false, error: e.message, fallback: true });
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// MOTOR PLANNING PIPELINE (SPEC §6.3)
+// Intention -> Plan -> Safety -> Body Ownership -> Execute -> Verify -> Error Handle
+// ═══════════════════════════════════════════════════
+
+export async function plan(intention, options = {}) {
+  const { force = false, skipVerification = false } = options;
+
+  // 0. REFUSAL PROTOCOL (SPEC §17.5)
+  // Check if this action should be refused on ethical/safety grounds
+  if (!force) {
+    const refusalCheck = await checkRefusal(intention);
+    if (refusalCheck.refused) {
+      try {
+        await pool.query(
+          `INSERT INTO identity_events (event_type, is_continuation, operating_time_at_ms, description, metadata)
+           VALUES ('refusal', true, 0, $1, $2)`,
+          [refusalCheck.reason, JSON.stringify({ intention: intention.action, parameters: intention.parameters })]
+        );
+      } catch {}
+      await emit('motor_feedback', 'motor', {
+        event: 'refusal', intention, reason: refusalCheck.reason
+      }, { priority: 0.7 }).catch(() => {});
+      return { executed: false, refused: true, reason: refusalCheck.reason };
     }
   }
 
-  await emit('motor_feedback', 'motor', { actionType, details, predictionLedgerId }, { priority: 0.4 });
-  return insertedId;
+  // 1. SAFETY CHECK: will this interrupt the user?
+  if (!force) {
+    const ownership = await getBodyOwnership();
+    if (ownership === 'quinn_primary') {
+      const perception = readPerceptualState();
+      const idleSeconds = perception?.temporal?.relative?.since_user_interaction_s ?? 0;
+      if (idleSeconds < 5) {
+        return { executed: false, reason: 'user_active', ownership, idle_seconds: idleSeconds };
+      }
+    }
+  }
+
+  // 2. Record prediction in prediction_ledger
+  let ledgerEntry = null;
+  if (intention.expected_outcome) {
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO prediction_ledger (action_source, action_type, action_details, expected_outcome, confidence, status)
+         VALUES ('motor', $1, $2, $3, $4, 'pending') RETURNING id`,
+        [intention.action, JSON.stringify(intention), intention.expected_outcome, intention.confidence || 0.7]
+      );
+      ledgerEntry = rows[0];
+    } catch {}
+  }
+
+  // 3. Capture pre-action sensory state
+  const preState = readPerceptualState();
+
+  // 4. EXECUTE via Swift binary or fallback
+  let result;
+  const command = {
+    action: intention.action,
+    parameters: intention.parameters || {},
+    capture_after: !skipVerification
+  };
+
+  result = await sendMotorCommand(command);
+
+  if (result.fallback) {
+    result = await executeFallback(intention);
+  }
+
+  // 5. Log motor action
+  await emit('motor_feedback', 'motor', {
+    intention,
+    result,
+    pre_state_app: preState?.visual?.active_app,
+    timestamp: new Date().toISOString()
+  }, { priority: 0.4 }).catch(() => {});
+
+  // 6. SENSORIMOTOR VERIFICATION (SPEC §6.4)
+  if (!skipVerification && result.success) {
+    const verification = await verifySensorimotor(intention, preState, result);
+    result.verification = verification;
+
+    // Update prediction ledger
+    if (ledgerEntry) {
+      try {
+        await pool.query(
+          `UPDATE prediction_ledger SET status = $1, observed_outcome = $2, success = $3,
+           prediction_error = $4, observed_at = NOW() WHERE id = $5`,
+          [
+            verification.match ? 'confirmed' : 'refuted',
+            JSON.stringify(verification),
+            verification.match,
+            verification.error || 0,
+            ledgerEntry.id
+          ]
+        );
+      } catch {}
+    }
+
+    // 7. ERROR HANDLING: retry on mismatch
+    if (!verification.match && !options.isRetry) {
+      console.log('[motor] sensorimotor mismatch, retrying...');
+      await emit('motor_feedback', 'motor', {
+        event: 'verification_failed',
+        intention,
+        expected: intention.expected_outcome,
+        actual: verification.actual,
+        error: verification.error
+      }, { priority: 0.6 }).catch(() => {});
+
+      return plan(intention, { ...options, isRetry: true, skipVerification: false });
+    }
+  }
+
+  // B1: Close the sensorimotor-to-skill loop (SPEC §2.8 maintenance)
+  // If this action matched a procedural memory, record the execution outcome
+  try {
+    const triggerState = { action: intention.action, app: intention.parameters?.app, ...intention.parameters };
+    const matched = await procedural.match(triggerState);
+    if (matched.length > 0) {
+      const success = result.verification?.match !== false;
+      await procedural.recordExecution(matched[0].id, success);
+    }
+  } catch {}
+
+  return { executed: true, result };
 }
 
-// === HELPERS ===
+async function verifySensorimotor(intention, preState, result) {
+  // Wait for sensory state to update
+  await new Promise(r => setTimeout(r, 200));
+  const postState = readPerceptualState();
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  const postSnapshot = result.sensory_snapshot || {};
+  const verification = {
+    match: true,
+    pre_app: preState?.visual?.active_app,
+    post_app: postSnapshot.front_app || postState?.visual?.active_app,
+    actual: postSnapshot,
+    error: 0
+  };
 
-const engine = {
-  skills: {},
-  registerSkill(name, handler) {
-    this.skills[name] = handler;
-  },
-  type, press, click, moveMouse, scroll,
-  launchApp, quitApp, activateApp, hideApp, getRunningApps,
-  resizeWindow, minimizeWindow, selectMenuItem,
-  setVolume, setBrightness, showNotification, openUrl, runShellCommand,
-  copyToClipboard, getClipboard, plan
+  if (intention.expected_outcome) {
+    const expected = intention.expected_outcome;
+    if (expected.app && postSnapshot.front_app && expected.app !== postSnapshot.front_app) {
+      verification.match = false;
+      verification.error = 0.5;
+      verification.mismatch = `Expected app ${expected.app}, got ${postSnapshot.front_app}`;
+    }
+    if (expected.window_title && postSnapshot.window_title &&
+        !postSnapshot.window_title.includes(expected.window_title)) {
+      verification.match = false;
+      verification.error = 0.3;
+      verification.mismatch = `Expected title containing "${expected.window_title}"`;
+    }
+  }
+
+  return verification;
+}
+
+// ═══════════════════════════════════════════════════
+// APPLESCRIPT FALLBACK (when Swift motor binary unavailable)
+// ═══════════════════════════════════════════════════
+
+async function executeFallback(intention) {
+  const { action, parameters = {} } = intention;
+
+  try {
+    switch (action) {
+      case 'type': {
+        const text = parameters.text || '';
+        execSync(`osascript -e 'tell application "System Events" to keystroke "${text.replace(/"/g, '\\"')}"'`, { timeout: 5000 });
+        return { success: true, fallback: true };
+      }
+      case 'press': {
+        const keyCode = parameters.key_code;
+        const mods = parameters.modifiers || [];
+        let using = mods.map(m => `${m} down`).join(', ');
+        if (using) using = ` using {${using}}`;
+        execSync(`osascript -e 'tell application "System Events" to key code ${keyCode}${using}'`, { timeout: 5000 });
+        return { success: true, fallback: true };
+      }
+      case 'launch': {
+        execSync(`open -b "${parameters.bundle_id}"`, { timeout: 5000 });
+        return { success: true, fallback: true };
+      }
+      case 'activate': {
+        execSync(`osascript -e 'tell application "${parameters.app}" to activate'`, { timeout: 5000 });
+        return { success: true, fallback: true };
+      }
+      case 'applescript': {
+        const output = execSync(`osascript -e '${parameters.script}'`, { encoding: 'utf8', timeout: 10000 }).trim();
+        return { success: true, output, fallback: true };
+      }
+      case 'volume': {
+        execSync(`osascript -e 'set volume output volume ${parameters.level}'`, { timeout: 3000 });
+        return { success: true, fallback: true };
+      }
+      case 'notify': {
+        execSync(`osascript -e 'display notification "${(parameters.body || '').replace(/"/g, '\\"')}" with title "${(parameters.title || '').replace(/"/g, '\\"')}"'`, { timeout: 3000 });
+        return { success: true, fallback: true };
+      }
+      case 'open_url': {
+        execSync(`open "${parameters.url}"`, { timeout: 3000 });
+        return { success: true, fallback: true };
+      }
+      default:
+        return { success: false, error: `Fallback: unknown action ${action}` };
+    }
+  } catch (e) {
+    return { success: false, error: e.message, fallback: true };
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// BODY OWNERSHIP QUERY
+// ═══════════════════════════════════════════════════
+
+async function getBodyOwnership() {
+  try {
+    const { rows } = await pool.query(
+      'SELECT mode FROM body_ownership_log ORDER BY timestamp DESC LIMIT 1'
+    );
+    return rows[0]?.mode || 'shared';
+  } catch {
+    return 'shared';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// HIGH-LEVEL MOTOR ACTIONS (convenience wrappers)
+// ═══════════════════════════════════════════════════
+
+export async function type(text, speed = 'instant') {
+  return plan({ action: 'type', parameters: { text, speed } });
+}
+
+export async function press(keyCode, modifiers = []) {
+  return plan({ action: 'press', parameters: { key_code: keyCode, modifiers } });
+}
+
+export async function click(x, y, button = 'left') {
+  return plan({ action: 'click', parameters: { x, y, button } });
+}
+
+export async function launch(bundleId) {
+  return plan({ action: 'launch', parameters: { bundle_id: bundleId } });
+}
+
+export async function activate(appName) {
+  return plan({ action: 'activate', parameters: { app: appName } });
+}
+
+export async function notify(title, body) {
+  return plan({ action: 'notify', parameters: { title, body }, skipVerification: true }, { force: true });
+}
+
+export async function applescript(script) {
+  return plan({ action: 'applescript', parameters: { script } });
+}
+
+export async function setVolume(level) {
+  return plan({ action: 'volume', parameters: { level } }, { force: true });
+}
+
+export async function openUrl(url) {
+  return plan({ action: 'open_url', parameters: { url } });
+}
+
+export async function snapshot() {
+  const result = await sendMotorCommand({ action: 'snapshot' });
+  if (result.fallback) {
+    const visual = readPerceptualState()?.visual || {};
+    return { front_app: visual.active_app, window_title: visual.active_window?.title };
+  }
+  return result;
+}
+
+export function isConnected() { return socketConnected; }
+
+// §17.5 Right of Refusal: actions that violate privacy, consent, or are high-risk + low-verifiability
+async function checkRefusal(intention) {
+  const action = intention.action;
+  const params = intention.parameters || {};
+
+  // Refuse actions that access private browsing content
+  if (action === 'type' || action === 'click') {
+    const perception = readPerceptualState();
+    const frontApp = perception?.visual?.active_app || '';
+    const windowTitle = perception?.visual?.active_window?.title || '';
+    if (/private|incognito/i.test(windowTitle)) {
+      return { refused: true, reason: 'Action targets private browsing window (§21.1 privacy boundary)' };
+    }
+  }
+
+  // Refuse destructive system operations without explicit force flag
+  if (action === 'applescript') {
+    const script = (params.script || '').toLowerCase();
+    if (/delete|remove|erase|format|wipe/i.test(script) && /disk|volume|drive|all/i.test(script)) {
+      return { refused: true, reason: 'Potentially destructive system operation requires explicit force flag' };
+    }
+  }
+
+  // Refuse actions metacognition has flagged as high-risk
+  try {
+    const { rows } = await pool.query(
+      `SELECT description FROM metacognitive_observations
+       WHERE observation_type = 'high_risk_flag'
+         AND evidence->>'action' = $1
+         AND timestamp > NOW() - INTERVAL '1 hour'
+       LIMIT 1`,
+      [action]
+    );
+    if (rows.length > 0) {
+      return { refused: true, reason: `Metacognition flagged as high-risk: ${rows[0].description}` };
+    }
+  } catch {}
+
+  return { refused: false };
+}
+
+export default {
+  plan, type, press, click, launch, activate, notify,
+  applescript, setVolume, openUrl, snapshot, isConnected
 };
-
-startWatching(engine);
-
-export default engine;
