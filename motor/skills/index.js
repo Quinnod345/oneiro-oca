@@ -57,3 +57,4 @@ export { default as conversationIndexer } from '../../../conversation-indexer.js
 export { default as autonomyGrants } from '../../../autonomy-grants.js';
 export { default as capabilityNeedRater } from './capability-need-rater.js';
 export { default as buildVelocityTracker } from './build-velocity-tracker.js';
+export { default as xPostPredictionFailureStandalone } from './x-post-prediction-failure-standalone.js';
