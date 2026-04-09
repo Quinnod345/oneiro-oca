@@ -364,7 +364,56 @@ async function think() {
     neuralBus.writeLayer('emotion', encoders.encodeEmotion(emotionState));
     neuralBus.writeLayer('executive', encoders.encodeExecutive(mode, cogLoad, oca.layers.executive.getBodyOwnership(), goals.length));
     neuralBus.writeLayer('creative', encoders.encodeCreative(emotionState));
-    neuralBus.writeLayer('motor', encoders.encodeMotor(false, 0));
+    neuralBus.writeLayer('motor', encoders.encodeMotor(
+      typeof motor !== 'undefined' && motor?.isConnected?.() || false,
+      tickCount
+    ));
+
+    // Encode hypothesis, memory, metacognition (were dark because never written)
+    try {
+      const pendingHypos = await pool.query(
+        `SELECT COUNT(*) AS pending FROM hypotheses WHERE status = 'pending'`
+      ).catch(() => ({rows:[{pending:0}]}));
+      const calCurve = await pool.query(
+        `SELECT ROUND(stated_confidence::numeric,1) AS confidence_bucket,
+                ROUND(SUM(CASE WHEN was_correct THEN 1 ELSE 0 END)::numeric/NULLIF(COUNT(*),0),3) AS actual_accuracy
+         FROM calibration_log WHERE was_correct IS NOT NULL
+         GROUP BY ROUND(stated_confidence::numeric,1) HAVING COUNT(*)>=5`
+      ).catch(() => ({rows:[]}));
+      neuralBus.writeLayer('hypothesis', encoders.encodeHypothesis({
+        pending: parseInt(pendingHypos.rows[0]?.pending || 0),
+        top: [], calibration: calCurve.rows
+      }));
+    } catch {}
+    try {
+      const memStats = await pool.query(
+        `SELECT (SELECT COUNT(*) FROM episodic_memory) AS ep_total,
+                (SELECT COUNT(*) FILTER (WHERE consolidation_status='raw') FROM episodic_memory) AS ep_raw,
+                (SELECT AVG(importance_score) FROM episodic_memory) AS ep_importance,
+                (SELECT COUNT(*) FROM semantic_memory) AS sem_total,
+                (SELECT AVG(confidence) FROM semantic_memory) AS sem_confidence`
+      ).catch(() => ({rows:[{}]}));
+      const ms = memStats.rows[0] || {};
+      neuralBus.writeLayer('memory', encoders.encodeMemory({
+        episodic: { total: ms.ep_total, raw: ms.ep_raw, avg_importance: ms.ep_importance },
+        semantic: { total: ms.sem_total, avg_confidence: ms.sem_confidence }
+      }));
+    } catch {}
+    try {
+      // Light metacognition: read cached bias state instead of running full cycle
+      const biasRows = await pool.query(
+        `SELECT bias_type, current_severity FROM cognitive_biases WHERE current_severity > 0`
+      ).catch(() => ({rows:[]}));
+      const stuckCount = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM metacognitive_observations WHERE observation_type='stuck_state' AND timestamp > NOW() - INTERVAL '1 hour'`
+      ).catch(() => ({rows:[{cnt:0}]}));
+      neuralBus.writeLayer('metacognition', encoders.encodeMetacognition({
+        healthy: biasRows.rows.length === 0,
+        stuck_issues: new Array(parseInt(stuckCount.rows[0]?.cnt || 0)),
+        active_biases: biasRows.rows.map(b => ({type: b.bias_type, severity: parseFloat(b.current_severity)})),
+        calibration: []
+      }));
+    } catch {}
 
     const currentActivation = neuralBus.getWorkspace();
     const predicted = neuralMLP.predict(currentActivation);
