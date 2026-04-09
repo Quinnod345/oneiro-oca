@@ -37,7 +37,7 @@ function buildFallbackPerception() {
   const app = visual.frontApp || 'unknown';
   if (['Terminal', 'Cursor', 'Xcode'].includes(app)) userActivity = 'coding';
   else if (['Arc', 'Safari', 'Chrome', 'Dia'].includes(app)) userActivity = 'browsing';
-  else if (['Logic Pro', 'GarageBand'].includes(app)) userActivity = 'creating';
+  else if (['GarageBand'].includes(app)) userActivity = 'creating';
   else if (['Messages', 'Telegram', 'Discord'].includes(app)) userActivity = 'communicating';
   else if (['Preview', 'Books', 'Notion'].includes(app)) userActivity = 'reading';
 

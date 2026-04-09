@@ -24,7 +24,7 @@ function resolveOCAPath(relativePath) {
 }
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
-const MAX_TASK_RETRIES = 4;
+const MAX_TASK_RETRIES = 8;
 const TASK_TIMEOUT_MS = 1_200_000;
 const SELF_BUILD_TIMEOUT_MS = 300_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
@@ -86,7 +86,7 @@ async function verifyDreamRelevance(dream) {
   }
 
   // Skip verification for dreams with many code references (likely complex architectural changes)
-  if (refs.files.length > 15 || refs.patterns.length > 30) {
+  if (refs.files.length > 8 || refs.patterns.length > 15) {
     return { relevant: true };
   }
 
@@ -136,7 +136,7 @@ Respond with JSON only:
 
   try {
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 300000)
+      setTimeout(() => reject(new Error('Verification timeout')), 15000)
     );
     
     const response = await Promise.race([
@@ -191,7 +191,7 @@ async function getPostHistory() {
 const credentialGapsNotified = new Set();
 
 // Ensure dreams don't get stuck in intermediate states
-const EXECUTION_TIMEOUT_MS = 900000; // 15 minutes max per dream (allow complex operations)
+const EXECUTION_TIMEOUT_MS = 600000; // 10 minutes max per dream (allow time for self-builds + execution)
 
 // Track execution attempts to prevent infinite retries
 const executionAttempts = new Map();
