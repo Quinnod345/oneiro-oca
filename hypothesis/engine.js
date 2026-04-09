@@ -441,11 +441,12 @@ export async function form(domain, claim, prediction, { testMethod = null, testT
     if (calRows.length > 0 && parseInt(calRows[0].total) >= 10) {
       const actualAccuracy = parseFloat(calRows[0].actual_accuracy);
       const deviation = confidence - actualAccuracy;
-      if (deviation > 0.15) {
-        // We're overconfident at this level — apply a correction
-        // Blend toward actual accuracy: stated = stated * 0.6 + actual * 0.4
-        const adjusted = confidence * 0.6 + actualAccuracy * 0.4;
-        confidence = Math.max(0.3, Math.min(0.85, adjusted));
+      if (deviation > 0.05) {
+        // Overconfident: apply power-law correction toward actual accuracy
+        // new_confidence = stated * (actual/stated)^0.3
+        const ratio = Math.max(0.1, actualAccuracy / Math.max(0.1, confidence));
+        const adjusted = confidence * Math.pow(ratio, 0.3);
+        confidence = Math.max(0.2, Math.min(0.85, adjusted));
       }
     }
   } catch {}

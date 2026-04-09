@@ -37,7 +37,7 @@ const MAX_CYCLE_RUNNING_MS = 60000; // force-release stale lock after 60s
 
 export async function cycle() {
   // Reentrancy guard with stale-lock recovery.
-  // When withTimeout in mind.js fires, the underlying _cycleInner() promise
+  // When a caller's withTimeout fires, the underlying _cycleInner() promise
   // keeps running.  `running` stays true until it settles.  If a DB query or
   // event-bus listener hangs, this could block ALL future cycles indefinitely.
   // Recovery: if the lock has been held for >60s, force-release it so new
@@ -111,7 +111,7 @@ async function _cycleInner() {
 
   // 4. CONSOLIDATION: Handled by cognitive-loop.js (separate process).
   // Removed from here — LLM-heavy consolidation (60-120s) exceeds the 22500ms
-  // OCA tick timeout in mind.js, causing cascade failures.
+  // OCA tick timeout in the host process, causing cascade failures.
 
   // 4.5 SEMANTIC DECAY: confidence should decay with disuse
   if (cycleCount % 25 === 0) {
@@ -142,7 +142,7 @@ async function _cycleInner() {
 }
 
 // ============================================================
-// API — for integration with mind.js and OpenClaw
+// API — for integration with cognitive-loop / OpenClaw
 // ============================================================
 
 // Experience something (creates episodic memory + updates emotion)
@@ -309,11 +309,23 @@ export async function status() {
   };
 }
 
-// Initialize (restore state, start cycle)
+// ============================================================
+// BOOT SEQUENCE (SPEC §4.4)
+// ============================================================
+
 export async function init() {
   console.log('[oca] initializing cognitive architecture...');
-  await emotion.restore();
 
+  // Step 4 (L3): Database already connected via pool import
+  // Step 5 (L4): Restore emotional state from last known + time elapsed
+  await emotion.restore();
+  console.log('[oca] emotion restored');
+
+  // Step 6 (L5-L9): Start cognitive processes
+  // Register workspace broadcast handlers (SPEC §14.6)
+  registerWorkspaceHandlers();
+
+  // Wire causal hooks
   if (!causalHooksReady) {
     causalHooksReady = true;
     on('hypothesis_tested', async (ev) => {
@@ -348,11 +360,7 @@ export async function init() {
           expectedEffect: hyp.prediction,
           confidence: Math.max(0.2, Math.min(0.9, 1 - surprise / 2)),
           hypothesisId: hyp.id,
-          metadata: {
-            trigger: 'hypothesis_tested',
-            surprise,
-            auto_generated: true
-          }
+          metadata: { trigger: 'hypothesis_tested', surprise, auto_generated: true }
         }).catch(() => null);
       } catch (e) {
         console.error('[oca] causal hook error:', e.message);
@@ -360,12 +368,70 @@ export async function init() {
     });
   }
 
-  console.log('[oca] emotion restored');
+  // Step 7 (L10): Executive online
+  // Step 9: Orientation happens in cognitive-loop.js after full boot
+
   console.log('[oca] cognitive architecture online');
   return true;
 }
 
-export default { 
-  layers, cycle, experience, learn, predict, remember, know, decide, 
-  reason, imagine, create, sense, reflect, status, init 
+// ============================================================
+// GLOBAL WORKSPACE BROADCAST HANDLERS (SPEC §14.6)
+// Each layer registers how it responds to new workspace items
+// ============================================================
+
+function registerWorkspaceHandlers() {
+  // Memory: retrieve related experiences when something enters workspace
+  executive.registerWorkspaceHandler('memory', async (item) => {
+    if (item.contentType === 'perception' || item.contentType === 'interrupt') {
+      const related = await episodic.recall(
+        typeof item.content === 'string' ? item.content : JSON.stringify(item.content),
+        { limit: 3 }
+      ).catch(() => []);
+      if (related.length > 0) {
+        await executive.addToWorkspace('memory_retrieval', {
+          triggered_by: item.id,
+          memories: related.map(m => ({ id: m.id, content: m.content?.slice?.(0, 200) }))
+        }, 'memory', 0.3).catch(() => {});
+      }
+    }
+  });
+
+  // Emotion: update state when significant items enter workspace
+  executive.registerWorkspaceHandler('emotion', async (item) => {
+    if (item.salience > 0.6) {
+      emotion.processInformationGain(item.salience * 0.3);
+    }
+  });
+
+  // Hypothesis: generate predictions from workspace items
+  executive.registerWorkspaceHandler('hypothesis', async (item) => {
+    if (item.contentType === 'perception' && item.salience > 0.5) {
+      // Hypothesis engine handles this in its own cycle
+    }
+  });
+}
+
+// ============================================================
+// INTEROCEPTIVE EFFECTS (SPEC §5.6)
+// Maps body state to cognitive modulation
+// ============================================================
+
+export function applyInteroceptiveEffects(interoState) {
+  if (!interoState) return;
+
+  const energyPolicy = interoState.energy_policy;
+  if (energyPolicy === 'low_energy') {
+    emotion.processInteroception?.({ energy: 0.2 });
+  } else if (energyPolicy === 'overheat_cooldown') {
+    emotion.processInteroception?.({ energy: 0.3, stress: 0.5 });
+  } else if (energyPolicy === 'cognitive_overload') {
+    emotion.processInteroception?.({ energy: 0.5, stress: 0.3 });
+  }
+}
+
+export default {
+  layers, cycle, experience, learn, predict, remember, know, decide,
+  reason, imagine, create, sense, reflect, status, init,
+  applyInteroceptiveEffects
 };

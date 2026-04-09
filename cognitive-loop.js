@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // OCA Cognitive Loop — the continuous thinking process
-// Replaces mind.js ponder cycle with grounded, hypothesis-driven cognition
+// Main OCA entry: grounded, hypothesis-driven cognition + HTTP API on :3333
 // Also bootstraps the HTTP API (port 3333) — this IS the sole primary process.
 import { pool, emit, on } from './event-bus.js';
 import oca from './index.js';
@@ -11,6 +11,10 @@ import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
 import dreamExecutor from './executive/dream-executor.js';
 import autonomic from './autonomic/self-modifier.js';
+import thinkerBridge from './thinker-bridge.js';
+import neuralBus from './neural-bus.js';
+import neuralMLP from './neural-mlp.js';
+import encoders from './neural-encoders.js';
 import { execSync } from 'child_process';
 import { acquireProcessLock, releaseProcessLock } from '../process-lock.js';
 import { dirname, join } from 'path';
@@ -47,6 +51,43 @@ let dreamExecutionCooldown = 0;
 let autonomicCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
+
+// ── Operating-time accumulator (SPEC §18.4.1) ──
+let operatingTimeSessionStart = Date.now();
+let operatingTimeSessionId = null;
+let operatingTimeCumulativeMs = 0; // loaded from DB at boot
+
+async function initOperatingTime() {
+  try {
+    const { rows: [sum] } = await pool.query(
+      `SELECT COALESCE(SUM(duration_ms), 0)::bigint AS total FROM operating_time_log WHERE duration_ms IS NOT NULL`
+    );
+    operatingTimeCumulativeMs = Number(sum.total) || 0;
+    operatingTimeSessionStart = Date.now();
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO operating_time_log (started_at, reason) VALUES (NOW(), 'boot') RETURNING id`
+    );
+    operatingTimeSessionId = row.id;
+    console.log(`[oca] operating time: ${Math.round(operatingTimeCumulativeMs / 3600000)}h cumulative, session ${operatingTimeSessionId}`);
+  } catch (e) {
+    console.error('[oca] operating time init failed:', e.message);
+  }
+}
+
+function getOperatingTimeMs() {
+  return operatingTimeCumulativeMs + (Date.now() - operatingTimeSessionStart);
+}
+
+async function flushOperatingTime(reason = 'shutdown') {
+  if (!operatingTimeSessionId) return;
+  const duration = Date.now() - operatingTimeSessionStart;
+  try {
+    await pool.query(
+      `UPDATE operating_time_log SET stopped_at = NOW(), duration_ms = $1 WHERE id = $2`,
+      [duration, operatingTimeSessionId]
+    );
+  } catch {}
+}
 
 const HYPOTHESIS_SLA_MINUTES = 25;
 const HYPOTHESIS_SLA_BATCH = 4;
@@ -234,8 +275,40 @@ async function think() {
   
   // ── 1. SENSE ──────────────────────────────────────
   const perception = oca.sense();
-  const intero = perception.interoceptive;
-  const visual = perception.visual;
+  const rawIntero = perception.interoceptive || {};
+  const rawVisual = perception.visual || {};
+  // Normalize visual: new format uses active_app, old uses frontApp
+  const visual = {
+    frontApp: rawVisual.active_app || rawVisual.frontApp || 'unknown',
+    windowTitle: rawVisual.active_window?.title || rawVisual.windowTitle || '',
+    runningApps: rawVisual.running_apps || rawVisual.runningApps || [],
+    ...rawVisual
+  };
+
+  // Normalize interoceptive to a stable format that works with both
+  // the old { battery, cpu, memory } numbers and new Swift { battery_level, memory_pressure, ... }
+  const intero = {
+    battery: {
+      level: rawIntero.battery_level != null ? rawIntero.battery_level / 100
+           : typeof rawIntero.battery === 'number' ? rawIntero.battery
+           : rawIntero.battery?.level ?? 1,
+      charging: rawIntero.battery_charging ?? rawIntero.battery?.charging ?? false
+    },
+    cpu: {
+      utilization: typeof rawIntero.cpu === 'number' ? rawIntero.cpu : rawIntero.cpu?.utilization ?? 0,
+      raw: rawIntero.cpu?.raw ?? 0
+    },
+    memory: {
+      pressure: rawIntero.memory_pressure ?? (typeof rawIntero.memory === 'number' ? rawIntero.memory : rawIntero.memory?.pressure ?? 0)
+    },
+    thermal: {
+      throttling: rawIntero.thermal_state === 'serious' || rawIntero.thermal_state === 'critical'
+                  || rawIntero.thermal?.throttling || false,
+      pressure: rawIntero.thermal_state || rawIntero.thermal?.pressure || 'nominal'
+    },
+    energy_policy: rawIntero.energy_policy || 'nominal',
+    disk_usage_ratio: rawIntero.disk_usage_ratio ?? rawIntero.disk?.used ?? 0
+  };
   const activity = getUserActivity(visual.frontApp);
   
   // ── 2. BODY OWNERSHIP ─────────────────────────────
@@ -247,13 +320,43 @@ async function think() {
     goals.length
   );
   
+  // ── 2b. COGNITIVE LOAD BALANCING (SPEC §14.4) ────
+  const workspace = await oca.layers.executive.getWorkspace().catch(() => []);
+  oca.layers.executive.computeCognitiveLoad(oca.layers.emotion.getState(), workspace.length, goals.length);
+  const loadPolicy = oca.layers.executive.getLoadPolicy();
+
+  // ── 2c. INTEROCEPTIVE EFFECTS (SPEC §5.6) ──────
+  oca.applyInteroceptiveEffects(intero);
+
   // ── 3. FEEL ───────────────────────────────────────
-  oca.layers.emotion.processInteroception(
-    intero.battery.level, intero.cpu.utilization, intero.memory.pressure, 
-    intero.thermal.throttling ? 1 : 0
-  );
+  const batteryLevel = intero?.battery_level != null ? intero.battery_level / 100 : intero?.battery?.level ?? 1;
+  const cpuUtil = intero?.cpu?.utilization ?? 0;
+  const memPressure = intero?.memory_pressure ?? intero?.memory?.pressure ?? 0;
+  const thermalThrottling = (intero?.thermal_state === 'serious' || intero?.thermal_state === 'critical') ? 1 : (intero?.thermal?.throttling ? 1 : 0);
+  oca.layers.emotion.processInteroception(batteryLevel, cpuUtil, memPressure, thermalThrottling);
   oca.layers.emotion.processIdle(activity.idleSeconds / 60);
   
+  // ── NEURAL BUS CYCLE (every tick) ───────────────────
+  // 1. Encode all layers into the vector bus
+  // 2. MLP predicts next-cycle activation
+  // 3. After this tick's subsystems run, compute prediction error + Hebbian update
+  try {
+    const emotionState = oca.layers.emotion.getState();
+    neuralBus.writeLayer('sensory', encoders.encodeSensory(perception));
+    neuralBus.writeLayer('emotion', encoders.encodeEmotion(emotionState));
+    neuralBus.writeLayer('executive', encoders.encodeExecutive(mode, currentLoad, oca.layers.executive.getBodyOwnership(), goals.length));
+    neuralBus.writeLayer('creative', encoders.encodeCreative(emotionState));
+    neuralBus.writeLayer('motor', encoders.encodeMotor(false, 0));
+
+    // Predict next state
+    const currentActivation = neuralBus.getWorkspace();
+    const predicted = neuralMLP.predict(currentActivation);
+
+    // Store for post-cycle comparison (will be completed at end of think())
+    if (!think._neuralPredicted) think._neuralPredicted = predicted;
+    else think._neuralPredicted = predicted;
+  } catch {}
+
   // ── VISION ANALYSIS (every 20 cycles) ──────────────
   visionCooldown = Math.max(0, visionCooldown - 1);
   hypothesisCooldown = Math.max(0, hypothesisCooldown - 1);
@@ -1025,7 +1128,131 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     }
   }
   
-  // ── 12.7 AUTONOMIC SELF-MODIFICATION (every 200 cycles) ─
+  // ── 12.6b ANTI-DECAY EVALUATION (after daily benchmark) ──
+  // Runs after benchmark; computes CRM trends and checks failure conditions
+  if (lastBenchmarkDate === new Date().toISOString().slice(0, 10) && benchmarkCooldown === 19) {
+    try {
+      const antiDecay = await import('./evaluation/anti-decay.js');
+      const adResult = await withTimeout(antiDecay.default.runAntiDecayEvaluation(), LLM_TICK_TIMEOUT_MS, 'anti-decay');
+      const failCount = adResult?.failures?.length || 0;
+      const satisfied = antiDecay.default.isAntiDecaySatisfied(adResult.trends);
+      console.log(`[oca] 📊 anti-decay: ${failCount} failures, thesis ${satisfied.satisfied ? 'satisfied' : 'unsatisfied: ' + satisfied.reason}`);
+
+      // Execute automatic remediations
+      for (const r of (adResult?.remediations || [])) {
+        try {
+          if (r.action === 'metacognition_diagnostic') {
+            await oca.reflect();
+          } else if (r.action === 'force_consolidation') {
+            oca.layers.consolidation.consolidate().catch(() => {});
+          } else if (r.action === 'hypothesis_sla_sweep') {
+            // Trigger hypothesis SLA in next cycle
+            hypothesisSlaCooldown = 0;
+          } else if (r.action === 'flag_subsystem') {
+            await pool.query(
+              `INSERT INTO metacognitive_observations (target_layer, observation_type, description, severity)
+               VALUES ($1, 'anti_decay_flag', $2, 0.6)`,
+              [r.component, r.reason]
+            );
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.error('[oca] anti-decay evaluation error:', e.message);
+    }
+  }
+
+  // ── 12.6c MAINTENANCE SWEEPS (SPEC §2.8 — every layer participates) ──
+  // These run on staggered cooldowns to close open maintenance loops
+
+  // B2: Deliberation retrospective sweep (every 100 cycles)
+  if (tickCount % 100 === 50) {
+    try {
+      const delib = await import('./deliberation/engine.js');
+      const swept = await withTimeout(delib.default.sweepUnresolvedDeliberations(3), LLM_TICK_TIMEOUT_MS, 'delib-sweep');
+      if (swept?.evaluated > 0) console.log(`[oca] 🔄 deliberation: evaluated ${swept.evaluated} retrospectives`);
+    } catch {}
+  }
+
+  // B4: Metacognition self-accuracy sweep (every 60 cycles)
+  if (tickCount % 60 === 30) {
+    try {
+      const swept = await oca.layers.metacognition.sweepInterventionOutcomes();
+      if (swept?.resolved > 0) console.log(`[oca] 🔄 metacognition: ${swept.resolved}/${swept.checked} interventions resolved`);
+    } catch {}
+  }
+
+  // B5: Reasoning trace audit (every 30 cycles, alongside metacognition)
+  if (tickCount % 30 === 15) {
+    try {
+      const { rows: unaudited } = await pool.query(
+        `SELECT id FROM reasoning_traces WHERE conclusion_correct IS NULL AND timestamp < NOW() - INTERVAL '2 hours' LIMIT 3`
+      );
+      for (const t of unaudited) {
+        await oca.layers.metacognition.evaluateTrace(t.id).catch(() => {});
+      }
+      if (unaudited.length > 0) console.log(`[oca] 🔄 audited ${unaudited.length} reasoning traces`);
+    } catch {}
+  }
+
+  // B6: Causal experiment SLA sweep (every 200 cycles)
+  if (tickCount % 200 === 100) {
+    try {
+      const { rows: stale } = await pool.query(
+        `SELECT id FROM causal_experiments WHERE status = 'running' AND started_at < NOW() - INTERVAL '24 hours' LIMIT 5`
+      );
+      for (const e of stale) {
+        await oca.layers.causal.completeExperiment(e.id, {
+          actualOutcome: 'timed_out', outcomeValence: 0, causalSupport: 0,
+          modelUpdate: 'Experiment timed out without observable outcome'
+        }).catch(() => {});
+      }
+      if (stale.length > 0) console.log(`[oca] 🔄 timed out ${stale.length} stale causal experiments`);
+    } catch {}
+  }
+
+  // B7: Emotional baseline drift detection (every 150 cycles)
+  if (tickCount % 150 === 75) {
+    try {
+      const drift = await oca.layers.emotion.detectBaselineDrift();
+      if (drift?.drifts?.length > 0) {
+        console.log(`[oca] 🔄 emotion drift: ${drift.drifts.map(d => d.dimension).join(', ')}`);
+        for (const d of drift.drifts) {
+          await pool.query(
+            `INSERT INTO metacognitive_observations (target_layer, observation_type, description, severity, evidence)
+             VALUES ('emotion', 'baseline_drift', $1, 0.4, $2)`,
+            [`${d.dimension}: baseline ${d.baseline.toFixed(3)} vs rolling ${d.rolling.toFixed(3)}`, JSON.stringify(d)]
+          ).catch(() => {});
+        }
+      }
+    } catch {}
+  }
+
+  // ── 12.7a GENERATIVE THOUGHT — the thinker (SPEC §22.2.2 scaffold) ─────
+  // This is the generative reasoning step that gives the system agency.
+  // Every N cycles, the system asks itself "what should I do?" and then does it.
+  if (!isTickLLMHeavy && !isConsolidating) {
+    const thinkerFrequency = mode === 'alert' ? 5 : mode === 'working' ? 8 : mode === 'monitoring' ? 20 : 999;
+    if (tickCount % thinkerFrequency === 0 && tickCount > 0) {
+      isTickLLMHeavy = true;
+      try {
+        const thought = await withTimeout(thinkerBridge.runThinkerCycle(), LLM_TICK_TIMEOUT_MS, 'thinker');
+        if (thought?.thoughts) {
+          await oca.layers.executive.addToWorkspace(
+            'thought',
+            { thoughts: thought.thoughts, actions: Object.keys(thought).filter(k => thought[k] && k !== 'thoughts') },
+            'thinker',
+            0.6
+          ).catch(() => {});
+        }
+      } catch (e) {
+        console.error('[oca] thinker error:', e.message?.slice(0, 120));
+      }
+      isTickLLMHeavy = false;
+    }
+  }
+
+  // ── 12.7b AUTONOMIC SELF-MODIFICATION (every 200 cycles) ─
   autonomicCooldown = Math.max(0, autonomicCooldown - 1);
   if (autonomicCooldown <= 0 && result.cycle >= 10 && !isConsolidating) {
     autonomicCooldown = 200; // ~30-60 min depending on cycle speed
@@ -1163,6 +1390,31 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       cycleInterval = 15000;
   }
   
+  // ── NEURAL BUS POST-CYCLE: learn from prediction error ──
+  try {
+    // Re-encode after all subsystems have run this tick
+    const postEmotion = oca.layers.emotion.getState();
+    neuralBus.writeLayer('emotion', encoders.encodeEmotion(postEmotion));
+
+    // Hebbian update based on co-activation
+    neuralBus.hebbianUpdate();
+
+    // MLP learns from prediction error
+    if (think._neuralPredicted) {
+      const actual = neuralBus.getWorkspace();
+      const mlpResult = neuralMLP.learn(actual);
+
+      // Feed prediction error into surprise system
+      const predError = neuralBus.computePredictionError(think._neuralPredicted);
+      if (predError.magnitude > 0.3) {
+        oca.layers.emotion.processSurprise(predError.magnitude * 0.5, 'neural_prediction');
+      }
+
+      // Periodic MLP weight save (every 50 cycles)
+      if (tickCount % 50 === 0) neuralMLP.save();
+    }
+  } catch {}
+
   // ── LOG ────────────────────────────────────────────
   const elapsed = Date.now() - t0;
   previousPresence = activity.presence;
@@ -1259,13 +1511,21 @@ async function protectCoreDrives() {
 // blocks or couples to the main cognitive tick.
 // ═══════════════════════════════════════════════════
 
-const CONSOLIDATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const CONSOLIDATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes normal
+const CONSOLIDATION_FAST_MS = 3 * 60 * 1000; // 3 minutes when backlog > 10k
 
 function startConsolidationSchedule() {
-  const run = () => {
+  const run = async () => {
+    // Check backlog size to determine interval
+    let backlog = 0;
+    try {
+      const { rows: [r] } = await pool.query(`SELECT COUNT(*) AS cnt FROM episodic_memory WHERE consolidation_status = 'raw'`);
+      backlog = parseInt(r.cnt) || 0;
+    } catch {}
+    const interval = backlog > 10000 ? CONSOLIDATION_FAST_MS : CONSOLIDATION_INTERVAL_MS;
+
     if (isConsolidating) {
-      // Previous call still in-flight — skip this round
-      setTimeout(run, CONSOLIDATION_INTERVAL_MS);
+      setTimeout(run, interval);
       return;
     }
     // Defer if think() is in an LLM-heavy section — they share the LLM
@@ -1319,9 +1579,47 @@ async function start() {
   console.log('[oca] ═══ Oneiro Cognitive Architecture ═══');
   console.log('[oca] initializing all layers...');
   
+  await initOperatingTime();
   await oca.init();
 
-  // ─── HTTP API server (replaces mind.js api.js) ───
+  // §2.9 Identity event: classify this boot as continuation or new CI
+  try {
+    const { rows: [memCheck] } = await pool.query(
+      `SELECT COUNT(*) AS episodes FROM episodic_memory`
+    );
+    const hasHistory = parseInt(memCheck.episodes) > 0;
+    const { rows: [lastEvent] } = await pool.query(
+      `SELECT event_type, event_at FROM identity_events ORDER BY event_at DESC LIMIT 1`
+    );
+    const isContinuation = hasHistory;
+    const description = isContinuation
+      ? `Clean restart — ${memCheck.episodes} episodic memories intact, maintenance loop resuming`
+      : 'First boot or post-wipe — no prior episodic memory, this is a new CI';
+    await pool.query(
+      `INSERT INTO identity_events (event_type, is_continuation, operating_time_at_ms, description, previous_state)
+       VALUES ('restart', $1, $2, $3, $4)`,
+      [isContinuation, getOperatingTimeMs(), description,
+       JSON.stringify({ episodes: parseInt(memCheck.episodes), last_event: lastEvent || null })]
+    );
+    console.log(`[oca] identity: ${isContinuation ? 'continuation' : 'new CI'} (${memCheck.episodes} episodes)`);
+  } catch (e) {
+    console.error('[oca] identity event logging failed:', e.message);
+  }
+
+  // Initialize neural bus: load connection weights from DB, load MLP weights from disk
+  try {
+    const { rows: connections } = await pool.query(
+      'SELECT from_layer, to_layer, strength FROM neural_connections'
+    );
+    neuralBus.initWeights(connections);
+    neuralMLP.load();
+    console.log(`[oca] neural bus online (${neuralBus.TOTAL_DIM}-dim workspace, ${connections.length} connections)`);
+  } catch (e) {
+    console.error('[oca] neural bus init failed (non-fatal):', e.message);
+    neuralBus.initWeights([]);
+  }
+
+  // ─── HTTP API server (Express app from ../api.js) ───
   try {
     const { app: apiApp } = await import('../api.js');
     apiApp.listen(PORT, () => {
@@ -1345,10 +1643,14 @@ async function start() {
     console.error('[oca] visual memory indexer failed:', e.message);
   }
   
-  // Boot experience
-  await oca.experience('system', 'Cognitive architecture booted. All layers online.', {
-    importanceScore: 0.7
-  });
+  // Boot experience (non-fatal — embedding may fail if API key is invalid)
+  try {
+    await oca.experience('system', 'Cognitive architecture booted. All layers online.', {
+      importanceScore: 0.7
+    });
+  } catch (e) {
+    console.error('[oca] boot experience failed (non-fatal):', e.message?.slice(0, 120));
+  }
 
   // ═══════════════════════════════════════════════════
   // CORE DRIVES — hardcoded desires that survive resets
@@ -1432,6 +1734,19 @@ process.on('unhandledRejection', (reason, promise) => {
   }
 });
 
-process.on('SIGINT', () => { releaseProcessLock(OCA_LOOP_LOCK_FILE); process.exit(0); });
-process.on('SIGTERM', () => { releaseProcessLock(OCA_LOOP_LOCK_FILE); process.exit(0); });
+async function gracefulShutdown(signal) {
+  try { neuralMLP.save(); } catch {}
+  try {
+    await pool.query(
+      `INSERT INTO identity_events (event_type, is_continuation, operating_time_at_ms, description)
+       VALUES ('shutdown', true, $1, $2)`,
+      [getOperatingTimeMs(), `Graceful shutdown via ${signal}`]
+    );
+  } catch {}
+  await flushOperatingTime(signal);
+  releaseProcessLock(OCA_LOOP_LOCK_FILE);
+  process.exit(0);
+}
+process.on('SIGINT', () => gracefulShutdown('sigint'));
+process.on('SIGTERM', () => gracefulShutdown('sigterm'));
 process.on('exit', () => releaseProcessLock(OCA_LOOP_LOCK_FILE));

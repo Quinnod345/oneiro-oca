@@ -131,18 +131,27 @@ export async function recent(limit = 20, eventType = null) {
   return rows;
 }
 
-// Compute importance score dynamically
+// Compute importance score dynamically (SPEC §7.2 decay function)
+// importance(t) = base_importance * e^(-decay_rate * days_since_last_access)
+//               + access_bonus * log(1 + access_count)
+//               + surprise_bonus * surprise_magnitude
+//               + emotional_bonus * emotional_arousal
 export function computeImportance(episode) {
-  const base = 0.3;
-  const surpriseBonus = (episode.surprise_magnitude || 0) * 0.3;
-  const emotionBonus = Math.abs(episode.emotional_arousal || 0) * 0.2;
-  const accessBonus = Math.log(1 + (episode.access_count || 0)) * 0.05;
-  const daysSinceAccess = episode.last_accessed 
-    ? (Date.now() - new Date(episode.last_accessed).getTime()) / 86400000 
-    : 999;
-  const decayPenalty = Math.exp(-(episode.decay_rate || 0.1) * daysSinceAccess) - 1; // negative
-  
-  return Math.max(0, Math.min(1, base + surpriseBonus + emotionBonus + accessBonus + decayPenalty));
+  const baseImportance = episode.importance_score || 0.5;
+  const decayRate = episode.decay_rate || 0.1;
+  const daysSinceAccess = episode.last_accessed
+    ? (Date.now() - new Date(episode.last_accessed).getTime()) / 86400000
+    : 30; // default: treat as 30 days old if never accessed
+  const accessCount = episode.access_count || 0;
+  const surpriseMag = episode.surprise_magnitude || 0;
+  const arousal = Math.abs(episode.emotional_arousal || 0);
+
+  const decayedBase = baseImportance * Math.exp(-decayRate * daysSinceAccess);
+  const accessBonus = 0.1 * Math.log(1 + accessCount);
+  const surpriseBonus = 0.3 * surpriseMag;
+  const emotionalBonus = 0.2 * arousal;
+
+  return Math.max(0, Math.min(1, decayedBase + accessBonus + surpriseBonus + emotionalBonus));
 }
 
 // Update importance scores (run periodically)

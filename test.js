@@ -32,7 +32,7 @@ async function test() {
   console.log('4. Forming hypothesis...');
   const hyp = await oca.predict(
     'self',
-    'The cognitive architecture will produce measurably different thinking patterns than the current mind.js',
+    'The cognitive architecture will produce measurably different thinking patterns than a plain agent loop',
     'Within 1 week, the hypothesis engine will have tracked >10 predictions with a calibration curve',
     { confidence: 0.7 }
   );
@@ -59,8 +59,8 @@ async function test() {
   // 8. Deliberation
   console.log('8. Running deliberation...');
   const decision = await oca.decide(
-    'Should I integrate the cognitive architecture into mind.js now, or build it as a separate process?',
-    { stakes: 'high', context: 'Mind.js is running and stable. Modifying it risks breaking existing functionality.' }
+    'Should I deepen OCA inside cognitive-loop now, or split more logic into separate processes?',
+    { stakes: 'high', context: 'cognitive-loop is running and stable. Changing it risks breaking the API and tick.' }
   );
   console.log(`   ✅ Resolution (${decision.resolutionMethod}): ${decision.resolution.slice(0, 200)}`);
   console.log(`   Skeptic: ${decision.perspectives.skeptic.argument.slice(0, 100)}...`);

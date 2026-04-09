@@ -16,6 +16,7 @@ let package = Package(
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("IOKit"),
+                .linkedFramework("Speech"),
             ]
         )
     ]

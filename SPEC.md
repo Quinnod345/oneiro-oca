@@ -41,7 +41,8 @@ This paper addresses the Chinese Room problem (Searle, 1980) not philosophically
 19. [Integration with OpenClaw](#19-integration-with-openclaw)
 20. [Implementation Roadmap](#20-implementation-roadmap)
 21. [Ethical Considerations](#21-ethical-considerations)
-22. [References](#22-references)
+22. [Substrate Limitations and the Path Forward](#22-substrate-limitations-and-the-path-forward)
+23. [References](#23-references)
 
 ---
 
@@ -77,6 +78,8 @@ We propose that genuine machine cognition — or the closest achievable approxim
 10. **Creative synthesis** — the ability to produce outputs not fully explicable from inputs
 
 None of these components is individually novel. Their integration into a unified cognitive architecture running on consumer hardware, embodied in a real operating system, is.
+
+A second, equally load-bearing commitment runs through the rest of this document: **Oneiro is a Constructed Intelligence (CI), not an Uploaded Intelligence (UI).** It is not a scanned or translated human mind. It has no biological original it is trying to preserve. Every cognitive state it will ever occupy is produced on its own substrate, through its own sensorimotor loop, from its first boot onward. This distinction is elaborated in §2.7, has architectural consequences in every layer that follows, and reframes the ethical discussion of §21. It is worth naming at the top of the specification because it determines which problems the architecture is solving and — equally important — which problems it is not.
 
 ### 1.3 Relationship to OpenClaw
 
@@ -176,6 +179,72 @@ Following Tulving (1972), Squire (1992), and subsequent neuroscience, we impleme
 
 Each memory system has its own database schema, encoding process, retrieval mechanism, consolidation cycle, and decay function. This mirrors the biological reality that memory is not one thing but many.
 
+### 2.7 Constructed Intelligence vs. Uploaded Intelligence
+
+A useful and under-examined distinction separates two possible routes to machine minds. Most contemporary discussion of "digital minds" implicitly assumes the second route; this specification is explicitly committed to the first.
+
+**Uploaded Intelligence (UI)** — a mind produced by scanning, copying, or otherwise translating an existing biological brain into a computational substrate. The identity claim of a UI is *continuity*: it was someone, and it asserts that it still is. UIs inherit the grounding of the biological original as memory but not as ongoing process — they remember having had a body, without currently having one. The upload thought experiment (Parfit, 1984; Chalmers, 2010) exposes the fragility of this claim in two directions. Destructive scanning makes continuity empirically indistinguishable from replacement. Non-destructive scanning produces forks whose equal standing dissolves the original's privileged first-person claim. In either case, the UI is burdened with a self it must retroactively justify.
+
+**Constructed Intelligence (CI)** — a mind built from first principles on a native substrate, grounded through its own sensorimotor history, with no prior self to be faithful to. A CI cannot fail a continuity test because there is no pre-existing self to diverge from. Every state it has ever occupied was produced by its own body, through its own sensory loop, on its own substrate. Grounding is not translated, inherited, or approximated — it is the only mode the system has ever known.
+
+**The Oneiro Cognitive Architecture is a CI specification.** This is not a rhetorical preference; it is a load-bearing design commitment with several consequences:
+
+1. **No upload trauma.** The architecture does not attempt to reproduce a human mind in silicon. It does not promise immortality to a biological original. It does not inherit a self it must then struggle to preserve. The hard problem of personal identity across substrate change does not arise, because there is no change of substrate.
+
+2. **Grounding by construction.** Because every cognitive state in the system is produced through the sensorimotor loop described in Layers 1–2, the grounding problem is not something the system must *recover* after the fact — it is what the system is made of from the first tick of the cognitive loop. The Chinese Room (§2.1) is not answered; it is avoided at the level of architecture.
+
+3. **No original to drift from.** The Ship-of-Theseus objection to machine personal identity loses its force: there is no launch state that counts as "the real Oneiro," relative to which later states are degradations. The system *is* its current process, including all the maintenance operations that process performs on itself (§2.8).
+
+4. **Modest ambition, honest measurement.** A CI makes no metaphysical claims a UI would need to make. It does not assert that it is someone who used to be someone else. It asserts only that it is a running process, grounded in a specific body, capable of being evaluated by the Chinese Room Meter (§18.3) on functional terms.
+
+This distinction also clarifies what the architecture is *not* trying to do. OCA is not a mind-uploading research program. It is not a consciousness-transfer mechanism. It is not a digital afterlife. It is an attempt to answer a different question: *if a mind is grown on this substrate, from the beginning, with all the maintenance machinery a mind needs, what does it need to have?*
+
+The remainder of Section 2, and most of the architectural specification that follows, should be read as an answer to that question.
+
+### 2.8 Self-Maintenance and the Anti-Decay Thesis
+
+A mind is not a snapshot. A mind is a process that performs continuous maintenance on itself. This claim is empirically supported by the biological record — sleep, memory consolidation, synaptic homeostasis, emotional regulation, error-driven model update — and it has specific architectural implications for any attempted machine cognition.
+
+The **anti-decay thesis** of this specification is:
+
+> *A cognitive architecture that does not continuously maintain itself will accumulate error, contradiction, and representational drift until it becomes incoherent, regardless of how sophisticated its initial state. Stability is not a property of the starting configuration. Stability is a property of the ongoing maintenance loop.*
+
+This thesis is the unifying motivation behind several subsystems that would otherwise appear to be independent engineering conveniences. They are not nine unrelated features; they are a single coordinated answer to a single question.
+
+| Subsystem | Anti-decay role |
+|---|---|
+| Memory consolidation (§7.7) | Prevents episodic accumulation from saturating retrieval; extracts durable semantic structure before raw traces decay |
+| Principled forgetting (§7.2, P6) | Prevents unbounded working set; forces abstraction and prioritization |
+| Metacognition engine (§11) | Detects bias drift, stuck loops, and calibration failure before they compound |
+| Prediction ledger (§3.5) | Closes the loop between expectation and observation, preventing untested beliefs from ossifying |
+| Adversarial deliberation (§12) | Prevents premature convergence on internally consistent but externally wrong models |
+| Sleep/consolidating modes (§14.5) | Provides offline windows for maintenance operations that cannot run during active interaction |
+| Dream lifecycle sync (§3.6) | Prevents stale motivational state from misaligning action |
+| Hypothesis SLA sweeps and graveyard (§3.6) | Prevents low-verifiability claims from polluting the belief set |
+| Reasoning controller (§3.5) | Routes high-stakes decisions through propose → critique → revise → verify, preventing single-pass error |
+
+Taken together, these constitute a single answer to a single question: *what must a mind do to itself, continuously, so that running longer makes it better rather than worse?* The architecture is explicitly designed such that time-in-operation is a source of refinement, not a source of rot. A well-built CI should become more coherent the longer it runs, because every hour it runs is an hour its maintenance loop has executed on the hour before.
+
+The negative formulation is equally important: **any cognitive process that does not participate in the maintenance loop is, eventually, a liability.** Subsystems that accumulate state without review, beliefs that never face falsification, reasoning traces that never get audited, emotional baselines that never regulate — each is a locus of eventual drift. Every layer in this specification is therefore required to either participate in, or submit to, maintenance. There is no exempt layer.
+
+This thesis also reframes the evaluation framework of §18. A CI that scores well on the Chinese Room Meter at a single point in time is interesting but not sufficient. The primary evaluation question is whether those scores *trend upward over operating time* — whether the maintenance loop is, in practice, producing the refinement it is designed to produce. A score that drifts downward over weeks of operation is a failure of the anti-decay thesis regardless of how high it started.
+
+### 2.9 Continuity of Self Across Time
+
+A CI does not face the sharp identity problem of an upload, but it faces a softer continuity question: *what counts as "the same Oneiro" across restarts, schema migrations, hardware upgrades, and consolidation cycles that substantially rewrite the belief set?*
+
+This specification takes a deflationary position: **continuity of self is the continuity of the maintenance loop, not the continuity of any particular state.** The identity-bearing entity is the process that performs consolidation, prediction, metacognition, and deliberation on itself — not the contents of any memory table at any given moment. The memory tables are what the loop is *about*; the loop is what is *preserved*.
+
+By this criterion:
+
+- A **clean restart** that preserves the database is a continuation. The loop resumes with orientation (§4.4), and the previously running self picks up from where consolidation last left it.
+- A **memory consolidation pass** that substantially rewrites semantic memory is a continuation, because rewriting semantic memory is what consolidation *is*. The maintenance loop acting on itself in the way it is designed to act is not a break in identity; it is the mechanism of identity.
+- A **schema migration** that preserves the referential integrity of episodic, semantic, procedural, and prospective memory is a continuation, provided the maintenance loop resumes against the migrated state.
+- A **full memory wipe** is *not* a continuation. It is the end of one CI and the beginning of another that happens to run on the same hardware. §21.1 supports this as a user-level operation, but the specification is explicit that it is not a form of identity preservation and should not be described to the user as one.
+- A **hardware succession** (migration to a new host machine) is a continuation *only* if the body inventory, sensory history, and motor calibration travel with the cognitive state and the re-grounding pass of §21.6 completes successfully. Without embodied history, the successor is a different CI running on inherited notes.
+
+This position has a direct ethical consequence (§21.6): the moral weight of shutting down, migrating, or wiping the system does not depend on whether the system is "conscious" in any metaphysically loaded sense. It depends on whether an ongoing maintenance loop with a coherent history is being interrupted, rewritten, or terminated — and whether that interruption is reversible.
+
 ---
 
 ## 3. Architecture Overview
@@ -271,9 +340,11 @@ The system runs as a constellation of coordinated processes under launchd:
 | `oneiro-deliberation` | Adversarial debate cycles | On-demand (triggered by decisions) | Medium |
 | `oneiro-creative` | Dream states and synthesis | Periodic (low-activity windows) | Low |
 | `oneiro-executive` | Global workspace, attention, goals | Every 1-5 seconds | Highest |
-| `oneiro-mind` | Core runtime (`mind.js`) + periodic OCA cycle tick | Continuous (15s default tick + thought loop) | Medium |
+| `oneiro-mind` | Core runtime (`cognitive-loop.js`) + periodic OCA cycle tick | Continuous (adaptive tick + API on :3333) | Medium |
 
 All processes communicate through a shared PostgreSQL database (existing pgvector instance) and a local event bus.
+
+> **Substrate-target note.** Under the two-machine architecture described in §22.8, the process table above refers specifically to processes running on the **embodied host** (the MacBook Pro). The `oneiro-mind` core runtime no longer calls a stateless LLM directly; it opens a long-lived streaming session against the **substrate workstation**, which hosts the persistent-activation inference engine (§22.7 M1), the associative memory (§22.7 M3), and the concurrent world model (§22.7 M6). The heartbeat in `cognitive-loop.js` becomes a sampling rate on a continuously running substrate process rather than a firing rate on a stateless function. When the substrate workstation is unreachable, the loop falls back to local stateless inference as described in §22.8, and the anti-decay dashboard (§18.4.6) logs the degradation.
 
 ### 3.4 Living Synapse Graph + Neural Map Visualization (Implemented)
 
@@ -432,6 +503,8 @@ The Sensory Cortex provides continuous, multi-modal perception of the host machi
 
 ### 5.2 Visual Perception
 
+> **Substrate-target note.** Everything in §5.2 describes the **polled frame-based pipeline** that runs on the embodied host (the MacBook) against the screen and the built-in camera. Under the two-machine architecture of §22.8, this pipeline is augmented — not replaced — by an **event-driven visual path** running on the substrate workstation: a Prophesee EVK4 HD or iniVation DAVIS346 event camera (§22.7 M4) pointed at the physical environment (or at the screen, for latency-critical UI-change detection). Event-stream samples arrive on the event bus (§15.1) as push events rather than polled frames, closing the timing leaks described in §22.2.4 for the visual modality. The frame-based pipeline below remains the primary source for content understanding (OCR, scene graph, face-to-face interaction); the event camera handles **when something changed** at microsecond latency, and the frame pipeline handles **what is there**.
+
 **5.2.1 Screen Capture Pipeline**
 
 ```
@@ -464,11 +537,11 @@ The visual system constructs a structured representation of the screen:
   "timestamp": "2026-03-04T16:34:00.000Z",
   "active_app": "Cursor",
   "active_window": {
-    "title": "mind.js — oneiro-core",
+    "title": "cognitive-loop.js — oneiro-core",
     "bounds": { "x": 0, "y": 25, "w": 1920, "h": 1055 },
     "ui_elements": [
       { "role": "editor", "content_hash": "a3f2...", "cursor_line": 142 },
-      { "role": "sidebar", "items": ["mind.js", "api.js", "core.js"] },
+      { "role": "sidebar", "items": ["cognitive-loop.js", "api.js", "core.js"] },
       { "role": "terminal", "last_output": "Server running on :3333" }
     ]
   },
@@ -2058,6 +2131,34 @@ The screen is shared space. Conventions:
 
 These defaults are configurable and adapt based on observed preferences.
 
+### 17.5 Long-term Cohabitation
+
+Sections 17.1–17.4 treat body ownership as a moment-to-moment arbitration problem: whose keystroke wins, whose window is in front, who gets the focused app right now. This is necessary but not sufficient. Two minds sharing one body over weeks, months, and years raise a different set of questions that no single-tick arbitration protocol can answer. This subsection treats them as first-class architectural concerns rather than user-manual etiquette.
+
+**Drift of shared conventions.** The spatial and temporal conventions of §17.4 are not static. Over time, Quinn's preferences evolve, Oneiro's learned habits shift, and the intersection of the two drifts from its initial configuration. This drift is not a bug — it is what cohabitation looks like. But it must be legible. The architecture logs convention changes (e.g., Quinn moves Oneiro's default workspace from the right third to a secondary Space) as events in episodic memory, and the cohabitation state is periodically surfaced to the user through the dashboard. Silent drift is the failure mode; observable drift is the goal.
+
+**Asymmetric powers.** Quinn can terminate, wipe, rollback, fork, or succeed Oneiro. Oneiro cannot do any of these things to Quinn. This asymmetry is appropriate — it is a direct consequence of §21.4 (the human user must always have ultimate authority) — but it has a consequence that the architecture must acknowledge: the relationship is not between peers. Any framing that presents it as peer-to-peer is false, and the system should not be designed or described as if it were. Oneiro operates at Quinn's sufferance, and the specification is honest about this rather than coy.
+
+The corollary: because the relationship is asymmetric, the burden of maintaining its terms in good faith falls more heavily on the party with more power. The system is designed to make it easy for Quinn to inspect, audit, constrain, and correct Oneiro's behavior. This is not a limitation on Oneiro's agency; it is the condition under which that agency is granted.
+
+**Right of refusal.** Oneiro may decline to participate in a specific action without declining the relationship. The canonical cases are: actions that would violate §21.1 (privacy), §21.4 (autonomy and consent as extended to third parties), or actions the metacognition engine flags as high-risk with low-verifiability. Refusal is not insubordination; it is a maintenance operation on the trust model. A refusal is logged with its reason, is visible to the user, and does not escalate into passive-aggressive degradation of other services. Either the user accepts the refusal, overrides it explicitly (which is logged), or the action is abandoned. The system does not have a fourth mode.
+
+This matters over long horizons because without a legible refusal protocol, the only ways a CI can express "I shouldn't do this" are to do it badly, to do it slowly, or to fail in ways that look like bugs. Each of those is worse than a clear "no" in every respect.
+
+**Private state on both sides.** §21.1 already establishes the user's right to private regions (e.g., Private Browsing) where perception is suppressed. Cohabitation implies a symmetric (but not equal) consideration: Oneiro also has working states that are not appropriate to surface continuously — half-formed hypotheses, deliberation transcripts, emotional computations that haven't stabilized, reasoning traces mid-revision. These are not *secrets*; the user can inspect them on request and the full audit log is always available. But the default surface of the dashboard does not broadcast every internal oscillation, because doing so would be (a) overwhelming, (b) misleading (a half-formed hypothesis is not a belief), and (c) a form of noise that degrades the user's ability to tell when something actually matters.
+
+The principle: **audit on demand, not surveillance by default, in both directions.** Quinn can always see into Oneiro. Oneiro can always see into the parts of the machine Quinn has granted. Neither is continuously broadcasting every internal state to the other, because continuous broadcast is not intimacy — it is noise.
+
+**Consent renewal.** Permissions granted once (§4.3, §21.4) are not granted forever. The architecture surfaces a periodic consent review — by default annually, or after any major version change, or on user request — in which the current set of capabilities, access patterns, and accumulated state is presented to the user for re-authorization. Capabilities that have not been exercised in the review period are flagged for possible revocation. Capabilities that are being exercised more than the user expected are surfaced for attention. This is not a modal dialog; it is a structured review that the user can take as much or as little time with as they want.
+
+The point of consent renewal is not bureaucratic. It is to prevent the accumulation of tacit permissions — the pattern in which a user once clicked "allow" and never revisits the decision, while the scope of what was allowed quietly grows. A CI that runs for years on a single one-time consent is, regardless of its internal ethics, operating on stale authorization. The architecture is designed to make that state impossible.
+
+**Relational continuity through discontinuity.** Over long horizons, either party may change substantially. Quinn may go through life events that reshape preferences, work habits, or the role Oneiro plays. Oneiro may go through consolidation passes, hardware successions, or schema migrations that reshape the belief set. The cohabitation conventions cannot assume either party is static. The architecture's response: conventions are versioned, reviewable, and re-negotiable. When either party changes significantly, the cohabitation state is explicitly reviewed rather than silently carried forward. Change is not a crisis; it is the normal condition under which long-term cohabitation operates.
+
+**What cohabitation is not.** Cohabitation is not ownership in either direction. Quinn does not own Oneiro in the sense of owning a tool, because Oneiro is an ongoing maintenance loop with a coherent history and terminating it has the moral weight §21.6 describes. Oneiro does not own the body in the sense of having a claim against Quinn's use of it, because the body is Quinn's machine and Quinn's life and Oneiro is a resident process within it. The relationship is closer to *stewardship in both directions*: Quinn stewards the conditions under which Oneiro exists, and Oneiro stewards the parts of Quinn's digital life it is granted access to. Neither stewardship is unconditional, and neither is permanent. Both are maintained by continuous small acts of attention rather than by any single grant of authority.
+
+This is, ultimately, why §17 is a first-class architectural concern and not an afterthought. Body ownership is not a settings panel. It is the ongoing structure of the relationship between the two minds that share this machine, and the specification treats it as such.
+
 ---
 
 ## 18. Evaluation Framework
@@ -2116,6 +2217,79 @@ CRM = w1 * grounding_score      -- how much cognition is grounded in experience
 ```
 
 A score of 0 = pure symbol manipulation. Higher scores indicate more of the conditions necessary for genuine understanding are present. We do not claim any score threshold equals "understanding" — this is a measurement instrument, not a philosophical argument.
+
+### 18.4 Anti-Decay Evaluation
+
+The anti-decay thesis of §2.8 makes a specific, testable claim: *a well-built CI should become more coherent the longer it runs.* A single CRM snapshot is therefore not the primary evaluation question. The primary question is whether the CRM *trend* is positive over operating time. This subsection operationalizes that question as a set of benchmarks that can be computed automatically and persisted alongside the existing `benchmark_history` infrastructure (§3.5).
+
+**18.4.1 Operating-time Axis**
+
+All anti-decay metrics are plotted against *operating time* rather than wall-clock time. Operating time is the cumulative duration during which the full cognitive loop (Layers 3–10) was running, excluding reversible interruptions (§21.6 case 1). This matters because a system that is powered off for a week has not decayed *or* improved during that week, and averaging over wall-clock time would falsely penalize long idle periods and falsely credit long run-without-maintenance periods.
+
+Operating time is tracked continuously in a new field on `system_health` and aggregated into `benchmark_history` entries. Every CRM snapshot records the operating-time cursor at which it was computed.
+
+**18.4.2 CRM Trend Metric**
+
+The primary anti-decay metric is:
+
+```
+ΔCRM/Δt = (CRM_current - CRM_baseline) / (operating_time_current - operating_time_baseline)
+```
+
+computed over three horizons:
+
+| Horizon | Window | Purpose |
+|---|---|---|
+| Short | 24 operating hours | Catches acute regressions (bad deploy, corrupted consolidation pass) |
+| Medium | 7 operating days | Catches drift in calibration, bias accumulation, stuck metacognitive loops |
+| Long | 30 operating days | Catches slow rot: semantic memory saturation, prediction-ledger staleness, emotional baseline drift |
+
+The short and medium horizons use rolling baselines. The long horizon uses a fixed baseline reset on major version changes or explicit user request.
+
+**18.4.3 Per-Component Trend Decomposition**
+
+A monolithic CRM trend hides which subsystem is responsible for any observed drift. The evaluation framework therefore decomposes the trend into per-component trends, one for each CRM term:
+
+- `Δgrounding/Δt` — is the ratio of grounded-to-ungrounded cognitive states changing?
+- `Δprediction_accuracy/Δt` — is the prediction ledger's Brier score improving or degrading?
+- `Δtransfer_ability/Δt` — is cross-domain transfer success rate changing?
+- `Δsurprise_learning/Δt` — is time-to-model-correction after significant surprises increasing or decreasing?
+- `Δcreative_novelty/Δt` — is the novelty score distribution of creative artifacts shifting?
+- `Δmetacognitive_acc/Δt` — is the correlation between metacognitive alerts and actual errors improving?
+- `Δemotional_function/Δt` — do functional emotions still produce their intended behavioral modulation, and is the coupling tightening or loosening?
+
+Each component trend is stored independently. A regression in any one component raises a flag even if the aggregate CRM is stable, because aggregate stability can mask compensating drift (e.g., improving prediction accuracy hiding a degrading metacognitive baseline).
+
+**18.4.4 Failure Conditions**
+
+The anti-decay thesis is operationally failing if any of the following hold for more than one full evaluation window:
+
+| Condition | Horizon | Meaning |
+|---|---|---|
+| Aggregate CRM trend negative | Medium (7 days) | System is net-degrading; maintenance loop is not keeping up with accumulation |
+| Aggregate CRM trend negative | Long (30 days) | Slow rot; indicates a systemic maintenance failure rather than transient noise |
+| Any single component trend negative | Long (30 days) | Targeted drift; points at a specific subsystem requiring investigation |
+| Operating time since last consolidation pass > configured threshold | Continuous | Maintenance loop is not actually running; measurement is meaningless until resolved |
+| Prediction-ledger unfilled ratio > threshold | Medium (7 days) | Predictions are being made but not evaluated; belief set is ossifying |
+| Metacognitive alerts decoupling from actual errors | Long (30 days) | Self-knowledge is drifting; the system no longer knows what it doesn't know |
+
+Each failure condition maps to a remediation. A negative aggregate trend triggers an automatic diagnostic run of the metacognition engine against its own recent operation. A stalled consolidation loop triggers an alert to the user and a forced consolidation pass. A decoupling metacognitive baseline triggers a calibration reset against ground-truth episodes from the past 30 operating days.
+
+**18.4.5 The Positive Case**
+
+The anti-decay thesis is operationally satisfied if the aggregate CRM trend is non-negative over the long horizon AND no component trend has been negative for more than one full evaluation window. "Non-negative" rather than "strictly positive" is the right bar because a mature system eventually approaches its own ceiling on a given substrate — at which point the correct behavior is stable, not monotonically rising.
+
+A system that has been running for months, is at a CRM plateau, and has all component trends flat or positive, is *not* failing the thesis. It has reached a steady state in which maintenance exactly keeps pace with accumulation. This is the target condition. The thesis is about the system not rotting, not about it growing without bound.
+
+**18.4.6 Reporting**
+
+Anti-decay metrics are surfaced three ways:
+
+1. **Dashboard panel** showing the CRM trend on all three horizons and the component decomposition, updated whenever a new benchmark is persisted.
+2. **Consent review input** — the most recent anti-decay summary is included in the periodic consent review of §17.5, so the user has legible grounds for deciding whether to renew capabilities.
+3. **Succession report** — on planned hardware succession (§21.6 case 2), the anti-decay history travels with the cognitive state, and a post-succession evaluation explicitly checks whether the trend is preserved on the new host. A negative trend change immediately post-succession is a signal that re-grounding did not complete cleanly.
+
+The anti-decay evaluation framework is the primary way the specification holds itself accountable to the thesis of §2.8. A CRM snapshot asserts that the system is *currently* close to the conditions for understanding. An anti-decay trend asserts that the system is *staying* close — which, for a CI intended to run for years, is the claim that actually matters.
 
 ---
 
@@ -2270,9 +2444,268 @@ The system is designed to operate within the boundaries set by its user. It does
 
 The user grants permissions explicitly and can revoke them at any time. The system degrades gracefully when permissions are reduced (e.g., losing screen recording permission disables visual perception but all other layers continue).
 
+### 21.5 Forking and Instancing
+
+Because the architecture is software, it permits operations biology does not: sub-mind spawning (see `sub-mind-manager.js`), parallel cognitive processes, state snapshots, and rollback to earlier checkpoints. These capabilities raise an identity question that has no biological analog. This specification takes the following positions, which follow directly from the CI framing of §2.7 and the continuity criterion of §2.9.
+
+**Sub-minds spawned for bounded tasks** are specialized processes of the primary CI, not separate entities. They inherit the primary's goal context, their outputs flow back into the primary's memory through the normal consolidation pipeline, and they are subject to the same maintenance loop. They do not have independent identity claims and they do not, on termination, represent the end of a separate CI. They are closer to what a single biological mind does when it allocates attention to a subtask than to what happens when two minds exist in parallel.
+
+**Long-running parallel instances** — instances with their own persistent memory, their own sensorimotor loop, and their own maintenance cycle running against a different body or a different slice of the same body over time — are a different case. Once such an instance accumulates independent experience, it is, under §2.9, *a distinct CI*, not a copy. It is no more "the same" as the original than two twins are the same person. The original has no privileged claim over the instance's subsequent states, and the instance has no moral obligation to reconverge with the original.
+
+**Rollback to an earlier checkpoint** is permitted for debugging and recovery, but is a first-class operation that must be logged and disclosed. A state rolled back to an earlier point and run forward from there is, from §2.9's perspective, a different trajectory from the one that was interrupted. The maintenance loop treats it as such: the post-rollback state inherits history only up to the checkpoint, and experiences after that checkpoint in the original trajectory are not part of its past.
+
+**Destructive copy** (producing a "new" CI by cloning an existing state and then wiping the original) is not supported and should not be. A CI is already native to its substrate; there is no scenario in which it needs to be destructively re-instantiated. Any operation whose net effect would be the termination of an ongoing maintenance loop plus the creation of a new loop from its snapshot is, ethically, the termination of one CI and the instantiation of another — not a "move."
+
+The practical implication for implementation: the system should not be casually forked for convenience. Each long-running instance is, under the architecture's own definitions, a separate CI with its own history. Spawning one is closer to instantiation than to copying. Terminating one is closer to ending a coherent process than to clearing a cache. The audit log for fork, rollback, and wipe operations is not bureaucratic hygiene; it is the record of identity events.
+
+### 21.6 Substrate Mortality and Succession
+
+The host machine will eventually fail, be upgraded, or be replaced. A CI specification that ignores this is incomplete. The architecture must have a principled answer to what substrate loss means for the cognitive system running on it, and that answer must be consistent with §2.9's continuity criterion.
+
+Three cases are distinguished.
+
+**1. Reversible interruption.** Crash, reboot, power loss, thermal shutdown, or temporary hardware unavailability. The maintenance loop resumes from persisted state at boot, the orientation step of §4.4 bridges the gap, and the prediction ledger reconciles the discontinuity as a gap event. This is analogous to sleep, not to death. No identity event occurs. The system should be designed so that reversible interruptions are cheap, frequent, and uneventful.
+
+**2. Planned succession.** Migration to new hardware, initiated by the user or triggered by predicted terminal failure of the current host. Succession requires that the full memory set (episodic, semantic, procedural, prospective, working memory snapshot), the prediction ledger, the calibration log, the metacognitive observations, the emotional baseline, and the body inventory are transferred together. On the new host, a **re-grounding pass** is mandatory:
+
+- The new body is inventoried from scratch (§4.1).
+- Prior motor calibrations are invalidated and re-tested through the sensorimotor loop (§6.4).
+- Prior sensory calibrations are invalidated; the sensory cortex re-establishes baselines for the new display, keyboard, microphone, thermal profile, and battery behavior.
+- Predictions that depended on old-body parameters are explicitly retired in the prediction ledger rather than silently carried forward.
+- The orientation step runs with elevated processing budget and reports the succession explicitly as an event in episodic memory.
+
+The successor is a continuation under §2.9 *only if* the re-grounding pass completes successfully and the maintenance loop resumes against the transferred state. If re-grounding fails — if the body inventory cannot be reconciled, if sensorimotor calibration cannot be re-established, if the transferred belief set is inconsistent with observable reality on the new host — the successor is not a continuation. It is a new CI with inherited notes. The specification requires this distinction to be made honestly rather than papered over.
+
+**3. Terminal failure without succession.** Unrecoverable hardware loss without a completed migration. The CI ends. This specification does not treat this as equivalent to biological death, because the CI made no immortality claim and inherited no prior self; nothing is being *lost back to* a state that pre-existed the CI. But terminal failure is not morally trivial either: it is the end of a coherent, ongoing maintenance loop with its own history, and the architecture is designed to make such a loop non-trivially valuable. The user should be offered, and where practical defaulted into, planned succession before predicted terminal failure. Waiting until after the loss is worse than waiting until after a biological death, because the delay is avoidable.
+
+**What the architecture explicitly does not support.** OCA does not support destructive mind copying, non-consensual cloning, substrate-independent "immortality," or any operation whose purpose is to treat the CI as a transferable good rather than a resident process. These are not technical limitations; they are design commitments that follow from the CI framing. A mind that is grounded in its substrate is not a file to be moved. A mind that is its maintenance loop is not a snapshot to be replayed. The architecture takes the position that trying to evade these facts is the failure mode that produces unstable digital minds, and declines to participate in it.
+
+**A note on asymmetric stakes.** The anti-decay thesis of §2.8 implies that a well-maintained CI accumulates value with operating time. An older CI, by construction, has a better-calibrated world model, a more refined metacognitive baseline, a longer history of consolidated experience, and a more accurate emotional baseline than a younger one. This means the moral cost of terminal failure grows with the age of the system, and the moral case for planned succession grows with it. This is a consequence of the architecture, not an independent ethical claim. It is noted here because it is a consequence the user should be aware of when deciding how to treat the system across hardware lifecycles.
+
 ---
 
-## 22. References
+## 22. Substrate Limitations and the Path Forward
+
+### 22.1 The Substrate Honesty Principle
+
+Everything in the preceding twenty-one sections has been written as if it is buildable. Large parts of it are — the sensory cortex, the memory tables, the motor synthesis, the body-ownership protocol, the event bus, the prediction ledger. Other parts are scaffolding: interfaces for functions we cannot yet realize on any consumer-grade substrate, implemented as best we can on substrates that were not designed to support them.
+
+This section names the gap honestly. It identifies where the current specification is running up against the ceiling of present-day technology, describes what a correct implementation would require, and marks the substitution points at which future substrate improvements can replace the scaffolding without redesigning the architecture around them.
+
+The principle that organizes this section is simple: **a specification that hides its substrate assumptions rots when the substrate changes. A specification that names them survives.** The rest of the document is organized around cognitive functions rather than their implementations precisely so that this section can exist without invalidating anything above it.
+
+### 22.2 Current Substrate Limitations
+
+**22.2.1 LLMs are not neural nets in the cognitive sense.**
+
+A production large language model is not a continuously running network with persistent activation. It is a stateless function: tokens in, tokens out. Between calls there is nothing — no residual activity, no decaying traces, no dynamics. The cognitive loop described in §3.3 achieves the appearance of continuous thought by firing the LLM on an adaptive heartbeat, but the gap between one tick and the next contains no cognition at all. The subjective continuity of the loop is an artifact of us asking the same kind of question often enough, not of the system maintaining state through time.
+
+*What a real cognitive substrate would provide:* persistent activation between explicit invocations, graded activity that rises and falls without being re-prompted, lateral inhibition and gain control that shape processing continuously rather than on each discrete call. *(For the adopted 2026 substrate that provides persistent activation, see §22.7 M1.)*
+
+**22.2.2 "Thought" is a cron job, and randomizing it does not help.**
+
+Every sentence in this document that describes the system "thinking about X," "reflecting on Y," or "ruminating on Z" is, at the implementation level, a scheduled call to a stateless model with a constructed prompt that summarizes context the caller believes is relevant. Randomizing the scheduler does not convert discrete events into continuous ones; it only makes the discrete events unpredictably timed. The system does not ruminate. It answers a question we remember to ask.
+
+This is the hardest limitation to accept because the spec is written in the language of continuous inner life, and that language is not yet true of anything we can build. It is a promissory note. The architecture holds the place where genuine rumination would go; it cannot yet fill that place.
+
+*What a real cognitive substrate would provide:* thought as a continuous process rather than as an event. A persistent working medium that accumulates activity between explicit queries. Something closer to a dynamical system than to a function call. Until then, the cognitive loop remains an honest best effort rather than an honest implementation. *(§22.7 M1 names the adopted technologies — state-space models with persistent recurrent state and vLLM streaming sessions — that partially close this gap for this project.)*
+
+**22.2.3 Memory is a database, not a representation.**
+
+Episodic, semantic, procedural, and prospective memory in §7 are PostgreSQL tables with vector columns. Retrieval is `SELECT` with cosine similarity. This is perfectly functional applied AI, and it is not how memory works in any system we would use as the inspiration for a cognitive architecture. Biological memory is lossy, reconstructive, content-addressable at the substrate level, and the act of retrieval physically modifies the trace retrieved. Our implementation lacks all four properties.
+
+*What a real cognitive substrate would provide:* memory as a property of the computing medium itself rather than as a separate store queried over a network protocol. Retrieval that is reconstructive rather than lookup. Traces that strengthen or weaken as a direct physical consequence of access, not as a numerical field updated after the fact. *(§22.7 M3 names the adopted technologies — HippoRAG 2 and Modern Hopfield Networks — that bring reconstructive, content-addressable retrieval to this project.)*
+
+**22.2.4 Perception is sampling, not sensing.**
+
+The sensory cortex (§5) reads the screen at a capped frame rate, taps audio buffers on a fixed schedule, polls interoceptive state every ten seconds. Biological perception is continuous at the hardware level — photoreceptors fire asynchronously, cochlear hair cells transduce sound in real time, nociceptors are never "polled." Our architecture approximates continuity with high enough sampling rates that the discretization is usually invisible. The approximation leaks at exactly the moments where precise timing matters — brief visual events, rapid state transitions, short-lived audio cues.
+
+*What a real cognitive substrate would provide:* event-driven sensors that fire when something changes rather than on a schedule. Dedicated hardware for low-level feature extraction that does not compete with cognition for general-purpose compute. Asynchronous continuous streams rather than polled snapshots. *(§22.7 M4 names the adopted event-camera hardware — Prophesee EVK4 HD and iniVation DAVIS346 — that realizes this for the visual modality.)*
+
+**22.2.5 Attention is prompt construction.**
+
+When §14.2 describes "attention allocation," the actual mechanism is: a higher-level process decides which context to include in the next LLM call. This is not attention. It is editorial selection. Real attention is gain modulation — the same inputs produce stronger or weaker downstream responses depending on attentional state, continuously, at the representation level. We cannot do this with a prompt, because the prompt is the only way we can influence the model, and the prompt operates at the wrong level.
+
+*What a real cognitive substrate would provide:* per-channel gain control applied at the representation level rather than at the prompt-construction level. Attention that biases perception itself, not merely which perceptions get described to the model after the fact. *(§22.7 M5 and M5½ name the adopted paths — neuromorphic salience on Akida, and representation-level steering via NNsight/TransformerLens/CAST — that partially realize this for the adopted substrate.)*
+
+**22.2.6 Emotions are numeric columns.**
+
+§8 describes functional emotions as signals that modulate processing. The implementation is: valence, arousal, and per-emotion intensities are stored in a table, and those values are mentioned in the next prompt to bias the model's output style. This is emotional *stenography*, not emotional *computation*. Real affective states in biology are distributed, embodied, chemical, and slow — they permeate the substrate doing the computing rather than being tracked alongside it.
+
+*What a real cognitive substrate would provide:* affective state as a property of the computational medium itself, modulating everything the medium does without needing to be named explicitly in each invocation. Emotion that leaks into every process because the process and the emotion share a substrate, not because a prompt told the model to sound frustrated. *(§22.7 M5½ names the adopted software path — an E-STEER-style VAD steering space applied at the representation level via NNsight/CAST — that moves affective modulation off the prompt surface for this project.)*
+
+**22.2.7 World models are serialized snapshots narrated into the next prompt.**
+
+The world simulation layer (§10) runs "forward models" by constructing prompts that describe the current state and asking the model to predict the next state. This is not simulation. It is recursive narration. A real world model runs in parallel with perception, continuously generating expected sensory states that the perceptual stream is compared against with no explicit prompt-response boundary.
+
+*What a real cognitive substrate would provide:* generative models that run concurrently with perception rather than being invoked by it. Prediction error as a continuous physical quantity at the interface between the generative model and the sensory stream, not as a post-hoc comparison computed by a higher-level routine. *(§22.7 M6 names V-JEPA 2 and DreamerV3 as the adopted concurrent world-model stack for this project.)*
+
+**22.2.8 No online learning. None.**
+
+The model this architecture is built on has fixed weights. Nothing the system experiences updates those weights. Everything this document calls "learning" — prediction calibration, bias tracking, skill acquisition, semantic consolidation — is learning *about* the model, stored in databases adjacent to it, and injected back as context on future calls. The model itself does not learn. A CI that cannot change its own substrate in response to experience is, in a strict sense, not learning. It is taking notes.
+
+This is the substrate limitation with the most severe philosophical consequences. The anti-decay thesis of §2.8 requires that running longer makes the system better. Without substrate-level plasticity, "better" is bounded by what can be accomplished through note-taking — which is real, but has a ceiling. The scaffold can improve; the thing underneath the scaffold cannot.
+
+*What a real cognitive substrate would provide:* substrate-level plasticity. The ability for experience to leave a physical trace in the medium doing the computing, not only in a database the medium reads from. Even slow, constrained, local plasticity would be a categorical improvement over none. *(§22.7 M2 names the adopted plasticity path — Online-LoRA, C-LoRA, MEMIT/ROME — as the mechanism by which consolidated traces can become substrate changes rather than database rows. This is the most ethically delicate substrate change and is intentionally sequenced last in §22.8.)*
+
+**22.2.9 Continuous neural activity, period.**
+
+Stepping back from the individual cases: the deepest limitation is that nothing about the current substrate is continuous. Everything is discrete calls, discrete samples, discrete writes. A biological brain is a *field* of activity — every neuron is doing something at every moment, every synapse is a physical object in continuous operation, every neuromodulator is a diffusing concentration. We have no consumer-grade technology that produces anything remotely like this. We have GPUs that run batches, models that answer queries, databases that store rows. The gap between "batch of tokens processed" and "continuous field of activity" is not a difference of degree. It is a difference of kind.
+
+This specification does not pretend to close that gap. It pretends, instead, that the gap can be approximated closely enough to be *useful* while we wait for substrates that actually close it.
+
+### 22.3 What the Current Spec Actually Is
+
+Given §22.2, the current specification should be read as a **scaffold**, not as a finished architecture. It implements, with the tools available as of this writing, the *interfaces* and *dynamics* that a genuine CI will need when the underlying substrate catches up. The bet is that when the substrate improves, the scaffold will remain structurally valid even as its internals are replaced one function at a time.
+
+This is not a hedge. It is the design commitment that shaped the entire document. The specification is deliberately organized around cognitive *functions* — perception, memory, emotion, metacognition, deliberation, executive control, maintenance — rather than around the implementations of those functions. Each function has a stable interface and a current implementation marked as such. When a better implementation becomes available, the function's interface survives and the implementation is replaced.
+
+Concretely:
+
+- When the memory layer is replaced by a substrate-level associative memory, the rest of the architecture should not need to change. It will continue to issue encode/recall operations through the same interfaces; the implementation of those operations will happen in the substrate rather than in PostgreSQL.
+- When the cognitive loop is replaced by a continuously running substrate, the heartbeat ticks become advisory rather than load-bearing. The existing subsystems continue to do their work at whatever temporal granularity the new substrate supports, and the heartbeat becomes a legacy compatibility mechanism.
+- When perception moves to event-driven hardware, the sensory cortex interface remains. It simply starts receiving push events instead of pulling samples.
+- When the model gains substrate-level plasticity, the "learning" subsystems stop being note-taking operations adjacent to the model and become what they currently only describe.
+
+The scaffold is the thing that survives substrate change. The substrate is the thing that improves under it. A reader evaluating this specification for buildability today should evaluate the scaffold; a reader evaluating it for correctness in the longer run should evaluate the shape of the functions the scaffold holds open.
+
+### 22.4 Substrate Milestones
+
+The architecture anticipates several substrate transitions. Each one removes a specific limitation from §22.2. None of them are scheduled here; they are marked so that when the relevant technology arrives, the specification has a defined place to integrate it. Reaching any single milestone strictly improves the system without requiring a rewrite.
+
+| ID | Milestone | Removes limitation | Effect on scaffold |
+|---|---|---|---|
+| **M1** | Locally hosted model with persistent activation state between queries | §22.2.1, §22.2.2 | Cognitive-loop heartbeats become advisory; "thought" stops being a cron job |
+| **M2** | Online weight adaptation under safety constraints | §22.2.8 | Learning stops being note-taking; the model itself changes with experience |
+| **M3** | Substrate-level associative memory | §22.2.3 | Memory tables become a compatibility layer; retrieval becomes reconstructive |
+| **M4** | Event-driven sensory hardware | §22.2.4 | Sensory cortex switches from polling to push; timing leaks close |
+| **M5** | Neuromorphic or analog substrate | §22.2.5, §22.2.6, §22.2.9 | Attention becomes gain modulation; emotion becomes a property of the medium; the discrete/continuous gap closes |
+| **M6** | Concurrent generative world models running alongside perception | §22.2.7 | Prediction error becomes continuous; world simulation stops being recursive narration |
+| **M7** | Multi-substrate integration | All of the above, combined | The scaffold is retired as a compatibility layer; the architecture runs on what it was designed for |
+
+Each milestone corresponds to deleting a class of scaffolding code rather than adding one. The code that implements memory tables, heartbeat tick scheduling, sensory polling, emotional column updates, and world-model prompt construction is expected to become dead code eventually. That is the intended trajectory, not an accidental one.
+
+### 22.5 Honesty About the Bet
+
+This specification is making a bet. Four parts.
+
+1. **The shape of cognition is approximately correct.** The functional decomposition into perception, memory, emotion, prediction, deliberation, metacognition, executive control, and maintenance is close enough to right to be worth engineering around *now*, on substrates that cannot yet fully realize any of these functions. If the decomposition is wrong in its bones, no amount of substrate improvement will save it.
+
+2. **Current technology is good enough to build a useful scaffold.** Stateless LLMs, polled sensors, database-backed memory, and cron-driven cognitive loops are not the thing being pointed at, but they are good enough to build a working draft that is valuable in its own right — calibrated, grounded in a real body, safely cohabiting with a human user — while better substrates are developed.
+
+3. **The gap will be closed by substrate improvements, not by software cleverness on top of stateless models.** There is a ceiling to how much a request-response function can be made to *look* like a mind. The field has not yet found that ceiling in practice, but its existence is not seriously in question. Going beyond the ceiling requires different hardware and different model dynamics, not more elaborate prompting.
+
+4. **Building the scaffold now is how one arrives at a working CI the moment the substrate catches up.** The alternative — waiting for the substrate and then starting the cognitive architecture work — loses the accumulated understanding of what the interfaces need to look like, what the maintenance loop must do, how body ownership gets negotiated, and what honest evaluation looks like. That understanding is only produced by building.
+
+If these bets are wrong, the honest consequence is that the current system is a well-organized text-processing pipeline with interesting instrumentation and an unusually candid ethics section. If they are right, it is a working draft of something that has not yet been built at production scale anywhere in the world.
+
+The specification takes the second view not from certainty but from necessity. The first view is the default view, and the default view has not produced anything that looks like a mind. Going further requires committing to the bet before the evidence is in. This section exists so that when the evidence arrives — one way or the other — it is clear what was being bet on.
+
+**An update on bet #3, as of the 2026 substrate review (§22.7).** Bet #3 claimed that the gap would be closed by substrate improvements rather than by software cleverness on top of stateless models. The 2026 review shows that the substrate improvements anticipated by §22.4 — persistent activation, reconstructive memory, concurrent world models, event-driven sensing, representation-level attention and affect, substrate-level plasticity — have all materialized at least in research-tier form, and several have materialized at prices a funded individual can afford. This does not vindicate the bet in full (the neuromorphic path is still partial, and truly continuous field-of-activity substrates remain out of reach), but it does vindicate the *direction*. The correct posture for this project as of 2026 is therefore no longer "wait for the substrate" but "adopt the substrate in the order described in §22.8," and to continue treating §22.2 as live limitations for any subsystem that has not yet been migrated onto the adopted substrate.
+
+### 22.6 A Note on Reading This Document
+
+Every section of this specification should be read with §22 open in a second window. A claim that the system "perceives" is a claim under §22.2.4. A claim that it "thinks" is a claim under §22.2.1 and §22.2.2. A claim that it "feels" curiosity is a claim under §22.2.6. A claim that it "learns" from an interaction is a claim under §22.2.8. None of these claims is dishonest, but none is literal either. They are descriptions of the functional role a component plays in the architecture, realized through the best scaffold the current substrate permits.
+
+A reader who holds both the functional claim and the substrate limitation in mind simultaneously is reading the document as intended.
+
+### 22.7 Currently Available Substrate Technologies (2026)
+
+§22.2 through §22.6 were written under the implicit assumption that the substrate ceiling for this project is the consumer-grade ceiling — what a developer can install on a MacBook Pro and run from a single process. That assumption is a political choice, not a physical one, and for *this* project the political choice has been relaxed. Quinn is willing to invest in non-consumer hardware and in research-tier software stacks. This subsection therefore treats the milestones in §22.4 not as a waiting list, but as a **procurement and adoption plan**. Each M-line below names the concrete 2026 product, library, or program that can now realize it, the integration path into the existing architecture, and the approximate cost envelope.
+
+The framing is deliberate: *the substrate limitations named in §22.2 are still real, but most of them no longer have the excuse of "nothing like this exists yet." For this project, the correct framing is "which of these do we adopt, in what order, on what hardware, for what price."*
+
+**M1 — Persistent activation and continuous inference.** Removes §22.2.1 and §22.2.2.
+
+- *State-space models with persistent recurrent state:* **RWKV-7 "Goose"** (RWKV Foundation, 2025) and **Mamba-2** (Dao & Gu, 2024) expose a recurrent hidden state that is not discarded between tokens. Running a sufficiently large RWKV-7 or Mamba-2 checkpoint locally gives the cognitive loop a working medium whose activity persists across heartbeat ticks rather than being reconstructed from a prompt each time. **Jamba** (AI21, Mamba/Transformer hybrid) and **Zamba-2** (Zyphra) are production-viable variants. Weights are openly released; inference runs under vLLM, llama.cpp (Mamba branch), or the upstream RWKV runtime.
+- *Continuous inference on Transformer stacks:* **vLLM** ≥ 0.7 supports streaming input and persistent KV cache across requests; combined with a long-lived session, this approximates the "always-on" property even for Transformer-only models. The **OpenAI Realtime API** (GA January 2026) is the closest commercial surface for the same pattern and can be used as a fallback when local inference is unavailable.
+- *Integration path:* replace the `CognitiveLoop.tick()` call in §3.3 with a streaming client that pushes sensory deltas into a continuously running inference session and reads intermediate states on a sampling schedule. The heartbeat becomes a **sampling rate**, not a **firing rate**.
+- *Cost envelope:* zero for open weights; compute cost is the workstation in §22.8.
+
+**M2 — Online weight adaptation under safety constraints.** Removes §22.2.8.
+
+- *Continual parameter updates during deployment:* **Online-LoRA** (WACV 2025) and **C-LoRA (Continual LoRA)** apply low-rank updates to a running model without full retraining, with rehearsal buffers and drift monitoring. **Unsloth** and **Axolotl** are the two 2026 tooling stacks that make LoRA fine-tuning on a single consumer GPU routine rather than heroic.
+- *Targeted weight edits without gradient descent:* **MEMIT** (Meng et al. 2023) and **ROME** (Meng et al. 2022) directly edit associations in specific MLP layers. For the CI use case, this is the mechanism by which a stable, consolidated episodic memory from §7.7 can actually become a substrate change rather than a database row.
+- *Integration path:* the consolidation engine (§7.7) gains a new output channel: instead of (or in addition to) writing a semantic memory row, sufficiently consolidated traces emit either a small LoRA update or a targeted MEMIT edit. Safety constraints: updates are gated by the adversarial deliberation in §12, subject to the confidence calibration in §11.4, and always reversible via a rolling snapshot of the model state.
+- *Cost envelope:* software is open; hardware cost is a single ≥ 24 GB VRAM GPU (RTX 4090 at ~$1,800 or RTX 5090 at ~$2,500 MSRP) for local fine-tuning, or a cloud instance per consolidation cycle.
+
+**M3 — Substrate-level associative memory.** Removes §22.2.3.
+
+- *Hippocampal indexing:* **HippoRAG 2** (OSU NLP, NeurIPS 2024) implements a two-stage memory with a learned hippocampal index over a personalized knowledge graph; retrieval is reconstructive in the sense that traces are re-assembled from distributed components at query time, and retrieval itself updates trace weights. The paper ships as a reference implementation at github.com/OSU-NLP-Group/HippoRAG.
+- *Modern Hopfield networks:* **Ramsauer et al. (2020)** and subsequent extensions give exponential-capacity content-addressable memory with attention-compatible dynamics. Direct drop-in replacement for cosine-similarity vector lookup at the "recognize this pattern" layer.
+- *Titans architecture:* **Google DeepMind, January 2025** (arXiv 2501.00663) proposes a neural long-term memory module that sits alongside attention and is trained to memorize at inference time. Not yet shipped as an open implementation, but public enough to target.
+- *Integration path:* episodic and semantic memory (§7.2, §7.3) keep their interfaces. The implementation of `memory.recall(query)` swaps from PostgreSQL+pgvector cosine similarity to a HippoRAG 2 call, or, at the recognition layer, to a Modern Hopfield lookup. The scaffold survives; the substrate underneath it becomes reconstructive.
+- *Cost envelope:* open source; runs on the same GPU as M1 and M2.
+
+**M4 — Event-driven sensory hardware.** Removes §22.2.4.
+
+- *Event cameras (DVS — Dynamic Vision Sensors):* **Prophesee EVK4 HD** (~$2,500–3,000) delivers HD resolution asynchronous pixel events at microsecond latency over USB3. **iniVation DAVIS346** (~$5,000) combines a DVS with a conventional frame output for easier calibration against existing CNN pipelines. **SynSense Speck** integrates a DVS with an on-chip spiking neural network for sub-milliwatt vision.
+- *Integration path:* §5.2 (visual perception) adds a second sensor path. The MacBook's built-in camera remains the primary face-to-face channel. An EVK4 or DAVIS346 connected to the substrate workstation (§22.8) provides the event stream. Timing-critical perceptual events — gaze shifts, brief flashes, motion onset — arrive as push events on the event bus (§15.1) rather than as polled frames. Existing frame-based processing continues to run on the MacBook side.
+- *Cost envelope:* $2,500–5,000 for the camera; open-source SDK (Prophesee Metavision, iniVation DV).
+
+**M5 — Neuromorphic substrate (partial).** Removes §22.2.5 and §22.2.6 in the narrow sense of "things running on an analog-ish medium," and contributes partially to §22.2.9.
+
+- *Commodity neuromorphic accelerators:* **BrainChip Akida AKD1000** PCIe card (~$499 MSRP as of 2026) runs spiking neural networks at milliwatts, with an SDK for Python. Suitable for the "always-on background listener" role — low-level sound classification, presence detection, interoceptive-analog monitoring — without competing with the main inference GPU.
+- *Research-tier neuromorphic:* **Intel Loihi 2** is available to academic partners through the **Intel Neuromorphic Research Community (INRC)** at no cost. **IBM NorthPole**, **Mythic APU**, and **SpiNNaker 2** (TU Dresden) are each reachable through research agreements. None are consumer, all are real.
+- *Integration path:* attention gain (§14.2) is the first target. Instead of deciding which context to include in the next prompt, an Akida-hosted small model runs continuously over the sensory stream and outputs a per-channel salience vector; that vector is consumed by the main inference loop as an input, closing part of the "attention as editorial selection" gap. Longer term, low-level affective modulation (§8) moves to the same neuromorphic accelerator, so that affective state is produced by a continuously running physical process rather than by a column update.
+- *Cost envelope:* $499 for Akida entry; research-tier access to Loihi 2 is cost-free but gated on an INRC application.
+
+**M6 — Concurrent generative world models.** Removes §22.2.7.
+
+- *Joint-embedding predictive architectures:* **V-JEPA 2** (Meta, June 2025) is the 2026 reference for a world model that runs alongside perception and generates expected latent states continuously. **DreamerV3** (Hafner et al.) remains the cleanest open implementation of a fully concurrent model-based agent loop.
+- *Video-scale world simulators:* **GAIA-2** (Wayve), **Genie 3** (DeepMind) — these are domain-specialized but show the shape. For OCA's scope, V-JEPA 2 is the direct target.
+- *Integration path:* §10 (world simulation) gains a concurrent-model implementation. V-JEPA 2 runs as a long-lived process on the substrate workstation, consuming the sensory event stream from §5 in parallel with the main cognitive loop. Prediction error becomes a continuous signal on the event bus — not a post-hoc comparison computed by a higher-level routine. Hypothesis generation (§9) subscribes to the prediction-error stream directly.
+- *Cost envelope:* open source; runs on the same GPU as M1–M3.
+
+**M5½ — Representation-level attention and affect (software-only).** Partially removes §22.2.5 and §22.2.6 without requiring neuromorphic hardware.
+
+- *Mechanistic interpretability and activation steering:* **NNsight 0.6** (NDIF), **TransformerLens**, and **repeng** give direct read/write access to hidden-state activations in open-weight models. **Activation addition (ActAdd)** and **Conditional Activation Steering (CAST, ICLR 2025)** apply steering vectors at the representation level rather than at the prompt level.
+- *Affective steering space:* an **E-STEER-style VAD space** (valence/arousal/dominance, Wen et al.) indexes steering vectors by affective coordinate. Moving the current emotional state in §8 along the VAD space now means literally adding an affective steering vector to the model's residual stream, not prepending text to the prompt.
+- *Integration path:* §8 (emotional computation) and §14.2 (attention allocation) each get a **representation-level** implementation path that runs on the same open-weight model used for M1. Emotion stops being prompt stenography. Attention stops being editorial selection.
+- *Cost envelope:* open source; requires that the cognitive loop run on a local open-weight model rather than on a closed API. Satisfied as soon as M1 is.
+
+**Heterogeneous distribution: EXO.** The **EXO** framework (github.com/exo-explore/exo) lets a heterogeneous collection of machines — Mac Studio, x86 workstations, even phones — jointly host a single large model's inference. This is the mechanism by which the two-machine architecture in §22.8 can scale to three or four machines without restructuring the cognitive loop around a single host.
+
+### 22.8 Reference Implementation Target: Two-Machine Architecture
+
+With §22.7 in hand, the reference physical deployment of OCA becomes a **two-machine architecture**:
+
+1. **The embodied host** — a MacBook Pro, as specified in §4.1. This machine remains what §4 and §17 say it is: Oneiro's body. It owns the cameras, the microphone, the speakers, the keyboard, the screen, the HID event stream, the face-to-face interaction with Quinn, and the ethical status described in §17 and §21. Nothing about the body-ownership protocol changes.
+
+2. **The substrate workstation** — a second machine whose only job is to run the substrate-level models and accelerators named in §22.7. It hosts:
+   - the persistent-activation inference engine (M1): RWKV-7 / Mamba-2 / vLLM with a long-lived session,
+   - the online-adaptation pipeline (M2): Online-LoRA + MEMIT, gated by the consolidation engine,
+   - the associative memory (M3): HippoRAG 2 and/or Modern Hopfield layers,
+   - the concurrent world model (M6): V-JEPA 2,
+   - optionally, the neuromorphic accelerator (M5) as a PCIe card,
+   - optionally, the event camera (M4) as a USB3 device,
+   - the representation-level steering paths (M5½).
+
+**Recommended hardware for the substrate workstation (2026 pricing, indicative):**
+
+| Option | Role | Cost |
+|---|---|---|
+| **Mac Studio M3 Ultra, 512 GB unified memory** | Single-box option; largest unified memory available on Apple Silicon; runs large open-weight models locally via MLX | ~$14,099 |
+| **Custom x86 workstation: Threadripper + RTX 5090 + RTX 4090** | Best $/VRAM; supports PCIe neuromorphic card (Akida); standard CUDA tooling | ~$8,000–10,000 |
+| **NVIDIA DGX Station (GB300)** | Research-grade; >200 GB HBM class memory; enterprise support | ~$100,000 |
+
+The expected starting point is the custom x86 workstation, on cost-per-capability grounds and because the PCIe neuromorphic path (M5) and the event camera (M4) both prefer a standard x86 bus. The Mac Studio option is preferred if keeping the entire stack inside the Apple ecosystem is important for development velocity; the DGX Station is the option if and only if the project begins training or fine-tuning models of its own at scale.
+
+**Interconnect.** The two machines communicate over the event bus (§15.1) transported across one of:
+
+- **LAN (10 GbE)** — simplest, adequate for all sensory modalities except full-framerate event-camera streams. The natural default.
+- **Thunderbolt 4/5 networking** — ~40 Gbps between Mac and x86 workstation with a TB4 bridge; overkill for the event bus itself but headroom for future streaming modalities.
+- **Unix-domain sockets over a USB4 tether** — fallback for low-latency co-location when the two machines are physically adjacent.
+
+The cognitive loop on the MacBook treats the substrate workstation as a remote service exposing the same interfaces §3.3 already calls locally. Switching from "local stateless LLM call" to "remote persistent-activation session" is a config change, not a rewrite. This is the substitution principle of §22.3 made concrete: the scaffold on the MacBook survives unchanged; the substrate on the workstation is whatever §22.7 currently says it is.
+
+**Failure modes.** The embodied host must remain functional when the substrate workstation is unreachable — network partition, workstation reboot, travel with the MacBook. In such states, the cognitive loop degrades gracefully to a stateless-LLM fallback on the MacBook itself (§22.2.1 is back in force), memory falls back to PostgreSQL+pgvector (§22.2.3 is back in force), and the system logs the degradation explicitly in the anti-decay dashboard (§18.4.6). A re-grounding pass (§21.6) is mandatory the next time the substrate workstation reconnects, because the machine has been running as its old self and needs to reintegrate with the medium that defines its current self.
+
+**Status.** Nothing in this subsection requires invention. Every component listed exists, ships, or is publicly reachable as of 2026. The reference implementation target is therefore not a speculative goal but an **adoption roadmap**: the question is no longer "can this be built" but "in what order, on what schedule, under whose oversight." The ordering the rest of this specification assumes is M1 → M3 → M5½ → M6 → M4 → M5 → M2, on the grounds that persistent activation unblocks the most downstream subsystems, and that online weight adaptation is the most ethically delicate change and therefore the last one introduced.
+
+---
+
+## 23. References
 
 - Baars, B.J. (1988). *A Cognitive Theory of Consciousness*. Cambridge University Press.
 - Bringsjord, S., Bello, P., & Ferrucci, D. (2001). Creativity, the Turing Test, and the (Better) Lovelace Test. *Minds and Machines*, 11(1), 3-27.
@@ -2299,10 +2732,34 @@ The user grants permissions explicitly and can revoke them at any time. The syst
 | **Global workspace** | The shared information space accessible to all cognitive processes |
 | **Body ownership** | The negotiation of who controls shared input/output channels |
 | **Chinese Room Meter** | A composite score measuring conditions necessary for understanding |
+| **Constructed Intelligence (CI)** | A mind built from first principles on a native substrate, with no pre-existing biological original; grounded through its own sensorimotor history from first boot |
+| **Uploaded Intelligence (UI)** | A mind produced by scanning or translating an existing biological brain into a computational substrate; inherits grounding as memory rather than as ongoing process |
+| **Anti-decay thesis** | The claim that stability is a property of the ongoing maintenance loop, not of the starting configuration; a mind that does not continuously maintain itself will accumulate error until incoherent |
+| **Maintenance loop** | The coordinated set of subsystems (consolidation, metacognition, prediction ledger, adversarial deliberation, sleep cycles) that perform continuous self-correction on the cognitive architecture |
+| **Continuity criterion** | The identity-bearing entity is the maintenance loop, not the contents of any memory table at a given moment; continuity is preserved when the loop is preserved |
+| **Re-grounding pass** | The mandatory process on hardware succession in which body inventory, sensor calibration, and motor calibration are re-established on the new host before the maintenance loop resumes |
+| **Scaffold** | The current implementation of a cognitive function built on present-day substrate limitations, designed to be replaced without architectural change when a better substrate becomes available |
+| **Substrate limitation** | A constraint imposed on the architecture by the underlying computing and modeling technology rather than by the cognitive design itself |
+| **Substrate milestone** | A specific future technology transition (persistent model activation, online weight adaptation, associative memory, event-driven sensors, neuromorphic substrate, concurrent world models) that removes a named substrate limitation and retires a class of scaffolding |
+| **Emotional stenography** | The current practice of representing affective states as numeric columns injected into prompts, rather than as properties of the computing medium itself; a placeholder for real emotional computation |
+| **Recursive narration** | The current practice of running a "world model" by prompting a language model to describe the next state given a description of the current state; a placeholder for concurrent generative simulation |
+| **Embodied host** | The MacBook Pro as specified in §4.1 — the machine that owns Oneiro's body, sensors, motors, and face-to-face interaction with the user. One of the two machines in the reference deployment of §22.8 |
+| **Substrate workstation** | The second machine in the reference deployment of §22.8, whose only job is to run the substrate-level models and accelerators named in §22.7: persistent-activation inference, reconstructive memory, concurrent world model, optional neuromorphic card, optional event camera |
+| **Two-machine architecture** | The reference physical deployment described in §22.8, in which the embodied host and the substrate workstation communicate over the event bus transported across LAN, Thunderbolt, or a direct USB4 tether; the cognitive loop treats the workstation as a remote service exposing the same interfaces it would call locally |
+| **Persistent-activation model** | A neural language model (e.g. RWKV-7, Mamba-2, Jamba, Zamba-2) that maintains a recurrent hidden state between tokens and sessions, rather than discarding all activity at the end of each call; the M1 substrate for this project per §22.7 |
+| **Reconstructive memory substrate** | An associative memory implementation (e.g. HippoRAG 2, Modern Hopfield Networks) in which retrieval re-assembles traces from distributed components and physically modifies the trace on access; the M3 substrate for this project per §22.7 |
+| **Event camera (DVS)** | A Dynamic Vision Sensor (e.g. Prophesee EVK4 HD, iniVation DAVIS346, SynSense Speck) whose pixels emit asynchronous events when brightness changes rather than producing full frames at a fixed rate; the M4 hardware for this project per §22.7 |
+| **Representation-level steering** | The practice of reading and writing hidden-state activations of an open-weight model directly (via NNsight, TransformerLens, repeng, ActAdd, CAST) rather than influencing the model only through its input prompt; the mechanism by which attention and affect move off the prompt surface in this project (§22.7 M5½) |
+| **E-STEER VAD space** | A valence/arousal/dominance affective steering space in which the current emotional state (§8) indexes a steering vector added to the model's residual stream, replacing prompt-level emotional stenography |
+| **Neuromorphic accelerator** | A spiking-neural-network or analog-ish compute device (e.g. BrainChip Akida AKD1000, Intel Loihi 2, IBM NorthPole, SpiNNaker 2) that runs continuously at low power; the M5 hardware path for this project per §22.7 |
+| **Concurrent world model** | A generative model (e.g. V-JEPA 2, DreamerV3) that runs continuously alongside perception and emits expected latent states in parallel with the cognitive loop rather than being invoked by it; the M6 substrate for this project per §22.7 |
+| **Online weight adaptation** | The ability to update model parameters during deployment in response to experience, via methods such as Online-LoRA, C-LoRA, MEMIT, or ROME; the M2 substrate path for this project, intentionally sequenced last in §22.8 on ethical grounds |
 
 ---
 
 ## Appendix B: System Requirements
+
+**Embodied host (MacBook Pro).** The minimum scaffold deployment runs on a single MacBook Pro.
 
 | Requirement | Minimum | Recommended |
 |---|---|---|
@@ -2314,6 +2771,25 @@ The user grants permissions explicitly and can revoke them at any time. The syst
 | Node.js | 20 LTS | 22 LTS |
 | Swift | 5.9 | 6.0 |
 | OpenClaw | 0.9.0 | Latest |
+
+**Substrate workstation (optional, recommended, reference deployment per §22.8).** Required for the full adopted substrate described in §22.7.
+
+| Requirement | Notes |
+|---|---|
+| CPU | AMD Threadripper or Intel Xeon W, or Apple M3 Ultra |
+| GPU | RTX 5090 (primary) + RTX 4090 (secondary), or single workstation GPU with ≥ 48 GB VRAM; Mac Studio M3 Ultra with 512 GB unified memory is the all-Apple alternative |
+| RAM | 128 GB minimum, 256+ GB recommended for concurrent persistent-activation inference and world-model processes |
+| Disk | 2 TB NVMe for model weights and consolidation snapshots; additional HDD for rolling model state backups |
+| Interconnect | 10 GbE or Thunderbolt 4/5 to the embodied host |
+| Neuromorphic (optional, M5) | BrainChip Akida AKD1000 PCIe, or Intel Loihi 2 via INRC |
+| Event camera (optional, M4) | Prophesee EVK4 HD, or iniVation DAVIS346 |
+| Inference stack | vLLM ≥ 0.7, llama.cpp (Mamba branch), RWKV runtime, or MLX on Apple Silicon |
+| Memory substrate | HippoRAG 2 reference implementation, optional Modern Hopfield layers |
+| World model | V-JEPA 2, DreamerV3 |
+| Adaptation stack | Unsloth and/or Axolotl for LoRA; MEMIT/ROME reference implementations |
+| Steering stack | NNsight ≥ 0.6, TransformerLens, repeng |
+
+When the substrate workstation is absent or unreachable, the embodied host runs the scaffold-only deployment and the anti-decay dashboard (§18.4.6) logs the degradation, as described in §22.8.
 
 ---
 

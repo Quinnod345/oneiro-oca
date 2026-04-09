@@ -1,4 +1,4 @@
-// OCA API Routes — mount into mind.js Express app
+// OCA API Routes — mounted from api.js (Express) when cognitive-loop runs
 // These endpoints expose the cognitive architecture to OpenClaw and external systems
 import { Router } from 'express';
 import oca from './index.js';
@@ -1010,11 +1010,174 @@ ocaRouter.get('/oca/benchmark/history', async (req, res) => {
 });
 
 // ============================================================
+// ANTI-DECAY EVALUATION (SPEC §18.4)
+// ============================================================
+
+ocaRouter.get('/oca/anti-decay', async (req, res) => {
+  try {
+    const antiDecay = await import('./evaluation/anti-decay.js');
+    const trends = await antiDecay.default.computeAllTrends();
+    const { failures, remediations } = await antiDecay.default.checkFailureConditions(trends);
+    const satisfied = antiDecay.default.isAntiDecaySatisfied(trends);
+    const opTime = await antiDecay.default.getTotalOperatingTimeMs();
+    res.json({ trends, failures, remediations, satisfied, operating_time_ms: opTime, operating_time_hours: Math.round(opTime / 3600000 * 10) / 10 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.post('/oca/anti-decay/run', async (req, res) => {
+  try {
+    const antiDecay = await import('./evaluation/anti-decay.js');
+    const result = await antiDecay.default.runAntiDecayEvaluation();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/anti-decay/history', async (req, res) => {
+  try {
+    const antiDecay = await import('./evaluation/anti-decay.js');
+    const horizon = req.query.horizon || 'medium';
+    const days = parseInt(req.query.days, 10) || 30;
+    const history = await antiDecay.default.getAntiDecayHistory({ horizon, days });
+    res.json({ history });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/operating-time', async (req, res) => {
+  try {
+    const antiDecay = await import('./evaluation/anti-decay.js');
+    const ms = await antiDecay.default.getTotalOperatingTimeMs();
+    res.json({ operating_time_ms: ms, operating_time_hours: Math.round(ms / 3600000 * 10) / 10 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// NEURAL BUS (vector signaling layer)
+// ============================================================
+
+ocaRouter.get('/oca/neural-bus', async (req, res) => {
+  try {
+    const bus = await import('./neural-bus.js');
+    const mlp = await import('./neural-mlp.js');
+    res.json({
+      workspace_dim: bus.TOTAL_DIM,
+      layers: bus.LAYER_DIMS,
+      weights: bus.default.getWeightStats(),
+      inter_layer_strengths: bus.default.getInterLayerStrengths(),
+      mlp: mlp.default.getStatus()
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
+// IDENTITY & CONTINUITY (SPEC §2.9, §21.5, §21.6)
+// ============================================================
+
+ocaRouter.get('/oca/identity', async (req, res) => {
+  try {
+    const identity = await import('./identity.js');
+    const status = await identity.default.getContinuityStatus();
+    res.json(status);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/identity/history', async (req, res) => {
+  try {
+    const identity = await import('./identity.js');
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const history = await identity.default.getIdentityHistory(limit);
+    res.json({ events: history });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
+// SUCCESSION (SPEC §21.6)
+// ============================================================
+
+ocaRouter.post('/oca/succession/manifest', async (req, res) => {
+  try {
+    const succession = await import('./succession.js');
+    const manifest = await succession.default.createTransferManifest();
+    res.json(manifest);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.post('/oca/succession/reground/:id', async (req, res) => {
+  try {
+    const succession = await import('./succession.js');
+    const result = await succession.default.executeRegrounding(parseInt(req.params.id));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/body-inventory', async (req, res) => {
+  try {
+    const succession = await import('./succession.js');
+    const inventory = await succession.default.captureBodyInventory();
+    res.json(inventory);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
+// COHABITATION (SPEC §17.5)
+// ============================================================
+
+ocaRouter.get('/oca/conventions', async (req, res) => {
+  try {
+    const cohab = await import('./cohabitation.js');
+    const active = await cohab.default.getActiveConventions();
+    res.json(active || { error: 'no conventions set' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.post('/oca/conventions', async (req, res) => {
+  try {
+    const cohab = await import('./cohabitation.js');
+    const { conventions, reason } = req.body;
+    const result = await cohab.default.proposeConventionUpdate(conventions, reason || 'user update');
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/conventions/drift', async (req, res) => {
+  try {
+    const cohab = await import('./cohabitation.js');
+    const drift = await cohab.default.checkConventionDrift();
+    res.json(drift);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/consent-review', async (req, res) => {
+  try {
+    const cohab = await import('./cohabitation.js');
+    const renewal = await cohab.default.checkConsentRenewal();
+    const report = await cohab.default.generateConsentReport();
+    res.json({ renewal, report });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.post('/oca/consent-review', async (req, res) => {
+  try {
+    const cohab = await import('./cohabitation.js');
+    const { action, notes } = req.body;
+    const review = await cohab.default.recordConsentReview(action || 'renewed', notes || '');
+    res.json(review);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ============================================================
 // CONSOLIDATION
 // ============================================================
 
 // Trigger consolidation manually (fire-and-forget to avoid blocking the event loop
-// with a 50-70s LLM call that starves the OCA tick in mind.js)
+// with a 50-70s LLM call that starves the OCA tick)
 let apiConsolidating = false;
 ocaRouter.post('/oca/consolidate', async (req, res) => {
   if (apiConsolidating) {

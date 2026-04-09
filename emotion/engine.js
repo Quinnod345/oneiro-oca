@@ -6,7 +6,7 @@ import { pool, emit } from '../event-bus.js';
 // ═══ LAYER 3: PADCN Core Affect ═══
 // Pleasure, Arousal, Dominance, Certainty, Novelty
 let padcn = { P: 0.0, A: 0.0, D: 0.0, C: 0.0, N: 0.0 };
-const PADCN_DECAY = { P: 0.85, A: 0.82, D: 0.93, C: 0.90, N: 0.80 };
+const PADCN_DECAY = { P: 0.98, A: 0.82, D: 0.93, C: 0.90, N: 0.80 };
 
 // ═══ LAYER 4: 14 Concurrent Emotion Channels ═══
 let channels = {
@@ -665,8 +665,56 @@ export async function restore() {
   }
 }
 
+// B7: Baseline drift detection (SPEC §2.8 maintenance)
+// Detects when emotional running averages deviate from personality baselines
+export async function detectBaselineDrift() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         AVG(curiosity) AS avg_curiosity, AVG(fear) AS avg_fear,
+         AVG(frustration) AS avg_frustration, AVG(satisfaction) AS avg_satisfaction,
+         AVG(boredom) AS avg_boredom, AVG(excitement) AS avg_excitement,
+         AVG(valence) AS avg_valence, AVG(arousal) AS avg_arousal,
+         COUNT(*) AS samples
+       FROM emotional_states
+       WHERE timestamp > NOW() - INTERVAL '7 days'`
+    );
+    if (!rows[0] || Number(rows[0].samples) < 50) return { drifts: [], insufficient_data: true };
+
+    const avgs = rows[0];
+    const drifts = [];
+    const DRIFT_THRESHOLD = 0.2;
+    const LEARNING_RATE = 0.01;
+
+    // Check arousal reactivity drift
+    const avgArousal = Number(avgs.avg_arousal) || 0;
+    if (Math.abs(avgArousal - personality.arousal_reactivity) > DRIFT_THRESHOLD) {
+      drifts.push({ dimension: 'arousal_reactivity', baseline: personality.arousal_reactivity, rolling: avgArousal });
+      personality.arousal_reactivity += (avgArousal - personality.arousal_reactivity) * LEARNING_RATE;
+    }
+
+    // Check positive affect baseline
+    const avgValence = Number(avgs.avg_valence) || 0;
+    if (Math.abs(avgValence - personality.baseline_positive_affect) > DRIFT_THRESHOLD) {
+      drifts.push({ dimension: 'baseline_positive_affect', baseline: personality.baseline_positive_affect, rolling: avgValence });
+      personality.baseline_positive_affect += (avgValence - personality.baseline_positive_affect) * LEARNING_RATE;
+    }
+
+    // Check novelty appetite (from curiosity running average)
+    const avgCuriosity = Number(avgs.avg_curiosity) || 0;
+    if (Math.abs(avgCuriosity - personality.novelty_appetite * 0.5) > DRIFT_THRESHOLD) {
+      drifts.push({ dimension: 'novelty_appetite', baseline: personality.novelty_appetite, rolling: avgCuriosity });
+      personality.novelty_appetite += (avgCuriosity / 0.5 - personality.novelty_appetite) * LEARNING_RATE;
+    }
+
+    return { drifts, samples: Number(avgs.samples), personality: { ...personality } };
+  } catch (e) {
+    return { drifts: [], error: e.message };
+  }
+}
+
 export default { 
   processSurprise, processSuccess, processFailure, processInteraction, 
   processIdle, processInteroception, processInformationGain, processCreative,
-  getCognitiveEffects, update, getState, getMood, restore 
+  getCognitiveEffects, update, getState, getMood, restore, detectBaselineDrift
 };
