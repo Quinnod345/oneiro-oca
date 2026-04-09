@@ -1229,6 +1229,30 @@ Runs during low-activity periods (user idle or sleeping). Analogous to sleep-dep
 | Episodes pruned | 10-50% of reviewed | Memory efficiency |
 | Consolidation duration | 5-15 minutes | Time budget |
 
+### 7.8 Hippocampal Recall (HippoRAG-Inspired, Implemented)
+
+The standard retrieval mechanism for episodic and semantic memory is cosine similarity over embedding vectors: `SELECT ... ORDER BY embedding <=> query_vector`. This is fast and functional, but it is fundamentally single-hop — it finds passages that are textually similar to the query, with no ability to traverse relationships between concepts.
+
+The architecture implements a retrieval path inspired by HippoRAG (Gutierrez et al., NeurIPS 2024), which models retrieval after the hippocampal indexing theory of human long-term memory. The key insight: the hippocampus does not store memories; it indexes associations between them. Recall is not lookup — it is pattern completion across a graph of associations.
+
+**Architecture:**
+
+The system maintains a knowledge graph (the "hippocampal index") from the existing `entities`, `entity_relations`, and `entity_mentions` tables. Retrieval proceeds in four steps:
+
+1. **Entity extraction:** Named entities and key concepts are extracted from the query using heuristic pattern matching (fast, <1ms) with LLM fallback for complex queries (~2s).
+
+2. **Graph matching:** Extracted entities are matched to knowledge graph nodes via exact name match (preferred) or embedding similarity (fallback). Each matched node becomes a "seed" for graph traversal.
+
+3. **Personalized PageRank (PPR):** The PPR algorithm runs on the entity_relations graph starting from seed nodes. This spreads activation across the graph, following relationship edges, so that entities connected to the query entities (even indirectly) receive non-zero scores. The algorithm uses **node specificity** (the inverse log of mention frequency) to weight seeds — rarer, more informative entities have stronger influence.
+
+4. **Passage ranking:** Scored entities are mapped back to episodic memories via `entity_mentions`. Each episode's score is the sum of its entities' PPR scores. Episodes are returned sorted by this score.
+
+**What this enables:** A query like "What music does Quinn create?" extracts ["Quinn", "music"], seeds the graph at those nodes, and PPR discovers that Quinn is connected to Logic Pro, which is connected to specific project files, which are mentioned in specific episodic memories — returning those memories even if they never contain the words "Quinn" and "music" in the same passage.
+
+**Fallback:** When the knowledge graph is too sparse for a given query (fewer than 3 graph results), the system transparently falls back to flat vector similarity recall, ensuring retrieval always returns results.
+
+**Performance:** PPR on the current graph (~180 entities, ~2,700 relations) completes in <100ms. The bottleneck is LLM entity extraction when heuristics are insufficient (~2s), which is comparable to the embedding API call in the vector path.
+
 ---
 
 ## 8. Layer 4: Emotional Computation

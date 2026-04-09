@@ -272,14 +272,212 @@ export async function contextForText(text, { limit = 8 } = {}) {
   return { entities: unique, relations: relations.slice(0, 20) };
 }
 
+// ═══════════════════════════════════════════════════
+// HIPPORAG: Personalized PageRank on entity graph
+// ═══════════════════════════════════════════════════
+
+export async function matchEntitiesToGraph(entityNames, { limit = 3 } = {}) {
+  if (!entityNames || entityNames.length === 0) return [];
+
+  const matched = [];
+  for (const name of entityNames) {
+    // First try exact match
+    const { rows: exact } = await pool.query(
+      `SELECT id, entity_key, canonical_name, mention_count
+       FROM entities WHERE LOWER(entity_key) = LOWER($1) OR LOWER(canonical_name) = LOWER($1)
+       LIMIT 1`,
+      [name]
+    );
+    if (exact.length > 0) {
+      matched.push({ ...exact[0], match_type: 'exact', similarity: 1.0 });
+      continue;
+    }
+
+    // Then try embedding similarity
+    try {
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI();
+      const resp = await openai.embeddings.create({ model: 'text-embedding-3-small', input: name });
+      const embedding = resp.data[0].embedding;
+
+      const { rows: similar } = await pool.query(
+        `SELECT id, entity_key, canonical_name, mention_count,
+                1 - (embedding <=> $1::vector) AS similarity
+         FROM entities WHERE embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector LIMIT $2`,
+        [JSON.stringify(embedding), limit]
+      );
+      if (similar.length > 0 && similar[0].similarity > 0.5) {
+        matched.push({ ...similar[0], match_type: 'embedding' });
+      }
+    } catch {}
+  }
+  return matched;
+}
+
+export async function personalizedPageRank(seedNodeIds, {
+  damping = 0.85,
+  iterations = 15,
+  tolerance = 0.0001,
+  maxNodes = 500,
+} = {}) {
+  if (!seedNodeIds || seedNodeIds.length === 0) return new Map();
+
+  // Load the subgraph: entities reachable within 2 hops from seeds
+  const { rows: relations } = await pool.query(
+    `WITH hop1 AS (
+       SELECT DISTINCT object_entity_id AS eid FROM entity_relations WHERE subject_entity_id = ANY($1)
+       UNION
+       SELECT DISTINCT subject_entity_id FROM entity_relations WHERE object_entity_id = ANY($1)
+     ),
+     hop2 AS (
+       SELECT DISTINCT r.object_entity_id AS eid FROM entity_relations r
+         JOIN hop1 ON r.subject_entity_id = hop1.eid
+       UNION
+       SELECT DISTINCT r.subject_entity_id FROM entity_relations r
+         JOIN hop1 ON r.object_entity_id = hop1.eid
+     ),
+     all_nodes AS (
+       SELECT unnest($1::int[]) AS eid
+       UNION SELECT eid FROM hop1
+       UNION SELECT eid FROM hop2
+     )
+     SELECT r.subject_entity_id AS src, r.object_entity_id AS dst, COALESCE(r.weight, 1.0) AS weight
+     FROM entity_relations r
+     WHERE r.subject_entity_id IN (SELECT eid FROM all_nodes)
+        AND r.object_entity_id IN (SELECT eid FROM all_nodes)
+     LIMIT $2`,
+    [seedNodeIds, maxNodes * 10]
+  );
+
+  // Build adjacency list
+  const adj = new Map(); // nodeId -> [{target, weight}]
+  const allNodes = new Set();
+  for (const r of relations) {
+    allNodes.add(r.src);
+    allNodes.add(r.dst);
+    if (!adj.has(r.src)) adj.set(r.src, []);
+    if (!adj.has(r.dst)) adj.set(r.dst, []);
+    adj.get(r.src).push({ target: r.dst, weight: Number(r.weight) || 1 });
+    adj.get(r.dst).push({ target: r.src, weight: Number(r.weight) || 1 }); // undirected
+  }
+
+  // Compute out-degree weights for normalization
+  const outWeight = new Map();
+  for (const [node, edges] of adj) {
+    outWeight.set(node, edges.reduce((s, e) => s + e.weight, 0));
+  }
+
+  // Node specificity: rarer entities get higher seed weight
+  const { rows: specificityRows } = await pool.query(
+    `SELECT id, COALESCE(mention_count, 1) AS mc FROM entities WHERE id = ANY($1)`,
+    [seedNodeIds]
+  );
+  const specificity = new Map();
+  let totalSpec = 0;
+  for (const r of specificityRows) {
+    const spec = 1 / Math.log(2 + (Number(r.mc) || 0));
+    specificity.set(r.id, spec);
+    totalSpec += spec;
+  }
+
+  // Initialize scores: seeds get specificity-weighted probability
+  const scores = new Map();
+  for (const node of allNodes) scores.set(node, 0);
+  for (const seedId of seedNodeIds) {
+    const spec = specificity.get(seedId) || (1 / seedNodeIds.length);
+    scores.set(seedId, totalSpec > 0 ? spec / totalSpec : 1 / seedNodeIds.length);
+  }
+
+  // Iterate PPR
+  for (let iter = 0; iter < iterations; iter++) {
+    const newScores = new Map();
+    for (const node of allNodes) newScores.set(node, 0);
+
+    // Teleport: with probability (1-damping), jump back to a seed
+    for (const seedId of seedNodeIds) {
+      const spec = specificity.get(seedId) || (1 / seedNodeIds.length);
+      const teleport = (1 - damping) * (totalSpec > 0 ? spec / totalSpec : 1 / seedNodeIds.length);
+      newScores.set(seedId, (newScores.get(seedId) || 0) + teleport);
+    }
+
+    // Propagate: with probability damping, follow edges
+    for (const [node, edges] of adj) {
+      const nodeScore = scores.get(node) || 0;
+      if (nodeScore < 1e-10) continue;
+      const totalOut = outWeight.get(node) || 1;
+      for (const edge of edges) {
+        const contribution = damping * nodeScore * (edge.weight / totalOut);
+        newScores.set(edge.target, (newScores.get(edge.target) || 0) + contribution);
+      }
+    }
+
+    // Check convergence
+    let maxDiff = 0;
+    for (const node of allNodes) {
+      maxDiff = Math.max(maxDiff, Math.abs((newScores.get(node) || 0) - (scores.get(node) || 0)));
+      scores.set(node, newScores.get(node) || 0);
+    }
+    if (maxDiff < tolerance) break;
+  }
+
+  return scores;
+}
+
+export async function rankPassagesByPPR(nodeScores, { limit = 10 } = {}) {
+  if (!nodeScores || nodeScores.size === 0) return [];
+
+  // Get top-scored nodes
+  const topNodes = [...nodeScores.entries()]
+    .filter(([, score]) => score > 0.001)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 50);
+
+  if (topNodes.length === 0) return [];
+
+  const nodeIds = topNodes.map(([id]) => id);
+
+  // Map nodes to episodic memories via entity_mentions
+  const { rows: mentions } = await pool.query(
+    `SELECT em.entity_id, em.source_type, em.source_id
+     FROM entity_mentions em
+     WHERE em.entity_id = ANY($1) AND em.source_type = 'episode'`,
+    [nodeIds]
+  );
+
+  // Score each episode: sum of its entities' PPR scores
+  const episodeScores = new Map();
+  for (const m of mentions) {
+    const nodeScore = nodeScores.get(m.entity_id) || 0;
+    const current = episodeScores.get(m.source_id) || 0;
+    episodeScores.set(m.source_id, current + nodeScore);
+  }
+
+  if (episodeScores.size === 0) return [];
+
+  // Fetch the top-scored episodes
+  const topEpisodes = [...episodeScores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+
+  const episodeIds = topEpisodes.map(([id]) => id);
+  const { rows: episodes } = await pool.query(
+    `SELECT id, timestamp, event_type, content, emotional_valence, emotional_arousal,
+            surprise_magnitude, importance_score, active_app, participants
+     FROM episodic_memory WHERE id = ANY($1)`,
+    [episodeIds]
+  );
+
+  // Attach PPR scores and sort
+  const scoreMap = new Map(topEpisodes);
+  return episodes
+    .map(ep => ({ ...ep, ppr_score: scoreMap.get(ep.id) || 0, embedding: undefined }))
+    .sort((a, b) => b.ppr_score - a.ppr_score);
+}
+
 export default {
-  upsertEntity,
-  upsertRelation,
-  recordMention,
-  ingestText,
-  searchEntities,
-  relationsForEntity,
-  contextForText,
-  extractEntityCandidates,
-  canonicalEntityKey
+  upsertEntity, upsertRelation, recordMention, ingestText,
+  searchEntities, relationsForEntity, contextForText,
+  extractEntityCandidates, canonicalEntityKey,
+  matchEntitiesToGraph, personalizedPageRank, rankPassagesByPPR
 };

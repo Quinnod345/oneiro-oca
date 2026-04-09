@@ -7,6 +7,7 @@ import episodic from './memory/episodic.js';
 import semantic from './memory/semantic.js';
 import procedural from './memory/procedural.js';
 import entityGraph from './memory/entity-graph.js';
+import hippoRecall from './memory/hippo-recall.js';
 import consolidation from './memory/consolidation.js';
 import metacognition from './metacognition/engine.js';
 import deliberation from './deliberation/engine.js';
@@ -188,8 +189,19 @@ export async function predict(domain, claim, prediction, opts = {}) {
   return await hypothesis.form(domain, claim, prediction, opts);
 }
 
-// Remember something (episodic recall)
+// Remember something — HippoRAG-inspired multi-hop recall via knowledge graph + PPR
+// Falls back to flat vector recall if graph is too sparse
 export async function remember(query, opts = {}) {
+  try {
+    const results = await hippoRecall.hippoRecall(query, {
+      limit: opts.limit || 5,
+      fallbackToVector: true,
+      ...opts
+    });
+    if (results && results.length > 0) return results;
+  } catch (e) {
+    console.error('[oca] hippo recall failed, falling back to vector:', e.message?.slice(0, 80));
+  }
   return await episodic.recall(query, opts);
 }
 
