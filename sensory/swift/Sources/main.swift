@@ -431,21 +431,28 @@ class AuditoryCortex {
     }
 
     private func startSystemAudioMonitoring() {
-        audioEngine = AVAudioEngine()
-        guard let engine = audioEngine else { return }
-
-        let inputNode = engine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            self?.processAudioBuffer(buffer)
-        }
-
+        // Audio engine can crash in child-process mode (no tty, piped stdio).
+        // Entire function is wrapped so audio failure doesn't kill the process.
         do {
+            audioEngine = AVAudioEngine()
+            guard let engine = audioEngine else { return }
+
+            let inputNode = engine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+            guard format.sampleRate > 0 else {
+                emitEvent("system", ["message": "Audio: no valid input format, skipping microphone tap"])
+                return
+            }
+
+            inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
+                self?.processAudioBuffer(buffer)
+            }
+
             try engine.start()
             emitEvent("system", ["message": "Audio engine started (microphone tap)"])
         } catch {
-            emitEvent("error", ["message": "Audio engine failed: \(error.localizedDescription)"])
+            emitEvent("system", ["message": "Audio engine unavailable (non-fatal): \(error.localizedDescription)"])
+            audioEngine = nil
         }
     }
 
@@ -1137,6 +1144,9 @@ class SensoryIntegrator {
 // ═══════════════════════════════════════════════════
 // MARK: - MAIN: Boot all sensory channels
 // ═══════════════════════════════════════════════════
+
+// Ignore SIGPIPE -- critical for child process mode where parent may close pipes
+signal(SIGPIPE, SIG_IGN)
 
 emitEvent("system", ["message": "oneiro-sensory starting", "version": "1.0.0"])
 

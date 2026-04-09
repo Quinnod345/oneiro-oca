@@ -196,21 +196,39 @@ async function handleEvent(event) {
   }
 }
 
-// Getters: prefer shared state file, fall back to cached event data
+// Getters: prefer fresh shared state file, fall back to cached event data
 export function getFullPerception() {
   const shared = readPerceptualState();
-  if (shared) return shared;
+  if (shared && shared.timestamp) {
+    const age = Date.now() - new Date(shared.timestamp).getTime();
+    if (age < 30000) return shared; // file is fresh (< 30s)
+  }
+
+  // Build from cached event data (updated by socket/stdout events)
+  const app = lastFrontApp || 'unknown';
+  const hasRecentEvents = eventCount > 0;
+  const hid = lastHIDMetrics || {};
+  const isTyping = (hid.wpm || 0) > 5;
+  const isClicking = (hid.clicks || 0) > 0;
+
+  let userActivity = 'idle';
+  if (isTyping && isClicking) userActivity = 'coding';
+  else if (isTyping) userActivity = 'typing';
+  else if (isClicking) userActivity = 'browsing';
+  else if (hasRecentEvents) userActivity = 'reading';
+
   return {
-    visual: { active_app: lastFrontApp || 'unknown', active_window: { title: lastWindowTitle || '' } },
+    timestamp: new Date().toISOString(),
+    visual: { active_app: app, active_window: { title: lastWindowTitle || '' }, frontApp: app },
     auditory: {},
-    tactile: lastHIDMetrics,
+    tactile: hid,
     proprioceptive: {},
-    interoceptive: lastInteroception,
+    interoceptive: lastInteroception || {},
     temporal: {},
-    user_presence: 'unknown',
-    user_activity: 'unknown',
+    user_presence: hasRecentEvents ? 'active' : 'unknown',
+    user_activity: userActivity,
     environment_stability: 'unknown',
-    attention_target: lastFrontApp || 'unknown',
+    attention_target: app,
     surprises: []
   };
 }
