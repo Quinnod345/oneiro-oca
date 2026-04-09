@@ -638,43 +638,46 @@ async function updateHeatmap() {
         angleStart += arcLen + gap;
     }
 
-    // Draw inter-layer connections (only strongest ones to avoid clutter)
+    // Draw inter-layer connections as visible curved lines
     const ils = data.interLayerWeights || {};
-    const sortedConns = Object.entries(ils).filter(([,v]) => v > 0.005).sort((a,b) => b[1] - a[1]);
+    const maxConn = Math.max(0.01, ...Object.values(ils));
+    const sortedConns = Object.entries(ils).filter(([,v]) => v > 0.003).sort((a,b) => b[1] - a[1]);
 
-    for (const [key, strength] of sortedConns.slice(0, 20)) {
+    for (const [key, strength] of sortedConns.slice(0, 25)) {
         const [from, to] = key.split('->');
         const fromNeurons = neurons.filter(n => n.layer === from);
         const toNeurons = neurons.filter(n => n.layer === to);
         if (fromNeurons.length === 0 || toNeurons.length === 0) continue;
 
-        // Draw a bezier bundle from the center of one layer arc to another
-        const fCenter = fromNeurons[Math.floor(fromNeurons.length / 2)];
-        const tCenter = toNeurons[Math.floor(toNeurons.length / 2)];
-        const alpha = Math.min(0.4, strength * 8);
+        const normalized = strength / maxConn; // 0-1 relative to strongest
+        const alpha = 0.08 + normalized * 0.5;
+        const lineW = 0.5 + normalized * 3;
+        const fc = LAYER_COLORS[from] || [150,150,150];
+        const tc = LAYER_COLORS[to] || [150,150,150];
+        const mr = Math.floor((fc[0]+tc[0])/2);
+        const mg = Math.floor((fc[1]+tc[1])/2);
+        const mb = Math.floor((fc[2]+tc[2])/2);
 
-        // Bundle: draw multiple thin lines with slight spread
-        const bundleCount = Math.max(1, Math.floor(strength * 60));
+        // Draw a bundle of 3-7 lines spread across each layer's arc
+        const bundleCount = Math.max(3, Math.floor(normalized * 7));
         for (let b = 0; b < bundleCount; b++) {
-            const spread = (b / bundleCount - 0.5) * 15;
-            const fIdx = Math.min(fromNeurons.length - 1, Math.max(0, Math.floor(fromNeurons.length / 2 + spread)));
-            const tIdx = Math.min(toNeurons.length - 1, Math.max(0, Math.floor(toNeurons.length / 2 + spread)));
+            const t = bundleCount === 1 ? 0.5 : b / (bundleCount - 1);
+            const fIdx = Math.floor(t * (fromNeurons.length - 1));
+            const tIdx = Math.floor(t * (toNeurons.length - 1));
             const fn = fromNeurons[fIdx];
             const tn = toNeurons[tIdx];
 
+            // Stable bezier: control point at center, offset deterministically by connection index
+            const connIdx = sortedConns.indexOf([key, strength]);
+            const cpOffset = ((b * 7 + key.length) % 60) - 30;
+            const cpx = cx + cpOffset;
+            const cpy = cy + cpOffset * 0.3;
+
             ctx.beginPath();
             ctx.moveTo(fn.x, fn.y);
-            // Bezier through center with slight offset
-            const cpx = cx + (Math.random() - 0.5) * 30;
-            const cpy = cy + (Math.random() - 0.5) * 30;
             ctx.quadraticCurveTo(cpx, cpy, tn.x, tn.y);
-            const fc = LAYER_COLORS[from] || [150,150,150];
-            const tc = LAYER_COLORS[to] || [150,150,150];
-            const mr = Math.floor((fc[0]+tc[0])/2);
-            const mg = Math.floor((fc[1]+tc[1])/2);
-            const mb = Math.floor((fc[2]+tc[2])/2);
-            ctx.strokeStyle = `rgba(${mr},${mg},${mb},${alpha * 0.3})`;
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = `rgba(${mr},${mg},${mb},${alpha / bundleCount * 2})`;
+            ctx.lineWidth = lineW / bundleCount * 1.5;
             ctx.stroke();
         }
     }
