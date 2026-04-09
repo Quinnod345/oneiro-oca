@@ -51,6 +51,7 @@ let dreamExecutionCooldown = 0;
 let autonomicCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
+let lastNeuralPrediction = null; // MLP prediction from pre-cycle, consumed in post-cycle
 
 // ── Operating-time accumulator (SPEC §18.4.1) ──
 let operatingTimeSessionStart = Date.now();
@@ -342,20 +343,19 @@ async function think() {
   // 3. After this tick's subsystems run, compute prediction error + Hebbian update
   try {
     const emotionState = oca.layers.emotion.getState();
+    const cogLoad = oca.layers.executive.getCognitiveLoad?.() || 0.3;
     neuralBus.writeLayer('sensory', encoders.encodeSensory(perception));
     neuralBus.writeLayer('emotion', encoders.encodeEmotion(emotionState));
-    neuralBus.writeLayer('executive', encoders.encodeExecutive(mode, currentLoad, oca.layers.executive.getBodyOwnership(), goals.length));
+    neuralBus.writeLayer('executive', encoders.encodeExecutive(mode, cogLoad, oca.layers.executive.getBodyOwnership(), goals.length));
     neuralBus.writeLayer('creative', encoders.encodeCreative(emotionState));
     neuralBus.writeLayer('motor', encoders.encodeMotor(false, 0));
 
-    // Predict next state
     const currentActivation = neuralBus.getWorkspace();
     const predicted = neuralMLP.predict(currentActivation);
-
-    // Store for post-cycle comparison (will be completed at end of think())
-    if (!think._neuralPredicted) think._neuralPredicted = predicted;
-    else think._neuralPredicted = predicted;
-  } catch {}
+    lastNeuralPrediction = predicted;
+  } catch (e) {
+    console.error('[oca] neural bus pre-cycle error:', e.message);
+  }
 
   // ── VISION ANALYSIS (every 20 cycles) ──────────────
   visionCooldown = Math.max(0, visionCooldown - 1);
@@ -1400,20 +1400,26 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     neuralBus.hebbianUpdate();
 
     // MLP learns from prediction error
-    if (think._neuralPredicted) {
+    if (lastNeuralPrediction) {
       const actual = neuralBus.getWorkspace();
       const mlpResult = neuralMLP.learn(actual);
 
       // Feed prediction error into surprise system
-      const predError = neuralBus.computePredictionError(think._neuralPredicted);
+      const predError = neuralBus.computePredictionError(lastNeuralPrediction);
       if (predError.magnitude > 0.3) {
         oca.layers.emotion.processSurprise(predError.magnitude * 0.5, 'neural_prediction');
       }
 
       // Periodic MLP weight save (every 50 cycles)
-      if (tickCount % 50 === 0) neuralMLP.save();
+      if (tickCount % 50 === 0) {
+        neuralMLP.save();
+        const stats = neuralBus.getWeightStats();
+        console.log(`[oca] neural: mlp loss=${mlpResult.running_loss?.toFixed(6) || '?'} updates=${mlpResult.updates} | weights: ${stats.nonzero} nonzero, sparsity ${(stats.sparsity*100).toFixed(1)}%`);
+      }
     }
-  } catch {}
+  } catch (e) {
+    console.error('[oca] neural bus post-cycle error:', e.message);
+  }
 
   // ── LOG ────────────────────────────────────────────
   const elapsed = Date.now() - t0;

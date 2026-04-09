@@ -419,6 +419,61 @@ The architecture now treats dreams as stateful cognitive objects rather than sta
 - Hypothesis SLA sweeps force evaluation of stale pending predictions to improve coverage.
 - AppleScript front-app fallback calls are stderr-silenced to reduce runtime log spam under constrained contexts.
 
+### 3.7 Neural Signaling Layer (Implemented)
+
+The architecture includes an explicit vector-mediated signaling layer that replaces text/JSON events for inter-layer communication. This is the first instance of substrate-level plasticity in the architecture, and directly addresses the limitation identified in §22.2.8 (no online learning).
+
+**Shared Activation Workspace:**
+
+A 208-dimensional float vector serves as the "global workspace" (§2.5) in its most concrete form. Each cognitive layer occupies a fixed-size slice:
+
+| Layer | Dimensions | Encodes |
+|---|---|---|
+| Sensory | 64 | Presence, activity, app context, interoception, tactile, audio, temporal, stability, surprises |
+| Emotion | 32 | PADCN (5), channels (14), drive deficits (7), meta-emotions (5), arousal (1) |
+| Hypothesis | 16 | Pending count, top confidences, calibration error per bucket |
+| Memory | 32 | Episode/semantic counts, quality metrics, working memory activation |
+| Executive | 16 | Mode (5 one-hot), load (1), ownership (4 one-hot), goal count |
+| Creative | 16 | Creative hunger, curiosity, awe, dream/artifact counts, novelty |
+| Metacognition | 16 | Health, stuck issues, bias severities, calibration deviations |
+| Motor | 16 | Connection status, recent action count |
+
+Each cognitive cycle:
+1. All layers **encode** their current state into their slice of the workspace
+2. Layers **read** weighted sums of other layers' activations (not their own)
+3. Connection weights determine how much one layer's activation influences another
+
+**Connection Weight Matrix:**
+
+A 208×208 weight matrix W governs signal routing between layers. Only inter-layer connections are nonzero (self-connections are zero by construction).
+
+- **Initialization:** Weights are seeded from the `neural_connections` table (which tracks co-occurrence and consolidation-derived links)
+- **Hebbian learning:** `dW[i][j] = learning_rate × activation[i] × activation[j]` — connections between co-active dimensions strengthen each cycle
+- **Continuous decay:** `W *= (1 - decay_rate)` every cycle — inactive connections fade, preventing saturation
+- **Sparsity:** Weights below a threshold are zeroed to maintain computational efficiency
+
+This means the architecture develops its own internal language of activation patterns over time. Layers that frequently co-activate develop stronger connections. The pattern of which layers influence which others is not hardcoded — it emerges from the actual dynamics of cognition.
+
+**Trainable Predictive Model (MLP):**
+
+A 2-layer multi-layer perceptron (208→64→208, 26,896 parameters) implements the predictive processing framework of §2.4 at the substrate level rather than through prompt engineering:
+
+1. Before each cognitive cycle, the MLP predicts what the workspace activation will look like after the cycle
+2. After the cycle, the actual activation is compared to the prediction
+3. **Prediction error** is computed as MSE between predicted and actual
+4. **Backpropagation** updates the MLP's weights to improve future predictions
+5. Large prediction errors feed into the surprise/metacognition system as a genuine learning signal
+
+This is not "learning" in the sense of §22.2.8's criticism (database note-taking adjacent to a fixed model). The MLP's weights actually change with experience. It is a small, constrained form of substrate-level plasticity: the computing medium itself changes in response to what it processes.
+
+**Relationship to §22.2.8:**
+
+Section 22.2.8 identifies the absence of online learning as the substrate limitation with the most severe philosophical consequences. The neural signaling layer does not fully resolve this limitation — the primary LLM still has fixed weights — but it introduces a trainable component that sits between the fixed model and the cognitive state, learning to predict the system's own dynamics. This is a partial answer: not full substrate plasticity, but a first scaffold for it.
+
+**Weight Persistence:**
+
+MLP weights are saved to disk periodically and on graceful shutdown, surviving restarts. Hebbian connection weights are reflected back into the `neural_connections` table. Both are part of the cognitive state that would need to travel in a succession transfer (§21.6).
+
 ---
 
 ## 4. Layer 0: Hardware Substrate & Embodiment
