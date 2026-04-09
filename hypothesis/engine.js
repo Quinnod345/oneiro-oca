@@ -398,7 +398,7 @@ async function archiveHypothesisVersion({
 }
 
 // Form a new hypothesis from an observation
-export async function form(domain, claim, prediction, { testMethod = null, testType = 'passive_observation', confidence = 0.5, sourceData = {}, deadline = null } = {}) {
+export async function form(domain, claim, prediction, { testMethod = null, testType = 'passive_observation', confidence = 0.4, sourceData = {}, deadline = null } = {}) {
   const embedding = await getEmbedding(`${claim} | ${prediction}`);
   const effectiveDeadline = deadline || new Date(Date.now() + DEFAULT_HYPOTHESIS_DEADLINE_MINUTES * 60000).toISOString();
   const normalizedSourceData = {
@@ -673,7 +673,9 @@ export async function getPendingTests(limit = 10) {
 // Expire overdue hypotheses
 export async function expireOverdue() {
   const { rows } = await pool.query(
-    `UPDATE hypotheses SET status = 'expired' 
+    `UPDATE hypotheses SET status = 'expired',
+       model_update = COALESCE(model_update, 'Expired: prediction deadline passed without observable outcome'),
+       surprise_magnitude = COALESCE(surprise_magnitude, 0.2)
      WHERE status = 'pending' AND prediction_deadline < NOW()
      RETURNING id, claim`
   );

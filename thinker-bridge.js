@@ -196,6 +196,9 @@ async function dispatchThought(thought) {
       });
     } catch (e) {
       console.error(`[thinker] shell error: ${e.message?.slice(0, 200)}`);
+      // CRM Fix 5: genuine failure creates real emotional response
+      oca.layers.emotion.processFailure(0.4);
+      oca.layers.emotion.processSurprise(0.3, 'shell_failure', `Command failed: ${e.message?.slice(0, 60)}`);
     }
   }
 
