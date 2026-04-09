@@ -66,3 +66,5 @@ export { default as xPostThreadReplyCapabilityGaps } from './x-post-thread-reply
 export { default as xPostOcaThread } from './x-post-oca-thread.js';
 export { default as xPostSelfBuildLoopMetricsSkill } from './x-post-self-build-loop-metrics.js';
 export { default as xPostRollbackDeepDive } from './x-post-rollback-deep-dive.js';
+export { default as xPostPredictionDimensionBreakdown } from './x-post-prediction-dimension-breakdown.js';
+export { default as xPostStandaloneCounterfactualDeepDive } from './x-post-standalone-counterfactual-deep-dive.js';
