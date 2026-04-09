@@ -511,6 +511,89 @@ async function sendChat() {
     }
 }
 
+// ═══ MLP / NEURAL PLASTICITY ═══
+
+async function updateMLP() {
+    const data = await f('/oca/neural-bus');
+    const container = document.getElementById('mlpContent');
+    if (!data || !data.mlp) { container.innerHTML = '<div class="empty-state">No data</div>'; return; }
+
+    const mlp = data.mlp;
+    const weights = data.weights || {};
+    const ils = data.inter_layer_strengths || {};
+    const topConns = Object.entries(ils).sort((a,b) => b[1]-a[1]).slice(0, 5);
+    const lossWidth = Math.min(100, mlp.running_loss * 1000);
+
+    let html = '';
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Training Updates</span><span class="mlp-stat-value">${mlp.total_updates}</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Running Loss</span><span class="mlp-stat-value" style="color:var(--gold)">${mlp.running_loss?.toFixed(6) || '0'}</span></div>`;
+    html += `<div class="mlp-loss-bar"><div class="mlp-loss-fill" style="width:${lossWidth}%"></div></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Parameters</span><span class="mlp-stat-value">${(mlp.total_params || 0).toLocaleString()}</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Weights Nonzero</span><span class="mlp-stat-value">${(weights.nonzero || 0).toLocaleString()} (${((1 - (weights.sparsity || 0)) * 100).toFixed(1)}%)</span></div>`;
+
+    if (topConns.length > 0) {
+        html += `<div class="mlp-connections">Top connections:<br>`;
+        html += topConns.map(([k,v]) => `  ${k} = ${v}`).join('<br>');
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+// ═══ HIPPORAG RECALL ═══
+
+async function runHippoRecall() {
+    const input = document.getElementById('hippoQuery');
+    const container = document.getElementById('hippoResults');
+    const query = input.value.trim();
+    if (!query) return;
+
+    container.innerHTML = '<div class="empty-state">Searching knowledge graph...</div>';
+    try {
+        const r = await fetch(`${API}/oca/hippo-recall`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ query, limit: 6 }),
+            signal: AbortSignal.timeout(15000)
+        });
+        const data = await r.json();
+        if (!data.results || data.results.length === 0) {
+            container.innerHTML = '<div class="empty-state">No results found</div>';
+            return;
+        }
+
+        const hippoMeta = data.results[0]?._hippo;
+        let html = '';
+        if (hippoMeta) {
+            html += `<div class="hippo-entities">Entities: ${esc(hippoMeta.query_entities.join(', '))} | Nodes: ${hippoMeta.matched_nodes.map(n => esc(n.name)).join(', ')} | ${hippoMeta.elapsed_ms}ms</div>`;
+        }
+        for (const r of data.results) {
+            const score = r.ppr_score ? r.ppr_score.toFixed(4) : r.similarity?.toFixed(3) || '—';
+            html += `<div class="hippo-result">
+                <div class="hippo-result-header">
+                    <span class="hippo-result-method">${r.recall_method || 'unknown'}</span>
+                    <span class="hippo-result-score">${score}</span>
+                </div>
+                <div class="hippo-result-content">${esc(r.content?.slice(0, 200) || '')}</div>
+                <div class="hippo-result-meta">
+                    <span>${r.event_type || ''}</span>
+                    <span>${r.active_app || ''}</span>
+                    <span>${r.timestamp ? ago(r.timestamp) + ' ago' : ''}</span>
+                </div>
+            </div>`;
+        }
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div class="empty-state">Error: ${esc(e.message?.slice(0, 60) || 'unknown')}</div>`;
+    }
+}
+
+async function updateHippoStats() {
+    const data = await f('/oca/hippo-stats');
+    const el = document.getElementById('hippoGraphStats');
+    if (data && el) {
+        el.textContent = `${data.entity_count || '?'} entities / ${data.relation_count || '?'} relations`;
+    }
+}
+
 // ═══ INIT ═══
 
 async function refreshAll() {
@@ -527,6 +610,8 @@ async function refreshAll() {
         updatePerception(),
         updateCohabitation(),
         updateMaintenance(),
+        updateMLP(),
+        updateHippoStats(),
     ]);
 }
 
@@ -534,6 +619,10 @@ function init() {
     document.getElementById('chatSend').addEventListener('click', sendChat);
     document.getElementById('chatInput').addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    });
+    document.getElementById('hippoSearchBtn').addEventListener('click', runHippoRecall);
+    document.getElementById('hippoQuery').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); runHippoRecall(); }
     });
     refreshAll();
     setInterval(refreshAll, 3000);
