@@ -25,7 +25,7 @@ function resolveOCAPath(relativePath) {
 const MOTOR_SKILLS_DIR = join(OCA_ROOT, 'motor', 'skills');
 const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 4;
-const TASK_TIMEOUT_MS = 480_000;
+const TASK_TIMEOUT_MS = 1_200_000;
 const SELF_BUILD_TIMEOUT_MS = 300_000;
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
@@ -85,8 +85,8 @@ async function verifyDreamRelevance(dream) {
     return { relevant: true };
   }
 
-  // Skip verification for dreams with moderate code references (likely executable)
-  if (refs.files.length <= 60 && refs.patterns.length <= 120) {
+  // Skip verification for dreams with many code references (likely complex architectural changes)
+  if (refs.files.length > 15 || refs.patterns.length > 30) {
     return { relevant: true };
   }
 
@@ -136,7 +136,7 @@ Respond with JSON only:
 
   try {
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 60000)
+      setTimeout(() => reject(new Error('Verification timeout')), 300000)
     );
     
     const response = await Promise.race([
@@ -191,7 +191,10 @@ async function getPostHistory() {
 const credentialGapsNotified = new Set();
 
 // Ensure dreams don't get stuck in intermediate states
-const EXECUTION_TIMEOUT_MS = 300000; // 5 minutes max per dream
+const EXECUTION_TIMEOUT_MS = 120000; // 2 minutes max per dream (faster failure/retry)
+
+// Track execution attempts to prevent infinite retries
+const executionAttempts = new Map();
 
 async function createRuntimeNotification(message, category = 'thought', priority = 'normal', metadata = {}) {
   try {
