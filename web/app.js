@@ -539,6 +539,109 @@ async function updateMLP() {
     container.innerHTML = html;
 }
 
+// ═══ NEURAL HEATMAP ═══
+
+async function updateHeatmap() {
+    const data = await f('/oca/neural-bus/heatmap');
+    if (!data || !data.matrix) return;
+
+    const canvas = document.getElementById('heatmapCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const layers = data.layers;
+    const n = layers.length; // 8
+    const padding = 60;
+    const cellSize = Math.floor((canvas.width - padding) / n);
+    const offsetX = padding;
+    const offsetY = padding;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Find max weight for normalization
+    let maxWeight = 0;
+    for (const row of data.matrix) {
+        for (const [, v] of Object.entries(row.connections)) {
+            maxWeight = Math.max(maxWeight, v);
+        }
+    }
+    if (maxWeight < 0.001) maxWeight = 0.05;
+
+    // Draw cells
+    for (let i = 0; i < n; i++) {
+        const row = data.matrix[i];
+        for (let j = 0; j < n; j++) {
+            const val = row.connections[layers[j]] || 0;
+            const intensity = Math.min(1, val / maxWeight);
+
+            // Color: dark bg -> warm gold for strong connections
+            if (i === j) {
+                // Diagonal: layer self-activation level
+                const act = data.activations?.[layers[i]];
+                const selfIntensity = act ? Math.min(1, act.mean * 3) : 0;
+                ctx.fillStyle = `rgba(91, 143, 168, ${selfIntensity * 0.6 + 0.05})`;
+            } else if (intensity > 0.001) {
+                // Gold for strong, dim for weak
+                const r = Math.floor(201 * intensity + 15 * (1 - intensity));
+                const g = Math.floor(169 * intensity + 15 * (1 - intensity));
+                const b = Math.floor(110 * intensity + 20 * (1 - intensity));
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${intensity * 0.85 + 0.05})`;
+            } else {
+                ctx.fillStyle = 'rgba(15, 15, 20, 0.8)';
+            }
+
+            ctx.fillRect(offsetX + j * cellSize, offsetY + i * cellSize, cellSize - 1, cellSize - 1);
+
+            // Value text for significant connections
+            if (intensity > 0.15 && i !== j) {
+                ctx.fillStyle = intensity > 0.5 ? '#08080C' : 'rgba(237, 232, 219, 0.6)';
+                ctx.font = '8px "DM Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(val.toFixed(3), offsetX + j * cellSize + cellSize / 2, offsetY + i * cellSize + cellSize / 2);
+            }
+        }
+    }
+
+    // Layer labels
+    ctx.fillStyle = 'rgba(237, 232, 219, 0.5)';
+    ctx.font = '9px "DM Mono", monospace';
+    const shortNames = { sensory: 'SENS', emotion: 'EMO', hypothesis: 'HYPO', memory: 'MEM', executive: 'EXEC', creative: 'CREA', metacognition: 'META', motor: 'MOTR' };
+
+    // Column headers (top)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (let j = 0; j < n; j++) {
+        ctx.save();
+        ctx.translate(offsetX + j * cellSize + cellSize / 2, offsetY - 4);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillText(shortNames[layers[j]] || layers[j], 0, 0);
+        ctx.restore();
+    }
+
+    // Row labels (left)
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+        ctx.fillText(shortNames[layers[i]] || layers[i], offsetX - 6, offsetY + i * cellSize + cellSize / 2);
+    }
+
+    // Legend
+    const legend = document.getElementById('heatmapLegend');
+    if (legend) {
+        legend.innerHTML = `
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(201,169,110,0.85)"></span> strong</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(201,169,110,0.3)"></span> weak</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(91,143,168,0.4)"></span> self</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(15,15,20,0.8)"></span> none</span>
+            <span style="margin-left:8px;color:var(--dim)">max: ${maxWeight.toFixed(4)}</span>
+        `;
+    }
+
+    // Meta
+    const meta = document.getElementById('heatmapMeta');
+    if (meta) meta.textContent = `${n}x${n} layers | max ${maxWeight.toFixed(4)}`;
+}
+
 // ═══ HIPPORAG RECALL ═══
 
 async function runHippoRecall() {
@@ -611,6 +714,7 @@ async function refreshAll() {
         updateCohabitation(),
         updateMaintenance(),
         updateMLP(),
+        updateHeatmap(),
         updateHippoStats(),
     ]);
 }
