@@ -341,6 +341,25 @@ ocaRouter.post('/oca/contradict', async (req, res) => {
 });
 
 // Entity graph query surfaces
+// HippoRAG recall endpoint
+ocaRouter.post('/oca/hippo-recall', async (req, res) => {
+  try {
+    const hippo = await import('./memory/hippo-recall.js');
+    const { query, limit = 10 } = req.body;
+    if (!query) return res.status(400).json({ error: 'query required' });
+    const results = await hippo.default.hippoRecall(query, { limit });
+    res.json({ results, count: results.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/hippo-stats', async (req, res) => {
+  try {
+    const hippo = await import('./memory/hippo-recall.js');
+    const stats = await hippo.default.getGraphStats();
+    res.json(stats);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 ocaRouter.get('/oca/entities', async (req, res) => {
   try {
     const query = req.query.query || '';
