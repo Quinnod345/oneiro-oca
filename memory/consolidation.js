@@ -156,6 +156,7 @@ Extract 3-8 principles, 0-3 procedures, 0-3 connections. DO NOT include long evi
     // 5. CAUSAL LINKS: Store in world model
     if (extracted.connections) {
       for (const conn of extracted.connections) {
+        try {
         const causalEdge = [{
           from: conn.cause,
           to: conn.effect,
@@ -193,6 +194,9 @@ Extract 3-8 principles, 0-3 procedures, 0-3 connections. DO NOT include long evi
             source: 'consolidation',
           }
         });
+        } catch (e) {
+          console.error('[consolidation] connection storage failed:', e.message?.slice(0, 100));
+        }
       }
     }
 

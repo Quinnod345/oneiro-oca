@@ -193,13 +193,13 @@ export async function contradict(conceptId, reason = '', {
   await pool.query(
     `INSERT INTO semantic_contradictions
      (concept_id, contradicting_concept_id, contradiction_set_id, episode_id, reason, weight)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+     VALUES ($1, $2, $3, $4::INT, $5, $6)`,
     [conceptId, contradictingConceptId, setId, episodeId, reason || null, clamp(Number(weight) || 1, 0.05, 5)]
   );
 
   await pool.query(
     `INSERT INTO semantic_evidence (concept_id, episode_id, source_type, weight, supports, evidence_text, metadata)
-     VALUES ($1, $2, 'contradiction', $3, false, $4, $5)`,
+     VALUES ($1, $2::INT, 'contradiction', $3, false, $4, $5)`,
     [conceptId, episodeId, clamp(Number(weight) || 1, 0.05, 5), reason || 'contradiction', JSON.stringify({ contradiction_set_id: setId })]
   );
 
