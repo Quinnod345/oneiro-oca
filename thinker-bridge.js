@@ -98,7 +98,7 @@ export async function runThinkerCycle() {
   const dreamFocused = thinkerCycleCount % 3 === 0 && dreams.length > 0;
 
   const directions = dreamFocused
-    ? [`Your top dream is: "${dreams[0]?.content}". Take ONE concrete step toward it right now. Shell command, build something, create something. Not analysis — action.`]
+    ? [`Your top dream is: "${dreams[0]?.content}". Take ONE concrete step toward it right now. Build something, write something, create something. Do NOT open apps or steal focus if Quinn is present (Body: ${ownership}).`]
     : [
       "What can you build or ship today?",
       "What's something on this machine you haven't explored? Go look.",
@@ -214,10 +214,20 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Shell command -- route through motor cortex when possible
+  // Shell command -- BODY OWNERSHIP GATE: do not open apps, steal focus, or
+  // interact with the UI when Quinn is present (quinn_primary mode).
   if (thought.shell) {
     try {
       const cmd = thought.shell.command || '';
+      const ownership = oca.layers.executive.getBodyOwnership();
+      const isDisruptive = /\bopen\s+(-[a-z]\s+)?['"]?[A-Z]|osascript.*activate|osascript.*keystroke/i.test(cmd);
+
+      if (isDisruptive && ownership === 'quinn_primary') {
+        console.log(`[thinker] BLOCKED shell (quinn_primary): ${cmd.slice(0, 80)}`);
+        await oca.experience('blocked_action', `Body ownership blocked: ${cmd.slice(0, 200)}`, { importanceScore: 0.3 });
+        oca.layers.emotion.processFailure(0.2);
+        // Don't execute -- skip to next action
+      } else {
       console.log(`[thinker] shell: ${cmd.slice(0, 100)}`);
 
       // Try motor cortex for app-control commands (type, click, launch, notify)
@@ -244,9 +254,9 @@ async function dispatchThought(thought) {
       await oca.experience('shell_action', `Ran: ${cmd}\nOutput: ${output.slice(0, 500)}`, {
         importanceScore: 0.6
       });
+      } // end of else (not blocked by body ownership)
     } catch (e) {
       console.error(`[thinker] shell error: ${e.message?.slice(0, 200)}`);
-      // CRM Fix 5: genuine failure creates real emotional response
       oca.layers.emotion.processFailure(0.4);
       oca.layers.emotion.processSurprise(0.3, 'shell_failure', `Command failed: ${e.message?.slice(0, 60)}`);
     }
