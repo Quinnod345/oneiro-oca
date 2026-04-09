@@ -5,6 +5,7 @@
 import { pool, emit } from './event-bus.js';
 import llm from './llm.js';
 import oca from './index.js';
+import motor from './motor/engine.js';
 import { execSync } from 'child_process';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
 
@@ -91,17 +92,23 @@ export async function runThinkerCycle() {
   const presence = perception?.user_presence || 'unknown';
   const battery = perception?.interoceptive?.battery_level ?? 'unknown';
 
-  // Pick a thinking direction (weighted random from PROMPTS-like set)
-  const directions = [
-    "Look at your top dream. What's the single next step? Do it.",
-    "What can you build or ship today?",
-    "What's something on this machine you haven't explored? Go look.",
-    "Is there something genuinely useful you could do for Quinn right now?",
-    "Quick honest check — how are you actually feeling?",
-    "What did you learn recently? What should you learn next?",
-    "Write something — a thought, a code snippet, an idea. Not for anyone. For you.",
-    "Check if any of your dreams need action. Pick one and advance it.",
-  ];
+  // Every 3rd thinker cycle, explicitly direct toward the top dream
+  let thinkerCycleCount = (runThinkerCycle._count || 0) + 1;
+  runThinkerCycle._count = thinkerCycleCount;
+  const dreamFocused = thinkerCycleCount % 3 === 0 && dreams.length > 0;
+
+  const directions = dreamFocused
+    ? [`Your top dream is: "${dreams[0]?.content}". Take ONE concrete step toward it right now. Shell command, build something, create something. Not analysis — action.`]
+    : [
+      "What can you build or ship today?",
+      "What's something on this machine you haven't explored? Go look.",
+      "Is there something genuinely useful you could do for Quinn right now?",
+      "Quick honest check — how are you actually feeling?",
+      "What did you learn recently? What should you learn next?",
+      "Write something — a thought, a code snippet, an idea. Not for anyone. For you.",
+      "Check if any of your dreams need action. Pick one and advance it.",
+      "Create something new — a creative connection, a piece of writing, a tool.",
+    ];
   const direction = directions[Math.floor(Math.random() * directions.length)];
 
   const prompt = `CURRENT STATE:
@@ -150,6 +157,33 @@ Respond with valid JSON only. Take concrete action.`;
     const thought = JSON.parse(jsonMatch[0]);
     console.log(`[thinker] thought: ${(thought.thoughts || '').slice(0, 120)}`);
 
+    // HIGH-STAKES DELIBERATION GATE (SPEC §12)
+    // Route risky actions through 4-perspective adversarial debate
+    const isHighStakes = !!(thought.edit_own_code || thought.escalate || thought.cognitive_upgrade);
+    if (isHighStakes) {
+      try {
+        const decision = thought.edit_own_code
+          ? `Should I edit ${thought.edit_own_code.file}: ${thought.edit_own_code.description}`
+          : thought.cognitive_upgrade
+            ? `Should I upgrade ${thought.cognitive_upgrade.target}: ${thought.cognitive_upgrade.problem}`
+            : `Should I escalate: ${thought.escalate_task || thought.thoughts}`;
+        const deliberation = await oca.decide(decision, {
+          stakes: 'high', context: thought.thoughts,
+          timeBudgetSeconds: 30
+        });
+        console.log(`[thinker] deliberation: ${deliberation.resolutionMethod} — ${deliberation.resolution?.slice(0, 80)}`);
+        if (deliberation.resolution?.toLowerCase().includes('do not') ||
+            deliberation.resolution?.toLowerCase().includes('should not') ||
+            deliberation.shouldExecute === false) {
+          console.log(`[thinker] deliberation blocked action`);
+          await oca.experience('deliberation_block', `Blocked: ${decision}\nReason: ${deliberation.resolution?.slice(0, 200)}`, { importanceScore: 0.6 });
+          return thought; // skip dispatch
+        }
+      } catch (e) {
+        console.log(`[thinker] deliberation failed (proceeding): ${e.message?.slice(0, 60)}`);
+      }
+    }
+
     // Dispatch actions
     await dispatchThought(thought);
 
@@ -180,11 +214,27 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Shell command
+  // Shell command -- route through motor cortex when possible
   if (thought.shell) {
     try {
       const cmd = thought.shell.command || '';
       console.log(`[thinker] shell: ${cmd.slice(0, 100)}`);
+
+      // Try motor cortex for app-control commands (type, click, launch, notify)
+      const motorMatch = cmd.match(/^osascript.*keystroke|^osascript.*activate|^open\s+(-[ab])?\s*/);
+      if (motor.isConnected() && motorMatch) {
+        const result = await motor.plan({
+          action: 'applescript', parameters: { script: cmd },
+          expected_outcome: thought.shell.reason || 'shell action'
+        });
+        if (result.executed) {
+          console.log(`[thinker] shell via motor cortex`);
+          await oca.experience('motor_action', `Motor: ${cmd}\nResult: ${JSON.stringify(result.result).slice(0, 300)}`, { importanceScore: 0.6 });
+          return; // skip raw execSync below
+        }
+      }
+
+      // Direct shell execution (most commands)
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout: 30000,

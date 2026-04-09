@@ -255,13 +255,13 @@ Extract 3-8 principles, 0-3 procedures, 0-3 connections. DO NOT include long evi
   const reviewedIds = rawEpisodes.map(e => e.id);
 
   if (extracted_anything) {
+    // Mark as 'consolidated' -- genuine knowledge was extracted
     await pool.query(
-      `UPDATE episodic_memory SET consolidation_status = 'reviewed' WHERE id = ANY($1)`,
+      `UPDATE episodic_memory SET consolidation_status = 'consolidated' WHERE id = ANY($1)`,
       [reviewedIds]
     );
   } else {
-    // LLM returned valid but empty -- mark as reviewed anyway to avoid infinite loops
-    // but log the empty extraction
+    // LLM returned valid but empty -- mark as reviewed (not consolidated)
     await pool.query(
       `UPDATE episodic_memory SET consolidation_status = 'reviewed' WHERE id = ANY($1)`,
       [reviewedIds]

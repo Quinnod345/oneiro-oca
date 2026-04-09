@@ -326,6 +326,22 @@ async function think() {
   oca.layers.executive.computeCognitiveLoad(oca.layers.emotion.getState(), workspace.length, goals.length);
   const loadPolicy = oca.layers.executive.getLoadPolicy();
 
+  // ── 2b-ii. LOAD BALANCING: policy actually modulates processing (SPEC §14.4) ──
+  if (loadPolicy.reduce_sensory) visionCooldown = Math.max(visionCooldown, 40);
+  if (loadPolicy.defer_hypotheses) hypothesisCooldown = Math.max(hypothesisCooldown, 20);
+  if (loadPolicy.suppress_creative) { creativeCooldown = Math.max(creativeCooldown, 40); dreamCooldown = Math.max(dreamCooldown, 30); }
+  if (loadPolicy.increase_sensory) visionCooldown = Math.min(visionCooldown, 5);
+  if (loadPolicy.run_background_hypotheses) hypothesisCooldown = 0;
+  if (loadPolicy.initiate_creative) { creativeCooldown = 0; dreamCooldown = 0; }
+
+  // ── 2b-iii. ATTENTION ALLOCATION modulates cadence (SPEC §14.2) ──
+  const allocation = oca.layers.executive.getAllocation();
+  if (allocation) {
+    if (allocation.creative > 0.2) { creativeCooldown = Math.min(creativeCooldown, 10); dreamCooldown = Math.min(dreamCooldown, 5); }
+    if (allocation.reasoning > 0.3) hypothesisCooldown = Math.min(hypothesisCooldown, 3);
+    if (allocation.perception > 0.3) visionCooldown = Math.min(visionCooldown, 10);
+  }
+
   // ── 2c. INTEROCEPTIVE EFFECTS (SPEC §5.6) ──────
   oca.applyInteroceptiveEffects(intero);
 
@@ -925,6 +941,21 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       
       if (!meta.healthy) {
         console.log(`[oca] 🪞 metacognition: system unhealthy`);
+        // Trigger deliberation about what to do when unhealthy (every 300 cycles)
+        if (result.cycle % 300 === 0 && !isTickLLMHeavy) {
+          try {
+            const issues = [
+              ...(meta.stuck_issues || []).map(s => s.description || s.type),
+              ...(meta.active_biases || []).map(b => `${b.type} (severity ${b.severity})`),
+              ...(meta.calibration || []).map(c => `calibration ${c.direction} at ${c.bucket}`)
+            ].join('; ');
+            const delib = await oca.decide(
+              `System is unhealthy: ${issues}. What should I do about it?`,
+              { stakes: 'medium', context: `Biases: ${meta.active_biases?.length || 0}, stuck: ${meta.stuck_issues?.length || 0}` }
+            );
+            console.log(`[oca] 🪞 deliberation on health: ${delib.resolution?.slice(0, 80)}`);
+          } catch {}
+        }
       }
     } catch (e) {
       if (result.cycle <= 10) console.error('[oca] metacognition error:', e.message);
@@ -1010,7 +1041,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       if (dream) {
         console.log(`[oca] 💭 dreamed: ${dream.novelConnections?.length || 0} connections`);
         oca.layers.emotion.processSuccess('creative');
-        dreamCooldown = 15;
+        dreamCooldown = 8;
       }
     } catch (e) {
       console.error('[oca] dream error:', e.message);
@@ -1019,8 +1050,8 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   }
   
   // Cross-domain connection: lower threshold, also trigger on boredom or creative_hunger
-  if (creativeCooldown <= 0 && !isConsolidating && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.1)) {
-    creativeCooldown = 25;
+  if (creativeCooldown <= 0 && !isConsolidating && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.05)) {
+    creativeCooldown = 15;
     try {
       const semanticCount = (await pool.query('SELECT COUNT(*) FROM semantic_memory')).rows[0].count;
       if (parseInt(semanticCount) >= 2) {
@@ -1752,6 +1783,27 @@ async function start() {
   await swiftSensory.ensureTable();
   const swiftStarted = await swiftSensory.start();
   console.log(swiftStarted ? '[oca] Swift sensory cortex online' : '[oca] Using Node.js sensory fallback');
+
+  // Start motor binary connection (try socket first, it may be running via launchd)
+  try {
+    const motorEngine = (await import('./motor/engine.js')).default;
+    // Motor engine auto-connects to /tmp/oneiro-motor.sock on first plan() call.
+    // Try to spawn the binary if the socket doesn't exist.
+    const { existsSync } = await import('fs');
+    const { spawn: spawnProcess } = await import('child_process');
+    const MOTOR_BINARY = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/motor/swift/.build/release/oneiro-motor';
+    const MOTOR_SOCK = '/tmp/oneiro-motor.sock';
+    if (existsSync(MOTOR_BINARY) && !existsSync(MOTOR_SOCK)) {
+      const motorProc = spawnProcess(MOTOR_BINARY, [], { stdio: 'ignore', detached: true });
+      motorProc.unref();
+      console.log('[oca] Motor cortex binary spawned, PID:', motorProc.pid);
+      // Wait briefly for socket to appear
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    console.log('[oca] Motor cortex:', existsSync(MOTOR_SOCK) ? 'socket available' : 'fallback mode (AppleScript)');
+  } catch (e) {
+    console.error('[oca] Motor cortex init (non-fatal):', e.message?.slice(0, 80));
+  }
 
   try {
     const visualStart = await visualMemory.startScreenshotIndexer();
