@@ -1081,6 +1081,31 @@ ocaRouter.get('/oca/operating-time', async (req, res) => {
 // NEURAL BUS (vector signaling layer)
 // ============================================================
 
+ocaRouter.get('/oca/neural-bus/heatmap', async (req, res) => {
+  try {
+    const bus = await import('./neural-bus.js');
+    const layers = bus.LAYERS;
+    const matrix = [];
+    for (const from of layers) {
+      const row = {};
+      for (const to of layers) {
+        row[to] = bus.default.getConnectionStrength(from, to);
+      }
+      matrix.push({ layer: from, connections: row });
+    }
+    const activations = {};
+    for (const layer of layers) {
+      const act = bus.default.getLayerActivation(layer);
+      if (act) {
+        let sum = 0, max = 0;
+        for (let i = 0; i < act.length; i++) { sum += Math.abs(act[i]); max = Math.max(max, Math.abs(act[i])); }
+        activations[layer] = { mean: sum / act.length, max, dims: act.length };
+      }
+    }
+    res.json({ layers, matrix, activations });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 ocaRouter.get('/oca/neural-bus', async (req, res) => {
   try {
     const bus = await import('./neural-bus.js');
