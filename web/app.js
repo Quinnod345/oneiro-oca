@@ -541,105 +541,198 @@ async function updateMLP() {
 
 // ═══ NEURAL HEATMAP ═══
 
+// Neural mind map: every neuron as a dot, grouped in arcs by layer, connections drawn between them
+const LAYER_COLORS = {
+    sensory: [91, 143, 168],     // slate blue
+    emotion: [201, 169, 110],    // warm gold
+    hypothesis: [91, 168, 143],  // seafoam
+    memory: [168, 130, 91],      // amber
+    executive: [143, 91, 168],   // purple
+    creative: [196, 92, 60],     // ember
+    metacognition: [110, 140, 180], // steel
+    motor: [150, 150, 100],      // olive
+};
+const LAYER_LABELS = { sensory:'Sensory',emotion:'Emotion',hypothesis:'Hypothesis',memory:'Memory',executive:'Executive',creative:'Creative',metacognition:'Meta',motor:'Motor' };
+
 async function updateHeatmap() {
-    const data = await f('/oca/neural-bus/heatmap');
-    if (!data || !data.matrix) return;
+    const data = await f('/oca/neural-bus/full');
+    if (!data || !data.workspace) return;
 
     const canvas = document.getElementById('heatmapCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const R = Math.min(W, H) * 0.38; // main ring radius
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#08080C';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle radial gradient center glow
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.2);
+    grad.addColorStop(0, 'rgba(201, 169, 110, 0.03)');
+    grad.addColorStop(1, 'rgba(8, 8, 12, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
     const layers = data.layers;
-    const n = layers.length; // 8
-    const padding = 60;
-    const cellSize = Math.floor((canvas.width - padding) / n);
-    const offsetX = padding;
-    const offsetY = padding;
+    const offsets = data.offsets;
+    const workspace = data.workspace;
+    const delta = data.delta || [];
+    const totalDim = workspace.length; // 208
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Position each neuron on a ring, grouped by layer
+    // Each layer gets an arc segment proportional to its dimension count
+    const neurons = []; // {x, y, layer, dimIdx, activation, delta}
+    let angleStart = -Math.PI / 2; // start at top
+    const gap = 0.04; // gap between layer arcs in radians
+    const totalGap = gap * layers.length;
+    const totalArc = Math.PI * 2 - totalGap;
 
-    // Find max weight for normalization
-    let maxWeight = 0;
-    for (const row of data.matrix) {
-        for (const [, v] of Object.entries(row.connections)) {
-            maxWeight = Math.max(maxWeight, v);
+    for (const layer of layers) {
+        const info = offsets[layer];
+        const dims = info.dim;
+        const arcLen = (dims / totalDim) * totalArc;
+        const color = LAYER_COLORS[layer] || [150, 150, 150];
+
+        for (let d = 0; d < dims; d++) {
+            const t = d / Math.max(1, dims - 1);
+            const angle = angleStart + t * arcLen;
+            const globalIdx = info.start + d;
+            const act = Math.abs(workspace[globalIdx] || 0);
+            const dlt = delta[globalIdx] || 0;
+
+            // Spread neurons in a band (inner/outer variation based on activation)
+            const rVar = R + act * 20 - 10;
+            const x = cx + Math.cos(angle) * rVar;
+            const y = cy + Math.sin(angle) * rVar;
+
+            neurons.push({ x, y, layer, dimIdx: d, globalIdx, activation: act, delta: dlt, angle, color });
         }
-    }
-    if (maxWeight < 0.001) maxWeight = 0.05;
-
-    // Draw cells
-    for (let i = 0; i < n; i++) {
-        const row = data.matrix[i];
-        for (let j = 0; j < n; j++) {
-            const val = row.connections[layers[j]] || 0;
-            const intensity = Math.min(1, val / maxWeight);
-
-            // Color: dark bg -> warm gold for strong connections
-            if (i === j) {
-                // Diagonal: layer self-activation level
-                const act = data.activations?.[layers[i]];
-                const selfIntensity = act ? Math.min(1, act.mean * 3) : 0;
-                ctx.fillStyle = `rgba(91, 143, 168, ${selfIntensity * 0.6 + 0.05})`;
-            } else if (intensity > 0.001) {
-                // Gold for strong, dim for weak
-                const r = Math.floor(201 * intensity + 15 * (1 - intensity));
-                const g = Math.floor(169 * intensity + 15 * (1 - intensity));
-                const b = Math.floor(110 * intensity + 20 * (1 - intensity));
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${intensity * 0.85 + 0.05})`;
-            } else {
-                ctx.fillStyle = 'rgba(15, 15, 20, 0.8)';
-            }
-
-            ctx.fillRect(offsetX + j * cellSize, offsetY + i * cellSize, cellSize - 1, cellSize - 1);
-
-            // Value text for significant connections
-            if (intensity > 0.15 && i !== j) {
-                ctx.fillStyle = intensity > 0.5 ? '#08080C' : 'rgba(237, 232, 219, 0.6)';
-                ctx.font = '8px "DM Mono", monospace';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(val.toFixed(3), offsetX + j * cellSize + cellSize / 2, offsetY + i * cellSize + cellSize / 2);
-            }
-        }
+        angleStart += arcLen + gap;
     }
 
-    // Layer labels
-    ctx.fillStyle = 'rgba(237, 232, 219, 0.5)';
-    ctx.font = '9px "DM Mono", monospace';
-    const shortNames = { sensory: 'SENS', emotion: 'EMO', hypothesis: 'HYPO', memory: 'MEM', executive: 'EXEC', creative: 'CREA', metacognition: 'META', motor: 'MOTR' };
+    // Draw inter-layer connections (only strongest ones to avoid clutter)
+    const ils = data.interLayerWeights || {};
+    const sortedConns = Object.entries(ils).filter(([,v]) => v > 0.005).sort((a,b) => b[1] - a[1]);
 
-    // Column headers (top)
+    for (const [key, strength] of sortedConns.slice(0, 20)) {
+        const [from, to] = key.split('->');
+        const fromNeurons = neurons.filter(n => n.layer === from);
+        const toNeurons = neurons.filter(n => n.layer === to);
+        if (fromNeurons.length === 0 || toNeurons.length === 0) continue;
+
+        // Draw a bezier bundle from the center of one layer arc to another
+        const fCenter = fromNeurons[Math.floor(fromNeurons.length / 2)];
+        const tCenter = toNeurons[Math.floor(toNeurons.length / 2)];
+        const alpha = Math.min(0.4, strength * 8);
+
+        // Bundle: draw multiple thin lines with slight spread
+        const bundleCount = Math.max(1, Math.floor(strength * 60));
+        for (let b = 0; b < bundleCount; b++) {
+            const spread = (b / bundleCount - 0.5) * 15;
+            const fIdx = Math.min(fromNeurons.length - 1, Math.max(0, Math.floor(fromNeurons.length / 2 + spread)));
+            const tIdx = Math.min(toNeurons.length - 1, Math.max(0, Math.floor(toNeurons.length / 2 + spread)));
+            const fn = fromNeurons[fIdx];
+            const tn = toNeurons[tIdx];
+
+            ctx.beginPath();
+            ctx.moveTo(fn.x, fn.y);
+            // Bezier through center with slight offset
+            const cpx = cx + (Math.random() - 0.5) * 30;
+            const cpy = cy + (Math.random() - 0.5) * 30;
+            ctx.quadraticCurveTo(cpx, cpy, tn.x, tn.y);
+            const fc = LAYER_COLORS[from] || [150,150,150];
+            const tc = LAYER_COLORS[to] || [150,150,150];
+            const mr = Math.floor((fc[0]+tc[0])/2);
+            const mg = Math.floor((fc[1]+tc[1])/2);
+            const mb = Math.floor((fc[2]+tc[2])/2);
+            ctx.strokeStyle = `rgba(${mr},${mg},${mb},${alpha * 0.3})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+        }
+    }
+
+    // Draw neurons
+    for (const n of neurons) {
+        const size = 1.5 + n.activation * 4;
+        const alpha = 0.15 + n.activation * 0.7;
+
+        // Glow for highly active neurons
+        if (n.activation > 0.3) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, size + 3, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${n.color[0]},${n.color[1]},${n.color[2]},${alpha * 0.15})`;
+            ctx.fill();
+        }
+
+        // Delta flash: green for increasing, red for decreasing
+        if (Math.abs(n.delta) > 0.01) {
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, size + 2, 0, Math.PI * 2);
+            if (n.delta > 0) ctx.fillStyle = `rgba(91,168,143,${Math.min(0.4, Math.abs(n.delta) * 2)})`;
+            else ctx.fillStyle = `rgba(196,92,60,${Math.min(0.4, Math.abs(n.delta) * 2)})`;
+            ctx.fill();
+        }
+
+        // Neuron dot
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${n.color[0]},${n.color[1]},${n.color[2]},${alpha})`;
+        ctx.fill();
+    }
+
+    // Layer labels around the ring
+    ctx.font = '11px "Libre Baskerville", serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    for (let j = 0; j < n; j++) {
-        ctx.save();
-        ctx.translate(offsetX + j * cellSize + cellSize / 2, offsetY - 4);
-        ctx.rotate(-Math.PI / 4);
-        ctx.fillText(shortNames[layers[j]] || layers[j], 0, 0);
-        ctx.restore();
+    ctx.textBaseline = 'middle';
+    angleStart = -Math.PI / 2;
+    for (const layer of layers) {
+        const info = offsets[layer];
+        const arcLen = (info.dim / totalDim) * totalArc;
+        const midAngle = angleStart + arcLen / 2;
+        const labelR = R + 35;
+        const lx = cx + Math.cos(midAngle) * labelR;
+        const ly = cy + Math.sin(midAngle) * labelR;
+        const color = LAYER_COLORS[layer] || [150,150,150];
+        ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},0.7)`;
+        ctx.fillText(LAYER_LABELS[layer] || layer, lx, ly);
+
+        // Dim count
+        ctx.font = '8px "DM Mono", monospace';
+        ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},0.35)`;
+        ctx.fillText(`${info.dim}d`, lx, ly + 14);
+        ctx.font = '11px "Libre Baskerville", serif';
+
+        angleStart += arcLen + gap;
     }
 
-    // Row labels (left)
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    for (let i = 0; i < n; i++) {
-        ctx.fillText(shortNames[layers[i]] || layers[i], offsetX - 6, offsetY + i * cellSize + cellSize / 2);
-    }
+    // Center: MLP stats
+    ctx.font = '10px "DM Mono", monospace';
+    ctx.fillStyle = 'rgba(201, 169, 110, 0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText(`MLP ${data.mlp?.total_updates || 0} updates`, cx, cy - 12);
+    ctx.fillText(`loss ${(data.mlp?.running_loss || 0).toFixed(5)}`, cx, cy + 2);
+    ctx.fillStyle = 'rgba(107, 101, 117, 0.4)';
+    ctx.fillText(`${data.weights?.nonzero || 0} active weights`, cx, cy + 16);
+    ctx.fillText(`${totalDim} dimensions`, cx, cy + 30);
 
     // Legend
     const legend = document.getElementById('heatmapLegend');
     if (legend) {
-        legend.innerHTML = `
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(201,169,110,0.85)"></span> strong</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(201,169,110,0.3)"></span> weak</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(91,143,168,0.4)"></span> self</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgba(15,15,20,0.8)"></span> none</span>
-            <span style="margin-left:8px;color:var(--dim)">max: ${maxWeight.toFixed(4)}</span>
-        `;
+        legend.innerHTML = layers.map(l => {
+            const c = LAYER_COLORS[l] || [150,150,150];
+            return `<span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:rgb(${c.join(',')})"></span> ${LAYER_LABELS[l] || l}</span>`;
+        }).join('') + `<span style="margin-left:8px;color:var(--dim)">green=rising red=falling</span>`;
     }
 
-    // Meta
     const meta = document.getElementById('heatmapMeta');
-    if (meta) meta.textContent = `${n}x${n} layers | max ${maxWeight.toFixed(4)}`;
+    if (meta) meta.textContent = `${totalDim} neurons | ${sortedConns.length} connections`;
 }
 
 // ═══ HIPPORAG RECALL ═══

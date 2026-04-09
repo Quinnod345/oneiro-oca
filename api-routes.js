@@ -1081,6 +1081,42 @@ ocaRouter.get('/oca/operating-time', async (req, res) => {
 // NEURAL BUS (vector signaling layer)
 // ============================================================
 
+ocaRouter.get('/oca/neural-bus/full', async (req, res) => {
+  try {
+    const bus = await import('./neural-bus.js');
+    const mlp = await import('./neural-mlp.js');
+    const workspace = Array.from(bus.default.getWorkspace());
+    const previous = Array.from(bus.default.getPreviousWorkspace());
+    const layers = bus.LAYERS;
+    const offsets = bus.OFFSETS;
+
+    // Per-dimension activations grouped by layer
+    const layerActivations = {};
+    for (const [layer, info] of Object.entries(offsets)) {
+      layerActivations[layer] = workspace.slice(info.start, info.end);
+    }
+
+    // Inter-layer connection matrix (full resolution: each dim to each dim, sampled)
+    const interLayerWeights = {};
+    for (const from of layers) {
+      for (const to of layers) {
+        if (from === to) continue;
+        interLayerWeights[`${from}->${to}`] = bus.default.getConnectionStrength(from, to);
+      }
+    }
+
+    // Delta: difference between current and previous workspace
+    const delta = workspace.map((v, i) => v - previous[i]);
+
+    res.json({
+      workspace, previous, delta,
+      layers, offsets, layerActivations, interLayerWeights,
+      mlp: mlp.default.getStatus(),
+      weights: bus.default.getWeightStats()
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 ocaRouter.get('/oca/neural-bus/heatmap', async (req, res) => {
   try {
     const bus = await import('./neural-bus.js');
