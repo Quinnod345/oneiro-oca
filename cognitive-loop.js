@@ -362,11 +362,15 @@ async function think() {
     const cogLoad = oca.layers.executive.getCognitiveLoad?.() || 0.3;
     neuralBus.writeLayer('sensory', encoders.encodeSensory(perception));
     neuralBus.writeLayer('emotion', encoders.encodeEmotion(emotionState));
-    neuralBus.writeLayer('executive', encoders.encodeExecutive(mode, cogLoad, oca.layers.executive.getBodyOwnership(), goals.length));
-    neuralBus.writeLayer('creative', encoders.encodeCreative(emotionState));
+    neuralBus.writeLayer('executive', encoders.encodeExecutive(
+      mode, cogLoad, oca.layers.executive.getBodyOwnership(), goals.length,
+      oca.layers.executive.getAllocation()
+    ));
+    neuralBus.writeLayer('creative', encoders.encodeCreative(
+      emotionState, 0, 0, 0.3
+    ));
     neuralBus.writeLayer('motor', encoders.encodeMotor(
-      typeof motor !== 'undefined' && motor?.isConnected?.() || false,
-      tickCount
+      false, tickCount, tickCount % 5 === 0, oca.layers.executive.getBodyOwnership()
     ));
 
     // Encode hypothesis, memory, metacognition (were dark because never written)
