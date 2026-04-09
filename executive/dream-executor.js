@@ -191,7 +191,7 @@ async function getPostHistory() {
 const credentialGapsNotified = new Set();
 
 // Ensure dreams don't get stuck in intermediate states
-const EXECUTION_TIMEOUT_MS = 120000; // 2 minutes max per dream (faster failure/retry)
+const EXECUTION_TIMEOUT_MS = 900000; // 15 minutes max per dream (allow complex operations)
 
 // Track execution attempts to prevent infinite retries
 const executionAttempts = new Map();
