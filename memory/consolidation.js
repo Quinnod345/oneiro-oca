@@ -1,7 +1,7 @@
 // OCA Memory Consolidation Engine
 // Analogous to sleep-dependent memory processing
 // Converts episodic → semantic, detects procedural patterns, prunes
-import { pool } from '../event-bus.js';
+import { pool, emit } from '../event-bus.js';
 import episodic from './episodic.js';
 import semantic from './semantic.js';
 import procedural from './procedural.js';
@@ -227,6 +227,11 @@ Extract 3-8 principles, 0-3 procedures, 0-3 connections. DO NOT include long evi
             }
           );
           contradictionUpdates++;
+          // CRM Fix 5: discovering a belief is wrong creates genuine surprise
+          await emit('perception_update', 'consolidation', {
+            channel: 'internal', event: 'contradiction_discovered',
+            concept: contradiction.concept, reason: contradiction.reason
+          }, { priority: 0.5 }).catch(() => {});
         } catch {
           // Keep consolidation resilient even on malformed contradiction payloads.
         }

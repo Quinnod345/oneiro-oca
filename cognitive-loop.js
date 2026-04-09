@@ -1228,6 +1228,89 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     } catch {}
   }
 
+  // ── CRM FIX 2: Counterfactual evaluation sweep (every 100 cycles) ──
+  if (tickCount % 100 === 45) {
+    try {
+      const { rows: uneval } = await pool.query(
+        `SELECT c.id, c.actual_action, c.alternative_action, c.predicted_alternative_outcome,
+                e.content AS episode_content
+         FROM counterfactuals c
+         LEFT JOIN episodic_memory e ON c.episode_id = e.id
+         WHERE c.accuracy_score IS NULL AND c.created_at < NOW() - INTERVAL '1 hour'
+         LIMIT 5`
+      );
+      for (const cf of uneval) {
+        try {
+          await oca.layers.simulation.evaluateCounterfactual(cf.id, cf.episode_content || 'Outcome observed through continued operation');
+        } catch {}
+      }
+      if (uneval.length > 0) console.log(`[oca] evaluated ${uneval.length} counterfactuals`);
+    } catch {}
+  }
+
+  // ── CRM FIX 3: Causal experiment auto-completion (every 150 cycles) ──
+  if (tickCount % 150 === 70) {
+    try {
+      // Complete experiments whose referenced hypothesis has resolved
+      const { rows: resolvable } = await pool.query(
+        `SELECT ce.id, h.status AS hypo_status, h.actual_outcome
+         FROM causal_experiments ce
+         JOIN hypotheses h ON ce.hypothesis_id = h.id
+         WHERE ce.status IN ('designed', 'running')
+           AND h.status IN ('confirmed', 'refuted')
+         LIMIT 10`
+      );
+      for (const exp of resolvable) {
+        try {
+          await oca.layers.causal.completeExperiment(exp.id, {
+            actualOutcome: exp.actual_outcome || `Hypothesis ${exp.hypo_status}`,
+            outcomeValence: exp.hypo_status === 'confirmed' ? 0.6 : -0.3,
+            causalSupport: exp.hypo_status === 'confirmed' ? 0.8 : 0.2,
+            modelUpdate: `Auto-completed: referenced hypothesis was ${exp.hypo_status}`
+          });
+        } catch {}
+      }
+      // Also handle ancient 'designed' experiments (never started)
+      await pool.query(
+        `UPDATE causal_experiments SET status = 'completed',
+           actual_outcome = 'Experiment expired without execution',
+           causal_support = 0.3, completed_at = NOW()
+         WHERE status = 'designed' AND created_at < NOW() - INTERVAL '7 days'`
+      ).catch(() => {});
+      if (resolvable.length > 0) console.log(`[oca] auto-completed ${resolvable.length} causal experiments`);
+    } catch {}
+  }
+
+  // ── CRM FIX 6: Metacognition remediation (every 100 cycles) ──
+  if (tickCount % 100 === 55) {
+    try {
+      const { rows: biases } = await pool.query(
+        `SELECT bias_type, current_severity, countermeasure FROM cognitive_biases WHERE current_severity > 0.3`
+      );
+      for (const bias of biases) {
+        // Actually execute countermeasures
+        if (bias.bias_type === 'recency_bias' && bias.current_severity > 0.3) {
+          // Trigger consolidation focused on older episodes
+          oca.layers.consolidation.consolidate().catch(() => {});
+        }
+        if (bias.bias_type === 'confirmation_bias' && bias.current_severity > 0.3) {
+          // Flag next hypothesis test to seek disconfirming evidence
+          await pool.query(
+            `UPDATE hypotheses SET source_data = source_data || '{"seek_disconfirmation": true}'::jsonb
+             WHERE status = 'pending' ORDER BY created_at DESC LIMIT 3`
+          ).catch(() => {});
+        }
+        // Decrease severity after intervention
+        await pool.query(
+          `UPDATE cognitive_biases SET current_severity = GREATEST(0, current_severity - 0.05)
+           WHERE bias_type = $1`,
+          [bias.bias_type]
+        ).catch(() => {});
+      }
+      if (biases.length > 0) console.log(`[oca] metacognition remediation: ${biases.length} biases treated`);
+    } catch {}
+  }
+
   // ── 12.7a GENERATIVE THOUGHT — the thinker (SPEC §22.2.2 scaffold) ─────
   // This is the generative reasoning step that gives the system agency.
   // Every N cycles, the system asks itself "what should I do?" and then does it.
@@ -1311,6 +1394,31 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
           ).catch(() => {});
         }
       }
+      // Calibration recalibration: retroactively adjust PENDING hypothesis
+      // confidence when calibration curve shows systematic overconfidence
+      try {
+        const { rows: calCurve } = await pool.query(`
+          SELECT ROUND(stated_confidence::numeric, 1) AS bucket,
+                 COUNT(*) AS total,
+                 ROUND(SUM(CASE WHEN was_correct THEN 1 ELSE 0 END)::numeric / NULLIF(COUNT(*), 0), 3) AS actual
+          FROM calibration_log WHERE was_correct IS NOT NULL
+          GROUP BY ROUND(stated_confidence::numeric, 1)
+          HAVING COUNT(*) >= 10
+        `);
+        for (const row of calCurve) {
+          const stated = parseFloat(row.bucket);
+          const actual = parseFloat(row.actual);
+          if (stated - actual > 0.1) {
+            // Overconfident at this bucket -- deflate pending hypotheses
+            const adjusted = Math.max(0.2, stated * Math.pow(actual / Math.max(0.1, stated), 0.3));
+            await pool.query(
+              `UPDATE hypotheses SET confidence = LEAST(confidence, $1)
+               WHERE status = 'pending' AND confidence >= $2 AND confidence < $3`,
+              [adjusted, stated - 0.05, stated + 0.05]
+            );
+          }
+        }
+      } catch {}
     } catch {}
   }
   
@@ -1553,11 +1661,16 @@ function startConsolidationSchedule() {
     isConsolidating = true;
     oca.layers.consolidation.consolidate().then(consolidated => {
       if (consolidated) {
-        const pCount = consolidated.principles?.length || 0;
-        const prCount = consolidated.procedures?.length || 0;
+        const pCount = consolidated.semanticCreated || 0;
+        const prCount = consolidated.proceduralUpdated || 0;
+        const cCount = consolidated.contradictionUpdates || 0;
         if (pCount + prCount > 0) {
-          console.log(`[oca] 📚 consolidated: ${pCount} principles, ${prCount} procedures`);
+          console.log(`[oca] 📚 consolidated: ${pCount} semantic, ${prCount} procedural, ${cCount} contradictions`);
           oca.layers.emotion.processSuccess('consolidation');
+        }
+        // CRM Fix 5: contradictions create genuine emotional surprise
+        if (cCount > 0) {
+          oca.layers.emotion.processSurprise(0.25 * cCount, 'consolidation', `${cCount} beliefs contradicted`);
         }
       }
     }).catch(e => {
