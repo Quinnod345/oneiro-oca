@@ -4,7 +4,7 @@
 
 A cognitive architecture for an AI system fully embodied in a MacBook Pro. Not a chatbot with tools — a mind with continuous perception, motor control, emotional computation, hypothesis-driven reasoning, metacognitive self-monitoring, and adversarial deliberation. Built on [OpenClaw](https://github.com/openclaw/openclaw).
 
-**v1.0.0** — Full SPEC alignment. Neural signaling. Thinker reconnected.
+**v1.1.0** — Architecture complete. All 208 neurons active. HippoRAG. Body ownership enforced.
 
 ---
 
@@ -71,7 +71,29 @@ Open `http://localhost:3333/web/` for the cognitive dashboard.
 
 ---
 
-## What's New in v1.0.0
+## What's New in v1.1.0
+
+### Architecture Complete
+- All 6 remaining scaffolds replaced with working systems (motor activation, creative pipeline, load balancing, attention modulation, deliberation integration, episodic consolidated status)
+- CRM organic improvement: 6 disconnected cognitive loops connected (calibration, counterfactual, causal, surprise, emotion variance, metacognition remediation)
+- Body ownership enforced on thinker shell commands (no more opening apps when Quinn is present)
+
+### Neural Mind Map (208 neurons)
+- High-definition ring topology visualization of all 208 cognitive neurons
+- Every layer fully encoded: sensory 72%, emotion 88%, hypothesis 81%, memory 100%, executive 100%, creative 88%, metacognition 88%, motor 94%
+- Stable bezier connection bundles showing Hebbian inter-layer strengths
+- Green/red delta glow showing activation changes in real time
+- MLP training stats displayed at center (updates, loss, active weights)
+
+### HippoRAG Memory
+- Hippocampal recall via knowledge graph + Personalized PageRank
+- 207 entities, 3,260 relations, 85,755 mentions
+- Multi-hop retrieval in <100ms (falls back to vector when graph is sparse)
+- Dashboard search interface for hippocampal recall
+
+---
+
+## What's in v1.0.0
 
 ### Multi-Process Architecture
 - Swift `oneiro-sensory` binary: continuous SCStream capture, frame differencing, HID metrics, AVAudioEngine, interoception, temporal cortex, sensory integration into unified PerceptualState
