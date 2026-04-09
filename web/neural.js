@@ -52,6 +52,12 @@ let S = {
   hour: 12, isLateNight: false,
   // Undercurrents & chains
   ucCount: 0, ucTopStrength: 0, activeChains: 0, topChainPriority: 0,
+  // Neural bus / MLP
+  mlpUpdates: 0, mlpLoss: 0, mlpPredError: 0,
+  neuralSparsity: 0.5, neuralMaxWeight: 0,
+  // Inter-layer strengths (top connections)
+  nl_emoSens: 0, nl_execSens: 0, nl_execCreat: 0,
+  nl_creatEmo: 0, nl_hypoSens: 0, nl_metaEmo: 0,
   // Status
   dominant: [], narrative: '',
 };
@@ -198,6 +204,8 @@ function cellColor(val, x, y, t) {
     { hue: 50,  w: S.ch_pride * 0.5 },                                 // burnished gold
     { hue: 160, w: S.ch_aversion * 0.4 + S.ch_disgust * 0.3 },       // murky teal
     { hue: 200, w: S.dr_selfPreserve * 0.2 * (1 - S.battery) },      // steel blue when low battery
+    { hue: 75,  w: S.mlpPredError * 0.8 },                            // lime-green: neural prediction surprise
+    { hue: 195, w: Math.max(S.nl_emoSens, S.nl_execCreat) * 12 },    // teal: strong neural connections active
   ];
 
   // Circular weighted average (handle hue wrapping)
@@ -353,10 +361,56 @@ function buildFrame(t) {
       const cpuV = S.cpu > 0.3 ? snoise(x * 0.5 + T * 6 * S.cpu, y * 0.4) * S.cpu * 0.12 : 0;
 
       // ═══ Layer 10: Memory pressure haze ═══
-      // High mem pressure = foggy, diffuse noise everywhere
       let memHaze = 0;
       if (S.memPressure > 0.7) {
         memHaze = snoise(x * 0.15 + T * 0.4, y * 0.12 + T * 0.3) * (S.memPressure - 0.7) * 0.8;
+      }
+
+      // ═══ Layer 14: MLP prediction error — "surprise wave" ═══
+      // When the MLP is surprised (high prediction error), concentric
+      // ripples radiate from center — the mind noticing something unexpected
+      let mlpSurprise = 0;
+      if (S.mlpPredError > 0.05) {
+        const rippleSpeed = 2 + S.mlpPredError * 6;
+        const rippleFreq = 8 + S.mlpPredError * 15;
+        const ripple = Math.sin(dist * rippleFreq - T * rippleSpeed) * 0.5 + 0.5;
+        const fade = Math.max(0, 1 - dist * 2.5); // fades toward edges
+        mlpSurprise = ripple * fade * S.mlpPredError * 0.4;
+      }
+
+      // ═══ Layer 15: Neural connection flows ═══
+      // Visible streams between layer regions, intensity = connection strength
+      // Each connection occupies a diagonal band across the field
+      let neuralFlow = 0;
+      const maxConn = Math.max(S.nl_emoSens, S.nl_execSens, S.nl_execCreat, S.nl_creatEmo, S.nl_hypoSens, S.nl_metaEmo);
+      if (maxConn > 0.005) {
+        // Each connection is a flowing sine band at a different angle
+        const flows = [
+          { strength: S.nl_emoSens,   angle: 0.3,  offset: 0.15 },  // emotion→sensory
+          { strength: S.nl_execSens,  angle: -0.2, offset: 0.35 },  // executive→sensory
+          { strength: S.nl_execCreat, angle: 0.7,  offset: 0.55 },  // executive→creative
+          { strength: S.nl_creatEmo,  angle: -0.5, offset: 0.75 },  // creative→emotion
+          { strength: S.nl_hypoSens,  angle: 0.1,  offset: 0.25 },  // hypothesis→sensory
+          { strength: S.nl_metaEmo,   angle: -0.4, offset: 0.65 },  // meta→emotion
+        ];
+        for (const f of flows) {
+          if (f.strength < 0.003) continue;
+          const proj = nx * Math.cos(f.angle) + ny * Math.sin(f.angle);
+          const band = Math.sin((proj - f.offset) * 40 + T * (1.5 + f.strength * 10)) * 0.5 + 0.5;
+          const width = 0.02 + f.strength * 0.3;
+          const inBand = Math.abs(proj - f.offset - Math.sin(T * 0.5 + f.offset * 3) * 0.05) < width;
+          if (inBand) neuralFlow += band * f.strength * 8;
+        }
+        neuralFlow = Math.min(0.35, neuralFlow);
+      }
+
+      // ═══ Layer 16: MLP learning pulse ═══
+      // Subtle background glow that brightens each time the MLP updates
+      // (loss decreasing = system is learning its own dynamics)
+      let learnGlow = 0;
+      if (S.mlpUpdates > 0) {
+        const learnPhase = (S.mlpUpdates * 0.1 + T * 0.5) % (Math.PI * 2);
+        learnGlow = Math.max(0, Math.sin(learnPhase) * (1 - S.mlpLoss * 20)) * 0.03;
       }
 
       // ═══ Layer 11: Self-preservation border ═══
@@ -386,7 +440,8 @@ function buildFrame(t) {
       // ═══ Composite ═══
       let val = terrain * 0.2 + pulse * (0.12 + S.arousal * 0.18) +
                 Math.abs(ucWave) * 0.15 + creativeV * 0.5 + tensionV +
-                crmV + defianceV + cpuV + memHaze + preserveV + trustV + shameV;
+                crmV + defianceV + cpuV + memHaze + preserveV + trustV + shameV +
+                mlpSurprise + neuralFlow + learnGlow;
 
       val *= boredomMask;
 
@@ -437,6 +492,10 @@ function buildFrame(t) {
         ch = palChar(P_JAGGED, val); // self-preservation = sharp edges
       } else if (trustV > 0.03) {
         ch = palChar(P_ORGANIC, val + T * 0.2); // trust = organic warmth
+      } else if (mlpSurprise > 0.06) {
+        ch = palChar(P_SPARK, val + T * 0.8); // surprise = sparking
+      } else if (neuralFlow > 0.04) {
+        ch = palChar(P_FLOW, val + T * 1.2); // neural flow = streaming lines
       } else if (tensionV > 0.04) {
         ch = palChar(P_JAGGED, val);
       } else if (Math.abs(ucWave) > 0.04) {
@@ -464,12 +523,13 @@ function buildFrame(t) {
 // ── Polling — fetch from OCA cognitive endpoints ──
 async function pollState() {
   try {
-    const [emotion, crm, sense, pulse, status] = await Promise.all([
+    const [emotion, crm, sense, pulse, status, neuralBus] = await Promise.all([
       fetch(API + '/oca/emotion').then(r => r.json()).catch(() => null),
       fetch(API + '/oca/crm').then(r => r.json()).catch(() => null),
       fetch(API + '/oca/sense').then(r => r.json()).catch(() => null),
       fetch(API + '/pulse').then(r => r.json()).catch(() => null),
       fetch(API + '/oca/status').then(r => r.json()).catch(() => null),
+      fetch(API + '/oca/neural-bus').then(r => r.json()).catch(() => null),
     ]);
 
     // ── Emotion state (primary source of truth) ──
@@ -615,9 +675,26 @@ async function pollState() {
 
     // ── OCA status extras ──
     if (status?.emotion) {
-      // Status gives us the dominant emotions as a handy summary
       S.dominant = status.emotion.dominant || [];
       S.narrative = status.emotion.narrative || '';
+    }
+
+    // ── Neural bus / MLP ──
+    if (neuralBus) {
+      S.mlpUpdates = neuralBus.mlp?.total_updates ?? 0;
+      S.mlpLoss = neuralBus.mlp?.running_loss ?? 0;
+      S.neuralSparsity = neuralBus.weights?.sparsity ?? 0.5;
+      S.neuralMaxWeight = neuralBus.weights?.max_weight ?? 0;
+      // Inter-layer strengths
+      const ils = neuralBus.inter_layer_strengths || {};
+      S.nl_emoSens = ils['emotion->sensory'] ?? 0;
+      S.nl_execSens = ils['executive->sensory'] ?? 0;
+      S.nl_execCreat = ils['executive->creative'] ?? 0;
+      S.nl_creatEmo = ils['creative->emotion'] ?? 0;
+      S.nl_hypoSens = ils['hypothesis->sensory'] ?? 0;
+      S.nl_metaEmo = ils['metacognition->emotion'] ?? 0;
+      // Derive prediction error magnitude from loss trend
+      S.mlpPredError = Math.min(1, Math.sqrt(S.mlpLoss) * 5);
     }
   } catch {}
 }
