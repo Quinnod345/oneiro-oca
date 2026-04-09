@@ -196,17 +196,44 @@ export function encodeMemory(memoryStats) {
   let i = 0;
   const ep = memoryStats.episodic || {};
   const sem = memoryStats.semantic || {};
+  const wm = memoryStats.workingMemory || [];
+  const hippo = memoryStats.hippoGraph || {};
 
+  // Episodic: 3 dims
   v[i++] = clamp01(parseInt(ep.total || 0) / 50000);
   v[i++] = clamp01(parseInt(ep.raw || 0) / 50000);
   v[i++] = clamp01(parseFloat(ep.avg_importance || 0));
+
+  // Semantic: 3 dims
   v[i++] = clamp01(parseInt(sem.total || 0) / 5000);
   v[i++] = clamp01(parseFloat(sem.avg_confidence || 0));
-  v[i++] = clamp01(parseInt(sem.total_evidence || 0) / 5000);
   v[i++] = clamp01(parseInt(sem.total_contradictions || 0) / 1000);
-  v[i++] = clamp01(parseInt(sem.categories || 0) / 500);
 
-  // Working memory activation (remaining 24 dims: 3 per WM slot)
+  // HippoRAG knowledge graph: 4 dims
+  v[i++] = clamp01(parseInt(hippo.entity_count || 0) / 500);
+  v[i++] = clamp01(parseInt(hippo.relation_count || 0) / 5000);
+  v[i++] = clamp01(parseInt(hippo.mention_count || 0) / 100000);
+  v[i++] = clamp01(parseInt(hippo.embedded_count || 0) / 500);
+
+  // Consolidation state: 1 dim (ratio of consolidated to total)
+  const consolidated = parseInt(ep.consolidated || 0);
+  const total = parseInt(ep.total || 1);
+  v[i++] = clamp01(consolidated / Math.max(1, total));
+
+  // Working memory: 7 slots x 3 dims each = 21 dims
+  // Each slot: [type_encoding, salience, has_content]
+  for (let slot = 0; slot < 7; slot++) {
+    const item = wm[slot];
+    if (item) {
+      const typeMap = { perception: 0.2, thought: 0.4, goal: 0.6, vision_analysis: 0.8, interrupt: 1.0 };
+      v[i++] = typeMap[item.content_type] || 0.3;
+      v[i++] = clamp01(item.salience || 0);
+      v[i++] = 1.0; // slot occupied
+    } else {
+      v[i++] = 0; v[i++] = 0; v[i++] = 0; // empty slot
+    }
+  }
+
   return v;
 }
 

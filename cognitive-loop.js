@@ -389,14 +389,26 @@ async function think() {
       const memStats = await pool.query(
         `SELECT (SELECT COUNT(*) FROM episodic_memory) AS ep_total,
                 (SELECT COUNT(*) FILTER (WHERE consolidation_status='raw') FROM episodic_memory) AS ep_raw,
+                (SELECT COUNT(*) FILTER (WHERE consolidation_status='consolidated') FROM episodic_memory) AS ep_consolidated,
                 (SELECT AVG(importance_score) FROM episodic_memory) AS ep_importance,
                 (SELECT COUNT(*) FROM semantic_memory) AS sem_total,
-                (SELECT AVG(confidence) FROM semantic_memory) AS sem_confidence`
+                (SELECT AVG(confidence) FROM semantic_memory) AS sem_confidence,
+                (SELECT COUNT(*) FROM semantic_memory WHERE contradiction_count > 0) AS sem_contradictions`
       ).catch(() => ({rows:[{}]}));
+      const hippoStats = await pool.query(
+        `SELECT (SELECT COUNT(*) FROM entities) AS entity_count,
+                (SELECT COUNT(*) FROM entities WHERE embedding IS NOT NULL) AS embedded_count,
+                (SELECT COUNT(*) FROM entity_relations) AS relation_count,
+                (SELECT COUNT(*) FROM entity_mentions) AS mention_count`
+      ).catch(() => ({rows:[{}]}));
+      const wmItems = await oca.layers.executive.getWorkspace().catch(() => []);
       const ms = memStats.rows[0] || {};
+      const hs = hippoStats.rows[0] || {};
       neuralBus.writeLayer('memory', encoders.encodeMemory({
-        episodic: { total: ms.ep_total, raw: ms.ep_raw, avg_importance: ms.ep_importance },
-        semantic: { total: ms.sem_total, avg_confidence: ms.sem_confidence }
+        episodic: { total: ms.ep_total, raw: ms.ep_raw, consolidated: ms.ep_consolidated, avg_importance: ms.ep_importance },
+        semantic: { total: ms.sem_total, avg_confidence: ms.sem_confidence, total_contradictions: ms.sem_contradictions },
+        hippoGraph: hs,
+        workingMemory: wmItems
       }));
     } catch {}
     try {
