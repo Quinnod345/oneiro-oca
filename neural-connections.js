@@ -45,22 +45,21 @@ async function updateExisting({
   label,
   metadata,
 }) {
-  // Bounded update: use diminishing returns as strength approaches 1.0
-  // New formula: strength + delta * (1 - strength) -- asymptotically approaches 1.0
+  // Bounded update: diminishing returns as strength approaches 0.95
   const { rows } = await pool.query(
     `UPDATE neural_connections
      SET strength = LEAST(0.95, strength + $5 * (1.0 - strength)),
          activation_count = activation_count + 1,
          last_activated = NOW(),
-         label = COALESCE($7, label),
-         metadata = COALESCE(neural_connections.metadata, '{}'::jsonb) || $8::jsonb
+         label = COALESCE($6, label),
+         metadata = COALESCE(neural_connections.metadata, '{}'::jsonb) || $7::jsonb
      WHERE from_layer = $1
        AND (($2::INT IS NULL AND from_id IS NULL) OR from_id = $2::INT)
        AND to_layer = $3
        AND (($4::INT IS NULL AND to_id IS NULL) OR to_id = $4::INT)
-       AND connection_type = $9
+       AND connection_type = $8
      RETURNING *`,
-    [fromLayer, fromId, toLayer, toId, strengthDelta, baseStrength, label, JSON.stringify(metadata || {}), connectionType]
+    [fromLayer, fromId, toLayer, toId, strengthDelta, label, JSON.stringify(metadata || {}), connectionType]
   );
   return rows[0] || null;
 }
