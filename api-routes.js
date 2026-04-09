@@ -1000,7 +1000,9 @@ ocaRouter.post('/oca/intend/complete', async (req, res) => {
 ocaRouter.get('/oca/crm', async (req, res) => {
   try {
     const crm = await import('./evaluation/chinese-room-meter.js');
+    const crmMlp = await import('./evaluation/crm-mlp.js');
     const result = await crm.default.compute();
+    result.mlp_status = crmMlp.default.getStatus();
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1112,6 +1114,7 @@ ocaRouter.get('/oca/neural-bus/full', async (req, res) => {
       workspace, previous, delta,
       layers, offsets, layerActivations, interLayerWeights,
       mlp: mlp.default.getStatus(),
+      mlp_last_step: mlp.default.getLastStep(),
       weights: bus.default.getWeightStats()
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1151,7 +1154,8 @@ ocaRouter.get('/oca/neural-bus', async (req, res) => {
       layers: bus.LAYER_DIMS,
       weights: bus.default.getWeightStats(),
       inter_layer_strengths: bus.default.getInterLayerStrengths(),
-      mlp: mlp.default.getStatus()
+      mlp: mlp.default.getStatus(),
+      mlp_last_step: mlp.default.getLastStep()
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1194,7 +1198,11 @@ ocaRouter.post('/oca/succession/reground/:id', async (req, res) => {
     const succession = await import('./succession.js');
     const result = await succession.default.executeRegrounding(parseInt(req.params.id));
     res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/not found/i.test(msg)) return res.status(404).json({ error: msg });
+    res.status(500).json({ error: msg });
+  }
 });
 
 ocaRouter.get('/oca/body-inventory', async (req, res) => {

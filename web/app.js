@@ -88,20 +88,52 @@ async function updateCRM() {
     document.getElementById('crmScoreLarge').textContent = `${Math.round(score * 100)}`;
     document.getElementById('crmInterpretation').textContent = data.interpretation || '';
 
-    // Components
+    // Components + MLP prediction overlay
     const container = document.getElementById('componentList');
+    const mlpErrors = data.mlp_surprise || {};
     if (data.components) {
         container.innerHTML = '';
         for (const [name, comp] of Object.entries(data.components)) {
             const s = comp.score ?? 0;
             const color = s > 0.7 ? 'var(--seafoam)' : s > 0.4 ? 'var(--gold)' : 'var(--ember)';
+            const mlpErr = mlpErrors[name];
+            const surpriseTag = mlpErr?.surprised ? ' <span style="color:var(--ember);font-size:8px">SURPRISE</span>' : '';
+            const mlpPred = mlpErr?.predicted != null ? `<span style="font-size:8px;color:var(--dim);margin-left:4px">mlp:${Math.round(mlpErr.predicted*100)}</span>` : '';
             container.innerHTML += `
                 <div class="comp-row">
-                    <span class="comp-name">${name}</span>
+                    <span class="comp-name">${name}${surpriseTag}</span>
                     <div class="comp-bar"><div class="comp-fill" style="width:${s*100}%;background:${color}"></div></div>
-                    <span class="comp-val" style="color:${color}">${Math.round(s*100)}</span>
+                    <span class="comp-val" style="color:${color}">${Math.round(s*100)}${mlpPred}</span>
                 </div>`;
         }
+    }
+
+    // CRM MLP dedicated panel in left column
+    const crmMlpPanel = document.getElementById('crmMlpPanel');
+    if (crmMlpPanel && data.mlp_status) {
+        const ms = data.mlp_status;
+        const perComp = ms.per_component_running_error || {};
+        let html = `<div class="mlp-panel-title">CRM MLP (18d &rarr; 12h &rarr; 9)</div>`;
+        html += `<div class="mlp-panel-row"><span class="mlp-panel-label">Updates</span><span class="mlp-panel-value">${ms.total_updates}</span></div>`;
+        html += `<div class="mlp-panel-row"><span class="mlp-panel-label">Loss</span><span class="mlp-panel-value" style="color:var(--gold)">${(ms.running_loss || 0).toFixed(5)}</span></div>`;
+        const lossW = Math.min(100, (ms.running_loss || 0) * 500);
+        html += `<div class="mlp-panel-bar"><div class="mlp-panel-bar-fill" style="width:${lossW}%;background:var(--gold)"></div></div>`;
+        html += `<div class="mlp-panel-row"><span class="mlp-panel-label">Params</span><span class="mlp-panel-value">${(ms.total_params || 0).toLocaleString()}</span></div>`;
+
+        if (Object.keys(perComp).length > 0) {
+            html += `<div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:6px;margin-bottom:4px">Per-component prediction error:</div>`;
+            html += '<div class="mlp-component-grid">';
+            for (const [comp, err] of Object.entries(perComp)) {
+                const errVal = Number(err) || 0;
+                const color = errVal > 0.15 ? 'var(--ember)' : errVal > 0.08 ? 'var(--gold)' : 'var(--seafoam)';
+                html += `<div class="mlp-component-cell ${errVal > 0.15 ? 'surprised' : ''}">
+                    <div style="color:var(--text-mid)">${comp.slice(0, 8)}</div>
+                    <div style="color:${color};font-weight:500">${(errVal * 100).toFixed(1)}%</div>
+                </div>`;
+            }
+            html += '</div>';
+        }
+        crmMlpPanel.innerHTML = html;
     }
 }
 
@@ -524,18 +556,38 @@ async function updateMLP() {
     const topConns = Object.entries(ils).sort((a,b) => b[1]-a[1]).slice(0, 5);
     const lossWidth = Math.min(100, mlp.running_loss * 1000);
 
+    const lastStep = data.mlp_last_step;
+
     let html = '';
-    html += `<div class="mlp-stat"><span class="mlp-stat-label">Training Updates</span><span class="mlp-stat-value">${mlp.total_updates}</span></div>`;
-    html += `<div class="mlp-stat"><span class="mlp-stat-label">Running Loss</span><span class="mlp-stat-value" style="color:var(--gold)">${mlp.running_loss?.toFixed(6) || '0'}</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Cognitive MLP (208d, residual)</span><span class="mlp-stat-value">${mlp.total_updates} updates</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Loss</span><span class="mlp-stat-value" style="color:var(--gold)">${mlp.running_loss?.toFixed(6) || '0'}</span></div>`;
     html += `<div class="mlp-loss-bar"><div class="mlp-loss-fill" style="width:${lossWidth}%"></div></div>`;
-    html += `<div class="mlp-stat"><span class="mlp-stat-label">Parameters</span><span class="mlp-stat-value">${(mlp.total_params || 0).toLocaleString()}</span></div>`;
-    html += `<div class="mlp-stat"><span class="mlp-stat-label">Weights Nonzero</span><span class="mlp-stat-value">${(weights.nonzero || 0).toLocaleString()} (${((1 - (weights.sparsity || 0)) * 100).toFixed(1)}%)</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Params</span><span class="mlp-stat-value">${(mlp.total_params || 0).toLocaleString()}</span></div>`;
+    html += `<div class="mlp-stat"><span class="mlp-stat-label">Hebbian weights</span><span class="mlp-stat-value">${(weights.nonzero || 0).toLocaleString()} (${((1 - (weights.sparsity || 0)) * 100).toFixed(1)}% active)</span></div>`;
 
     if (topConns.length > 0) {
-        html += `<div class="mlp-connections">Top connections:<br>`;
-        html += topConns.map(([k,v]) => `  ${k} = ${v}`).join('<br>');
-        html += '</div>';
+        html += `<div class="mlp-connections">Top: ${topConns.map(([k,v]) => `${k}=${v}`).join(', ')}</div>`;
     }
+
+    // Per-layer prediction RMSE from last step
+    if (lastStep?.per_layer_rmse) {
+        const sorted = Object.entries(lastStep.per_layer_rmse).sort((a,b) => b[1]-a[1]);
+        const top3 = sorted.slice(0, 3);
+        html += `<div style="font-family:var(--mono);font-size:8px;color:var(--slate);margin-top:6px;letter-spacing:1px">LAST-STEP RMSE</div>`;
+        for (const [layer, rmse] of top3) {
+            const barW = Math.min(100, rmse * 200);
+            const color = rmse > 0.25 ? 'var(--ember)' : rmse > 0.1 ? 'var(--gold)' : 'var(--seafoam)';
+            html += `<div class="mlp-stat"><span class="mlp-stat-label">${layer}</span><span class="mlp-stat-value" style="color:${color}">${rmse.toFixed(4)}</span></div>`;
+            html += `<div class="mlp-loss-bar"><div class="mlp-loss-fill" style="width:${barW}%;background:${color}"></div></div>`;
+        }
+        if (lastStep.residual_magnitude != null) {
+            html += `<div class="mlp-stat"><span class="mlp-stat-label">Δ magnitude</span><span class="mlp-stat-value">${lastStep.residual_magnitude.toFixed(5)}</span></div>`;
+        }
+    }
+
+    html += `<div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">3 MLPs total — ${((mlp.total_params || 0) + 345 + 409).toLocaleString()} trainable params</div>`;
+    html += `<div style="font-family:var(--mono);font-size:8px;color:var(--dim)">CRM MLP in left column — Trader MLP in trading panel</div>`;
+
     container.innerHTML = html;
 }
 
@@ -814,6 +866,176 @@ async function updateHippoStats() {
     }
 }
 
+// ═══ TRADING MINDS ═══
+
+async function updateTrader() {
+    const data = await f('/trader');
+    if (!data) {
+        document.getElementById('traderGrid').innerHTML = '<div class="empty-state">Trading API offline</div>';
+        return;
+    }
+
+    const { crypto, robinhood, combinedTotal } = data;
+    const cp = crypto?.portfolio;
+    const rp = robinhood?.portfolio;
+
+    // Badges
+    const badgesEl = document.getElementById('traderBadges');
+    let badgeHtml = '';
+    if (crypto) badgeHtml += `<span class="trader-badge ${crypto.running ? 'live' : 'stopped'}">${crypto.running ? 'crypto live' : 'crypto off'}</span>`;
+    if (robinhood) badgeHtml += `<span class="trader-badge ${robinhood.running ? 'live' : 'stopped'}">${robinhood.running ? 'robinhood live' : 'robinhood off'}</span>`;
+    badgesEl.innerHTML = badgeHtml;
+
+    // Combined total with chain breakdown
+    const combinedEl = document.getElementById('traderCombined');
+    const cryptoTotal = cp?.totalValueUsd || 0;
+    const rhTotal = rp?.total_equity || 0;
+    const ethVal = cp?.ethValueUsd || 0;
+    const solVal = cp?.solValueUsd || 0;
+    const ethBal = cp?.ethBalance || 0;
+    const solBal = cp?.solBalance || 0;
+
+    combinedEl.innerHTML = `
+        <div class="trader-combined-total">$${(combinedTotal || 0).toFixed(2)}</div>
+        <div class="trader-combined-label">TOTAL PORTFOLIO</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-mid);margin-top:6px;display:flex;gap:16px;justify-content:center">
+            <span>Crypto $${cryptoTotal.toFixed(2)}</span>
+            <span>Stocks $${rhTotal.toFixed(2)}</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;display:flex;gap:16px;justify-content:center">
+            <span>ETH: ${ethBal.toFixed(4)} ($${ethVal.toFixed(2)})</span>
+            <span>SOL: ${solBal.toFixed(4)} ($${solVal.toFixed(2)})</span>
+            ${rp?.buying_power != null ? `<span>RH BP: $${rp.buying_power.toFixed(2)}</span>` : ''}
+        </div>`;
+
+    // Trader MLP panel
+    const traderMlpPanel = document.getElementById('traderMlpPanel');
+    if (traderMlpPanel) {
+        const decisions = crypto?.decisions || [];
+        const mlpDecisions = decisions.filter(d => d.mlp != null);
+        const trainEvents = decisions.filter(d => d.action === 'mlp_train');
+        const lastTrain = trainEvents.slice(-1)[0];
+        const wins = trainEvents.filter(d => d.profitable).length;
+        const losses = trainEvents.filter(d => d.profitable === false || (d.profitable == null && d.pnl_pct < 0)).length;
+
+        let mHtml = `<div class="mlp-panel-title">Trader MLP (24d &rarr; 16h &rarr; 1)</div>`;
+        if (lastTrain) {
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Updates</span><span class="mlp-panel-value">${lastTrain.mlp_updates || trainEvents.length}</span></div>`;
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Loss</span><span class="mlp-panel-value" style="color:var(--gold)">${(lastTrain.mlp_loss || 0).toFixed(4)}</span></div>`;
+            const lossW = Math.min(100, (lastTrain.mlp_loss || 0) * 100);
+            mHtml += `<div class="mlp-panel-bar"><div class="mlp-panel-bar-fill" style="width:${lossW}%;background:var(--gold)"></div></div>`;
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Record</span><span class="mlp-panel-value"><span style="color:var(--seafoam)">${wins}W</span> / <span style="color:var(--ember)">${losses}L</span></span></div>`;
+        } else if (mlpDecisions.length > 0) {
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Status</span><span class="mlp-panel-value">Passive (${mlpDecisions.length} scored)</span></div>`;
+            const avgConf = mlpDecisions.reduce((s, d) => s + d.mlp, 0) / mlpDecisions.length;
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Avg confidence</span><span class="mlp-panel-value">${avgConf.toFixed(3)}</span></div>`;
+        } else {
+            mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Status</span><span class="mlp-panel-value" style="color:var(--dim)">Waiting for first trade</span></div>`;
+        }
+        mHtml += `<div class="mlp-panel-row"><span class="mlp-panel-label">Params</span><span class="mlp-panel-value">409</span></div>`;
+        traderMlpPanel.innerHTML = mHtml;
+    }
+
+    // Positions grid — split by chain
+    const gridEl = document.getElementById('traderGrid');
+    let gridHtml = '';
+
+    if (cp) {
+        const positions = cp.positions || {};
+        const posArr = Object.entries(positions).sort((a, b) => (b[1].valueUsd || 0) - (a[1].valueUsd || 0));
+        const solPositions = posArr.filter(([, p]) => p.chain === 'solana');
+        const ethPositions = posArr.filter(([, p]) => p.chain !== 'solana');
+
+        if (solPositions.length > 0 || solBal > 0) {
+            gridHtml += `<div class="trader-portfolio">
+                <div class="trader-portfolio-title">Solana</div>
+                <div class="trader-portfolio-total">$${(solVal + solPositions.reduce((s, [,p]) => s + (p.valueUsd||0), 0)).toFixed(2)}</div>`;
+            for (const [sym, pos] of solPositions.slice(0, 10)) {
+                const val = pos.valueUsd || 0;
+                gridHtml += `<div class="trader-pos-row">
+                    <span><span class="trader-pos-symbol">${esc(pos.ticker || sym)}</span></span>
+                    <span class="trader-pos-value">$${val.toFixed(2)}</span>
+                </div>`;
+            }
+            if (solPositions.length === 0) gridHtml += `<div style="font-family:var(--mono);font-size:9px;color:var(--dim);padding:4px 0">No token positions yet</div>`;
+            gridHtml += '</div>';
+        }
+
+        if (ethPositions.length > 0 || ethBal > 0.001) {
+            gridHtml += `<div class="trader-portfolio">
+                <div class="trader-portfolio-title">Ethereum</div>
+                <div class="trader-portfolio-total">$${(ethVal + ethPositions.reduce((s, [,p]) => s + (p.valueUsd||0), 0)).toFixed(2)}</div>`;
+            for (const [sym, pos] of ethPositions.slice(0, 8)) {
+                const val = pos.valueUsd || 0;
+                gridHtml += `<div class="trader-pos-row">
+                    <span><span class="trader-pos-symbol">${esc(pos.ticker || sym)}</span></span>
+                    <span class="trader-pos-value">$${val.toFixed(2)}</span>
+                </div>`;
+            }
+            gridHtml += '</div>';
+        }
+    }
+
+    if (rp) {
+        const positions = rp.positions || [];
+        const total = rp.total_equity || 0;
+        gridHtml += `<div class="trader-portfolio">
+            <div class="trader-portfolio-title">Robinhood</div>
+            <div class="trader-portfolio-total">$${total.toFixed(2)}</div>`;
+        for (const pos of positions.slice(0, 8)) {
+            const val = (pos.quantity || 0) * (pos.current_price || 0);
+            const pnl = pos.pnl_pct;
+            gridHtml += `<div class="trader-pos-row">
+                <span><span class="trader-pos-symbol">${esc(pos.ticker || '?')}</span></span>
+                <span><span class="trader-pos-value">$${val.toFixed(2)}</span>${pnl != null ? `<span class="trader-pos-pnl ${pnl >= 0 ? 'positive' : 'negative'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</span>` : ''}</span>
+            </div>`;
+        }
+        gridHtml += '</div>';
+    }
+
+    gridEl.innerHTML = gridHtml || '<div class="empty-state">No portfolio data</div>';
+
+    // Decisions
+    const decisionsEl = document.getElementById('traderDecisions');
+    const decisions = crypto?.decisions || [];
+    if (decisions.length > 0) {
+        let dHtml = '<div class="trader-section-title">Recent Trades</div>';
+        for (const d of decisions.slice(-8).reverse()) {
+            const action = (d.action || 'hold').toLowerCase();
+            const actionClass = action.includes('buy') || action.includes('fomo') || action.includes('dip') ? 'buy'
+                : action.includes('sell') || action.includes('exit') || action.includes('trim') || action.includes('capitulation') || action.includes('profit') || action.includes('greed') || action.includes('liquidation') ? 'sell' : 'hold';
+            const chain = d.chain || 'eth';
+            dHtml += `<div class="trader-decision-row">
+                <span class="trader-action-badge ${actionClass}">${esc(d.action || '?')}</span>
+                <span class="trader-pos-symbol">${esc(d.symbol || '')}</span>
+                <span style="font-size:8px;color:var(--dim)">${chain}</span>
+                ${d.amount != null ? `<span class="trader-pos-value">$${d.amount.toFixed(2)}</span>` : ''}
+                ${d.score != null ? `<span style="font-size:8px;color:var(--slate)">s${d.score}</span>` : ''}
+                ${d.mlp != null ? `<span style="font-size:8px;color:${d.mlp > 0.5 ? 'var(--seafoam)' : 'var(--ember)'}">mlp:${d.mlp.toFixed(2)}</span>` : ''}
+                <span class="trader-decision-ts">${d.ts ? ago(d.ts) : ''}</span>
+            </div>`;
+        }
+        decisionsEl.innerHTML = dHtml;
+    } else {
+        decisionsEl.innerHTML = '';
+    }
+
+    // Live log (last 12 lines)
+    const auditEl = document.getElementById('traderAudit');
+    const logText = crypto?.recentLog || '';
+    if (logText) {
+        const lines = logText.split('\n').filter(l => l.trim()).slice(-12);
+        let lHtml = '<div class="trader-section-title">Live Activity</div><div class="trader-log-box">';
+        for (const line of lines) {
+            lHtml += `<div class="trader-log-line">${esc(line)}</div>`;
+        }
+        lHtml += '</div>';
+        auditEl.innerHTML = lHtml;
+    } else {
+        auditEl.innerHTML = '';
+    }
+}
+
 // ═══ INIT ═══
 
 async function refreshAll() {
@@ -833,6 +1055,7 @@ async function refreshAll() {
         updateMLP(),
         updateHeatmap(),
         updateHippoStats(),
+        updateTrader(),
     ]);
 }
 

@@ -4,7 +4,7 @@
 
 A cognitive architecture for an AI system fully embodied in a MacBook Pro. Not a chatbot with tools — a mind with continuous perception, motor control, emotional computation, hypothesis-driven reasoning, metacognitive self-monitoring, and adversarial deliberation. Built on [OpenClaw](https://github.com/openclaw/openclaw).
 
-**v1.1.0** — Architecture complete. All 208 neurons active. HippoRAG. Body ownership enforced.
+**v1.2.0** — Neural MLP v2: residual-delta training, per-layer weighted loss, metacognitive prediction-mismatch routing, observability API.
 
 ---
 
@@ -24,7 +24,7 @@ L1   Sensory Cortex       — continuous visual/audio/tactile/intero/temporal (S
 L0   Hardware Substrate   — macOS, IOKit, CoreGraphics, ScreenCaptureKit, Accessibility
 ```
 
-**Neural Signaling Layer:** 208-dimensional shared activation workspace. Layers communicate through dense float vectors, not text events. Connection weights update via Hebbian learning. A trainable MLP (26,896 parameters) predicts next-cycle cognitive dynamics — prediction errors drive surprise-based learning.
+**Neural Signaling Layer:** 208-dimensional shared activation workspace. Layers communicate through dense float vectors, not text events. Connection weights update via Hebbian learning. A trainable MLP (26,896 parameters) predicts next-cycle cognitive **residuals** (Δ) with per-layer weighted loss — prediction errors drive surprise-based learning and feed rate-limited metacognitive observations when specific layers misbehave.
 
 **Thinker:** Generative LLM reasoning step that gives the system agency. Every 5 cycles, assembles full cognitive context and asks "what should I do?" — then executes via shell, code editing, Claude Code escalation, or motor cortex.
 
@@ -71,6 +71,18 @@ Open `http://localhost:3333/web/` for the cognitive dashboard.
 
 ---
 
+## What's New in v1.2.0
+
+### Neural MLP v2 (Residual Predictive Processing)
+- MLP now predicts **residuals** (Δ = next_state − current_state) instead of raw next-state vectors, improving convergence on fast-changing dynamics
+- **Per-layer weighted loss**: hypothesis, executive, and metacognition slices weighted 1.5x so the gradient respects behavioral importance, not just variance
+- **Metacognitive routing**: per-layer prediction errors above threshold insert rate-limited `prediction_mismatch` rows into `metacognitive_observations`, giving the metacognition subsystem direct visibility into which layers are behaving unpredictably
+- **Observability API**: `GET /oca/neural-bus` and `/oca/neural-bus/full` now include `mlp_last_step` with per-layer RMSE, residual magnitude, and weighted loss
+- **Dashboard**: MLP panel shows residual mode, top 3 layers by RMSE with color-coded bars, and delta magnitude
+- Weight checkpoint schema versioned (v2); old v1 checkpoints auto-invalidated on load
+
+---
+
 ## What's New in v1.1.0
 
 ### Architecture Complete
@@ -104,7 +116,7 @@ Open `http://localhost:3333/web/` for the cognitive dashboard.
 - 208-dim shared activation workspace replacing text/JSON events
 - 8 layer encoders (sensory 64d, emotion 32d, hypothesis 16d, memory 32d, executive 16d, creative 16d, metacognition 16d, motor 16d)
 - 43,264-weight connection matrix with Hebbian updates + continuous decay
-- Trainable 2-layer MLP (208→64→208) for predictive processing
+- Trainable 2-layer MLP (208→64→208) for residual predictive processing with per-layer weighted loss
 
 ### Thinker Reconnected
 - Generative LLM reasoning integrated into cognitive loop
@@ -169,7 +181,9 @@ Open `http://localhost:3333/web/` for the cognitive dashboard.
 ### Neural
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/oca/neural-bus` | Workspace dims, weight stats, inter-layer strengths, MLP status |
+| GET | `/oca/neural-bus` | Workspace dims, weight stats, inter-layer strengths, MLP status + last-step diagnostics |
+| GET | `/oca/neural-bus/full` | Full workspace vectors, layer activations, inter-layer weights, MLP last-step per-layer RMSE |
+| GET | `/oca/neural-bus/heatmap` | Layer-to-layer connection matrix + activation summaries |
 | GET | `/oca/neural` | Live synapse graph |
 
 ### Identity & Cohabitation
@@ -205,7 +219,7 @@ cognitive/
 ├── index.js                   # Orchestrator tying all layers together
 ├── event-bus.js               # Cross-process IPC (pg NOTIFY + Unix sockets)
 ├── neural-bus.js              # 208-dim vector signaling layer
-├── neural-mlp.js              # Trainable predictive model (26,896 params)
+├── neural-mlp.js              # Trainable residual predictive model (26,896 params, per-layer weighted loss)
 ├── neural-encoders.js         # Per-layer state → float vector encoders
 ├── neural-connections.js      # Synapse graph persistence + maintenance
 ├── thinker-bridge.js          # Generative reasoning with action dispatch
