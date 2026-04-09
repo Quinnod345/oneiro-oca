@@ -21,7 +21,7 @@ async function extractQueryEntities(query) {
   try {
     const response = await llm.messages.create({
       model: 'claude-sonnet-4-6',
-      system: 'Extract named entities and key concepts from the query. Return a JSON array of strings. Only entities, no explanations. Example: ["Quinn", "Logic Pro", "music production"]',
+      system: 'Extract named entities and key concepts from the query. Return a JSON array of strings. Only entities, no explanations. Example: ["Quinn", "oneiro-core", "PostgreSQL"]',
       messages: [{ role: 'user', content: query }],
       max_tokens: 200,
       temperature: 0
@@ -55,7 +55,7 @@ function extractEntitiesHeuristic(query) {
   // Known patterns
   const patterns = [
     /\b(?:Quinn|Oneiro|OCA|OpenClaw|EOSAI|InnerEcho)\b/gi,
-    /\b(?:Logic Pro|Cursor|Terminal|Xcode|Telegram|Discord|Arc|Dia)\b/gi,
+    /\b(?:Cursor|Terminal|Xcode|Telegram|Discord|Arc|Dia)\b/gi,
     /\b(?:MacBook|Apple|Swift|Node\.js|PostgreSQL|Claude)\b/gi,
   ];
   for (const pat of patterns) {
