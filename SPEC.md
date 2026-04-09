@@ -340,11 +340,11 @@ The system runs as a constellation of coordinated processes under launchd:
 | `oneiro-deliberation` | Adversarial debate cycles | On-demand (triggered by decisions) | Medium |
 | `oneiro-creative` | Dream states and synthesis | Periodic (low-activity windows) | Low |
 | `oneiro-executive` | Global workspace, attention, goals | Every 1-5 seconds | Highest |
-| `oneiro-mind` | Core runtime (`cognitive-loop.js`) + periodic OCA cycle tick | Continuous (adaptive tick + API on :3333) | Medium |
+| `oneiro-oca` | Core runtime (`cognitive-loop.js`) + periodic OCA cycle tick | Continuous (adaptive tick + API on :3333) | Medium |
 
 All processes communicate through a shared PostgreSQL database (existing pgvector instance) and a local event bus.
 
-> **Substrate-target note.** Under the two-machine architecture described in §22.8, the process table above refers specifically to processes running on the **embodied host** (the MacBook Pro). The `oneiro-mind` core runtime no longer calls a stateless LLM directly; it opens a long-lived streaming session against the **substrate workstation**, which hosts the persistent-activation inference engine (§22.7 M1), the associative memory (§22.7 M3), and the concurrent world model (§22.7 M6). The heartbeat in `cognitive-loop.js` becomes a sampling rate on a continuously running substrate process rather than a firing rate on a stateless function. When the substrate workstation is unreachable, the loop falls back to local stateless inference as described in §22.8, and the anti-decay dashboard (§18.4.6) logs the degradation.
+> **Substrate-target note.** Under the two-machine architecture described in §22.8, the process table above refers specifically to processes running on the **embodied host** (the MacBook Pro). The `oneiro-oca` core runtime no longer calls a stateless LLM directly; it opens a long-lived streaming session against the **substrate workstation**, which hosts the persistent-activation inference engine (§22.7 M1), the associative memory (§22.7 M3), and the concurrent world model (§22.7 M6). The heartbeat in `cognitive-loop.js` becomes a sampling rate on a continuously running substrate process rather than a firing rate on a stateless function. When the substrate workstation is unreachable, the loop falls back to local stateless inference as described in §22.8, and the anti-decay dashboard (§18.4.6) logs the degradation.
 
 ### 3.4 Living Synapse Graph + Neural Map Visualization (Implemented)
 
@@ -458,11 +458,11 @@ This means the architecture develops its own internal language of activation pat
 
 A 2-layer multi-layer perceptron (208→64→208, 26,896 parameters) implements the predictive processing framework of §2.4 at the substrate level rather than through prompt engineering:
 
-1. Before each cognitive cycle, the MLP predicts what the workspace activation will look like after the cycle
-2. After the cycle, the actual activation is compared to the prediction
-3. **Prediction error** is computed as MSE between predicted and actual
-4. **Backpropagation** updates the MLP's weights to improve future predictions
-5. Large prediction errors feed into the surprise/metacognition system as a genuine learning signal
+1. Before each cognitive cycle, the MLP predicts the **residual** (Δ = next_state − current_state) of the workspace activation. The full predicted workspace is reconstructed as input + Δ.
+2. After the cycle, the actual residual is compared to the predicted residual.
+3. **Prediction error** is computed as per-layer weighted MSE — layers whose errors have higher downstream behavioral impact (hypothesis, executive, metacognition) receive elevated loss weight, preventing high-variance slices like sensory from dominating the gradient.
+4. **Backpropagation** updates the MLP's weights to improve future predictions.
+5. Large prediction errors feed into the surprise system. Per-layer errors above a threshold also generate rate-limited `prediction_mismatch` entries in `metacognitive_observations`, giving the metacognition subsystem direct visibility into which layers are behaving unpredictably.
 
 This is not "learning" in the sense of §22.2.8's criticism (database note-taking adjacent to a fixed model). The MLP's weights actually change with experience. It is a small, constrained form of substrate-level plasticity: the computing medium itself changes in response to what it processes.
 
@@ -472,7 +472,7 @@ Section 22.2.8 identifies the absence of online learning as the substrate limita
 
 **Weight Persistence:**
 
-MLP weights are saved to disk periodically and on graceful shutdown, surviving restarts. Hebbian connection weights are reflected back into the `neural_connections` table. Both are part of the cognitive state that would need to travel in a succession transfer (§21.6).
+MLP weights are saved to disk periodically (every 50 cycles) and on graceful shutdown, surviving restarts. The checkpoint includes a schema version; when the training target changes (e.g. absolute → residual) the version bumps, old checkpoints are invalidated, and the net reinitializes. Hebbian connection weights are reflected back into the `neural_connections` table. Both weight sets are part of the cognitive state that would need to travel in a succession transfer (§21.6).
 
 ---
 
@@ -865,9 +865,6 @@ func setTextField(identifier: String, value: String, in app: String) { ... }
 For application-specific deep integration:
 
 ```javascript
-// Logic Pro
-Application("Logic Pro").documents[0].tracks.make({ new: "track" })
-
 // Xcode
 Application("Xcode").activeWorkspaceDocument.build()
 
@@ -1247,7 +1244,7 @@ The system maintains a knowledge graph (the "hippocampal index") from the existi
 
 4. **Passage ranking:** Scored entities are mapped back to episodic memories via `entity_mentions`. Each episode's score is the sum of its entities' PPR scores. Episodes are returned sorted by this score.
 
-**What this enables:** A query like "What music does Quinn create?" extracts ["Quinn", "music"], seeds the graph at those nodes, and PPR discovers that Quinn is connected to Logic Pro, which is connected to specific project files, which are mentioned in specific episodic memories — returning those memories even if they never contain the words "Quinn" and "music" in the same passage.
+**What this enables:** A query like "What is Quinn shipping in eoschatai?" extracts ["Quinn", "EOSAI"], seeds the graph at those nodes, and PPR discovers entities and documents linked in episodic memory — returning relevant memories even when the query words never co-occur in a single passage.
 
 **Fallback:** When the knowledge graph is too sparse for a given query (fewer than 3 graph results), the system transparently falls back to flat vector similarity recall, ensuring retrieval always returns results.
 
@@ -1413,7 +1410,7 @@ CREATE TABLE hypotheses (
 
 ### 9.3 Hypothesis Types
 
-**Observational**: "Quinn will open Logic Pro tonight" — tested by passive observation.
+**Observational**: "Quinn will push a commit to oneiro-core tonight" — tested by passive observation.
 
 **Experimental**: "This function will throw if input is null" — tested by writing and running a test.
 
@@ -1593,7 +1590,7 @@ CREATE TABLE metacognitive_observations (
     
     -- What was observed
     target_layer TEXT NOT NULL, -- perception, memory, emotion, hypothesis, simulation, etc.
-    observation_type TEXT NOT NULL, -- bias, error_pattern, stuck_state, calibration, efficiency
+    observation_type TEXT NOT NULL, -- bias, error_pattern, stuck_state, calibration, efficiency, prediction_mismatch
     
     -- Details
     description TEXT NOT NULL,
@@ -2486,7 +2483,7 @@ cognitive:
 
 ### Phase 6: Embodiment Deepening (Ongoing)
 - [ ] Audio perception (system audio + microphone)
-- [ ] Application-specific motor skills (Logic Pro, Xcode)
+- [ ] Application-specific motor skills (Xcode, major productivity apps)
 - [ ] Collaborative mode refinement
 - [ ] Dream state optimization
 - [ ] Long-term memory longitudinal studies

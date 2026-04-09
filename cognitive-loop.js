@@ -52,6 +52,7 @@ let autonomicCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
 let lastNeuralPrediction = null; // MLP prediction from pre-cycle, consumed in post-cycle
+let lastPredMismatchInsert = 0;  // rate-limit metacog inserts (ms timestamp)
 
 // ── Operating-time accumulator (SPEC §18.4.1) ──
 let operatingTimeSessionStart = Date.now();
@@ -432,7 +433,10 @@ async function think() {
     } catch {}
 
     const currentActivation = neuralBus.getWorkspace();
-    const predicted = neuralMLP.predict(currentActivation);
+    const delta = neuralMLP.predict(currentActivation);
+    // Reconstruct full predicted workspace: input + predicted delta
+    const predicted = new Float32Array(currentActivation.length);
+    for (let i = 0; i < predicted.length; i++) predicted[i] = currentActivation[i] + delta[i];
     lastNeuralPrediction = predicted;
   } catch (e) {
     console.error('[oca] neural bus pre-cycle error:', e.message);
@@ -1612,6 +1616,32 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       const predError = neuralBus.computePredictionError(lastNeuralPrediction);
       if (predError.magnitude > 0.3) {
         oca.layers.emotion.processSurprise(predError.magnitude * 0.5, 'neural_prediction');
+      }
+
+      // Route high per-layer error into metacognitive_observations (rate-limited: 5 min)
+      const PRED_MISMATCH_COOLDOWN_MS = 5 * 60 * 1000;
+      const PRED_MISMATCH_THRESHOLD = 0.25;
+      const now = Date.now();
+      if (now - lastPredMismatchInsert > PRED_MISMATCH_COOLDOWN_MS) {
+        const offenders = Object.entries(predError.perLayer)
+          .filter(([, rmse]) => rmse > PRED_MISMATCH_THRESHOLD)
+          .sort((a, b) => b[1] - a[1]);
+        if (offenders.length > 0) {
+          lastPredMismatchInsert = now;
+          const worst = offenders[0];
+          const severity = Math.min(0.7, 0.3 + worst[1]);
+          pool.query(
+            `INSERT INTO metacognitive_observations (target_layer, observation_type, description, evidence, severity)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+              worst[0],
+              'prediction_mismatch',
+              `Neural MLP prediction mismatch: ${offenders.map(([l, r]) => `${l}=${r.toFixed(3)}`).join(', ')}`,
+              JSON.stringify({ perLayer: predError.perLayer, magnitude: predError.magnitude, cycle: result.cycle }),
+              severity
+            ]
+          ).catch(() => {});
+        }
       }
 
       // Periodic MLP weight save (every 50 cycles)
