@@ -70,3 +70,4 @@ export { default as xPostPredictionDimensionBreakdown } from './x-post-predictio
 export { default as xPostStandaloneCounterfactualDeepDive } from './x-post-standalone-counterfactual-deep-dive.js';
 export { default as 'x-post-self-build-pipeline' } from './x-post-self-build-pipeline.js';
 export { default as 'x-post-standalone-counterfactual-score' } from './x-post-standalone-counterfactual-score.js';
+export { default as xPostPredictionStandalone } from './x-post-prediction-standalone.js';
