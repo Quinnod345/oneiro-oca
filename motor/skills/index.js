@@ -1,3 +1,5 @@
+The export for `xPostSelfBuildLoopMechanics` already exists in the file at line 19. No changes are needed.
+
 export { default as xPost } from './x-post.js';
 export { default as xPostSelfBuildMetrics } from './x-post-self-build-metrics.js';
 export { default as xPostFailurePostmortem } from './x-post-failure-postmortem.js';

@@ -93,9 +93,9 @@ async function verifyDreamRelevance(dream) {
   // Read referenced files (cap total to avoid huge prompts)
   const fileSnippets = [];
   let totalChars = 0;
-  const MAX_SNIPPET_CHARS = 6000;
+  const MAX_SNIPPET_CHARS = 12000;
 
-  for (const relPath of refs.files.slice(0, 4)) {
+  for (const relPath of refs.files.slice(0, 6)) {
     if (totalChars >= MAX_SNIPPET_CHARS) break;
     const fullPath = resolveOCAPath(relPath);
     try {
@@ -136,7 +136,7 @@ Respond with JSON only:
 
   try {
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 15000)
+      setTimeout(() => reject(new Error('Verification timeout')), 60000)
     );
     
     const response = await Promise.race([
@@ -191,7 +191,7 @@ async function getPostHistory() {
 const credentialGapsNotified = new Set();
 
 // Ensure dreams don't get stuck in intermediate states
-const EXECUTION_TIMEOUT_MS = 1200000; // 20 minutes max per dream (allow time for self-builds + execution)
+const EXECUTION_TIMEOUT_MS = 300000; // 5 minutes max per dream (force faster cycles)
 
 // Track execution attempts to prevent infinite retries
 const executionAttempts = new Map();

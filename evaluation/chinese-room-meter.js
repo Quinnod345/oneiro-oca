@@ -7,6 +7,13 @@ function clamp01(v) {
   return Math.max(0, Math.min(1, Number(v) || 0));
 }
 
+/** Min episodic rows in the rolling window before we blend recent vs all-time grounding */
+const GROUNDING_RECENT_DAYS = 30;
+const GROUNDING_RECENT_MIN_N = 80;
+/** Prefer calibration rows from this window when sample is large enough */
+const CALIBRATION_RECENT_DAYS = 90;
+const CALIBRATION_RECENT_MIN_N = 50;
+
 // Compute the full CRM score
 export async function compute() {
   const scores = {
@@ -54,6 +61,15 @@ async function computeGroundingScore() {
            COUNT(*) FILTER (WHERE visual_hash IS NOT NULL OR audio_state != '{}' OR hid_metrics != '{}') as grounded
     FROM episodic_memory
   `);
+  const { rows: [epRecent] } = await pool.query(
+    `
+    SELECT COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE visual_hash IS NOT NULL OR audio_state != '{}' OR hid_metrics != '{}')::int AS grounded
+    FROM episodic_memory
+    WHERE timestamp > NOW() - ($1::text || ' days')::interval
+    `,
+    [String(GROUNDING_RECENT_DAYS)]
+  );
   const { rows: [sm] } = await pool.query(`
     SELECT COUNT(*) as total,
            COUNT(*) FILTER (WHERE array_length(source_episodes, 1) > 0) as traceable
@@ -65,28 +81,49 @@ async function computeGroundingScore() {
   const semanticTotal = parseInt(sm?.total || 0);
   const semanticTraceable = parseInt(sm?.traceable || 0);
   const groundedRatio = grounded / total;
+  const recentTotal = parseInt(epRecent?.total) || 0;
+  const recentGrounded = parseInt(epRecent?.grounded) || 0;
+  const recentRatio = recentTotal > 0 ? recentGrounded / recentTotal : groundedRatio;
   const traceabilityRatio = semanticTotal > 0 ? semanticTraceable / semanticTotal : 0.5;
-  const score = Math.min(1, groundedRatio * 0.7 + traceabilityRatio * 0.3 + 0.05);
+  const allTimeBlend = groundedRatio * 0.7 + traceabilityRatio * 0.3;
+  const recentBlend = recentRatio * 0.7 + traceabilityRatio * 0.3;
+  const useRecentBlend = recentTotal >= GROUNDING_RECENT_MIN_N;
+  const blended = useRecentBlend
+    ? 0.5 * allTimeBlend + 0.5 * recentBlend
+    : allTimeBlend;
+  const score = Math.min(1, blended + 0.05);
   
   return {
     score,
-    detail: `${grounded}/${total} episodic grounded, semantic traceability ${(traceabilityRatio * 100).toFixed(1)}%`,
+    detail: `${grounded}/${total} episodic grounded` + (recentTotal > 0
+      ? ` (${recentGrounded}/${recentTotal} last ${GROUNDING_RECENT_DAYS}d)`
+      : '') + `, semantic traceability ${(traceabilityRatio * 100).toFixed(1)}%`,
     metric: 'grounded_traceable_ratio',
     grounding_ratio: groundedRatio,
+    grounding_ratio_recent: recentRatio,
     grounding_traceability: traceabilityRatio
   };
 }
 
-// 2. Prediction Accuracy — calibration quality
+// 2. Prediction Accuracy — blend outcome accuracy with calibration (both matter for "understanding")
 async function computePredictionAccuracy() {
-  const { rows } = await pool.query(`
+  const calSql = `
     SELECT 
-      COUNT(*) as total,
-      COUNT(*) FILTER (WHERE was_correct = true) as correct,
-      AVG(ABS(stated_confidence - CASE WHEN was_correct THEN 1.0 ELSE 0.0 END)) as avg_cal_error
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE was_correct = true)::int AS correct,
+      AVG(ABS(stated_confidence - CASE WHEN was_correct THEN 1.0 ELSE 0.0 END)) AS avg_cal_error
     FROM calibration_log
     WHERE was_correct IS NOT NULL
-  `);
+  `;
+  let { rows } = await pool.query(
+    `${calSql} AND timestamp > NOW() - ($1::text || ' days')::interval`,
+    [String(CALIBRATION_RECENT_DAYS)]
+  );
+  let total = parseInt(rows[0]?.total) || 0;
+  if (total < CALIBRATION_RECENT_MIN_N) {
+    ({ rows } = await pool.query(calSql));
+    total = parseInt(rows[0]?.total) || 0;
+  }
 
   const { rows: coverageRows } = await pool.query(`
     SELECT
@@ -98,14 +135,22 @@ async function computePredictionAccuracy() {
     FROM hypotheses
   `);
 
-  const total = parseInt(rows[0]?.total) || 0;
+  const correct = parseInt(rows[0]?.correct) || 0;
   const calError = parseFloat(rows[0]?.avg_cal_error) || 0.5;
-  const accuracyOnVerifiable = total > 0 ? Math.max(0, 1 - calError * 2) : 0.5;
+  const rawAccuracy = total > 0 ? correct / total : 0.5;
+  // Softer than 1 - 2*err (which collapsed to ~0 for typical miscalibration while still penalizing it).
+  const calibrationScore = clamp01(1 - calError * 1.35);
+  const accuracyOnVerifiable = total > 0
+    ? 0.42 * rawAccuracy + 0.58 * calibrationScore
+    : 0.5;
 
   const totalCreated = parseInt(coverageRows[0]?.total_created) || 0;
   const totalEvaluated = parseInt(coverageRows[0]?.total_evaluated) || 0;
   const totalVerifiable = parseInt(coverageRows[0]?.total_verifiable) || 0;
-  const verifiabilityRate = totalEvaluated > 0 ? totalVerifiable / totalEvaluated : 0;
+  const verifiabilityRate = Math.min(
+    1,
+    totalEvaluated > 0 ? totalVerifiable / totalEvaluated : 0
+  );
   const evaluationCoverage = totalCreated > 0 ? totalEvaluated / totalCreated : 0;
   const coverageScore = Math.min(1, evaluationCoverage / 0.8); // full score near 80%+ evaluated
 
@@ -117,9 +162,11 @@ async function computePredictionAccuracy() {
 
   return {
     score,
-    detail: `${rows[0].correct || 0}/${total} verifiable predictions correct, cal_error=${calError.toFixed(3)}, verifiability=${(verifiabilityRate * 100).toFixed(1)}%, coverage=${(evaluationCoverage * 100).toFixed(1)}%`,
+    detail: `${correct}/${total} correct, raw_acc=${rawAccuracy.toFixed(3)}, cal_err=${calError.toFixed(3)}, verifiability=${(verifiabilityRate * 100).toFixed(1)}%, coverage=${(evaluationCoverage * 100).toFixed(1)}%`,
     metric: 'prediction_quality',
     accuracy_on_verifiable_predictions: accuracyOnVerifiable,
+    raw_accuracy: rawAccuracy,
+    calibration_score: calibrationScore,
     verifiability_rate: verifiabilityRate,
     evaluation_coverage: evaluationCoverage
   };
