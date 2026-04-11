@@ -10,7 +10,7 @@ import cohabitation from '../cohabitation.js';
 // ═══════════════════════════════════════════════════
 
 const MAX_WORKING_MEMORY = 7; // Miller's Law
-const WM_DECAY_PER_MINUTE = 0.65;
+const WM_DECAY_PER_MINUTE = 0.55;
 
 export async function addToWorkspace(contentType, content, sourceLayer, salience = 0.5) {
   const { rows: active } = await pool.query(
