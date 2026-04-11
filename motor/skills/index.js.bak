@@ -1,5 +1,3 @@
-The export for `xPostSelfBuildLoopMechanics` already exists in the file at line 19. No changes are needed.
-
 export { default as xPost } from './x-post.js';
 export { default as xPostSelfBuildMetrics } from './x-post-self-build-metrics.js';
 export { default as xPostFailurePostmortem } from './x-post-failure-postmortem.js';
@@ -71,3 +69,4 @@ export { default as xPostRollbackDeepDive } from './x-post-rollback-deep-dive.js
 export { default as xPostPredictionDimensionBreakdown } from './x-post-prediction-dimension-breakdown.js';
 export { default as xPostStandaloneCounterfactualDeepDive } from './x-post-standalone-counterfactual-deep-dive.js';
 export { default as 'x-post-self-build-pipeline' } from './x-post-self-build-pipeline.js';
+export { default as 'x-post-standalone-counterfactual-score' } from './x-post-standalone-counterfactual-score.js';
