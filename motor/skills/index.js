@@ -74,3 +74,5 @@ export { default as xPostPredictionStandalone } from './x-post-prediction-standa
 export { default as xPostCrmScoresWeakestLink } from './x-post-crm-scores-weakest-link.js';
 export { default as xPostBuildInPublicUncomfortable } from './x-post-build-in-public-uncomfortable.js';
 export { default as xPostStandaloneSkill } from './x-post-standalone-skill.js';
+export { default as 'x-post-standalone-counterfactual-score-code' } from './x-post-standalone-counterfactual-score-code.js';
+export { default as xPostBuildInPublicMetrics } from './x-post-build-in-public-metrics.js';
