@@ -59,17 +59,22 @@ def augment_image(img: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """
     h, w, c = img.shape
 
-    # Random brightness (±10%)
-    brightness = 1.0 + rng.uniform(-0.1, 0.1)
+    # Random brightness (±20%)
+    brightness = 1.0 + rng.uniform(-0.2, 0.2)
     img = np.clip(img * brightness, 0, 1)
 
-    # Random contrast (±10%)
+    # Random contrast (±20%)
     mean = img.mean()
-    contrast = 1.0 + rng.uniform(-0.1, 0.1)
+    contrast = 1.0 + rng.uniform(-0.2, 0.2)
     img = np.clip((img - mean) * contrast + mean, 0, 1)
 
-    # Random crop and resize (80-100% of original)
-    scale = rng.uniform(0.8, 1.0)
+    # Random saturation shift (±15%)
+    gray = np.mean(img, axis=-1, keepdims=True)
+    sat = 1.0 + rng.uniform(-0.15, 0.15)
+    img = np.clip(gray + sat * (img - gray), 0, 1)
+
+    # Random crop and resize (70-100% of original)
+    scale = rng.uniform(0.7, 1.0)
     crop_h = int(h * scale)
     crop_w = int(w * scale)
     top = rng.integers(0, h - crop_h + 1)
@@ -125,17 +130,20 @@ class DesignDataset:
 
         self.samples = []
         for sample in data.get("samples", []):
-            img_path = sample.get("image", "")
+            # Prefer screenshot_path (PNG) over image (may be HTML)
+            img_path = sample.get("screenshot_path") or sample.get("image", "")
             if not os.path.isabs(img_path):
                 img_path = str(self.data_dir / img_path)
-            if os.path.exists(img_path):
-                self.samples.append({
-                    "image": img_path,
-                    "scores": sample.get("scores", {}),
-                    "source": sample.get("source", "unknown"),
-                    "code_features": sample.get("code_features"),
-                    "metadata": sample.get("metadata", {}),
-                })
+            # Skip non-image files (HTML artifacts without screenshots)
+            if not os.path.exists(img_path) or img_path.endswith('.html'):
+                continue
+            self.samples.append({
+                "image": img_path,
+                "scores": sample.get("scores", {}),
+                "source": sample.get("source", "unknown"),
+                "code_features": sample.get("code_features"),
+                "metadata": sample.get("metadata", {}),
+            })
 
     def __len__(self):
         return len(self.samples)
@@ -168,6 +176,7 @@ class DesignDataset:
         for start in range(0, len(indices), batch_size):
             batch_idx = indices[start:start + batch_size]
             imgs, targets, features_list = [], [], []
+            has_all_features = True
 
             for idx in batch_idx:
                 img, target, code_feat = self[idx]
@@ -175,10 +184,15 @@ class DesignDataset:
                 targets.append(target)
                 if code_feat is not None:
                     features_list.append(code_feat)
+                else:
+                    has_all_features = False
+                    # Zero-fill missing code features so batches stay consistent
+                    features_list.append(np.zeros(64, dtype=np.float32))
 
             # Stack into MLX arrays (bfloat16 for M4 Max efficiency)
             batch_imgs = mx.array(np.stack(imgs))
             batch_targets = mx.array(np.stack(targets))
+            # Only pass features if at least some samples have them
             batch_features = mx.array(np.stack(features_list)) if features_list else None
 
             yield batch_imgs, batch_targets, batch_features

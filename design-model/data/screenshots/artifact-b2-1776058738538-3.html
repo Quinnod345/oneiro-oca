@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    min-height: 100vh;
+    background: #0a0a0f;
+    font-family: -apple-system, "SF Pro Text", "SF Pro Display", BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 80%, rgba(34, 197, 94, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(59, 130, 246, 0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 35% at 60% 70%, rgba(245, 158, 11, 0.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Subtle grid texture */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* Page content placeholder */
+  .page-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 12px;
+  }
+
+  .page-label {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.15);
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.08);
+    letter-spacing: -0.02em;
+  }
+
+  /* Toast container */
+  .toast-container {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+    align-items: flex-end;
+  }
+
+  /* Individual toast */
+  .toast {
+    width: 360px;
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+    cursor: default;
+    transform: translateX(calc(100% + 40px));
+    opacity: 0;
+    animation: slideIn 0.5s cubic-bezier(0.34, 1.26, 0.64, 1) forwards;
+
+    /* Frosted glass */
+    background: rgba(20, 20, 28, 0.72);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 0 0 0.5px rgba(0,0,0,0.4),
+      0 8px 32px rgba(0, 0, 0, 0.45),
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  .toast:nth-child(1) { animation-delay: 0.1s; }
+  .toast:nth-child(2) { animation-delay: 0.25s; }
+  .toast:nth-child(3) { animation-delay: 0.4s; }
+
+  .toast::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    pointer-events: none;
+  }
+
+  /* Type-specific left accent */
+  .toast::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 52%;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .toast.success::after { background: linear-gradient(180deg, #4ade80, #22c55e); }
+  .toast.info::after    { background: linear-gradient(180deg, #60a5fa, #3b82f6); }
+  .toast.warning::after { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
+
+  /* Hover lift */
+  .toast:hover {
+    transform: translateX(0) translateY(-2px) !important;
+    border-color: rgba(255,255,255,0.12);
+    box-shadow:
+      0 0 0 0.5px rgba(0,0,0,0.4),
+      0 16px 48px rgba(0, 0, 0, 0.55),
+      0 4px 12px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    to {
+      transform: translateX(calc(100% + 40px));
+      opacity: 0;
+      margin-bottom: -80px;
+      padding-top: 0;
+      padding-bottom: 0;
+      height: 0;
+    }
+  }
+
+  .toast.dismissing {
+    animation: fadeOut 0.4s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+    overflow: hidden;
+    transition: height 0.4s ease, margin 0.4s ease;
+  }
+
+  /* Icon wrapper */
+  .toast-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .toast.success .toast-icon {
+    background: rgba(34, 197, 94, 0.14);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(74, 222, 128, 0.15);
+  }
+  .toast.info .toast-icon {
+    background: rgba(59, 130, 246, 0.14);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(96, 165, 250, 0.15);
+  }
+  .toast.warning .toast-icon {
+    background: rgba(245, 158, 11, 0.14);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(251, 191, 36, 0.15);
+  }
+
+  .toast-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .toast.success .toast-icon svg { color: #4ade80; }
+  .toast.info .toast-icon svg    { color: #60a5fa; }
+  .toast.warning .toast-icon svg { color: #fbbf24; }
+
+  /* Body */
+  .toast-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toast-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+
+  .toast-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toast-time {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.28);
+    letter-spacing: 0.01em;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .toast-description {
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.48);
+    letter-spacing: 0.003em;
+  }
+
+  /* Dismiss button */
+  .toast-dismiss {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  }
+
+  .toast-dismiss:hover {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.7);
+    transform: scale(1.05);
+  }
+
+  .toast-dismiss:active {
+    transform: scale(0.95);
+  }
+
+  .toast-dismiss svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Progress bar */
+  .toast-progress {
+    position: absolute;
+    bottom: 0;
+    left: 3px;
+    right: 3px;
+    height: 2px;
+    border-radius: 0 0 14px 14px;
+    overflow: hidden;
+  }
+
+  .toast-progress-inner {
+    height: 100%;
+    border-radius: 2px;
+    animation: progress 6s linear forwards;
+    transform-origin: left;
+  }
+
+  .toast:nth-child(1) .toast-progress-inner { animation-delay: 0.1s; }
+  .toast:nth-child(2) .toast-progress-inner { animation-delay: 0.25s; }
+  .toast:nth-child(3) .toast-progress-inner { animation-delay: 0.4s; }
+
+  .toast.success .toast-progress-inner { background: linear-gradient(90deg, rgba(34,197,94,0.6), rgba(74,222,128,0.3)); }
+  .toast.info .toast-progress-inner    { background: linear-gradient(90deg, rgba(59,130,246,0.6), rgba(96,165,250,0.3)); }
+  .toast.warning .toast-progress-inner { background: linear-gradient(90deg, rgba(245,158,11,0.6), rgba(251,191,36,0.3)); }
+
+  @keyframes progress {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-content">
+  <span class="page-label">Notification System</span>
+  <span class="page-title">Activity Feed</span>
+</div>
+
+<div class="toast-container" id="toastContainer">
+
+  <!-- Success Toast -->
+  <div class="toast success" id="toast-1">
+    <div class="toast-icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M13.5 4.5L6 12 2.5 8.5"/>
+      </svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-header">
+        <span class="toast-title">Deployment successful</span>
+        <span class="toast-time">Just now</span>
+      </div>
+      <p class="toast-description">v2.4.1 is live on production. All 24 health checks passed.</p>
+    </div>
+    <button class="toast-dismiss" onclick="dismiss('toast-1')" aria-label="Dismiss">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M1 1l10 10M11 1L1 11"/>
+      </svg>
+    </button>
+    <div class="toast-progress"><div class="toast-progress-inner"></div></div>
+  </div>
+
+  <!-- Info Toast -->
+  <div class="toast info" id="toast-2">
+    <div class="toast-icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="8" r="6.5"/>
+        <path d="M8 7v4M8 5.5v.01"/>
+      </svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-header">
+        <span class="toast-title">New team member</span>
+        <span class="toast-time">2 min ago</span>
+      </div>
+      <p class="toast-description">Maya Chen has joined the workspace as a contributor.</p>
+    </div>
+    <button class="toast-dismiss" onclick="dismiss('toast-2')" aria-label="Dismiss">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M1 1l10 10M11 1L1 11"/>
+      </svg>
+    </button>
+    <div class="toast-progress"><div class="toast-progress-inner"></div></div>
+  </div>
+
+  <!-- Warning Toast -->
+  <div class="toast warning" id="toast-3">
+    <div class="toast-icon">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 1.5L1 14.5h14L8 1.5z"/>
+        <path d="M8 6v4M8 11.5v.01"/>
+      </svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-header">
+        <span class="toast-title">Storage at 87%</span>
+        <span class="toast-time">5 min ago</span>
+      </div>
+      <p class="toast-description">Database volume nearing limit. Consider archiving older records.</p>
+    </div>
+    <button class="toast-dismiss" onclick="dismiss('toast-3')" aria-label="Dismiss">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M1 1l10 10M11 1L1 11"/>
+      </svg>
+    </button>
+    <div class="toast-progress"><div class="toast-progress-inner"></div></div>
+  </div>
+
+</div>
+
+<script>
+  function dismiss(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('dismissing');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+
+  // Auto-dismiss after 6s
+  setTimeout(() => dismiss('toast-1'), 6100);
+  setTimeout(() => dismiss('toast-2'), 6250);
+  setTimeout(() => dismiss('toast-3'), 6400);
+</script>
+</body>
+</html>

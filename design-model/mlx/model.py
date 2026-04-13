@@ -246,7 +246,7 @@ class DesignEvaluator(nn.Module):
             code_feat_dim=code_feat_dim,
             hidden_1=256,
             hidden_2=128,
-            dropout=0.3,
+            dropout=0.5,  # High dropout for small dataset generalization
         )
 
     def __call__(self, images, code_features=None):

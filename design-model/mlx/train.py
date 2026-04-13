@@ -26,7 +26,7 @@ from pathlib import Path
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
-from mlx.utils import tree_flatten
+from mlx.utils import tree_flatten, tree_map
 
 from model import DesignEvaluator, create_model, save_weights, OUTPUT_DIM
 from data import DesignDataset, DIMENSION_WEIGHTS, SCORE_NAMES
@@ -139,12 +139,12 @@ def train(
             # Forward + backward
             loss, grads = loss_and_grad_fn(model, batch_imgs, batch_targets, batch_features)
 
-            # Gradient clipping
+            # Gradient clipping (handles nested parameter dicts)
             grad_flat = tree_flatten(grads)
             grad_norm = mx.sqrt(sum(mx.sum(g * g) for _, g in grad_flat))
             if grad_norm > gradient_clip:
                 scale = gradient_clip / (grad_norm + 1e-8)
-                grads = {k: v * scale for k, v in grads.items()} if isinstance(grads, dict) else grads
+                grads = tree_map(lambda g: g * scale, grads)
 
             # Update
             optimizer.update(model, grads)

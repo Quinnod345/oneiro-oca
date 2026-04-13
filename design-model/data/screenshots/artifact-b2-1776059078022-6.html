@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM Customers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0C0C0E;
+    --surface: #111115;
+    --surface-raised: #16161C;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.1);
+    --text-primary: #EDEDF0;
+    --text-secondary: #6B6B7A;
+    --text-tertiary: #3D3D4F;
+    --accent: #5E6AD2;
+    --accent-soft: rgba(94,106,210,0.12);
+    --row-alt: rgba(255,255,255,0.015);
+    --row-hover: rgba(255,255,255,0.035);
+    --active-bg: rgba(52,211,153,0.08);
+    --active-text: #34D399;
+    --active-border: rgba(52,211,153,0.2);
+    --trial-bg: rgba(245,158,11,0.08);
+    --trial-text: #F59E0B;
+    --trial-border: rgba(245,158,11,0.2);
+    --inactive-bg: rgba(107,107,122,0.1);
+    --inactive-text: #8B8BA7;
+    --inactive-border: rgba(107,107,122,0.2);
+    --churned-bg: rgba(239,68,68,0.08);
+    --churned-text: #EF4444;
+    --churned-border: rgba(239,68,68,0.2);
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .page-title-group {}
+
+  .page-eyebrow {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .page-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-weight: 400;
+  }
+
+  .page-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-top: 4px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    letter-spacing: -0.01em;
+  }
+
+  .btn:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.14);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    background: #6D7EE0;
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 340px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 34px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 0 12px 0 34px;
+    outline: none;
+    transition: all 0.15s ease;
+    letter-spacing: -0.01em;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .search-input:focus {
+    border-color: rgba(94,106,210,0.4);
+    background: var(--surface-raised);
+    box-shadow: 0 0 0 3px rgba(94,106,210,0.08);
+  }
+
+  .filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    letter-spacing: -0.01em;
+  }
+
+  .filter-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: var(--surface-raised);
+  }
+
+  .filter-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .toolbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .row-count {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 400;
+  }
+
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 0 16px;
+    height: 38px;
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    background: rgba(255,255,255,0.015);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.12s ease;
+  }
+
+  th:hover {
+    color: var(--text-primary);
+  }
+
+  th.sorted {
+    color: var(--text-primary);
+  }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sort-indicator {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 1.5px;
+    opacity: 0.3;
+    transition: opacity 0.12s ease;
+  }
+
+  th:hover .sort-indicator,
+  th.sorted .sort-indicator {
+    opacity: 1;
+  }
+
+  .sort-indicator svg {
+    display: block;
+  }
+
+  .sort-up, .sort-down {
+    color: var(--text-tertiary);
+    transition: color 0.12s ease;
+  }
+
+  th.sorted-asc .sort-up { color: var(--accent); }
+  th.sorted-desc .sort-down { color: var(--accent); }
+  th.sorted-asc .sort-indicator, th.sorted-desc .sort-indicator { opacity: 1; }
+
+  td {
+    padding: 0 16px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    transition: background 0.1s ease;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr:nth-child(even) td {
+    background: var(--row-alt);
+  }
+
+  tbody tr {
+    transition: background 0.1s ease;
+  }
+
+  tbody tr:hover td {
+    background: var(--row-hover) !important;
+  }
+
+  tbody tr:hover td:first-child {
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  .cell-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .name-text {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .company-text {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+    margin-top: 1px;
+  }
+
+  .email-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: -0.02em;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: 1px solid;
+    letter-spacing: 0.01em;
+  }
+
+  .badge-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .badge-active {
+    background: var(--active-bg);
+    color: var(--active-text);
+    border-color: var(--active-border);
+  }
+  .badge-active .badge-dot { background: var(--active-text); }
+
+  .badge-trial {
+    background: var(--trial-bg);
+    color: var(--trial-text);
+    border-color: var(--trial-border);
+  }
+  .badge-trial .badge-dot { background: var(--trial-text); }
+
+  .badge-inactive {
+    background: var(--inactive-bg);
+    color: var(--inactive-text);
+    border-color: var(--inactive-border);
+  }
+  .badge-inactive .badge-dot { background: var(--inactive-text); }
+
+  .badge-churned {
+    background: var(--churned-bg);
+    color: var(--churned-text);
+    border-color: var(--churned-border);
+  }
+  .badge-churned .badge-dot { background: var(--churned-text); }
+
+  .activity-cell {
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+  }
+
+  .activity-fresh {
+    color: var(--text-primary);
+  }
+
+  .revenue-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .revenue-zero {
+    color: var(--text-tertiary);
+  }
+
+  .action-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  tbody tr:hover .action-cell {
+    opacity: 1;
+  }
+
+  .icon-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+
+  .icon-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: rgba(255,255,255,0.08);
+  }
+
+  .table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(255,255,255,0.01);
+  }
+
+  .footer-info {
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+
+  .footer-revenue {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.02em;
+  }
+
+  .footer-revenue span {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .no-results {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-tertiary);
+    font-size: 13px;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="page-header">
+    <div class="page-title-group">
+      <div class="page-eyebrow">Workspace</div>
+      <div class="page-title">Customers</div>
+      <div class="page-meta">Manage and track your customer relationships</div>
+    </div>
+    <div class="page-actions">
+      <button class="btn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v10M3 8h10"/>
+        </svg>
+        Import
+      </button>
+      <button class="btn btn-primary">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v10M3 8h10"/>
+        </svg>
+        Add Customer
+      </button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <span class="search-icon">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14"/>
+        </svg>
+      </span>
+      <input type="text" class="search-input" placeholder="Search customers..." id="searchInput" oninput="filterRows()">
+    </div>
+
+    <button class="filter-btn" onclick="cycleFilter()">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 4h12M5 8h6M7 12h2"/>
+      </svg>
+      <span id="filterLabel">Filter</span>
+      <span class="filter-dot" id="filterDot" style="display:none;"></span>
+    </button>
+
+    <button class="filter-btn">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/>
+        <rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>
+      </svg>
+      Group
+    </button>
+
+    <div class="toolbar-right">
+      <span class="row-count" id="rowCount">6 customers</span>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="crm-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)" id="th-0">
+            <span class="th-inner">
+              Customer
+              <span class="sort-indicator">
+                <svg class="sort-up" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
+                <svg class="sort-down" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
+              </span>
+            </span>
+          </th>
+          <th onclick="sortTable(1)" id="th-1">
+            <span class="th-inner">
+              Email
+              <span class="sort-indicator">
+                <svg class="sort-up" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
+                <svg class="sort-down" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
+              </span>
+            </span>
+          </th>
+          <th onclick="sortTable(2)" id="th-2">
+            <span class="th-inner">
+              Status
+              <span class="sort-indicator">
+                <svg class="sort-up" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
+                <svg class="sort-down" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
+              </span>
+            </span>
+          </th>
+          <th onclick="sortTable(3)" id="th-3">
+            <span class="th-inner">
+              Last Activity
+              <span class="sort-indicator">
+                <svg class="sort-up" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
+                <svg class="sort-down" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
+              </span>
+            </span>
+          </th>
+          <th onclick="sortTable(4)" id="th-4" style="text-align:right;">
+            <span class="th-inner" style="justify-content:flex-end; width:100%;">
+              Revenue
+              <span class="sort-indicator">
+                <svg class="sort-up" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 0L8 5H0L4 0Z"/></svg>
+                <svg class="sort-down" width="8" height="5" viewBox="0 0 8 5" fill="currentColor"><path d="M4 5L0 0H8L4 5Z"/></svg>
+              </span>
+            </span>
+          </th>
+          <th style="width:72px;"></th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+      </tbody>
+    </table>
+    <div class="table-footer">
+      <span class="footer-info" id="footer-info">Showing 6 of 6 customers</span>
+      <span class="footer-revenue">Total ARR <span id="footer-revenue">$352,100</span></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const customers = [
+    {
+      name: "Sarah Chen",
+      company: "Amplitude",
+      email: "sarah.chen@amplitude.io",
+      status: "active",
+      activityLabel: "2 hours ago",
+      activityMinutes: 120,
+      revenue: 48200,
+      avatarBg: "#1E2B4A",
+      avatarColor: "#6D9EEB",
+      initials: "SC"
+    },
+    {
+      name: "Marcus Webb",
+      company: "Notion",
+      email: "m.webb@notion.so",
+      status: "trial",
+      activityLabel: "1 day ago",
+      activityMinutes: 1440,
+      revenue: 0,
+      avatarBg: "#2B1E3A",
+      avatarColor: "#A57EDB",
+      initials: "MW"
+    },
+    {
+      name: "Priya Sharma",
+      company: "Figma",
+      email: "priya@figma.com",
+      status: "active",
+      activityLabel: "43 min ago",
+      activityMinutes: 43,
+      revenue: 124000,
+      avatarBg: "#1E3A2B",
+      avatarColor: "#5DC887",
+      initials: "PS"
+    },
+    {
+      name: "Jordan Ellis",
+      company: "Vercel",
+      email: "j.ellis@vercel.com",
+      status: "inactive",
+      activityLabel: "12 days ago",
+      activityMinutes: 17280,
+      revenue: 67500,
+      avatarBg: "#2B2B2B",
+      avatarColor: "#8B8BA7",
+      initials: "JE"
+    },
+    {
+      name: "Tomás Rivera",
+      company: "Linear",
+      email: "t.rivera@linear.app",
+      status: "active",
+      activityLabel: "Just now",
+      activityMinutes: 2,
+      revenue: 89300,
+      avatarBg: "#1E2440",
+      avatarColor: "#7B8FE8",
+      initials: "TR"
+    },
+    {
+      name: "Aiko Tanaka",
+      company: "Stripe",
+      email: "aiko.t@stripe.com",
+      status: "churned",
+      activityLabel: "34 days ago",
+      activityMinutes: 48960,
+      revenue: 23100,
+      avatarBg: "#3A1E1E",
+      avatarColor: "#E87B7B",
+      initials: "AT"
+    }
+  ];
+
+  const statusConfig = {
+    active:   { label: "Active",   cls: "badge-active" },
+    trial:    { label: "Trial",    cls: "badge-trial" },
+    inactive: { label: "Inactive", cls: "badge-inactive" },
+    churned:  { label: "Churned",  cls: "badge-churned" }
+  };
+
+  const filterCycle = [null, "active", "trial", "inactive", "churned"];
+  let filterIndex = 0;
+  let currentSort = { col: -1, asc: true };
+  let searchQuery = "";
+
+  function cycleFilter() {
+    filterIndex = (filterIndex + 1) % filterCycle.length;
+    const f = filterCycle[filterIndex];
+    const dot = document.getElementById("filterDot");
+    const label = document.getElementById("filterLabel");
+    if (f) {
+      label.textContent = statusConfig[f].label;
+      dot.style.display = "block";
+    } else {
+      label.textContent = "Filter";
+      dot.style.display = "none";
+    }
+    renderRows();
+  }
+
+  function filterRows() {
+    searchQuery = document.getElementById("searchInput").value.toLowerCase();
+    renderRows();
+  }
+
+  function formatRevenue(n) {
+    if (n === 0) return "—";
+    return "$" + n.toLocaleString("en-US");
+  }
+
+  function getFilteredSorted() {
+    let data = [...customers];
+    const statusFilter = filterCycle[filterIndex];
+    if (statusFilter) data = data.filter(c => c.status === statusFilter);
+    if (searchQuery) {
+      data = data.filter(c =>
+        c.name.toLowerCase().includes(searchQuery) ||
+        c.email.toLowerCase().includes(searchQuery) ||
+        c.company.toLowerCase().includes(searchQuery) ||
+        c.status.includes(searchQuery)
+      );
+    }
+    if (currentSort.col >= 0) {
+      data.sort((a, b) => {
+        let va, vb;
+        switch(currentSort.col) {
+          case 0: va = a.name; vb = b.name; break;
+          case 1: va = a.email; vb = b.email; break;
+          case 2: va = a.status; vb = b.status; break;
+          case 3: va = a.activityMinutes; vb = b.activityMinutes; break;
+          case 4: va = a.revenue; vb = b.revenue; break;
+        }
+        if (typeof va === "string") {
+          return currentSort.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+        }
+        return currentSort.asc ? va - vb : vb - va;
+      });
+    }
+    return data;
+  }
+
+  function renderRows() {
+    const data = getFilteredSorted();
+    const body = document.getElementById("table-body");
+    const totalRevenue = data.reduce((s, c) => s + c.revenue, 0);
+
+    document.getElementById("rowCount").textContent = data.length + " customer" + (data.length !== 1 ? "s" : "");
+    document.getElementById("footer-info").textContent = `Showing ${data.length} of ${customers.length} customers`;
+    document.getElementById("footer-revenue").textContent = "$" + totalRevenue.toLocaleString("en-US");
+
+    if (data.length === 0) {
+      body.innerHTML = `<tr><td colspan="6"><div class="no-results">No customers match your search</div></td></tr>`;
+      return;
+    }
+
+    body.innerHTML = data.map(c => {
+      const sc = statusConfig[c.status];
+      const isFresh = c.activityMinutes < 120;
+      const revCls = c.revenue === 0 ? "revenue-zero" : "";
+      return `
+        <tr>
+          <td>
+            <div class="cell-name">
+              <div class="avatar" style="background:${c.avatarBg}; color:${c.avatarColor};">${c.initials}</div>
+              <div>
+                <div class="name-text">${c.name}</div>
+                <div class="company-text">${c.company}</div>
+              </div>
+            </div>
+          </td>
+          <td><div class="email-cell">${c.email}</div></td>
+          <td>
+            <span class="badge ${sc.cls}">
+              <span class="badge-dot"></span>
+              ${sc.label}
+            </span>
+          </td>
+          <td><div class="activity-cell ${isFresh ? 'activity-fresh' : ''}">${c.activityLabel}</div></td>
+          <td style="text-align:right;"><div class="revenue-cell ${revCls}">${formatRevenue(c.revenue)}</div></td>
+          <td>
+            <div class="action-cell">
+              <button class="icon-btn" title="Edit">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 2l3 3-9 9H2v-3L11 2z"/>
+                </svg>
+              </button>
+              <button class="icon-btn" title="More">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="3" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="13" cy="8" r="1.2"/>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function sortTable(col) {
+    const headers = document.querySelectorAll("th[id^='th-']");
+    headers.forEach(h => {
+      h.classList.remove("sorted", "sorted-asc", "sorted-desc");
+    });
+
+    if (currentSort.col === col) {
+      currentSort.asc = !currentSort.asc;
+    } else {
+      currentSort.col = col;
+      currentSort.asc = true;
+    }
+
+    const th = document.getElementById("th-" + col);
+    th.classList.add("sorted", currentSort.asc ? "sorted-asc" : "sorted-desc");
+    renderRows();
+  }
+
+  renderRows();
+</script>
+</body>
+</html>
