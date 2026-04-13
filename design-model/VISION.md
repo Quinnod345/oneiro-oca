@@ -35,9 +35,9 @@ A scalable neural network that evaluates design quality across 12 dimensions:
 
 | Phase | Architecture | Params | Status |
 |-------|-------------|--------|--------|
-| 1 | JS MLP (64→256→128→64→12) + auto-expansion | 58K → 1M+ | **DONE** |
-| 2a | MLX CNN backbone + SpatialAttention + DesignHead | 17.2M | **DONE** (needs training data) |
-| 2b | MobileNet V2 backbone (pretrained, frozen) + DesignHead | ~5M trainable | Planned |
+| 1 | JS MLP (64→256→128→64→12) + auto-expansion | 58K → 1M+ | **DONE** — trained, loss 0.039 |
+| 2a | MLX CNN backbone + SpatialAttention + DesignHead | 17.2M | **DONE** — needs more data for discrimination |
+| 2b | MobileNet V2 backbone (pretrained, frozen) + DesignHead | 675K trainable | **DONE** — discriminates quality tiers! |
 | 3 | Progressive Expert Network (7 expert columns) | 50-100M | Planned |
 | 4 | Self-training loop + comparative preference model | Unlimited | Planned |
 
@@ -117,15 +117,28 @@ design-model/
 ├── server.js          ✅ Unix socket server
 ├── knowledge.js       ✅ Design research knowledge base
 ├── skill-evolver.js   ✅ Skill iteration loop
+├── collect-data.js    ✅ Batch 1 data generation pipeline
+├── generate-batch-2.js ✅ Batch 2 data generation pipeline
+├── capture-real-world.js ✅ Real-world screenshot capture (Puppeteer)
+├── render-screenshots.js ✅ HTML→PNG rendering pipeline
+├── train-js.js        ✅ JS MLP training CLI
 ├── weights/
-│   ├── model-v1-latest.json       ✅ JS MLP weights (untrained)
-│   └── mlx-design-v1.safetensors  ✅ MLX model weights (untrained)
+│   ├── model-v1-latest.json       ✅ JS MLP weights (TRAINED — 2,881 updates, loss 0.039)
+│   ├── mlx-design-v1.safetensors  ✅ MLX model weights (TRAINED — 40 epochs, val loss 0.003)
+│   └── train-history-v1.json      ✅ MLX training curves
 ├── data/
-│   └── manifest.json              ⬜ Empty — needs training data
+│   ├── manifest.json              ✅ 43+ samples (18 synthetic + 25 real-world)
+│   ├── screenshots/               ✅ 18 HTML artifacts
+│   ├── pngs/                      ✅ 18 rendered PNG screenshots
+│   └── real-world/                ✅ 25 real-world design screenshots
 ├── mlx/
-│   ├── model.py       ✅ 17.2M param CNN + attention (9.9ms inference)
+│   ├── model.py       ✅ Phase 2a: 17.2M param CNN + attention
+│   ├── model_v2.py    ✅ Phase 2b: MobileNet V2 backbone + design head
 │   ├── data.py        ✅ Dataset management + augmentation
-│   ├── train.py       ✅ Full GPU training pipeline
+│   ├── train.py       ✅ Phase 2a GPU training pipeline
+│   ├── train_v2.py    ✅ Phase 2b feature-based training (~30ms/epoch)
+│   ├── extract_features.py ✅ MobileNet V2 feature extraction (PyTorch)
+│   ├── convert_mobilenet.py ✅ PyTorch→MLX weight conversion
 │   ├── serve.py       ✅ MLX GPU inference server
 │   └── export.py      ✅ ONNX + Core ML export
 └── exports/           ⬜ Empty — no exports yet
@@ -144,22 +157,53 @@ OCA Integration:
 └── migrations/014     ✅ DB tables defined
 ```
 
+### Training Results (2026-04-13)
+
+**Phase 1: JS MLP (58K params)**
+- 2,881 total weight updates across 50+ epochs
+- Running loss: 0.039
+- Per-dimension error: 0.12-0.18 (code features only, no vision)
+- Sample predictions: 9/12 dimensions within 0.1 of target
+
+**Phase 2a: MLX CNN (17.2M params)**
+- Trained from scratch on M4 Max GPU
+- 58 samples, val loss 0.020
+- Overfits with small data — needs pretrained backbone for discrimination
+
+**Phase 2b: Pretrained MobileNet V2 + Design Head (675K trainable) — DISCRIMINATES**
+- MobileNet V2 backbone: frozen ImageNet features (pre-extracted, 1280-dim)
+- Trainable design head: 675K params (512→256→128→64→12)
+- 58 samples, 50 train / 8 val
+- **Best validation loss: 0.008** (epoch 62 of 112)
+- Training time: **3.5 seconds total** (~30ms/epoch!)
+- **Quality discrimination proven:**
+  - Reference sites: predicts 0.91 (target 0.87-0.96)
+  - High quality: predicts 0.69-0.85 (target 0.73-0.84)
+  - Medium quality: predicts 0.47-0.73 (target 0.50-0.71)
+  - Low quality: predicts 0.10-0.12 (target 0.03-0.24)
+- Per-dimension MAE at best:
+  - typography: 0.056 | color: 0.063 | spatial: 0.032
+  - motion: 0.048 | emotion: 0.028 | craft: 0.038
+  - minimal: 0.054 | native: 0.095 | visceral: 0.034
+  - behavioral: 0.036 | reflective: 0.044 | overall: 0.093
+
+**Real-World Training Data Sources:**
+Apple (macOS, iPhone, Design Awards, Developer), Screen Studio, Todoist, Arc,
+The Browser Company, Linear, Craft, Things 3, Bear, Raycast, Notion, Figma,
+Klack, Pixelmator Pro, Fantastical, Vercel, Stripe + scrolled views
+
 ### What's Next
 
-**IN PROGRESS: Training Data Collection** (started 2026-04-12)
-Data pipeline is live — `collect-data.js` generates design artifacts via Claude, scores them across 12 dimensions with LLM-as-judge, and saves to `data/manifest.json`. First batch of 18 samples (high/medium/low quality) generating now.
+**IMMEDIATE: Expand Training Data**
+- Batch 2 generation in progress (20 more artifacts with new component types)
+- Target: 100+ samples for robust generalization
+- Add more real-world screenshots (dribbble portfolios, award-winning sites)
+- Retrain both models on expanded dataset
 
-Training scripts ready:
-- `train-js.js` — trains Phase 1 JS MLP on collected data
-- `mlx/train.py` — trains Phase 2a MLX CNN on M4 Max GPU
-
-**NEXT: First Training Run**
-Once we have 18+ samples from current batch:
-- Train JS MLP (Phase 1) for immediate model feedback
-- Add reference app screenshots (Things 3, Alcove, Bear screenshots from web)
-- Generate more data (50-100 samples target)
-- Train MLX CNN (Phase 2a) on M4 Max GPU
-- Validate that scores correlate with human judgment
+**NEXT: Validation & Inference Integration**
+- Validate scores against human judgment (spot-check 10 samples)
+- Wire MLX inference server (`mlx/serve.py`) for real-time evaluation
+- Connect to OCA cognitive loop for live design feedback
 
 **THEN: Progressive Growth**
 - Begin skill evolution loop (model scores → skill improvement → better artifacts)

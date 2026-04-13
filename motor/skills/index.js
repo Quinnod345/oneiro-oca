@@ -82,3 +82,4 @@ export { default as xPostSelfBuildLoopMechanicsV2 } from './x-post-self-build-lo
 export { default as 'x-post-self-build-loop-mechanics-standalone' } from './x-post-self-build-loop-mechanics-standalone.js';
 export { default as 'x-post-build-failure-deep-dive' } from './x-post-build-failure-deep-dive.js';
 export { default as xPostPredictionDimensionWhy } from './x-post-prediction-dimension-why.js';
+export { default as xPostSelfBuildLoopMechanicsV3 } from './x-post-self-build-loop-mechanics-v3.js';
