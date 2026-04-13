@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Organism Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #1a2332;
+            --surface: #243447;
+            --border: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-healthy: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-critical: #ef4444;
+            --pulse-healthy: 2.5s;
+            --pulse-stressed: 0.8s;
+            --pulse-critical: 0.4s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: 100vh;
+            gap: 2px;
+        }
+
+        .organism-container {
+            background: var(--bg-secondary);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+        }
+
+        .organism {
+            width: 320px;
+            height: 320px;
+            position: relative;
+            margin-bottom: 48px;
+        }
+
+        .organism-core {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            background: radial-gradient(circle at 35% 35%, rgba(16, 185, 129, 0.4), rgba(16, 185, 129, 0.1), transparent 70%);
+            border: 3px solid var(--accent-healthy);
+            animation: breathe-healthy var(--pulse-healthy) ease-in-out infinite;
+        }
+
+        .organism-core.stressed {
+            border-color: var(--accent-warning);
+            background: radial-gradient(circle at 35% 35%, rgba(245, 158, 11, 0.4), rgba(245, 158, 11, 0.1), transparent 70%);
+            animation: breathe-stressed var(--pulse-stressed) ease-in-out infinite;
+        }
+
+        .organism-core.critical {
+            border-color: var(--accent-critical);
+            background: radial-gradient(circle at 35% 35%, rgba(239, 68, 68, 0.4), rgba(239, 68, 68, 0.1), transparent 70%);
+            animation: breathe-critical var(--pulse-critical) ease-in-out infinite;
+        }
+
+        .organism-rings {
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+        }
+
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid;
+            opacity: 0.6;
+        }
+
+        .ring-1 {
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-color: var(--accent-healthy);
+            animation: ring-pulse var(--pulse-healthy) ease-in-out infinite 0.5s;
+        }
+
+        .ring-2 {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border-color: var(--accent-healthy);
+            animation: ring-pulse var(--pulse-healthy) ease-in-out infinite 1s;
+        }
+
+        .stressed .ring-1, .stressed .ring-2 {
+            border-color: var(--accent-warning);
+            animation-duration: var(--pulse-stressed);
+        }
+
+        .critical .ring-1, .critical .ring-2 {
+            border-color: var(--accent-critical);
+            animation-duration: var(--pulse-critical);
+        }
+
+        .organism-vitals {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .vital-reading {
+            font-size: 48px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            margin-bottom: 8px;
+        }
+
+        .vital-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .organism-info {
+            position: absolute;
+            bottom: 120px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .organism-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .organism-status {
+            font-size: 16px;
+            font-weight: 500;
+            padding: 8px 24px;
+            border-radius: 24px;
+            display: inline-block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-healthy {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-healthy);
+            border: 1px solid var(--accent-healthy);
+        }
+
+        .status-stressed {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-warning);
+            border: 1px solid var(--accent-warning);
+        }
+
+        .status-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-critical);
+            border: 1px solid var(--accent-critical);
+        }
+
+        .neural-network {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+
+        .neural-path {
+            position: absolute;
+            width: 2px;
+            background: var(--accent-healthy);
+            animation: neural-flow 3s linear infinite;
+        }
+
+        .path-1 {
+            height: 200px;
+            top: 100px;
+            left: 200px;
+            transform: rotate(45deg);
+            animation-delay: 0s;
+        }
+
+        .path-2 {
+            height: 150px;
+            top: 400px;
+            left: 300px;
+            transform: rotate(-30deg);
+            animation-delay: 1s;
+        }
+
+        .path-3 {
+            height: 180px;
+            top: 200px;
+            right: 180px;
+            transform: rotate(60deg);
+            animation-delay: 2s;
+        }
+
+        .system-timestamp {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        @keyframes breathe-healthy {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+        }
+
+        @keyframes breathe-stressed {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            50% { transform: scale(1.08); box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); }
+        }
+
+        @keyframes breathe-critical {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+            50% { transform: scale(1.12); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+
+        @keyframes ring-pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(1.1); }
+        }
+
+        @keyframes neural-flow {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="neural-network">
+        <div class="neural-path path-1"></div>
+        <div class="neural-path path-2"></div>
+        <div class="neural-path path-3"></div>
+    </div>
+
+    <div class="system-timestamp" id="timestamp">00:00:00</div>
+
+    <div class="monitor-grid">
+        <div class="organism-container">
+            <div class="organism">
+                <div class="organism-rings stressed">
+                    <div class="ring ring-1"></div>
+                    <div class="ring ring-2"></div>
+                </div>
+                <div class="organism-core stressed">
+                    <div class="organism-vitals">
+                        <div class="vital-reading" id="cpu-usage">73%</div>
+                        <div class="vital-label">Load Average</div>
+                    </div>
+                </div>
+            </div>
+            <div class="organism-info">
+                <h2 class="organism-title">CPU Organism</h2>
+                <div class="organism-status status-stressed">Elevated Activity</div>
+            </div>
+        </div>
+
+        <div class="organism-container">
+            <div class="organism">
+                <div class="organism-rings">
+                    <div class="ring ring-1"></div>
+                    <div class="ring ring-2"></div>
+                </div>
+                <div class="organism-core">
+                    <div class="organism-vitals">
+                        <div class="vital-reading" id="memory-usage">42%</div>
+                        <div class="vital-label">Utilization</div>
+                    </div>
+                </div>
+            </div>
+            <div class="organism-info">
+                <h2 class="organism-title">Memory Organism</h2>
+                <div class="organism-status status-healthy">Stable Rhythm</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = now.toTimeString().split(' ')[0];
+        }
+
+        function simulateSystemMetrics() {
+            const cpuElement = document.getElementById('cpu-usage');
+            const memoryElement = document.getElementById('memory-usage');
+            
+            // Simulate fluctuating metrics
+            const baseCpu = 65;
+            const baseMemory = 40;
+            
+            const cpuVariation = Math.sin(Date.now() / 2000) * 15 + Math.random() * 10;
+            const memoryVariation = Math.sin(Date.now() / 3000) * 8 + Math.random() * 5;
+            
+            const currentCpu = Math.max(0, Math.min(100, baseCpu + cpuVariation));
+            const currentMemory = Math.max(0, Math.min(100, baseMemory + memoryVariation));
+            
+            cpuElement.textContent = Math.round(currentCpu) + '%';
+            memoryElement.textContent = Math.round(currentMemory) + '%';
+        }
+
+        updateTimestamp();
+        setInterval(updateTimestamp, 1000);
+        setInterval(simulateSystemMetrics, 2000);
+    </script>
+</body>
+</html>

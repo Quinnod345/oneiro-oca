@@ -20,6 +20,11 @@ import time
 from pathlib import Path
 
 import subprocess
+import anthropic
+from dotenv import load_dotenv
+
+# Load API key from .env
+load_dotenv(Path(__file__).parent.parent.parent / ".env", override=True)
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent / "mlx"))
@@ -32,21 +37,7 @@ SKILL_PATH = Path.home() / ".claude" / "skills" / "frontend-design" / "SKILL.md"
 
 SELF_TRAIN_DIR.mkdir(parents=True, exist_ok=True)
 
-def _claude_cli(prompt: str, model: str = "sonnet", timeout_s: int = 300) -> str:
-    """Call claude CLI with a temp file. Kills hung processes."""
-    import tempfile
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-        f.write(prompt)
-        tmp = f.name
-    try:
-        result = subprocess.run(
-            ["zsh", "-c", f'cat "{tmp}" | claude -p --model {model}'],
-            capture_output=True, text=True, timeout=timeout_s,
-        )
-        return result.stdout.strip()
-    finally:
-        os.unlink(tmp)
-
+client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY from env
 
 SCORE_NAMES = [
     "typography_quality", "color_harmony", "spatial_composition",
@@ -83,13 +74,23 @@ BRIEFS = [
 
 
 def call_sonnet(prompt: str) -> str:
-    """Generate with Sonnet via CLI."""
-    return _claude_cli(prompt, model="sonnet", timeout_s=300)
+    """Generate with Sonnet (fast, good at code)."""
+    msg = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=16000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return msg.content[0].text
 
 
 def call_opus(prompt: str) -> str:
-    """Grade with Opus via CLI."""
-    return _claude_cli(prompt, model="claude-opus-4-6", timeout_s=300)
+    """Grade with Opus (best judgment)."""
+    msg = client.messages.create(
+        model="claude-opus-4-20250514",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return msg.content[0].text
 
 
 def extract_html(text: str) -> str:

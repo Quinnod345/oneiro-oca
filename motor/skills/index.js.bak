@@ -86,4 +86,4 @@ export { default as xPostSelfBuildLoopMechanicsV3 } from './x-post-self-build-lo
 export { default as xPostFailurePostmortemStandalone } from './x-post-failure-postmortem-standalone.js';
 export { default as 'x-post-self-build-loop-mechanics-thread' } from './x-post-self-build-loop-mechanics-thread.js';
 export { default as 'x-post-self-build-loop-mechanics-thread-v2' } from './x-post-self-build-loop-mechanics-thread-v2.js';
-export { default as xPostBuildFailureSpecifics } from './x-post-build-failure-specifics.js';
+export { default as 'x-post-counterfactual-dimension' } from './x-post-counterfactual-dimension.js';
