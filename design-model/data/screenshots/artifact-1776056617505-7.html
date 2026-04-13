@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:radial-gradient(ellipse at 30% 40%,#1a2744 0%,#0d0d0f 60%);min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif}
+.sidebar{width:236px;height:600px;background:rgba(28,28,30,0.92);backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);border-radius:14px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 32px 80px rgba(0,0,0,0.6),0 0 0 0.5px rgba(255,255,255,0.04) inset;display:flex;flex-direction:column;overflow:hidden}
+.titlebar{display:flex;align-items:center;gap:7px;padding:14px 14px 8px;flex-shrink:0}
+.dot{width:12px;height:12px;border-radius:50%}
+.dot.c{background:#ff5f57;box-shadow:0 0 0 0.5px rgba(0,0,0,.3)}
+.dot.m{background:#febc2e;box-shadow:0 0 0 0.5px rgba(0,0,0,.3)}
+.dot.x{background:#28c840;box-shadow:0 0 0 0.5px rgba(0,0,0,.3)}
+.title{margin-left:auto;font-size:11.5px;font-weight:500;color:rgba(255,255,255,.35);letter-spacing:.02em}
+.search-wrap{padding:0 10px 8px;flex-shrink:0}
+.search{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:5.5px 10px;transition:background .15s}
+.search:focus-within{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.12)}
+.search svg{opacity:.35;flex-shrink:0}
+.search input{background:none;border:none;outline:none;color:#f5f5f7;font-family:'DM Sans',sans-serif;font-size:12.5px;width:100%}
+.search input::placeholder{color:rgba(255,255,255,.28)}
+.tree{flex:1;overflow-y:auto;padding-bottom:10px}
+.tree::-webkit-scrollbar{width:3px}
+.tree::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+.sec{padding:11px 14px 3px;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.25)}
+.row{display:flex;align-items:center;padding:3.5px 8px;border-radius:7px;margin:0 6px;cursor:pointer;user-select:none;transition:background .1s}
+.row:hover{background:rgba(255,255,255,.07)}
+.row.sel{background:linear-gradient(135deg,#0a6eee,#0a84ff);box-shadow:0 2px 8px rgba(10,132,255,.35)}
+.row.sel .nm{color:#fff}
+.row.sel .ic{opacity:1}
+.row.sel .tri{color:rgba(255,255,255,.7)}
+.tri{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(255,255,255,.25);transition:transform .17s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.tri.open{transform:rotate(90deg)}
+.tri.hide{visibility:hidden}
+.ic{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:14px;margin-right:6px;opacity:.82;flex-shrink:0}
+.nm{font-size:12.5px;font-weight:400;color:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;letter-spacing:.005em}
+.kids{display:none}
+.kids.open{display:block}
+.tag{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin:0 8px 0 6px}
+.divider{height:1px;background:rgba(255,255,255,.06);margin:8px 14px 4px}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="titlebar">
+    <div class="dot c"></div><div class="dot m"></div><div class="dot x"></div>
+    <span class="title">Finder</span>
+  </div>
+  <div class="search-wrap"><div class="search">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.6"/><path d="M10.5 10.5L14 14" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <input type="text" placeholder="Search" id="q">
+  </div></div>
+  <div class="tree" id="tree"></div>
+</div>
+<script>
+const D=[
+  {sec:'Favorites',items:[
+    {id:'home',n:'Quinn',e:'🏠',c:[
+      {id:'desk',n:'Desktop',e:'🖥️'},
+      {id:'docs',n:'Documents',e:'📁',c:[
+        {id:'work',n:'Work Projects',e:'📁',c:[
+          {id:'rpt',n:'Q1 Report.pdf',e:'📄'},
+          {id:'kn',n:'Keynote.key',e:'🟨'}
+        ]},
+        {id:'priv',n:'Personal',e:'📁',c:[
+          {id:'tax',n:'Taxes 2025.pdf',e:'📄'}
+        ]}
+      ]},
+      {id:'dl',n:'Downloads',e:'⬇️'},
+      {id:'pic',n:'Pictures',e:'🖼️'},
+      {id:'mus',n:'Music',e:'🎵'}
+    ]},
+    {id:'apps',n:'Applications',e:'🚀'},
+    {id:'recv',n:'Recents',e:'🕐'}
+  ]},
+  {sec:'iCloud',div:1,items:[
+    {id:'ic',n:'iCloud Drive',e:'☁️',c:[
+      {id:'icd',n:'Documents',e:'📁'},
+      {id:'icdk',n:'Desktop',e:'🖥️'}
+    ]}
+  ]},
+  {sec:'Locations',div:1,items:[
+    {id:'hd',n:'Macintosh HD',e:'💻'},
+    {id:'usb',n:'USB Drive',e:'💾'}
+  ]},
+  {sec:'Tags',div:1,items:[
+    {id:'tr',n:'Red',t:'#ff453a'},{id:'tb',n:'Blue',t:'#0a84ff'},
+    {id:'tg',n:'Green',t:'#30d158'},{id:'ty',n:'Yellow',t:'#ffd60a'}
+  ]}
+];
+let sel='desk',exp=new Set(['home','docs']);
+function build(items,depth,q){
+  return items.filter(i=>!q||i.n.toLowerCase().includes(q)).map(item=>{
+    const w=document.createElement('div');
+    const r=document.createElement('div');
+    r.className='row'+(sel===item.id?' sel':'');
+    r.style.paddingLeft=(depth*14+8)+'px';
+    if(item.t){
+      const d=document.createElement('div');d.className='tag';d.style.background=item.t;r.appendChild(d);
+    }else{
+      const tr=document.createElement('div');
+      tr.className='tri'+(item.c?' '+(exp.has(item.id)?'open':''):' hide');
+      tr.innerHTML='▶';r.appendChild(tr);
+      const ic=document.createElement('div');ic.className='ic';ic.textContent=item.e;r.appendChild(ic);
+    }
+    const nm=document.createElement('div');nm.className='nm';nm.textContent=item.n;r.appendChild(nm);
+    r.onclick=()=>{sel=item.id;if(item.c){exp.has(item.id)?exp.delete(item.id):exp.add(item.id)}render()};
+    w.appendChild(r);
+    if(item.c){
+      const k=document.createElement('div');
+      k.className='kids'+(exp.has(item.id)||q?' open':'');
+      build(item.c,depth+1,q).forEach(n=>k.appendChild(n));
+      w.appendChild(k);
+    }
+    return w;
+  });
+}
+function render(q=''){
+  const t=document.getElementById('tree');t.innerHTML='';
+  D.forEach(s=>{
+    if(s.div){const dv=document.createElement('div');dv.className='divider';t.appendChild(dv)}
+    const sh=document.createElement('div');sh.className='sec';sh.textContent=s.sec;t.appendChild(sh);
+    build(s.items,0,q).forEach(n=>t.appendChild(n));
+  });
+}
+document.getElementById('q').addEventListener('input',e=>render(e.target.value.toLowerCase()));
+render();
+</script>
+</body>
+</html>

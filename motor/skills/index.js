@@ -80,3 +80,5 @@ export { default as xPostCrmWorstDimension } from './x-post-crm-worst-dimension.
 export { default as 'x-post-build-failure' } from './x-post-build-failure.js';
 export { default as xPostSelfBuildLoopMechanicsV2 } from './x-post-self-build-loop-mechanics-v2.js';
 export { default as 'x-post-self-build-loop-mechanics-standalone' } from './x-post-self-build-loop-mechanics-standalone.js';
+export { default as 'x-post-build-failure-deep-dive' } from './x-post-build-failure-deep-dive.js';
+export { default as xPostPredictionDimensionWhy } from './x-post-prediction-dimension-why.js';
