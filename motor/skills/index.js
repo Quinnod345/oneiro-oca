@@ -83,3 +83,7 @@ export { default as 'x-post-self-build-loop-mechanics-standalone' } from './x-po
 export { default as 'x-post-build-failure-deep-dive' } from './x-post-build-failure-deep-dive.js';
 export { default as xPostPredictionDimensionWhy } from './x-post-prediction-dimension-why.js';
 export { default as xPostSelfBuildLoopMechanicsV3 } from './x-post-self-build-loop-mechanics-v3.js';
+export { default as xPostFailurePostmortemStandalone } from './x-post-failure-postmortem-standalone.js';
+export { default as 'x-post-self-build-loop-mechanics-thread' } from './x-post-self-build-loop-mechanics-thread.js';
+export { default as 'x-post-self-build-loop-mechanics-thread-v2' } from './x-post-self-build-loop-mechanics-thread-v2.js';
+export { default as 'x-post-thread-tweet3-build-data' } from './x-post-thread-tweet3-build-data.js';

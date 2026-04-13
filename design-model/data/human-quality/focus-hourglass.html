@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Focus Hourglass</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: oklch(0.16 0.01 60);
+    --bg-warm: oklch(0.18 0.02 55);
+    --glass-stroke: oklch(0.40 0.03 55);
+    --glass-fill: oklch(0.20 0.02 50 / 0.4);
+    --sand: oklch(0.75 0.10 70);
+    --sand-bright: oklch(0.82 0.12 65);
+    --sand-dim: oklch(0.60 0.08 75);
+    --text: oklch(0.72 0.04 60);
+    --text-dim: oklch(0.45 0.03 55);
+    --accent: oklch(0.70 0.10 60);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  /* warm ambient glow behind hourglass */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -55%);
+    width: 500px; height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      oklch(0.24 0.06 55 / 0.4) 0%,
+      oklch(0.20 0.04 60 / 0.2) 40%,
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+
+  .hourglass-container {
+    position: relative;
+    width: 240px;
+    height: 480px;
+  }
+
+  /* glass outline via SVG */
+  .glass-svg {
+    position: absolute;
+    inset: 0;
+    width: 240px;
+    height: 480px;
+  }
+
+  /* top bulb sand (depleting) */
+  .sand-top {
+    position: absolute;
+    bottom: 248px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 120px;
+    clip-path: polygon(
+      5% 0%, 95% 0%,
+      80% 100%, 20% 100%
+    );
+    background: linear-gradient(180deg, var(--sand) 0%, var(--sand-dim) 100%);
+    border-radius: 0 0 4px 4px;
+    animation: depleteTop 1500s linear forwards;
+    transform-origin: bottom center;
+  }
+  @keyframes depleteTop {
+    from { height: 120px; }
+    to   { height: 0px; }
+  }
+
+  /* bottom bulb sand (accumulating) */
+  .sand-bottom {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 8px;
+    clip-path: polygon(
+      15% 0%, 85% 0%,
+      95% 100%, 5% 100%
+    );
+    background: linear-gradient(180deg, var(--sand-bright) 0%, var(--sand) 60%, var(--sand-dim) 100%);
+    border-radius: 0 0 6px 6px;
+    animation: fillBottom 1500s linear forwards;
+    transform-origin: bottom center;
+  }
+  @keyframes fillBottom {
+    from { height: 8px; }
+    to   { height: 140px; }
+  }
+
+  /* falling stream through waist */
+  .stream {
+    position: absolute;
+    top: 226px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(180deg, var(--sand), var(--sand-bright), var(--sand));
+    opacity: 0.7;
+    animation: streamPulse 2s ease-in-out infinite;
+  }
+  @keyframes streamPulse {
+    0%, 100% { opacity: 0.5; height: 26px; }
+    50%      { opacity: 0.85; height: 30px; }
+  }
+
+  /* falling particles */
+  .particles {
+    position: absolute;
+    top: 240px;
+    left: 50%; transform: translateX(-50%);
+    width: 80px; height: 210px;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--sand-bright);
+    animation: particleFall linear infinite;
+  }
+
+  @keyframes particleFall {
+    0% {
+      transform: translateY(0) translateX(0);
+      opacity: 0.9;
+    }
+    15% {
+      opacity: 1;
+    }
+    70% {
+      opacity: 0.8;
+    }
+    90% {
+      opacity: 0.4;
+      transform: translateY(195px) translateX(var(--drift));
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(210px) translateX(var(--drift));
+    }
+  }
+
+  /* accumulated pile shimmer */
+  .pile-glow {
+    position: absolute;
+    bottom: 26px;
+    left: 50%; transform: translateX(-50%);
+    width: 60px; height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, oklch(0.80 0.10 65 / 0.3), transparent);
+    filter: blur(6px);
+    animation: pileShimmer 3s ease-in-out infinite alternate;
+  }
+  @keyframes pileShimmer {
+    0%   { opacity: 0.3; }
+    100% { opacity: 0.7; }
+  }
+
+  /* text content below */
+  .info {
+    margin-top: 36px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .session-label {
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+
+  .timer-display {
+    font-size: 42px;
+    font-weight: 200;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .pause-btn {
+    margin-top: 4px;
+    width: 44px; height: 44px;
+    border: 1.5px solid var(--glass-stroke);
+    border-radius: 50%;
+    background: oklch(0.20 0.02 55 / 0.6);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(4px);
+  }
+  .pause-btn:hover {
+    background: oklch(0.25 0.03 55 / 0.7);
+    border-color: var(--accent);
+    transform: scale(1.06);
+  }
+  .pause-icon {
+    display: flex; gap: 4px;
+  }
+  .pause-bar {
+    width: 3px; height: 14px;
+    border-radius: 1px;
+    background: var(--text);
+  }
+
+  .status-text {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<div class="hourglass-container">
+  <!-- glass shape -->
+  <svg class="glass-svg" viewBox="0 0 240 480" fill="none">
+    <!-- top bulb -->
+    <path d="M 40,20 Q 40,8 52,8 L 188,8 Q 200,8 200,20 L 200,180 Q 200,220 120,240 Q 40,220 40,180 Z"
+          fill="oklch(0.20 0.02 50 / 0.25)" stroke="oklch(0.38 0.03 55)" stroke-width="1.2"/>
+    <!-- bottom bulb -->
+    <path d="M 40,460 Q 40,472 52,472 L 188,472 Q 200,472 200,460 L 200,300 Q 200,260 120,240 Q 40,260 40,300 Z"
+          fill="oklch(0.20 0.02 50 / 0.25)" stroke="oklch(0.38 0.03 55)" stroke-width="1.2"/>
+    <!-- top cap -->
+    <rect x="32" y="4" width="176" height="5" rx="2" fill="oklch(0.35 0.03 55)"/>
+    <!-- bottom cap -->
+    <rect x="32" y="471" width="176" height="5" rx="2" fill="oklch(0.35 0.03 55)"/>
+    <!-- waist highlight -->
+    <ellipse cx="120" cy="240" rx="6" ry="3" fill="oklch(0.50 0.04 55 / 0.2)"/>
+    <!-- glass reflection -->
+    <path d="M 60,30 Q 55,120 80,200" stroke="oklch(0.50 0.02 55 / 0.08)" stroke-width="18" stroke-linecap="round" fill="none"/>
+  </svg>
+
+  <div class="sand-top"></div>
+  <div class="stream"></div>
+  <div class="particles" id="particles"></div>
+  <div class="sand-bottom"></div>
+  <div class="pile-glow"></div>
+</div>
+
+<div class="info">
+  <div class="session-label">Deep Work Session</div>
+  <div class="timer-display" id="timer">25:00</div>
+  <button class="pause-btn" id="pauseBtn" aria-label="Pause">
+    <div class="pause-icon">
+      <div class="pause-bar"></div>
+      <div class="pause-bar"></div>
+    </div>
+  </button>
+  <div class="status-text">Focused</div>
+</div>
+
+<script>
+  // generate particles
+  const particlesEl = document.getElementById('particles');
+  const count = 18;
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 2 + Math.random() * 3;
+    const left = 30 + Math.random() * 20; // cluster around center
+    const dur = 1.8 + Math.random() * 1.4;
+    const delay = Math.random() * 3;
+    const drift = (-8 + Math.random() * 16);
+    const brightness = 0.70 + Math.random() * 0.15;
+    p.style.cssText = `
+      width: ${size}px;
+      height: ${size}px;
+      left: ${left}%;
+      top: 0;
+      --drift: ${drift}px;
+      animation-duration: ${dur}s;
+      animation-delay: ${delay}s;
+      background: oklch(${brightness} 0.10 ${65 + Math.random() * 15});
+      opacity: 0;
+    `;
+    particlesEl.appendChild(p);
+  }
+
+  // timer logic
+  let totalSeconds = 25 * 60;
+  let running = true;
+  const timerEl = document.getElementById('timer');
+  const pauseBtn = document.getElementById('pauseBtn');
+
+  function updateTimer() {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    timerEl.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  setInterval(() => {
+    if (running && totalSeconds > 0) {
+      totalSeconds--;
+      updateTimer();
+    }
+  }, 1000);
+
+  pauseBtn.addEventListener('click', () => {
+    running = !running;
+    document.querySelector('.status-text').textContent = running ? 'Focused' : 'Paused';
+    pauseBtn.style.borderColor = running ? 'oklch(0.40 0.03 55)' : 'oklch(0.70 0.10 60)';
+  });
+</script>
+
+</body>
+</html>

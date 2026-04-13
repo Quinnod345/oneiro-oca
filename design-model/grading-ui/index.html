@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Model Grading</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Design Grading</h1>
+    <nav>
+      <button class="nav-btn active" data-view="gallery">Gallery</button>
+      <button class="nav-btn" data-view="grade">Grade</button>
+      <button class="nav-btn" data-view="compare">Compare</button>
+      <button class="nav-btn" data-view="stats">Stats</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Gallery View -->
+    <section id="view-gallery" class="view active">
+      <div class="gallery-controls">
+        <select id="filter-source">
+          <option value="all">All Sources</option>
+          <option value="scraped_real_world">Scraped</option>
+          <option value="real_world">Real World</option>
+          <option value="llm_judge">Synthetic</option>
+          <option value="flywheel">Flywheel</option>
+        </select>
+        <select id="filter-graded">
+          <option value="all">All</option>
+          <option value="ungraded">Ungraded</option>
+          <option value="graded">Graded</option>
+        </select>
+        <span id="gallery-count"></span>
+      </div>
+      <div id="gallery-grid" class="gallery-grid"></div>
+    </section>
+
+    <!-- Grade View -->
+    <section id="view-grade" class="view">
+      <div class="grade-layout">
+        <div class="grade-screenshot">
+          <img id="grade-img" src="" alt="Design screenshot">
+          <div id="grade-name" class="grade-name"></div>
+        </div>
+        <div class="grade-panel">
+          <!-- Quick Grade (default) -->
+          <div class="grade-mode-toggle">
+            <button class="mode-btn active" data-mode="quick">Quick</button>
+            <button class="mode-btn" data-mode="detailed">Detailed</button>
+          </div>
+
+          <div id="quick-grade" class="grade-section">
+            <h2>How good is this design overall?</h2>
+            <div id="quick-overall" class="big-slider"></div>
+
+            <h2>How innovative / creative is it?</h2>
+            <div id="quick-innovation" class="big-slider"></div>
+
+            <h2>Does everything work together as a whole?</h2>
+            <p class="hint">Great typography that clashes with the color scheme = bad. Everything should feel like one cohesive vision.</p>
+            <div id="quick-coherence" class="big-slider"></div>
+
+            <h2>Tags</h2>
+            <div id="innovation-tags" class="tags">
+              <button class="tag" data-tag="innovative">Innovative</button>
+              <button class="tag" data-tag="conventional">Conventional</button>
+              <button class="tag" data-tag="problem_redefiner">Problem Redefiner</button>
+              <button class="tag" data-tag="constraint_turner">Constraint Turner</button>
+              <button class="tag" data-tag="paradigm_shift">Paradigm Shift</button>
+              <button class="tag" data-tag="cohesive">Cohesive</button>
+              <button class="tag" data-tag="disjointed">Disjointed</button>
+            </div>
+          </div>
+
+          <!-- Detailed Grade (expandable) -->
+          <div id="detailed-grade" class="grade-section" style="display:none">
+            <h2>All Dimensions</h2>
+            <div id="grade-sliders" class="sliders"></div>
+          </div>
+
+          <h2>Notes</h2>
+          <p class="hint">This is the most valuable signal. Be specific about what works, what doesn't, and WHY. "The typography is elegant but fights the color palette" teaches more than any slider.</p>
+          <textarea id="grade-notes" placeholder="What works? What doesn't? Do the parts fit together? Is there anything genuinely new here?"></textarea>
+
+          <div class="grade-actions">
+            <button id="btn-prev" class="btn-secondary">Prev</button>
+            <button id="btn-submit" class="btn-primary">Submit</button>
+            <button id="btn-skip" class="btn-secondary">Skip</button>
+            <button id="btn-next" class="btn-secondary">Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare View -->
+    <section id="view-compare" class="view">
+      <div class="compare-layout">
+        <div class="compare-side">
+          <img id="compare-img-a" src="" alt="Design A">
+          <div id="compare-name-a" class="compare-name">A</div>
+        </div>
+        <div class="compare-controls">
+          <h2>Which is better?</h2>
+          <div id="compare-dims" class="compare-dims"></div>
+          <button id="btn-submit-compare" class="btn-primary">Submit Comparison</button>
+          <button id="btn-new-compare" class="btn-secondary">New Pair</button>
+        </div>
+        <div class="compare-side">
+          <img id="compare-img-b" src="" alt="Design B">
+          <div id="compare-name-b" class="compare-name">B</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats View -->
+    <section id="view-stats" class="view">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total">-</div>
+          <div class="stat-label">Total Designs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-graded">-</div>
+          <div class="stat-label">Human Graded</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-remaining">-</div>
+          <div class="stat-label">Remaining</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-pairs">-</div>
+          <div class="stat-label">Comparison Pairs</div>
+        </div>
+      </div>
+      <div class="stats-sections">
+        <div>
+          <h2>Grading Progress</h2>
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <div id="progress-text" class="progress-text"></div>
+        </div>
+        <div>
+          <h2>Model-Human Disagreements</h2>
+          <div id="disagreement-list" class="disagreement-list"></div>
+        </div>
+        <div>
+          <h2>Source Breakdown</h2>
+          <div id="source-breakdown" class="source-breakdown"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

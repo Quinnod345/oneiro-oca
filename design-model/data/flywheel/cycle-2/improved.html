@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #090910;
+  --surface: #111118;
+  --surface-2: #18181f;
+  --surface-3: #1e1e27;
+  --border: rgba(255,255,255,0.065);
+  --border-hi: rgba(255,255,255,0.13);
+  --text-1: #eeeef2;
+  --text-2: #888898;
+  --text-3: #50505e;
+
+  --green:  #4ade80; --green-dim:  rgba(74,222,128,0.08);  --green-mid: rgba(74,222,128,0.18);
+  --blue:   #38bdf8; --blue-dim:   rgba(56,189,248,0.08);  --blue-mid:  rgba(56,189,248,0.18);
+  --amber:  #fbbf24; --amber-dim:  rgba(251,191,36,0.08);  --amber-mid: rgba(251,191,36,0.18);
+  --red:    #f87171; --red-dim:    rgba(248,113,113,0.08); --red-mid:   rgba(248,113,113,0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+html, body { height: 100%; }
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* ─── Demo Shell ─── */
+.demo {
+  text-align: center;
+  max-width: 440px;
+  padding: 48px 24px;
+}
+.demo-eyebrow {
+  font-family: 'Syne', sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 18px;
+}
+.demo-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text-1);
+  margin-bottom: 10px;
+}
+.demo-sub {
+  font-size: 14.5px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text-2);
+  line-height: 1.65;
+  margin-bottom: 44px;
+}
+
+/* ─── Button Grid ─── */
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-1);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--border-hi); }
+.btn:focus-visible {
+  border-color: var(--border-hi);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.1);
+}
+.btn:active { transform: scale(0.965); }
+
+.btn-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+  transition: box-shadow 0.18s ease;
+}
+.btn:hover .btn-dot { box-shadow: 0 0 10px currentColor; }
+
+.btn-success .btn-dot { background: var(--green); color: var(--green); }
+.btn-info    .btn-dot { background: var(--blue);  color: var(--blue); }
+.btn-warning .btn-dot { background: var(--amber); color: var(--amber); }
+.btn-error   .btn-dot { background: var(--red);   color: var(--red); }
+
+.btn-all {
+  grid-column: 1 / -1;
+  background: var(--surface-2);
+  border-color: rgba(255,255,255,0.09);
+  color: var(--text-2);
+  font-size: 12.5px;
+  padding: 10px;
+}
+.btn-all:hover { color: var(--text-1); }
+
+/* ─── Hint row ─── */
+.kbd-hint {
+  margin-top: 20px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10.5px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* ─── Toast Region ─── */
+#toast-region {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  width: 364px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  pointer-events: none;
+}
+
+/* ─── Toast ─── */
+.toast {
+  pointer-events: all;
+  position: relative;
+  background: rgba(13, 13, 20, 0.93);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.055) inset,
+    0 2px 8px rgba(0,0,0,0.4),
+    0 10px 32px rgba(0,0,0,0.45),
+    0 24px 64px rgba(0,0,0,0.3);
+
+  /* enter/exit state */
+  opacity: 0;
+  transform: translateX(calc(100% + 30px)) scale(0.96);
+  max-height: 0;
+  margin-bottom: 0;
+
+  transition:
+    transform 0.5s cubic-bezier(0.34, 1.48, 0.64, 1),
+    opacity   0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+  background-image: radial-gradient(ellipse 70% 90% at 0% 55%, var(--t-dim, transparent) 0%, transparent 100%);
+  cursor: default;
+  will-change: transform, opacity;
+}
+
+/* Left accent */
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 2px;
+  background: var(--t-color, transparent);
+  border-radius: 2px;
+  opacity: 0.9;
+}
+
+/* Top shimmer edge */
+.toast::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--t-color, transparent) 0%, rgba(255,255,255,0.06) 40%, transparent 100%);
+  opacity: 0.45;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  max-height: 200px;
+  margin-bottom: 8px;
+}
+
+.toast.collapsing {
+  opacity: 0;
+  transform: translateX(calc(100% + 30px)) scale(0.96);
+  max-height: 0;
+  margin-bottom: 0;
+  transition:
+    transform   0.26s cubic-bezier(0.4, 0, 1, 1),
+    opacity     0.2s  cubic-bezier(0.4, 0, 1, 1),
+    max-height  0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover: slight lift */
+.toast.visible:hover {
+  border-color: var(--border-hi);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.07) inset,
+    0 4px 12px rgba(0,0,0,0.45),
+    0 14px 40px rgba(0,0,0,0.5),
+    0 28px 72px rgba(0,0,0,0.3);
+  transform: translateX(-2px) scale(1.005);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+/* Swipe-out dragging */
+.toast.dragging {
+  transition: none !important;
+  cursor: grabbing;
+}
+
+/* Type palettes */
+.toast-success { --t-color: var(--green); --t-dim: var(--green-dim); --t-mid: var(--green-mid); }
+.toast-info    { --t-color: var(--blue);  --t-dim: var(--blue-dim);  --t-mid: var(--blue-mid); }
+.toast-warning { --t-color: var(--amber); --t-dim: var(--amber-dim); --t-mid: var(--amber-mid); }
+.toast-error   { --t-color: var(--red);   --t-dim: var(--red-dim);   --t-mid: var(--red-mid); }
+
+/* ─── Inner layout ─── */
+.toast-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 12px 12px 16px;
+}
+
+/* Icon */
+.toast-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 0px;
+  color: var(--t-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 6px var(--t-color));
+}
+
+/* Body */
+.toast-body { flex: 1; min-width: 0; }
+
+.toast-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+
+.toast-msg {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+/* Action row */
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.toast-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--t-mid, var(--border));
+  background: var(--t-dim, transparent);
+  color: var(--t-color);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  outline: none;
+}
+.toast-action:hover { background: var(--t-mid); }
+.toast-action:focus-visible {
+  box-shadow: 0 0 0 2px var(--t-color);
+  outline: none;
+}
+
+.toast-action-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-3);
+}
+.toast-action-ghost:hover { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+
+/* Close button */
+.toast-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s ease, color 0.14s ease;
+  outline: none;
+  margin-top: -1px;
+  margin-right: -2px;
+}
+.toast-close:hover { background: var(--surface-3); color: var(--text-1); }
+.toast-close:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.15); }
+.toast-close svg { pointer-events: none; }
+
+/* ─── Progress bar ─── */
+.toast-progress {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 2px;
+  background: var(--t-color);
+  opacity: 0.5;
+  border-radius: 0 0 0 13px;
+  transform-origin: left center;
+  width: 100%;
+  transform: scaleX(1);
+  transition: transform linear;
+}
+
+.toast:hover .toast-progress,
+.toast.paused .toast-progress {
+  /* pause handled via JS */
+  animation-play-state: paused;
+}
+</style>
+</head>
+<body>
+
+<div class="demo" role="main">
+  <div class="demo-eyebrow">UI Component</div>
+  <h1 class="demo-title">Toast Notifications</h1>
+  <p class="demo-sub">Hover to pause · Drag to dismiss · Actions included</p>
+
+  <div class="button-grid" role="group" aria-label="Trigger notifications">
+    <button class="btn btn-success" onclick="showToast('success')">
+      <span class="btn-dot" aria-hidden="true"></span> Success
+    </button>
+    <button class="btn btn-info" onclick="showToast('info')">
+      <span class="btn-dot" aria-hidden="true"></span> Info
+    </button>
+    <button class="btn btn-warning" onclick="showToast('warning')">
+      <span class="btn-dot" aria-hidden="true"></span> Warning
+    </button>
+    <button class="btn btn-error" onclick="showToast('error')">
+      <span class="btn-dot" aria-hidden="true"></span> Error
+    </button>
+    <button class="btn btn-all" onclick="['success','info','warning','error'].forEach((t,i)=>setTimeout(()=>showToast(t),i*180))">
+      Fire all four
+    </button>
+  </div>
+
+  <p class="kbd-hint" aria-label="Keyboard shortcut">
+    <kbd>Esc</kbd> dismiss latest &nbsp;·&nbsp; <kbd>D</kbd> demo burst
+  </p>
+</div>
+
+<div
+  id="toast-region"
+  role="region"
+  aria-label="Notifications"
+  aria-live="polite"
+  aria-atomic="false"
+></div>
+
+<script>
+const CONFIGS = {
+  success: {
+    title: 'Changes saved',
+    msg: 'Your draft has been synced across all devices.',
+    duration: 5000,
+    action: { label: 'View', ghost: 'Dismiss' },
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M5 8l2.2 2.2L11 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  },
+  info: {
+    title: 'Update available',
+    msg: 'Version 2.4.1 is ready. Restart to apply the latest fixes.',
+    duration: 6000,
+    action: { label: 'Restart now', ghost: 'Later' },
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M8 7.5v3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="5.2" r="0.85" fill="currentColor"/>
+    </svg>`
+  },
+  warning: {
+    title: 'Storage almost full',
+    msg: 'You've used 89% of your 5 GB quota. Free up space to avoid interruptions.',
+    duration: 7000,
+    action: { label: 'Manage storage', ghost: 'Ignore' },
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="11.2" r="0.8" fill="currentColor"/>
+    </svg>`
+  },
+  error: {
+    title: 'Payment failed',
+    msg: 'We couldn't charge your card ending in 4242. Please update your billing info.',
+    duration: 0,
+    action: { label: 'Update card', ghost: 'Cancel' },
+    icon: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`
+  }
+};
+
+const region = document.getElementById('toast-region');
+let toasts = [];
+
+function showToast(type) {
+  const cfg = CONFIGS[type];
+  const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = `toast toast-${type}`;
+  el.setAttribute('role', 'alert');
+  el.setAttribute('aria-atomic', 'true');
+  el.setAttribute('aria-label', `${type}: ${cfg.title}`);
+  el.tabIndex = 0;
+
+  const hasDuration = cfg.duration > 0;
+
+  el.innerHTML = `
+    <div class="toast-inner">
+      <div class="toast-icon" aria-hidden="true">${cfg.icon}</div>
+      <div class="toast-body">
+        <div class="toast-title">${cfg.title}</div>
+        <div class="toast-msg">${cfg.msg}</div>
+        ${cfg.action ? `
+        <div class="toast-actions">
+          <button class="toast-action" onclick="dismissToast('${id}')">${cfg.action.label}</button>
+          <button class="toast-action toast-action-ghost" onclick="dismissToast('${id}')">${cfg.action.ghost}</button>
+        </div>` : ''}
+      </div>
+      <button class="toast-close" aria-label="Dismiss notification" onclick="dismissToast('${id}')">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    ${hasDuration ? `<div class="toast-progress" id="prog-${id}"></div>` : ''}
+  `;
+
+  region.appendChild(el);
+
+  // Force reflow then animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { el.classList.add('visible'); });
+  });
+
+  // Auto-dismiss timer
+  let timer = null;
+  let startTime = null;
+  let remaining = cfg.duration;
+  let progressEl = hasDuration ? document.getElementById('prog-' + id) : null;
+  let rafId = null;
+
+  function startProgress() {
+    if (!hasDuration || !progressEl) return;
+    startTime = performance.now();
+    function tick(now) {
+      const elapsed = now - startTime;
+      const pct = Math.min(elapsed / remaining, 1);
+      progressEl.style.transform = `scaleX(${1 - pct})`;
+      if (pct < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        dismissToast(id);
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function pauseProgress() {
+    if (!hasDuration) return;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    if (startTime !== null) {
+      remaining -= performance.now() - startTime;
+      startTime = null;
+    }
+    el.classList.add('paused');
+  }
+
+  function resumeProgress() {
+    if (!hasDuration) return;
+    el.classList.remove('paused');
+    startProgress();
+  }
+
+  if (hasDuration) startProgress();
+
+  // Hover to pause
+  el.addEventListener('mouseenter', pauseProgress);
+  el.addEventListener('mouseleave', resumeProgress);
+  el.addEventListener('focus', pauseProgress);
+  el.addEventListener('blur', resumeProgress);
+
+  // Swipe / drag to dismiss
+  let dragStart = null;
+  let dragX = 0;
+
+  function onPointerDown(e) {
+    if (e.target.closest('button')) return;
+    dragStart = e.clientX;
+    dragX = 0;
+    el.classList.add('dragging');
+    pauseProgress();
+    el.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e) {
+    if (dragStart === null) return;
+    dragX = Math.max(0, e.clientX - dragStart);
+    const opacity = Math.max(0, 1 - dragX / 180);
+    el.style.transform = `translateX(${dragX}px) scale(1)`;
+    el.style.opacity = opacity;
+  }
+
+  function onPointerUp(e) {
+    if (dragStart === null) return;
+    el.classList.remove('dragging');
+    if (dragX > 90) {
+      dismissToast(id);
+    } else {
+      el.style.transform = '';
+      el.style.opacity = '';
+      resumeProgress();
+    }
+    dragStart = null;
+    dragX = 0;
+  }
+
+  el.addEventListener('pointerdown', onPointerDown);
+  el.addEventListener('pointermove', onPointerMove);
+  el.addEventListener('pointerup', onPointerUp);
+  el.addEventListener('pointercancel', onPointerUp);
+
+  // Keyboard: Escape or Delete on focused toast
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === 'Delete') { e.preventDefault(); dismissToast(id); }
+  });
+
+  const meta = { id, el, pauseProgress, resumeProgress, rafId: () => rafId };
+  toasts.push(meta);
+  return id;
+}
+
+function dismissToast(id) {
+  const idx = toasts.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const { el } = toasts[idx];
+  toasts.splice(idx, 1);
+
+  el.classList.remove('visible');
+  el.classList.add('collapsing');
+  el.setAttribute('aria-hidden', 'true');
+
+  el.addEventListener('transitionend', () => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }, { once: true });
+
+  // Fallback removal
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 800);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('.toast')) return;
+  if (e.key === 'Escape' && toasts.length > 0) {
+    dismissToast(toasts[toasts.length - 1].id);
+  }
+  if (e.key === 'd' || e.key === 'D') {
+    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      ['success','info','warning','error'].forEach((t, i) => setTimeout(() => showToast(t), i * 160));
+    }
+  }
+});
+
+// Show an initial toast on load
+setTimeout(() => showToast('info'), 600);
+</script>
+</body>
+</html>

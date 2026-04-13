@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-window:       #1e1e24;
+    --bg-titlebar:     #2c2c32;
+    --bg-tabbar:       #252529;
+    --bg-navigator:    #232327;
+    --bg-editor:       #1e1e24;
+    --bg-statusbar:    #18181d;
+    --bg-line-active:  rgba(255,255,255,0.035);
+    --bg-nav-active:   rgba(74,130,255,0.18);
+    --border-subtle:   rgba(255,255,255,0.065);
+    --border-strong:   rgba(0,0,0,0.45);
+    --text-plain:      #dfdfe0;
+    --text-dim:        rgba(255,255,255,0.38);
+    --text-mid:        rgba(255,255,255,0.55);
+    --text-bright:     rgba(255,255,255,0.88);
+    --syn-keyword:     #fc5fa3;
+    --syn-type:        #5dd8ff;
+    --syn-string:      #fc6a5d;
+    --syn-comment:     #6c7986;
+    --syn-number:      #d9c97c;
+    --syn-function:    #67b7a4;
+    --syn-attr:        #fd8f3f;
+    --syn-property:    #41a1c0;
+    --syn-macro:       #fd8f3f;
+    --syn-builtin:     #78c2b3;
+  }
+
+  body {
+    background: #0e0e12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  }
+
+  /* ── Window ──────────────────────────────────────── */
+  .window {
+    width: 940px;
+    height: 620px;
+    border-radius: 11px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-window);
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.08),
+      0 2px 4px rgba(0,0,0,0.4),
+      0 12px 40px rgba(0,0,0,0.55),
+      0 40px 100px rgba(0,0,0,0.5);
+  }
+
+  /* ── Title bar ───────────────────────────────────── */
+  .titlebar {
+    height: 40px;
+    background: var(--bg-titlebar);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 7.5px;
+    margin-right: 10px;
+  }
+
+  .tl {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: default;
+    position: relative;
+    transition: filter 0.12s;
+  }
+  .tl:hover { filter: brightness(1.15) saturate(1.1); }
+  .tl-close    { background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.18); }
+  .tl-minimize { background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12); }
+  .tl-maximize { background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12); }
+
+  .titlebar-center {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.01em;
+  }
+
+  .titlebar-branch {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .branch-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #28c840;
+    flex-shrink: 0;
+  }
+
+  /* ── Tab bar ──────────────────────────────────────── */
+  .tabbar {
+    height: 36px;
+    background: var(--bg-tabbar);
+    border-bottom: 1px solid var(--border-strong);
+    display: flex;
+    align-items: flex-end;
+    padding-left: 10px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+
+  .tab {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 0 10px;
+    border-radius: 7px 7px 0 0;
+    font-size: 11.5px;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    position: relative;
+    transition: color 0.12s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text-mid); }
+
+  .tab.active {
+    background: var(--bg-editor);
+    color: var(--text-bright);
+    border-top: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+    margin-bottom: -1px;
+    z-index: 1;
+  }
+
+  .tab-file-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2.5px;
+    flex-shrink: 0;
+  }
+  .fi-swift  { background: #f05138; }
+  .fi-js     { background: #f0db4f; }
+  .fi-json   { background: #7d9b5e; }
+  .fi-ts     { background: #3178c6; }
+
+  .tab-modified {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fc9a3a;
+    flex-shrink: 0;
+  }
+
+  .tab-x {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.12s, background 0.12s;
+    flex-shrink: 0;
+    margin-left: 1px;
+  }
+  .tab:hover .tab-x,
+  .tab.active .tab-x { opacity: 1; }
+  .tab-x:hover { background: rgba(255,255,255,0.12); }
+
+  /* ── Body layout ──────────────────────────────────── */
+  .body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Navigator ────────────────────────────────────── */
+  .nav {
+    width: 204px;
+    background: var(--bg-navigator);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .nav-toolbar {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .nav-tool-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.1s;
+    color: var(--text-dim);
+  }
+  .nav-tool-btn:hover { background: rgba(255,255,255,0.07); }
+  .nav-tool-btn.active { color: rgba(255,255,255,0.75); }
+
+  .nav-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 6px 0;
+  }
+  .nav-scroll::-webkit-scrollbar { width: 4px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  .nav-section { margin-bottom: 4px; }
+
+  .nav-section-header {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 3px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .nav-section-header:hover { background: rgba(255,255,255,0.03); }
+
+  .chevron {
+    flex-shrink: 0;
+    transition: transform 0.15s cubic-bezier(0.4,0,0.2,1);
+  }
+  .chevron.open { transform: rotate(90deg); }
+
+  .nav-row {
+    height: 23px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 18px;
+    gap: 5px;
+    cursor: pointer;
+    color: rgba(255,255,255,0.6);
+    font-size: 11.5px;
+    transition: background 0.08s;
+    user-select: none;
+    position: relative;
+  }
+  .nav-row:hover { background: rgba(255,255,255,0.04); }
+  .nav-row.active {
+    background: var(--bg-nav-active);
+    color: rgba(255,255,255,0.9);
+  }
+
+  .nav-row-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── Editor pane ──────────────────────────────────── */
+  .editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .breadcrumb {
+    height: 27px;
+    background: var(--bg-editor);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 3px;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .breadcrumb::-webkit-scrollbar { display: none; }
+
+  .bc-item {
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .bc-item:hover { color: var(--text-mid); }
+  .bc-item.current { color: var(--text-mid); }
+
+  .bc-sep {
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  /* ── Code scroll area ────────────────────────────── */
+  .code-scroll {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+  }
+  .code-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+  .code-scroll::-webkit-scrollbar-corner { background: transparent; }
+  .code-scroll::-webkit-scrollbar-track { background: transparent; }
+  .code-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.11);
+    border-radius: 5px;
+    border: 2.5px solid transparent;
+    background-clip: content-box;
+  }
+  .code-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.2);
+    background-clip: content-box;
+  }
+
+  /* ── Gutter / line numbers ───────────────────────── */
+  .gutter {
+    padding: 14px 0;
+    background: var(--bg-editor);
+    border-right: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .ln {
+    font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 21px;
+    padding: 0 14px 0 10px;
+    color: rgba(255,255,255,0.18);
+    text-align: right;
+    cursor: pointer;
+    transition: color 0.1s;
+    letter-spacing: 0.01em;
+  }
+  .ln:hover { color: rgba(255,255,255,0.48); }
+  .ln.active { color: rgba(255,255,255,0.6); }
+  .ln.breakpoint {
+    color: #ff453a;
+    position: relative;
+  }
+
+  /* ── Code content ────────────────────────────────── */
+  .code-content {
+    flex: 1;
+    padding: 14px 24px 80px 14px;
+    min-width: 0;
+  }
+
+  .cl {
+    font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 21px;
+    white-space: pre;
+    display: block;
+    position: relative;
+  }
+
+  .cl.active-line {
+    background: var(--bg-line-active);
+    border-radius: 2px;
+    margin: 0 -14px 0 -14px;
+    padding: 0 14px;
+  }
+
+  /* ── Syntax colors ───────────────────────────────── */
+  .kw   { color: var(--syn-keyword); }
+  .ty   { color: var(--syn-type); }
+  .st   { color: var(--syn-string); }
+  .cm   { color: var(--syn-comment); font-style: italic; }
+  .nu   { color: var(--syn-number); }
+  .fn   { color: var(--syn-function); }
+  .at   { color: var(--syn-attr); }
+  .pr   { color: var(--syn-property); }
+  .mc   { color: var(--syn-macro); }
+  .bl   { color: var(--syn-builtin); }
+  .tx   { color: var(--text-plain); }
+  .op   { color: rgba(255,255,255,0.6); }
+
+  /* ── Cursor ──────────────────────────────────────── */
+  .cursor {
+    display: inline-block;
+    width: 1.5px;
+    height: 15px;
+    background: rgba(255,255,255,0.82);
+    vertical-align: text-bottom;
+    border-radius: 0.75px;
+    animation: blink 1.08s step-end infinite;
+    margin-left: 0.5px;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  /* ── Selection ───────────────────────────────────── */
+  .sel {
+    background: rgba(74,130,255,0.28);
+    border-radius: 2px;
+  }
+
+  /* ── Status bar ──────────────────────────────────── */
+  .statusbar {
+    height: 24px;
+    background: var(--bg-statusbar);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    flex-shrink: 0;
+    font-size: 10.5px;
+    color: var(--text-dim);
+  }
+
+  .sb-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: color 0.1s;
+    white-space: nowrap;
+  }
+  .sb-item:hover { color: var(--text-mid); }
+
+  .sb-dot {
+    width: 5.5px;
+    height: 5.5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .sb-dot.green  { background: #28c840; }
+  .sb-dot.yellow { background: #febc2e; }
+
+  .sb-sep {
+    width: 1px;
+    height: 10px;
+    background: rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+
+  .sb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ── Error / warning underlines ──────────────────── */
+  .err { text-decoration: underline; text-decoration-style: wavy; text-decoration-color: #ff453a; }
+  .wrn { text-decoration: underline; text-decoration-style: wavy; text-decoration-color: #ffd60a; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor { animation: none; opacity: 1; }
+    *, *::before, *::after { transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <!-- ── Title bar ── -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="tl tl-close"></div>
+      <div class="tl tl-minimize"></div>
+      <div class="tl tl-maximize"></div>
+    </div>
+    <div class="titlebar-center">ContentView.swift — Oneiro</div>
+    <div class="titlebar-branch">
+      <div class="branch-dot"></div>
+      <span>main</span>
+    </div>
+  </div>
+
+  <!-- ── Tab bar ── -->
+  <div class="tabbar">
+    <div class="tab">
+      <div class="tab-file-icon fi-json"></div>
+      <span>manifest.json</span>
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 1l5 5M6 1L1 6" stroke="rgba(255,255,255,0.45)" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <div class="tab active">
+      <div class="tab-file-icon fi-swift"></div>
+      <span>ContentView.swift</span>
+      <div class="tab-modified"></div>
+    </div>
+    <div class="tab">
+      <div class="tab-file-icon fi-swift"></div>
+      <span>DreamEngine.swift</span>
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 1l5 5M6 1L1 6" stroke="rgba(255,255,255,0.45)" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <div class="tab">
+      <div class="tab-file-icon fi-ts"></div>
+      <span>engine.ts</span>
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+          <path d="M1 1l5 5M6 1L1 6" stroke="rgba(255,255,255,0.45)" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Body ── -->
+  <div class="body">
+
+    <!-- ── Navigator ── -->
+    <div class="nav">
+      <div class="nav-toolbar">
+        <div class="nav-tool-btn active">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3h10M2 7h10M2 11h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="nav-tool-btn" style="margin-left:auto;">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8.8 8.8L11.5 11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="nav-tool-btn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <rect x="2" y="2" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="7" y="2" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="2" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="7" y="7" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="nav-scroll">
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="chevron open" width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M3 2l2 2-2 2" stroke="rgba(255,255,255,0.4)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Oneiro
+          </div>
+          <div class="nav-row active">
+            <div class="nav-row-icon" style="background:#f05138;"></div>
+            ContentView.swift
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#f05138;"></div>
+            DreamEngine.swift
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#f05138;"></div>
+            ViewModel.swift
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#f05138;"></div>
+            Models.swift
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#f05138;"></div>
+            Extensions.swift
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="chevron open" width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M3 2l2 2-2 2" stroke="rgba(255,255,255,0.4)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Resources
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#5c7cfa;border-radius:3px;"></div>
+            Assets.xcassets
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#7d9b5e;"></div>
+            manifest.json
+          </div>
+          <div class="nav-row">
+            <div class="nav-row-icon" style="background:#7d9b5e;"></div>
+            Localizable.strings
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="chevron" width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M3 2l2 2-2 2" stroke="rgba(255,255,255,0.4)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Tests
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="chevron" width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M3 2l2 2-2 2" stroke="rgba(255,255,255,0.4)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Frameworks
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Editor pane ── -->
+    <div class="editor-pane">
+
+      <!-- Breadcrumb -->
+      <div class="breadcrumb">
+        <div class="bc-item">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M1.5 4L5.5 1.5 9.5 4v5.5h-3V7H4.5v2.5h-3V4z" stroke="rgba(255,255,255,0.35)" stroke-width="1.1" stroke-linejoin="round"/>
+          </svg>
+          Oneiro
+        </div>
+        <span class="bc-sep">›</span>
+        <div class="bc-item">Views</div>
+        <span class="bc-sep">›</span>
+        <div class="bc-item current">ContentView.swift</div>
+        <span class="bc-sep">›</span>
+        <div class="bc-item">ContentView</div>
+        <span class="bc-sep">›</span>
+        <div class="bc-item">body</div>
+      </div>
+
+      <!-- Code area -->
+      <div class="code-scroll">
+
+        <!-- Gutter -->
+        <div class="gutter">
+          <div class="ln">1</div>
+          <div class="ln">2</div>
+          <div class="ln">3</div>
+          <div class="ln">4</div>
+          <div class="ln">5</div>
+          <div class="ln">6</div>
+          <div class="ln">7</div>
+          <div class="ln">8</div>
+          <div class="ln">9</div>
+          <div class="ln breakpoint">10</div>
+          <div class="ln">11</div>
+          <div class="ln">12</div>
+          <div class="ln">13</div>
+          <div class="ln">14</div>
+          <div class="ln">15</div>
+          <div class="ln">16</div>
+          <div class="ln">17</div>
+          <div class="ln">18</div>
+          <div class="ln">19</div>
+          <div class="ln">20</div>
+          <div class="ln">21</div>
+          <div class="ln active">22</div>
+          <div class="ln">23</div>
+          <div class="ln">24</div>
+          <div class="ln">25</div>
+          <div class="ln">26</div>
+          <div class="ln">27</div>
+          <div class="ln">28</div>
+          <div class="ln">29</div>
+          <div class="ln">30</div>
+          <div class="ln">31</div>
+          <div class="ln">32</div>
+          <div class="ln">33</div>
+          <div class="ln">34</div>
+          <div class="ln">35</div>
+          <div class="ln">36</div>
+        </div>
+
+        <!-- Code -->
+        <div class="code-content">
+<span class="cl"><span class="cm">//  ContentView.swift</span></span>
+<span class="cl"><span class="cm">//  Oneiro — Dream Intelligence Engine</span></span>
+<span class="cl"><span class="cm">//  Copyright © 2026 Quinn O'Donnell. All rights reserved.</span></span>
+<span class="cl"></span>
+<span class="cl"><span class="kw">import</span><span class="tx"> SwiftUI</span></span>
+<span class="cl"><span class="kw">import</span><span class="tx"> Combine</span></span>
+<span class="cl"></span>
+<span class="cl"><span class="mc">@MainActor</span></span>
+<span class="cl"><span class="kw">struct </span><span class="ty">ContentView</span><span class="tx">: </span><span class="ty">View</span><span class="tx"> {</span></span>
+<span class="cl"><span class="tx">    </span><span class="mc">@StateObject</span><span class="tx"> </span><span class="kw">private var</span><span class="tx"> viewModel </span><span class="op">=</span><span class="tx"> </span><span class="ty">DreamViewModel</span><span class="tx">()</span></span>
+<span class="cl"><span class="tx">    </span><span class="mc">@State</span><span class="tx"> </span><span class="kw">private var</span><span class="tx"> isRecording</span><span class="op">:</span><span class="tx"> </span><span class="ty">Bool</span><span class="tx"> </span><span class="op">=</span><span class="tx"> </span><span class="kw">false</span></span>
+<span class="cl"><span class="tx">    </span><span class="mc">@State</span><span class="tx"> </span><span class="kw">private var</span><span class="tx"> selectedDream</span><span class="op">:</span><span class="tx"> </span><span class="ty">Dream</span><span class="op">?</span></span>
+<span class="cl"><span class="tx">    </span><span class="mc">@Environment</span><span class="tx">(</span><span class="op">\.</span><span class="pr">colorScheme</span><span class="tx">) </span><span class="kw">var</span><span class="tx"> colorScheme</span></span>
+<span class="cl"></span>
+<span class="cl"><span class="tx">    </span><span class="kw">var </span><span class="pr">body</span><span class="tx">: </span><span class="kw">some </span><span class="ty">View</span><span class="tx"> {</span></span>
+<span class="cl"><span class="tx">        </span><span class="ty">NavigationSplitView</span><span class="tx">(columnVisibility: </span><span class="op">.</span><span class="pr">constant</span><span class="tx">(</span><span class="op">.</span><span class="tx">all)) {</span></span>
+<span class="cl"><span class="tx">            </span><span class="ty">DreamListView</span><span class="tx">(</span></span>
+<span class="cl"><span class="tx">                dreams: viewModel</span><span class="op">.</span><span class="pr">dreams</span><span class="tx">,</span></span>
+<span class="cl"><span class="tx">                selection: </span><span class="op">$</span><span class="tx">selectedDream</span></span>
+<span class="cl"><span class="tx">            )</span></span>
+<span class="cl"><span class="tx">            </span><span class="op">.</span><span class="fn">navigationTitle</span><span class="tx">(</span><span class="st">"Dreams"</span><span class="tx">)</span></span>
+<span class="cl active-line"><span class="tx">            </span><span class="op">.</span><span class="fn">toolbar</span><span class="tx"> {</span></span>
+<span class="cl"><span class="tx">                </span><span class="ty">ToolbarItem</span><span class="tx">(placement: </span><span class="op">.</span><span class="pr">primaryAction</span><span class="tx">) {</span></span>
+<span class="cl"><span class="tx">                    </span><span class="ty">Button</span><span class="tx">(action: startRecording) {</span></span>
+<span class="cl"><span class="tx">                        </span><span class="ty">Label</span><span class="tx">(</span><span class="st">"Record Dream"</span><span class="tx">, systemImage: </span><span class="st">"waveform.circle.fill"</span><span class="tx">)</span></span>
+<span class="cl"><span class="tx">                    }</span></span>
+<span class="cl"><span class="tx">                    </span><span class="op">.</span><span class="fn">disabled</span><span class="tx">(isRecording)</span></span>
+<span class="cl"><span class="tx">                }</span></span>
+<span class="cl"><span class="tx">            }</span></span>
+<span class="cl"><span class="tx">        } detail: {</span></span>
+<span class="cl"><span class="tx">            </span><span class="kw">if let</span><span class="tx"> dream </span><span class="op">=</span><span class="tx"> selectedDream {</span></span>
+<span class="cl"><span class="tx">                </span><span class="ty">DreamDetailView</span><span class="tx">(dream: dream)</span></span>
+<span class="cl"><span class="tx">            } </span><span class="kw">else</span><span class="tx"> {</span></span>
+<span class="cl"><span class="tx">                </span><span class="ty">EmptyStateView</span><span class="tx">(</span></span>
+<span class="cl"><span class="tx">                    title: </span><span class="st">"No Dream Selected"</span><span class="tx">,</span></span>
+<span class="cl"><span class="tx">                    symbol: </span><span class="st">"moon.stars.fill"</span></span>
+<span class="cl"><span class="tx">                )</span><span class="cursor"></span></span>
+        </div>
+
+      </div><!-- /code-scroll -->
+
+    </div><!-- /editor-pane -->
+  </div><!-- /body -->
+
+  <!-- ── Status bar ── -->
+  <div class="statusbar">
+    <div class="sb-item">
+      <div class="sb-dot green"></div>
+      Build Succeeded
+    </div>
+    <div class="sb-sep"></div>
+    <div class="sb-item">Swift 5.10</div>
+    <div class="sb-sep"></div>
+    <div class="sb-item">iOS 17.0+</div>
+    <div class="sb-sep"></div>
+    <div class="sb-item">
+      <div class="sb-dot yellow"></div>
+      1 Warning
+    </div>
+    <div class="sb-right">
+      <div class="sb-item">Ln 22, Col 18</div>
+      <div class="sb-sep"></div>
+      <div class="sb-item">UTF-8</div>
+      <div class="sb-sep"></div>
+      <div class="sb-item">4 Spaces</div>
+      <div class="sb-sep"></div>
+      <div class="sb-item">Swift</div>
+    </div>
+  </div>
+
+</div><!-- /window -->
+
+</body>
+</html>

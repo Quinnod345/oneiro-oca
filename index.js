@@ -24,6 +24,9 @@ import { evaluateDesign } from './design-model/evaluate.js';
 import { computeDesignPolicy, policyToPromptContext } from './design/emotion-bridge.js';
 import { getTrainingFocus as getDesignTrainingFocus } from './design-model/trainer.js';
 import { evolveSkill as evolveDesignSkill, getEvolutionStatus as getDesignEvolutionStatus } from './design-model/skill-evolver.js';
+import { isServerRunning as isDesignServerRunning } from './design-model/client.js';
+import { suggestChanges, generateCssPatch } from './design-model/suggest.js';
+import { build as buildDesign } from './design-model/builder.js';
 
 export const layers = {
   emotion, hypothesis, episodic, semantic, procedural,
@@ -40,6 +43,27 @@ export const design = {
   getTrainingFocus: getDesignTrainingFocus,
   evolveSkill: evolveDesignSkill,
   getEvolutionStatus: getDesignEvolutionStatus,
+  isServerRunning: isDesignServerRunning,
+  suggest: suggestChanges,
+  generateCssPatch,
+  build: buildDesign,
+
+  /** Start the Phase 2b/3 inference server if not already running. */
+  async initServer() {
+    if (isDesignServerRunning()) return { status: 'already_running' };
+    try {
+      const { execSync } = await import('child_process');
+      const { dirname } = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      execSync(`"${__dirname}/design-model/start-server.sh"`, {
+        timeout: 45000, stdio: 'ignore',
+      });
+      return { status: 'started' };
+    } catch (e) {
+      return { status: 'failed', error: e.message };
+    }
+  },
 };
 
 // ============================================================

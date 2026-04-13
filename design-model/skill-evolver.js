@@ -3,8 +3,9 @@
 // Uses design model scores as feedback signal.
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { loadModel } from './model.js';
+import { evaluateDesign } from './evaluate.js';
 import { encodeFromCode } from './encoder.js';
+import { capture, cleanup } from './screenshot-capture.js';
 import { SCORE_NAMES, DESIGN_DIMENSIONS } from './knowledge.js';
 
 const SKILL_PATH = process.env.HOME + '/.claude/skills/frontend-design/SKILL.md';
@@ -41,19 +42,46 @@ export async function evolveSkill(llmCall, options = {}) {
   }
   const currentSkill = readFileSync(SKILL_PATH, 'utf-8');
 
-  // Step 2: Evaluate — identify weakest dimensions
-  const model = loadModel();
-  const weakest = model.getWeakestDimensions(3);
-  const status = model.getStatus();
+  // Step 2: Evaluate — identify weakest dimensions by generating a test artifact
+  //   and scoring it to see where the current skill produces weak results
+  let probeScores;
+  try {
+    const probeCode = await llmCall(
+      `Using this design skill:\n---\n${currentSkill.slice(0, 2000)}\n---\n\nGenerate a single, complete HTML component with inline CSS that demonstrates the skill's design principles. Return ONLY the HTML.`,
+      'You are a frontend developer who follows design skill files precisely.'
+    );
+    const probeHtml = probeCode?.replace(/^```\w*\n?/m, '').replace(/\n?```$/m, '').trim();
+    if (probeHtml && probeHtml.includes('<') && probeHtml.length > 100) {
+      // Render to screenshot for visual evaluation
+      const probePng = `/tmp/skill-probe-${Date.now()}.png`;
+      try { await capture(probeHtml, probePng); } catch {}
+      const probeResult = await evaluateDesign({
+        code: probeHtml,
+        screenshot: existsSync(probePng) ? probePng : undefined,
+      });
+      probeScores = probeResult.scores;
+    }
+  } catch {}
 
-  if (weakest.length === 0 || weakest[0].error < 0.15) {
-    return { skipped: true, reason: 'model_performing_well', weakest };
+  if (!probeScores) {
+    return { skipped: true, reason: 'probe_evaluation_failed' };
+  }
+
+  // Find the 3 weakest dimensions
+  const weakest = Object.entries(probeScores)
+    .filter(([name]) => name !== 'overall_aesthetic')
+    .sort(([, a], [, b]) => a - b)
+    .slice(0, 3)
+    .map(([name, score]) => ({ name, score }));
+
+  if (weakest.length === 0 || weakest[0].score > 0.8) {
+    return { skipped: true, reason: 'skill_performing_well', weakest };
   }
 
   const weakDimNames = weakest.map(w => w.name);
   const weakDimDescriptions = weakest.map(w => {
     const dim = DESIGN_DIMENSIONS.find(d => d.name === w.name);
-    return `${w.name} (error: ${w.error.toFixed(3)}): ${dim?.description || ''}\n  High signals: ${dim?.highSignals?.join(', ') || 'N/A'}\n  Low signals: ${dim?.lowSignals?.join(', ') || 'N/A'}`;
+    return `${w.name} (score: ${w.score.toFixed(3)}): ${dim?.description || ''}\n  High signals: ${dim?.highSignals?.join(', ') || 'N/A'}\n  Low signals: ${dim?.lowSignals?.join(', ') || 'N/A'}`;
   }).join('\n\n');
 
   // Step 3: Propose skill amendment
@@ -119,18 +147,31 @@ Return ONLY the code, no explanation.`;
     return { skipped: true, reason: 'test_generation_failed' };
   }
 
-  // Step 5: Score test artifacts
-  const testScores = testArtifacts.map(artifact => {
-    const features = encodeFromCode(artifact, { skillVersion: evolutionCount + 1 });
-    const rawScores = model.predict(features);
-    return Object.fromEntries(SCORE_NAMES.map((n, i) => [n, rawScores[i]]));
-  });
+  // Step 5: Score test artifacts via Phase 2b/3 (with screenshots)
+  const testScores = [];
+  for (const artifact of testArtifacts) {
+    try {
+      const pngPath = `/tmp/skill-test-${Date.now()}-${testScores.length}.png`;
+      try { await capture(artifact, pngPath); } catch {}
+      const result = await evaluateDesign({
+        code: artifact,
+        screenshot: existsSync(pngPath) ? pngPath : undefined,
+      });
+      testScores.push(result.scores);
+    } catch {
+      // Fallback: code-only scoring
+      const result = await evaluateDesign({ code: artifact });
+      testScores.push(result.scores);
+    }
+  }
 
-  // Step 6: Compare to baseline
-  // Get baseline by scoring with current skill encoding
-  const baselineFeatures = encodeFromCode(testArtifacts[0], { skillVersion: evolutionCount });
-  const baselineRaw = model.predict(baselineFeatures);
-  const baselineScores = Object.fromEntries(SCORE_NAMES.map((n, i) => [n, baselineRaw[i]]));
+  if (testScores.length === 0) {
+    await cleanup();
+    return { skipped: true, reason: 'test_scoring_failed' };
+  }
+
+  // Step 6: Compare to baseline (probeScores from Step 2)
+  const baselineScores = probeScores;
 
   // Pick best test artifact
   const bestTest = testScores.reduce((best, scores, idx) => {
@@ -200,6 +241,7 @@ Return ONLY the code, no explanation.`;
     console.log(`[skill-evolver] ❌ skill evolution rejected: ${result.reason}`);
   }
 
+  await cleanup(); // Close Puppeteer
   return result;
 }
 

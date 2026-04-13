@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --success:      #3ecf8e;
+  --success-soft: rgba(62, 207, 142, 0.13);
+  --info:         #5ba4f5;
+  --info-soft:    rgba(91, 164, 245, 0.13);
+  --warning:      #f5a522;
+  --warning-soft: rgba(245, 165, 34, 0.13);
+  --surface:      #16161b;
+  --border:       rgba(255,255,255,0.07);
+  --text-1:       rgba(255,255,255,0.90);
+  --text-2:       rgba(255,255,255,0.46);
+}
+
+html, body { height: 100%; }
+
+body {
+  background: #0c0c11;
+  background-image:
+    radial-gradient(ellipse 70% 55% at 18% 58%, rgba(62,207,142,0.035) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 82% 25%, rgba(91,164,245,0.035) 0%, transparent 60%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Demo Stage ─────────────────────────── */
+.stage { text-align: center; }
+
+.stage h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  color: rgba(255,255,255,0.68);
+  letter-spacing: -0.01em;
+  margin-bottom: 5px;
+}
+
+.stage p {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.26);
+  letter-spacing: 0.04em;
+  margin-bottom: 30px;
+}
+
+.btn-row { display: flex; gap: 10px; justify-content: center; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 19px;
+  border-radius: 9px; border: 1px solid transparent;
+  background: transparent;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  letter-spacing: 0.03em; cursor: pointer;
+  transition: background 0.13s ease, border-color 0.13s ease;
+  outline: none;
+}
+.btn .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.btn-s { color: var(--success); border-color: rgba(62,207,142,0.28); }
+.btn-s .dot { background: var(--success); }
+.btn-s:hover { background: rgba(62,207,142,0.08); border-color: rgba(62,207,142,0.52); }
+
+.btn-i { color: var(--info); border-color: rgba(91,164,245,0.28); }
+.btn-i .dot { background: var(--info); }
+.btn-i:hover { background: rgba(91,164,245,0.08); border-color: rgba(91,164,245,0.52); }
+
+.btn-w { color: var(--warning); border-color: rgba(245,165,34,0.28); }
+.btn-w .dot { background: var(--warning); }
+.btn-w:hover { background: rgba(245,165,34,0.08); border-color: rgba(245,165,34,0.52); }
+
+/* ─── Toast Container ────────────────────── */
+#tc {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 10px;
+  align-items: flex-end; pointer-events: none;
+}
+
+/* ─── Toast Card ─────────────────────────── */
+.toast {
+  pointer-events: all;
+  position: relative; width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 13px; overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.025) inset,
+    0 2px 4px  rgba(0,0,0,0.28),
+    0 8px 20px rgba(0,0,0,0.52),
+    0 22px 44px rgba(0,0,0,0.3);
+  opacity: 0;
+  transform: translateY(14px) scale(0.975);
+}
+
+.toast.in {
+  transition:
+    opacity  0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.34s cubic-bezier(0.34, 1.28, 0.64, 1);
+  opacity: 1; transform: translateY(0) scale(1);
+}
+
+.toast.out {
+  transition:
+    opacity  0.18s ease-in,
+    transform 0.22s cubic-bezier(0.4, 0, 1, 1);
+  opacity: 0; transform: translateX(calc(100% + 28px)) scale(0.97);
+}
+
+/* left accent strip */
+.toast::before {
+  content: ''; position: absolute;
+  left: 0; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 2px 2px 0;
+}
+.toast-s::before { background: var(--success); }
+.toast-i::before { background: var(--info); }
+.toast-w::before { background: var(--warning); }
+
+/* body */
+.tbody {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 13px 13px 12px 18px;
+}
+
+.ticon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.ticon svg { width: 15px; height: 15px; }
+
+.toast-s .ticon { background: var(--success-soft); color: var(--success); }
+.toast-i .ticon { background: var(--info-soft);    color: var(--info); }
+.toast-w .ticon { background: var(--warning-soft); color: var(--warning); }
+
+.ttext { flex: 1; min-width: 0; }
+
+.ttitle {
+  font-family: 'DM Serif Display', serif;
+  font-size: 15.5px; color: var(--text-1);
+  line-height: 1.3; margin-bottom: 3px; letter-spacing: 0.005em;
+}
+
+.tmsg {
+  font-size: 13px; font-weight: 400; color: var(--text-2);
+  line-height: 1.55; letter-spacing: 0.01em;
+}
+
+.tclose {
+  width: 26px; height: 26px; border-radius: 7px; border: none;
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.22); flex-shrink: 0; padding: 0;
+  transition: background 0.12s, color 0.12s;
+  margin-top: -1px; margin-right: -1px;
+}
+.tclose:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.6); }
+.tclose svg { width: 10px; height: 10px; }
+
+/* progress track */
+.ttrack { height: 2px; background: rgba(255,255,255,0.05); }
+
+@keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+.tbar {
+  height: 100%; transform-origin: left center;
+  animation: shrink var(--dur, 4.5s) linear forwards;
+}
+.toast-s .tbar { background: rgba(62,207,142,0.55); }
+.toast-i .tbar { background: rgba(91,164,245,0.55); }
+.toast-w .tbar { background: rgba(245,165,34,0.55); }
+
+.toast:hover .tbar { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.in, .toast.out { transition-duration: 0.01ms !important; }
+  .tbar { animation-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1>Notifications</h1>
+  <p>Click a type to trigger a toast</p>
+  <div class="btn-row">
+    <button class="btn btn-s" onclick="fire('s')"><span class="dot"></span>Success</button>
+    <button class="btn btn-i" onclick="fire('i')"><span class="dot"></span>Info</button>
+    <button class="btn btn-w" onclick="fire('w')"><span class="dot"></span>Warning</button>
+  </div>
+</div>
+
+<div id="tc"></div>
+
+<script>
+const DUR = 4500;
+
+const DATA = {
+  s: [
+    { title: 'Changes saved',    msg: 'Your project has been updated successfully.' },
+    { title: 'Export complete',  msg: 'Your report has been exported to Downloads.' },
+    { title: 'Team invited',     msg: 'An invitation was sent to all 3 new members.' }
+  ],
+  i: [
+    { title: 'Update available', msg: 'Version 3.1 is ready with performance improvements.' },
+    { title: 'Sync in progress', msg: 'Files are syncing across all connected devices.' },
+    { title: 'Backup scheduled', msg: 'Your data will be backed up tonight at 2:00 AM.' }
+  ],
+  w: [
+    { title: 'Storage nearly full',  msg: "You've used 92% of your quota. Clean up old files." },
+    { title: 'Session expiring',     msg: 'Your session expires in 5 minutes. Save your work.' },
+    { title: 'Weak connection',      msg: 'Changes may not save. Check your internet connection.' }
+  ]
+};
+
+const ICONS = {
+  s: `<svg viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,7.5 5.5,11 13,3.5"/></svg>`,
+  i: `<svg viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="5.5"/><line x1="7.5" y1="6.8" x2="7.5" y2="10.5"/><circle cx="7.5" cy="4.8" r="0.8" fill="currentColor" stroke="none"/></svg>`,
+  w: `<svg viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 2.5L13.5 12.5H1.5Z"/><line x1="7.5" y1="6.5" x2="7.5" y2="9.5"/><circle cx="7.5" cy="11" r="0.8" fill="currentColor" stroke="none"/></svg>`
+};
+
+const cursors = { s: 0, i: 0, w: 0 };
+
+function fire(type) {
+  const cfg = DATA[type][cursors[type]++ % DATA[type].length];
+  const tc = document.getElementById('tc');
+
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.style.setProperty('--dur', DUR + 'ms');
+  el.innerHTML = `
+    <div class="tbody">
+      <div class="ticon">${ICONS[type]}</div>
+      <div class="ttext">
+        <div class="ttitle">${cfg.title}</div>
+        <div class="tmsg">${cfg.msg}</div>
+      </div>
+      <button class="tclose" aria-label="Dismiss">
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <line x1="1.5" y1="1.5" x2="8.5" y2="8.5"/>
+          <line x1="8.5" y1="1.5" x2="1.5" y2="8.5"/>
+        </svg>
+      </button>
+    </div>
+    <div class="ttrack"><div class="tbar"></div></div>`;
+
+  tc.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+
+  let remaining = DUR, startedAt, timerId;
+
+  const startTimer = ms => {
+    startedAt = Date.now();
+    timerId = setTimeout(() => dismiss(el), ms);
+  };
+
+  el.addEventListener('mouseenter', () => {
+    clearTimeout(timerId);
+    remaining -= (Date.now() - startedAt);
+    remaining = Math.max(remaining, 0);
+  });
+
+  el.addEventListener('mouseleave', () => {
+    if (!el.classList.contains('out')) startTimer(remaining);
+  });
+
+  el.querySelector('.tclose').addEventListener('click', () => dismiss(el));
+  startTimer(remaining);
+}
+
+function dismiss(el) {
+  if (el.classList.contains('out')) return;
+  el.classList.replace('in', 'out');
+  const cleanup = () => { if (el.parentNode) el.remove(); };
+  el.addEventListener('transitionend', cleanup, { once: true });
+  setTimeout(cleanup, 400);
+}
+</script>
+</body>
+</html>

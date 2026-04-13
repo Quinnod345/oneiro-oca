@@ -31,7 +31,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
 
-OUTPUT_DIM = 12
+OUTPUT_DIM = 16
 
 SCORE_NAMES = [
     "typography_quality", "color_harmony", "spatial_composition",
@@ -39,11 +39,14 @@ SCORE_NAMES = [
     "minimalism_coherence", "native_integration",
     "visceral_score", "behavioral_score", "reflective_score",
     "overall_aesthetic",
+    "innovation_score", "system_creativity", "design_distinctiveness",
+    "problem_level",
 ]
 
 DIMENSION_WEIGHTS = mx.array([
     1.2, 1.1, 1.1, 0.9, 1.3, 1.2, 1.0, 1.0,
     1.2, 1.0, 1.1, 1.5,
+    1.4, 1.3, 1.2, 1.1,
 ], dtype=mx.float32)
 
 
@@ -177,9 +180,26 @@ class FeatureDataset:
 # ═══════════════════════════════════════════════════
 
 
-def weighted_mse_loss(predictions, targets):
+def weighted_mse_loss(predictions, targets, confidence=None):
     diff = predictions - targets
-    return mx.mean(diff * diff * DIMENSION_WEIGHTS)
+    loss = diff * diff * DIMENSION_WEIGHTS
+    if confidence is not None:
+        loss = loss * confidence[:, None]
+
+    mse = mx.mean(loss)
+
+    # Coherence penalty: parts shouldn't score higher than the whole
+    overall_idx = SCORE_NAMES.index("overall_aesthetic")
+    pred_overall = predictions[:, overall_idx]
+    part_indices = [i for i, n in enumerate(SCORE_NAMES)
+                    if n not in ("overall_aesthetic", "innovation_score",
+                                 "system_creativity", "design_distinctiveness",
+                                 "problem_level")]
+    pred_parts_mean = mx.mean(predictions[:, part_indices], axis=1)
+    incoherence = mx.maximum(pred_parts_mean - pred_overall - 0.05, 0)
+    coherence_penalty = mx.mean(incoherence * incoherence) * 2.0
+
+    return mse + coherence_penalty
 
 
 def loss_fn(model, features, targets, code_features):

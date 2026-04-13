@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Epilogue:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0b0b0d;
+    font-family: 'Epilogue', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  .demo-label {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 24px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+
+  .demo-buttons {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1px solid;
+    background: transparent;
+    font-family: 'Epilogue', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  .btn:active { opacity: 0.7; }
+
+  .btn-success {
+    border-color: rgba(74,222,128,0.28);
+    color: rgba(74,222,128,0.85);
+  }
+  .btn-success:hover { background: rgba(74,222,128,0.07); }
+
+  .btn-info {
+    border-color: rgba(99,179,255,0.28);
+    color: rgba(99,179,255,0.85);
+  }
+  .btn-info:hover { background: rgba(99,179,255,0.07); }
+
+  .btn-warning {
+    border-color: rgba(251,191,36,0.28);
+    color: rgba(251,191,36,0.85);
+  }
+  .btn-warning:hover { background: rgba(251,191,36,0.07); }
+
+  /* ── Toast Container ── */
+  #toast-container {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    pointer-events: all;
+    position: relative;
+    width: 348px;
+    background: #17171a;
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 13px;
+    padding: 13px 13px 13px 15px;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    overflow: hidden;
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.25),
+      0 8px 20px rgba(0,0,0,0.4),
+      0 24px 48px rgba(0,0,0,0.3),
+      inset 0 0 0 0.5px rgba(255,255,255,0.04);
+    transform: translateX(calc(100% + 28px)) scale(0.97);
+    opacity: 0;
+    transition:
+      transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1),
+      opacity 0.3s ease,
+      margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .toast.in {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+
+  .toast.out {
+    transform: translateX(calc(100% + 28px)) scale(0.97);
+    opacity: 0;
+    transition:
+      transform 0.3s cubic-bezier(0.4, 0, 1, 0.8),
+      opacity 0.22s ease;
+  }
+
+  /* Accent strip */
+  .toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 13px 0 0 13px;
+  }
+  .toast-success::before { background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%); }
+  .toast-info::before    { background: linear-gradient(180deg, #93c5fd 0%, #60a5fa 100%); }
+  .toast-warning::before { background: linear-gradient(180deg, #fde047 0%, #facc15 100%); }
+
+  /* Icon bubble */
+  .toast-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .toast-success .toast-icon { background: rgba(74,222,128,0.12); }
+  .toast-info    .toast-icon { background: rgba(147,197,253,0.12); }
+  .toast-warning .toast-icon { background: rgba(253,224,71,0.12); }
+
+  /* Text */
+  .toast-body { flex: 1; min-width: 0; }
+
+  .toast-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15.5px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    margin-bottom: 3px;
+  }
+
+  .toast-message {
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.38);
+    line-height: 1.55;
+    letter-spacing: 0.01em;
+  }
+
+  /* Close */
+  .toast-close {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: rgba(255,255,255,0.2);
+    border-radius: 5px;
+    padding: 0;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .toast-close:hover {
+    color: rgba(255,255,255,0.6);
+    background: rgba(255,255,255,0.07);
+  }
+
+  /* Progress */
+  .toast-track {
+    position: absolute;
+    left: 3px; right: 0; bottom: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 0 0 13px 0;
+    overflow: hidden;
+  }
+  .toast-bar {
+    height: 100%;
+    width: 100%;
+    transform-origin: left;
+  }
+  .toast-success .toast-bar { background: rgba(74,222,128,0.4); }
+  .toast-info    .toast-bar { background: rgba(147,197,253,0.4); }
+  .toast-warning .toast-bar { background: rgba(253,224,71,0.4); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<p class="demo-label">Notifications</p>
+<div class="demo-buttons">
+  <button class="btn btn-success" onclick="toast('success')">Success</button>
+  <button class="btn btn-info"    onclick="toast('info')">Info</button>
+  <button class="btn btn-warning" onclick="toast('warning')">Warning</button>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const DURATION = 4800;
+const MAX = 5;
+
+const CONFIGS = {
+  success: {
+    title: 'Changes saved',
+    message: 'Your file was saved and synced across all devices.',
+    icon: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#4ade80" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  },
+  info: {
+    title: 'Update available',
+    message: 'Version 3.2.1 is ready — restart to install.',
+    icon: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="6" cy="6" r="4.4" stroke="#93c5fd" stroke-width="1.2"/>
+      <path d="M6 5.2V8.2" stroke="#93c5fd" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="6" cy="3.8" r="0.7" fill="#93c5fd"/>
+    </svg>`
+  },
+  warning: {
+    title: 'Storage at 94%',
+    message: 'You\'re almost out of space. Consider freeing up storage.',
+    icon: `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M6 1.5L10.5 9.5H1.5L6 1.5Z" stroke="#fde047" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M6 5V7" stroke="#fde047" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="6" cy="8.4" r="0.6" fill="#fde047"/>
+    </svg>`
+  }
+};
+
+function toast(type) {
+  const container = document.getElementById('toast-container');
+  const existing = container.querySelectorAll('.toast');
+  if (existing.length >= MAX) dismiss(existing[0]);
+
+  const cfg = CONFIGS[type];
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+
+  el.innerHTML = `
+    <div class="toast-icon">${cfg.icon}</div>
+    <div class="toast-body">
+      <div class="toast-title">${cfg.title}</div>
+      <div class="toast-message">${cfg.message}</div>
+    </div>
+    <button class="toast-close" aria-label="Dismiss">
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+        <path d="M1 1L8 8M8 1L1 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="toast-track"><div class="toast-bar"></div></div>
+  `;
+
+  container.appendChild(el);
+
+  // Entrance
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+
+  // Progress bar
+  const bar = el.querySelector('.toast-bar');
+  let startTime = null;
+  let elapsed = 0;
+  let raf;
+
+  function startProgress(remaining) {
+    startTime = performance.now();
+    function step(now) {
+      const delta = now - startTime;
+      const pct = Math.max(0, 1 - (elapsed + delta) / DURATION);
+      bar.style.transform = `scaleX(${pct})`;
+      if (pct > 0) raf = requestAnimationFrame(step);
+      else dismiss(el);
+    }
+    raf = requestAnimationFrame(step);
+  }
+
+  startProgress(DURATION);
+
+  el.addEventListener('mouseenter', () => {
+    cancelAnimationFrame(raf);
+    elapsed += performance.now() - startTime;
+    clearTimeout(el._t);
+  });
+
+  el.addEventListener('mouseleave', () => {
+    startProgress(DURATION - elapsed);
+  });
+
+  el.querySelector('.toast-close').addEventListener('click', () => dismiss(el));
+}
+
+function dismiss(el) {
+  cancelAnimationFrame(el._raf);
+  el.classList.remove('in');
+  el.classList.add('out');
+  el.addEventListener('transitionend', () => el.remove(), { once: true });
+}
+
+// Demo sequence on load
+setTimeout(() => toast('info'),    350);
+setTimeout(() => toast('success'), 700);
+setTimeout(() => toast('warning'), 1050);
+</script>
+</body>
+</html>

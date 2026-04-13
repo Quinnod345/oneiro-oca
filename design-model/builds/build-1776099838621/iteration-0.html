@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Focus</title>
+<style>
+:root {
+  --bg:           #0f0e0b;
+  --surface:      #171510;
+  --surface-up:   #1e1c14;
+  --border-dim:   #1a1810;
+  --border:       #252218;
+
+  --amber:        #bf6200;
+  --amber-mid:    #d97706;
+  --amber-bright: #f59e0b;
+  --amber-pale:   #fbbf24;
+  --amber-glow:   rgba(191, 98, 0, 0.22);
+  --amber-glow-2: rgba(191, 98, 0, 0.40);
+
+  --text:         #e8dfc8;
+  --text-2:       #504838;
+  --text-3:       #28251a;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 1440px; height: 900px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  cursor: default;
+  user-select: none;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse 52% 52% at 50% 50%,
+    rgba(191, 98, 0, 0.055) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.app {
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* ── Mode tabs ─────────────────────────────────────────── */
+
+.modes {
+  display: flex;
+  gap: 1px;
+  margin-bottom: 58px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.mode {
+  padding: 5px 18px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  outline: none;
+}
+
+.mode:hover { color: var(--text); }
+
+.mode.active {
+  background: var(--surface-up);
+  color: var(--amber-mid);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.55), inset 0 0 0 0.5px var(--border);
+}
+
+/* ── Ring ──────────────────────────────────────────────── */
+
+.ring-wrap {
+  position: relative;
+  width: 300px; height: 300px;
+}
+
+.ring-svg {
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+#lead {
+  transition: opacity 0.6s ease;
+}
+
+/* ── Center overlay ────────────────────────────────────── */
+
+.ring-center {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.time {
+  font-size: 70px;
+  font-weight: 200;
+  letter-spacing: -3px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  transition: color 0.2s;
+}
+
+.ring-center:hover .time { color: var(--amber-pale); }
+
+.label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-top: 3px;
+  transition: color 0.3s;
+}
+
+.running .label { color: var(--text-2); }
+
+.pulse-dot {
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--text-3);
+  margin-top: 10px;
+  transition: background 0.5s, box-shadow 0.5s;
+}
+
+.running .pulse-dot {
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+  animation: flicker 2.8s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  0%,100% { opacity: 1; }
+  40%      { opacity: 0.45; }
+  60%      { opacity: 0.7; }
+}
+
+/* ── Controls ──────────────────────────────────────────── */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 46px;
+}
+
+.btn {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.btn:hover {
+  border-color: var(--amber);
+  color: var(--amber-mid);
+  background: var(--surface-up);
+}
+
+.btn-sm { width: 34px; height: 34px; }
+
+.btn-lg {
+  width: 50px; height: 50px;
+  background: var(--surface-up);
+}
+
+.btn-lg.active {
+  border-color: var(--amber);
+  color: var(--amber-mid);
+  box-shadow: 0 0 18px var(--amber-glow);
+}
+
+/* ── Session dots ──────────────────────────────────────── */
+
+.dots {
+  display: flex;
+  gap: 10px;
+  margin-top: 32px;
+}
+
+.dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition: background 0.45s, box-shadow 0.45s;
+}
+
+.dot.done { background: var(--amber); box-shadow: 0 0 5px var(--amber-glow); }
+.dot.now  { background: var(--amber-mid); box-shadow: 0 0 8px var(--amber-glow-2); }
+
+/* ── Keyboard hint ─────────────────────────────────────── */
+
+.hint {
+  position: fixed;
+  bottom: 26px;
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.05em;
+}
+
+.hint kbd {
+  font-family: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--text-2);
+  font-size: 9px;
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="modes" id="modeBar">
+    <button class="mode active" data-idx="0">Focus · 25m</button>
+    <button class="mode"        data-idx="1">Break · 5m</button>
+    <button class="mode"        data-idx="2">Long · 15m</button>
+  </div>
+
+  <div class="ring-wrap" id="ringWrap">
+    <svg class="ring-svg" viewBox="0 0 300 300">
+      <defs>
+        <!-- Tight glow: blur + original merged -->
+        <filter id="fg" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Wide atmospheric bloom (drawn behind arc) -->
+        <filter id="fa" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="16"/>
+        </filter>
+        <!-- Lead dot glow -->
+        <filter id="fd" x="-300%" y="-300%" width="700%" height="700%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Track: barely there, warm not gray -->
+      <circle cx="150" cy="150" r="130"
+        fill="none" stroke="#1d1b11" stroke-width="1"/>
+
+      <!-- Atmospheric bloom — wide, low opacity, behind arc -->
+      <circle id="arcAtmo" cx="150" cy="150" r="130"
+        fill="none" stroke="#bf6200" stroke-width="4"
+        stroke-linecap="round"
+        stroke-dasharray="816.814" stroke-dashoffset="816.814"
+        filter="url(#fa)" opacity="0.45"/>
+
+      <!-- Main arc — thin, glowing filament -->
+      <circle id="arc" cx="150" cy="150" r="130"
+        fill="none" stroke="#d97706" stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-dasharray="816.814" stroke-dashoffset="816.814"
+        filter="url(#fg)"/>
+
+      <!-- Leading dot: brightest point at the arc's head -->
+      <circle id="lead" cx="280" cy="150" r="2.5"
+        fill="#f59e0b" filter="url(#fd)" opacity="0"/>
+    </svg>
+
+    <div class="ring-center" id="ringCenter">
+      <div class="time"  id="timeEl">25:00</div>
+      <div class="label" id="labelEl">Deep Work</div>
+      <div class="pulse-dot" id="pulseDot"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-sm" id="resetBtn" title="Reset (R)">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M1.5 6A4.5 4.5 0 1 0 6 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M1.5 1.5V6H6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <button class="btn btn-lg" id="playBtn" title="Play / Pause (Space)">
+      <svg id="iconPlay" width="13" height="13" viewBox="0 0 13 13">
+        <path d="M4.5 3L10 6.5L4.5 10V3Z" fill="currentColor"/>
+      </svg>
+      <svg id="iconPause" width="13" height="13" viewBox="0 0 13 13" style="display:none">
+        <rect x="3"   y="2.5" width="2.5" height="8" rx="1" fill="currentColor"/>
+        <rect x="7.5" y="2.5" width="2.5" height="8" rx="1" fill="currentColor"/>
+      </svg>
+    </button>
+
+    <button class="btn btn-sm" id="skipBtn" title="Skip session">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 3L7 6L2 9V3Z" fill="currentColor"/>
+        <rect x="8.25" y="3" width="1.5" height="6" rx="0.75" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="dots" id="dotRow">
+    <div class="dot now"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+
+</div>
+
+<div class="hint">
+  <span><kbd>Space</kbd> play · pause</span>
+  <span><kbd>R</kbd> reset</span>
+</div>
+
+<script>
+const MODES = [
+  { dur: 25 * 60, label: 'Deep Work' },
+  { dur:  5 * 60, label: 'Short Break' },
+  { dur: 15 * 60, label: 'Long Break' },
+];
+
+// 2π × 130 — circumference of r=130 circle
+const C = 2 * Math.PI * 130; // 816.814...
+
+const $ = id => document.getElementById(id);
+
+const arc      = $('arc');
+const arcAtmo  = $('arcAtmo');
+const lead     = $('lead');
+const timeEl   = $('timeEl');
+const labelEl  = $('labelEl');
+const ringWrap = $('ringWrap');
+const playBtn  = $('playBtn');
+const iconPlay = $('iconPlay');
+const iconPause= $('iconPause');
+const modeBtns = [...document.querySelectorAll('.mode')];
+const dotEls   = [...document.querySelectorAll('.dot')];
+
+// Sync dasharray to computed constant
+arc.setAttribute('stroke-dasharray', C);
+arcAtmo.setAttribute('stroke-dasharray', C);
+
+let modeIdx   = 0;
+let total     = MODES[0].dur;
+let remaining = total;
+let running   = false;
+let sessions  = 0;
+let ticker    = null;
+
+/* ── Formatting ───────────────────────────────────────────── */
+
+function fmt(s) {
+  return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+}
+
+/* ── Arc update ───────────────────────────────────────────── */
+
+function setArc(progress) {
+  const off = C * (1 - progress);
+  arc.setAttribute('stroke-dashoffset', off);
+  arcAtmo.setAttribute('stroke-dashoffset', off);
+
+  // Lead dot position in SVG space.
+  // SVG is rotated -90deg by CSS, so angle=0 (3-o'clock SVG) → 12-o'clock visually.
+  // progress * 2π sweeps clockwise.
+  const a = progress * Math.PI * 2;
+  lead.setAttribute('cx', 150 + 130 * Math.cos(a));
+  lead.setAttribute('cy', 150 + 130 * Math.sin(a));
+  lead.setAttribute('opacity', progress > 0.008 ? 1 : 0);
+}
+
+/* ── Render ───────────────────────────────────────────────── */
+
+function render() {
+  timeEl.textContent = fmt(remaining);
+  setArc(1 - remaining / total);
+}
+
+/* ── Run state ────────────────────────────────────────────── */
+
+function setRunning(r) {
+  running = r;
+  ringWrap.classList.toggle('running', r);
+  iconPlay.style.display  = r ? 'none' : '';
+  iconPause.style.display = r ? ''     : 'none';
+  playBtn.classList.toggle('active', r);
+}
+
+/* ── Toggle play / pause ──────────────────────────────────── */
+
+function togglePlay() {
+  if (remaining === 0) return;
+  if (running) {
+    clearInterval(ticker);
+    setRunning(false);
+  } else {
+    ticker = setInterval(() => {
+      if (remaining <= 0) { complete(); return; }
+      remaining--;
+      render();
+    }, 1000);
+    setRunning(true);
+  }
+}
+
+/* ── Complete ─────────────────────────────────────────────── */
+
+function complete() {
+  clearInterval(ticker);
+  setRunning(false);
+
+  if (modeIdx === 0) {
+    sessions = Math.min(sessions + 1, 4);
+    updateDots();
+  }
+
+  // Flash: arc brightens momentarily on completion
+  arc.style.transition = 'stroke 0.25s ease';
+  arc.style.stroke = '#fbbf24';
+  setTimeout(() => {
+    arc.style.transition = 'stroke 0.6s ease';
+    arc.style.stroke = '';
+    setTimeout(() => { arc.style.transition = ''; }, 700);
+  }, 350);
+}
+
+/* ── Reset ────────────────────────────────────────────────── */
+
+function reset() {
+  clearInterval(ticker);
+  setRunning(false);
+  remaining = total;
+  render();
+}
+
+/* ── Mode ─────────────────────────────────────────────────── */
+
+function setMode(idx) {
+  clearInterval(ticker);
+  setRunning(false);
+  modeIdx = idx;
+  total = MODES[idx].dur;
+  remaining = total;
+  labelEl.textContent = MODES[idx].label;
+  modeBtns.forEach((b, i) => b.classList.toggle('active', i === idx));
+  render();
+}
+
+/* ── Dots ─────────────────────────────────────────────────── */
+
+function updateDots() {
+  dotEls.forEach((d, i) => {
+    d.className = 'dot' + (i < sessions ? ' done' : i === sessions ? ' now' : '');
+  });
+}
+
+/* ── Events ───────────────────────────────────────────────── */
+
+$('ringCenter').addEventListener('click', togglePlay);
+$('playBtn').addEventListener('click', togglePlay);
+$('resetBtn').addEventListener('click', reset);
+$('skipBtn').addEventListener('click', () => setMode((modeIdx + 1) % 3));
+
+modeBtns.forEach((btn, i) => btn.addEventListener('click', () => setMode(i)));
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space')  { e.preventDefault(); togglePlay(); }
+  if (e.code === 'KeyR')   { reset(); }
+  if (e.code === 'Escape') { reset(); }
+});
+
+/* ── Init ─────────────────────────────────────────────────── */
+render();
+updateDots();
+</script>
+</body>
+</html>

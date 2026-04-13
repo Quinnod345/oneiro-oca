@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidebar Navigation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080a10;
+    --surface-1: #0e1118;
+    --surface-2: #141822;
+    --surface-3: #1c2130;
+    --surface-4: #232840;
+    --border: #1a1f2e;
+    --border-bright: #252d42;
+    --text-primary: #e2e6f5;
+    --text-secondary: #525d80;
+    --text-muted: #2e3550;
+    --accent: #e8a045;
+    --accent-dim: rgba(232,160,69,0.10);
+    --accent-glow: rgba(232,160,69,0.22);
+    --accent-text: #f0b96a;
+    --danger: #e05555;
+    --success: #48c07a;
+    --info: #5b9cf6;
+    --purple: #8b68f5;
+    --sidebar-width: 272px;
+    --sidebar-collapsed: 62px;
+    --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
+    --ease-out: cubic-bezier(0.22,1,0.36,1);
+    --ease-in-out: cubic-bezier(0.4,0,0.2,1);
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-width);
+    min-height: 100vh;
+    background: var(--surface-1);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    transition: width 380ms var(--ease-spring);
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    overflow: hidden;
+    will-change: width;
+  }
+
+  .sidebar.collapsed { width: var(--sidebar-collapsed); }
+
+  .sidebar::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 1px; height: 100%;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      var(--border-bright) 20%,
+      var(--border-bright) 80%,
+      transparent 100%);
+    pointer-events: none;
+  }
+
+  /* ── HEADER ── */
+  .sidebar-header {
+    padding: 16px 14px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .logo-mark {
+    width: 32px; height: 32px; min-width: 32px;
+    background: linear-gradient(140deg, #f0b060 0%, #c97820 100%);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 1px rgba(232,160,69,0.3), 0 4px 12px rgba(232,160,69,0.25);
+    transition: box-shadow 200ms, transform 200ms var(--ease-spring);
+    cursor: pointer;
+  }
+
+  .logo-mark:hover {
+    box-shadow: 0 0 0 1px rgba(232,160,69,0.5), 0 4px 20px rgba(232,160,69,0.4);
+    transform: scale(1.06);
+  }
+
+  .logo-mark svg { display: block; }
+
+  .logo-meta {
+    display: flex; flex-direction: column; gap: 1px; min-width: 0;
+    opacity: 1; transition: opacity 200ms var(--ease-in-out), transform 200ms var(--ease-out);
+    transform-origin: left;
+  }
+
+  .sidebar.collapsed .logo-meta { opacity: 0; pointer-events: none; transform: scaleX(0.92); }
+
+  .logo-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 14px;
+    letter-spacing: -0.2px;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .logo-sub {
+    font-size: 9px; letter-spacing: 0.12em;
+    color: var(--text-secondary); text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* ── TOGGLE ── */
+  .toggle-btn {
+    position: absolute; right: -13px; top: 50%;
+    transform: translateY(-50%);
+    width: 26px; height: 26px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-bright);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 20;
+    transition: background 150ms, border-color 200ms, box-shadow 200ms, transform 200ms var(--ease-spring);
+  }
+
+  .toggle-btn:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  .toggle-btn:active { transform: translateY(-50%) scale(0.94); }
+
+  .toggle-icon {
+    transition: transform 380ms var(--ease-spring);
+    color: var(--text-secondary);
+  }
+
+  .sidebar.collapsed .toggle-icon { transform: rotate(180deg); }
+
+  /* ── SCROLL AREA ── */
+  .sidebar-scroll {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    padding: 10px 0 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-bright) transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar { width: 3px; }
+  .sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 99px; }
+
+  /* ── SECTION ── */
+  .nav-section { margin-bottom: 2px; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px 6px 14px;
+    cursor: pointer; user-select: none;
+    position: relative; overflow: hidden;
+    transition: background 150ms;
+  }
+
+  .section-header::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: transparent;
+    transition: background 150ms;
+  }
+
+  .section-header:hover::before { background: rgba(255,255,255,0.025); }
+
+  /* Ripple */
+  .ripple {
+    position: absolute; border-radius: 50%;
+    background: rgba(232,160,69,0.12);
+    transform: scale(0); opacity: 1;
+    animation: ripple-out 500ms var(--ease-out) forwards;
+    pointer-events: none;
+  }
+
+  @keyframes ripple-out {
+    to { transform: scale(4); opacity: 0; }
+  }
+
+  .section-icon {
+    width: 30px; height: 30px; min-width: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    transition: background 180ms, border-color 180ms, box-shadow 180ms, transform 200ms var(--ease-spring);
+    position: relative; z-index: 1;
+  }
+
+  .section-icon svg { color: var(--text-secondary); transition: color 180ms; }
+
+  .section-header:hover .section-icon {
+    background: var(--surface-3);
+    border-color: var(--border-bright);
+    transform: scale(1.05);
+  }
+
+  .section-header:hover .section-icon svg { color: var(--text-primary); }
+
+  .section-header.active .section-icon {
+    background: var(--accent-dim);
+    border-color: rgba(232,160,69,0.3);
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .section-header.active .section-icon svg { color: var(--accent-text); }
+
+  .section-label-wrap {
+    flex: 1; display: flex; align-items: center;
+    justify-content: space-between; min-width: 0;
+    opacity: 1;
+    transition: opacity 200ms var(--ease-in-out), transform 200ms var(--ease-out);
+    transform-origin: left;
+    position: relative; z-index: 1;
+  }
+
+  .sidebar.collapsed .section-label-wrap { opacity: 0; pointer-events: none; transform: scaleX(0.92); }
+
+  .section-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--text-secondary); white-space: nowrap;
+    transition: color 180ms;
+  }
+
+  .section-header:hover .section-label,
+  .section-header.active .section-label { color: var(--text-primary); }
+
+  .section-chevron {
+    color: var(--text-muted);
+    transition: transform 320ms var(--ease-spring), color 180ms;
+    flex-shrink: 0;
+  }
+
+  .section-header.open .section-chevron { transform: rotate(90deg); }
+  .section-header.active .section-chevron { color: var(--accent); }
+
+  /* Badge */
+  .badge {
+    font-size: 9px; font-weight: 600;
+    padding: 2px 6px; border-radius: 99px;
+    letter-spacing: 0.04em;
+    background: var(--surface-3);
+    border: 1px solid var(--border-bright);
+    color: var(--text-secondary);
+    transition: background 180ms, border-color 180ms, color 180ms;
+    white-space: nowrap;
+  }
+
+  .badge.warn { background: rgba(232,160,69,0.12); border-color: rgba(232,160,69,0.25); color: var(--accent-text); }
+  .badge.info { background: rgba(91,156,246,0.12); border-color: rgba(91,156,246,0.25); color: #7db4f8; }
+  .badge.danger { background: rgba(224,85,85,0.12); border-color: rgba(224,85,85,0.25); color: #e87070; }
+
+  /* ── CHILDREN ── */
+  .section-children {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 360ms var(--ease-out), opacity 240ms var(--ease-in-out);
+    opacity: 0;
+  }
+
+  .section-children.open {
+    max-height: 600px;
+    opacity: 1;
+  }
+
+  /* ── NAV ITEM ── */
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 12px 7px 52px;
+    cursor: pointer; position: relative;
+    transition: background 140ms;
+    overflow: hidden;
+  }
+
+  .nav-item::before {
+    content: '';
+    position: absolute; left: 36px; top: 50%; transform: translateY(-50%);
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 200ms, box-shadow 200ms, transform 240ms var(--ease-spring);
+  }
+
+  .nav-item:hover::before {
+    background: var(--text-secondary);
+    transform: translateY(-50%) scale(1.3);
+  }
+
+  .nav-item.active::before {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    transform: translateY(-50%) scale(1.4);
+  }
+
+  .nav-item:hover { background: rgba(255,255,255,0.025); }
+  .nav-item.active { background: var(--accent-dim); }
+
+  /* Active left bar */
+  .nav-item.active::after {
+    content: '';
+    position: absolute; left: 0; top: 4px; bottom: 4px;
+    width: 2px; border-radius: 99px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    animation: bar-in 240ms var(--ease-spring) both;
+  }
+
+  @keyframes bar-in {
+    from { transform: scaleY(0); opacity: 0; }
+    to { transform: scaleY(1); opacity: 1; }
+  }
+
+  .nav-item-label {
+    font-size: 12px; color: var(--text-secondary);
+    transition: color 150ms; white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+
+  .nav-item:hover .nav-item-label { color: var(--text-primary); }
+  .nav-item.active .nav-item-label { color: var(--accent-text); font-weight: 500; }
+
+  .nav-item-badge { margin-left: auto; }
+
+  /* ── TOOLTIP (collapsed) ── */
+  .sidebar.collapsed .section-header { position: relative; }
+
+  .tooltip {
+    position: absolute; left: calc(100% + 14px); top: 50%;
+    transform: translateY(-50%) translateX(-6px);
+    background: var(--surface-3);
+    border: 1px solid var(--border-bright);
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 140ms var(--ease-in-out), transform 180ms var(--ease-spring);
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+
+  .tooltip::before {
+    content: '';
+    position: absolute; right: 100%; top: 50%;
+    transform: translateY(-50%);
+    border: 5px solid transparent;
+    border-right-color: var(--border-bright);
+  }
+
+  .sidebar.collapsed .section-header:hover .tooltip {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+
+  /* ── DIVIDER ── */
+  .nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 14px;
+    opacity: 0.7;
+  }
+
+  /* ── USER FOOTER ── */
+  .sidebar-footer {
+    border-top: 1px solid var(--border);
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: background 150ms;
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer:hover { background: rgba(255,255,255,0.025); }
+
+  .avatar {
+    width: 32px; height: 32px; min-width: 32px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--purple) 0%, #5b44cc 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: #fff;
+    border: 1px solid rgba(139,104,245,0.4);
+    box-shadow: 0 2px 8px rgba(139,104,245,0.3);
+    transition: box-shadow 200ms, transform 200ms var(--ease-spring);
+    flex-shrink: 0;
+  }
+
+  .sidebar-footer:hover .avatar {
+    transform: scale(1.06);
+    box-shadow: 0 4px 14px rgba(139,104,245,0.45);
+  }
+
+  .user-meta {
+    flex: 1; min-width: 0;
+    opacity: 1; transition: opacity 200ms, transform 200ms var(--ease-out);
+    transform-origin: left;
+  }
+
+  .sidebar.collapsed .user-meta { opacity: 0; pointer-events: none; transform: scaleX(0.92); }
+
+  .user-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-primary); white-space: nowrap;
+    letter-spacing: -0.1px;
+  }
+
+  .user-role {
+    font-size: 9.5px; color: var(--text-secondary);
+    white-space: nowrap; letter-spacing: 0.03em;
+  }
+
+  .footer-dots {
+    color: var(--text-muted);
+    opacity: 1; transition: opacity 180ms, color 150ms;
+    flex-shrink: 0;
+  }
+
+  .sidebar.collapsed .footer-dots { opacity: 0; }
+  .sidebar-footer:hover .footer-dots { color: var(--text-secondary); }
+
+  /* ── STATUS DOT ── */
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 2px var(--surface-1), 0 0 6px rgba(72,192,122,0.6);
+    position: absolute; bottom: 8px; right: 8px;
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 6px rgba(72,192,122,0.6); }
+    50% { box-shadow: 0 0 0 2px var(--surface-1), 0 0 12px rgba(72,192,122,0.9); }
+  }
+
+  .avatar-wrap { position: relative; }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    flex: 1; padding: 40px;
+    display: flex; flex-direction: column; gap: 24px;
+    overflow: auto;
+  }
+
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px; font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.4px;
+  }
+
+  .page-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .card-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .card-value {
+    font-size: 28px; font-weight: 500;
+    color: var(--text-primary); letter-spacing: -1px;
+  }
+
+  .cards-row { display: flex; gap: 14px; }
+  .cards-row .card { flex: 1; }
+
+  /* Shimmer placeholder lines */
+  .shimmer-line {
+    height: 10px; border-radius: 99px;
+    background: linear-gradient(90deg,
+      var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  @keyframes shimmer {
+    from { background-position: 200% center; }
+    to { background-position: -200% center; }
+  }
+
+  .shimmer-line.w60 { width: 60%; }
+  .shimmer-line.w40 { width: 40%; }
+  .shimmer-line.w80 { width: 80%; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <header class="sidebar-header">
+    <div class="logo-mark">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 3L8 1L13 3V9C13 12 8 15 8 15C8 15 3 12 3 9V3Z" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.8)" stroke-width="1.2"/>
+        <path d="M5.5 8L7 9.5L10.5 6" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="logo-meta">
+      <div class="logo-name">Oneiro</div>
+      <div class="logo-sub">Control plane</div>
+    </div>
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
+      <svg class="toggle-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M4 2L8 6L4 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="sidebar-scroll">
+
+    <!-- Section: Workspace -->
+    <div class="nav-section">
+      <div class="section-header active open" data-section="workspace" onclick="toggleSection(this, event)">
+        <div class="section-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="1" width="5" height="5" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="8" y="1" width="5" height="5" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="1" y="8" width="5" height="5" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="8" y="8" width="5" height="5" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+        </div>
+        <div class="section-label-wrap">
+          <span class="section-label">Workspace</span>
+          <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2L7 5L3 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tooltip">Workspace</div>
+      </div>
+      <div class="section-children open" id="children-workspace">
+        <div class="nav-item active" onclick="setActive(this)">
+          <span class="nav-item-label">Overview</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Activity feed</span>
+          <span class="badge info nav-item-badge">12</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Notifications</span>
+          <span class="badge warn nav-item-badge">3</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Settings</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- Section: Cognitive -->
+    <div class="nav-section">
+      <div class="section-header open" data-section="cognitive" onclick="toggleSection(this, event)">
+        <div class="section-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4.5 7C4.5 5.6 5.6 4.5 7 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="1.2" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="section-label-wrap">
+          <span class="section-label">Cognitive</span>
+          <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2L7 5L3 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tooltip">Cognitive</div>
+      </div>
+      <div class="section-children open" id="children-cognitive">
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Dream engine</span>
+          <span class="badge warn nav-item-badge">Live</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Executive</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Emotion state</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Memory</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- Section: Motor -->
+    <div class="nav-section">
+      <div class="section-header" data-section="motor" onclick="toggleSection(this, event)">
+        <div class="section-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 7H12M9 4L12 7L9 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="section-label-wrap">
+          <span class="section-label">Motor</span>
+          <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2L7 5L3 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tooltip">Motor</div>
+      </div>
+      <div class="section-children" id="children-motor">
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Skills</span>
+          <span class="badge nav-item-badge">48</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Sandbox</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Execution log</span>
+          <span class="badge danger nav-item-badge">2</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- Section: Design Model -->
+    <div class="nav-section">
+      <div class="section-header" data-section="design" onclick="toggleSection(this, event)">
+        <div class="section-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 10.5L5 7.5L7.5 10L11 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="11" cy="4.5" r="1.5" fill="currentColor" opacity="0.5"/>
+          </svg>
+        </div>
+        <div class="section-label-wrap">
+          <span class="section-label">Design model</span>
+          <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2L7 5L3 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tooltip">Design model</div>
+      </div>
+      <div class="section-children" id="children-design">
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Flywheel</span>
+          <span class="badge info nav-item-badge">↑ v3</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Encoder</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Evaluator</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Training runs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- Section: Infrastructure -->
+    <div class="nav-section">
+      <div class="section-header" data-section="infra" onclick="toggleSection(this, event)">
+        <div class="section-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="2" width="11" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="1.5" y="8" width="11" height="4" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+            <circle cx="10.5" cy="4" r="0.8" fill="currentColor"/>
+            <circle cx="10.5" cy="10" r="0.8" fill="currentColor" opacity="0.4"/>
+          </svg>
+        </div>
+        <div class="section-label-wrap">
+          <span class="section-label">Infrastructure</span>
+          <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M3 2L7 5L3 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tooltip">Infrastructure</div>
+      </div>
+      <div class="section-children" id="children-infra">
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Processes</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Storage</span>
+        </div>
+        <div class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-label">Logs</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer: User -->
+  <div class="sidebar-footer">
+    <div class="avatar-wrap">
+      <div class="avatar">Q</div>
+      <div class="status-dot"></div>
+    </div>
+    <div class="user-meta">
+      <div class="user-name">Quinn O'Donnell</div>
+      <div class="user-role">Administrator</div>
+    </div>
+    <svg class="footer-dots" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="3" r="1.1" fill="currentColor"/>
+      <circle cx="7" cy="7" r="1.1" fill="currentColor"/>
+      <circle cx="7" cy="11" r="1.1" fill="currentColor"/>
+    </svg>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main">
+  <div>
+    <div class="page-title">Overview</div>
+    <div class="page-sub">Sunday, April 13 · System nominal</div>
+  </div>
+  <div class="cards-row">
+    <div class="card">
+      <div class="card-label">Active dreams</div>
+      <div class="card-value">1,712</div>
+      <div class="shimmer-line w60"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Skills deployed</div>
+      <div class="card-value">48</div>
+      <div class="shimmer-line w40"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Design score</div>
+      <div class="card-value">0.81</div>
+      <div class="shimmer-line w80"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label">Recent activity</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+      <div class="shimmer-line w80"></div>
+      <div class="shimmer-line w60"></div>
+      <div class="shimmer-line w70"></div>
+      <div class="shimmer-line w50"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('toggleBtn');
+
+  toggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+  });
+
+  function toggleSection(header, event) {
+    // Ripple
+    const rect = header.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    const size = Math.max(rect.width, rect.height);
+    ripple.classList.add('ripple');
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${event.clientX - rect.left - size/2}px;top:${event.clientY - rect.top - size/2}px`;
+    header.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+
+    const key = header.dataset.section;
+    const children = document.getElementById('children-' + key);
+    const isOpen = header.classList.contains('open');
+
+    header.classList.toggle('open', !isOpen);
+    children.classList.toggle('open', !isOpen);
+  }
+
+  function setActive(item) {
+    // Remove all active states
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.section-header').forEach(el => el.classList.remove('active'));
+
+    item.classList.add('active');
+
+    // Mark parent section header active
+    const section = item.closest('.nav-section');
+    if (section) {
+      const header = section.querySelector('.section-header');
+      if (header) header.classList.add('active');
+    }
+  }
+</script>
+</body>
+</html>

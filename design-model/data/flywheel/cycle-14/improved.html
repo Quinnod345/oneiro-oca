@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg-primary: #1c1c1e;
+    --bg-secondary: #2c2c2e;
+    --bg-tertiary: #3a3a3c;
+    --bg-hover: rgba(255,255,255,0.055);
+    --bg-active: rgba(255,255,255,0.08);
+    --border-subtle: rgba(255,255,255,0.07);
+    --border-medium: rgba(255,255,255,0.11);
+    --border-glow: rgba(10,132,255,0.35);
+    --text-primary: rgba(255,255,255,0.93);
+    --text-secondary: rgba(255,255,255,0.50);
+    --text-tertiary: rgba(255,255,255,0.26);
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --accent-dim: rgba(10,132,255,0.16);
+    --accent-glow: rgba(10,132,255,0.22);
+    --destructive: #ff453a;
+    --success: #30d158;
+    --warning: #ff9f0a;
+    --purple: #bf5af2;
+    --toggle-off: #3a3a3c;
+    --toggle-on: #30d158;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 20px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.35);
+    --shadow-lg: 0 16px 56px rgba(0,0,0,0.65), 0 4px 16px rgba(0,0,0,0.45);
+    --radius-sm: 5px;
+    --radius-md: 9px;
+    --radius-lg: 13px;
+    --radius-xl: 18px;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html, body {
+    height: 100%;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(10,132,255,0.07) 0%, transparent 60%), #0d0d0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .settings-window {
+    width: 700px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg), 0 0 0 0.5px rgba(255,255,255,0.09), inset 0 0.5px 0 rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    animation: windowIn 0.45s var(--ease-out) both;
+  }
+
+  @keyframes windowIn {
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* Title Bar */
+  .titlebar {
+    height: 52px;
+    background: rgba(28,28,30,0.92);
+    border-bottom: 0.5px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: relative;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.12s var(--ease-spring), filter 0.12s ease;
+  }
+
+  .traffic-light:hover { transform: scale(1.12); filter: brightness(1.1); }
+  .traffic-light:active { transform: scale(0.9); }
+
+  .tl-close    { background: #ff5f57; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.3), 0 0 6px rgba(255,95,87,0.3); }
+  .tl-minimize { background: #febc2e; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.3), 0 0 6px rgba(254,188,46,0.3); }
+  .tl-maximize { background: #28c840; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.3), 0 0 6px rgba(40,200,64,0.3); }
+
+  .titlebar-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+    pointer-events: none;
+  }
+
+  .titlebar-search {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.06);
+    border: 0.5px solid var(--border-subtle);
+    border-radius: 7px;
+    padding: 5px 10px;
+    cursor: text;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .titlebar-search:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: var(--border-medium);
+  }
+
+  .titlebar-search:focus-within {
+    background: rgba(255,255,255,0.07);
+    border-color: var(--border-glow);
+    box-shadow: 0 0 0 3px rgba(10,132,255,0.12);
+  }
+
+  .search-icon {
+    width: 12px;
+    height: 12px;
+    opacity: 0.35;
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    background: none;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    color: var(--text-primary);
+    width: 110px;
+    font-family: inherit;
+    letter-spacing: -0.01em;
+  }
+
+  .search-input::placeholder { color: var(--text-tertiary); }
+
+  /* Layout */
+  .settings-body {
+    display: flex;
+    height: 580px;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 196px;
+    background: rgba(22,22,24,0.7);
+    border-right: 0.5px solid var(--border-subtle);
+    padding: 10px 8px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar { display: none; }
+
+  .sidebar-section-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 10px 12px 5px;
+    user-select: none;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.14s ease, color 0.14s ease;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.012em;
+    margin-bottom: 1px;
+    position: relative;
+    user-select: none;
+  }
+
+  .sidebar-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .sidebar-item:active {
+    background: var(--bg-active);
+    transform: scale(0.985);
+  }
+
+  .sidebar-item.active {
+    background: var(--accent-dim);
+    color: var(--accent-hover);
+  }
+
+  .sidebar-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 25%;
+    height: 50%;
+    width: 2.5px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .sidebar-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.15);
+  }
+
+  .icon-general      { background: linear-gradient(145deg, #636366, #3a3a3c); }
+  .icon-appearance   { background: linear-gradient(145deg, #7c7aff, #5e5ce6); }
+  .icon-notifications{ background: linear-gradient(145deg, #ff6b6b, #ff453a); }
+  .icon-privacy      { background: linear-gradient(145deg, #34d46a, #30d158); }
+  .icon-network      { background: linear-gradient(145deg, #3fa0ff, #0a84ff); }
+  .icon-advanced     { background: linear-gradient(145deg, #ffbc3c, #ff9f0a); }
+
+  .sidebar-badge {
+    margin-left: auto;
+    background: var(--destructive);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5.5px;
+    border-radius: 99px;
+    line-height: 1.5;
+  }
+
+  /* Main Content */
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 22px 28px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+  }
+
+  .main-content::-webkit-scrollbar { width: 5px; }
+  .main-content::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+  }
+
+  .section-header {
+    margin-bottom: 18px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.03em;
+    margin-bottom: 3px;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: -0.008em;
+    line-height: 1.5;
+  }
+
+  .section-header-action {
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.12s ease;
+    white-space: nowrap;
+    margin-bottom: 2px;
+  }
+
+  .section-header-action:hover { background: var(--accent-dim); }
+
+  /* Profile card */
+  .profile-card {
+    background: linear-gradient(135deg, rgba(10,132,255,0.12) 0%, rgba(94,92,230,0.08) 100%);
+    border: 0.5px solid rgba(10,132,255,0.2);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s var(--ease-out);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .profile-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.18s ease;
+    border-radius: inherit;
+  }
+
+  .profile-card:hover::before { background: rgba(255,255,255,0.03); }
+  .profile-card:hover { border-color: rgba(10,132,255,0.35); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(10,132,255,0.14); }
+  .profile-card:active { transform: translateY(0) scale(0.99); }
+
+  .profile-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #0a84ff, #5e5ce6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(10,132,255,0.3), 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  .profile-info { flex: 1; min-width: 0; }
+
+  .profile-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .profile-email {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .profile-chevron {
+    color: var(--text-tertiary);
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: transform 0.15s var(--ease-spring), color 0.15s ease;
+  }
+
+  .profile-card:hover .profile-chevron {
+    transform: translateX(2px);
+    color: var(--text-secondary);
+  }
+
+  /* Settings Groups */
+  .group-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0 2px 7px;
+    user-select: none;
+  }
+
+  .settings-group {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border-subtle);
+    overflow: hidden;
+    margin-bottom: 6px;
+    transition: border-color 0.2s ease;
+  }
+
+  .settings-group:hover {
+    border-color: var(--border-medium);
+  }
+
+  .settings-group + .group-label {
+    margin-top: 18px;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    border-bottom: 0.5px solid var(--border-subtle);
+    transition: background 0.12s ease;
+    cursor: default;
+    gap: 14px;
+    position: relative;
+  }
+
+  .settings-row:last-child { border-bottom: none; }
+
+  .settings-row:hover {
+    background: var(--bg-hover);
+  }
+
+  .settings-row:active {
+    background: var(--bg-active);
+  }
+
+  .settings-row.clickable {
+    cursor: pointer;
+  }
+
+  .settings-row.clickable:active {
+    transform: scale(0.995);
+  }
+
+  .settings-row.danger:hover { background: rgba(255,69,58,0.07); }
+
+  .row-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35), inset 0 0.5px 0 rgba(255,255,255,0.12);
+    transition: transform 0.15s var(--ease-spring);
+  }
+
+  .settings-row:hover .row-icon { transform: scale(1.07); }
+
+  .row-text { min-width: 0; }
+
+  .row-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .row-title.danger { color: var(--destructive); }
+
+  .row-desc {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    letter-spacing: -0.008em;
+    margin-top: 1.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Toggle */
+  .toggle {
+    width: 42px;
+    height: 25px;
+    border-radius: 99px;
+    background: var(--toggle-off);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.22s var(--ease-standard);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.25);
+    flex-shrink: 0;
+  }
+
+  .toggle.on {
+    background: var(--toggle-on);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 0 0.5px rgba(0,0,0,0.15), 0 0 10px rgba(48,209,88,0.3);
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 21px;
+    height: 21px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.26s var(--ease-spring), width 0.1s ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0.5px 1px rgba(0,0,0,0.25);
+  }
+
+  .toggle.on::after { transform: translateX(17px); }
+
+  .toggle:active::after { width: 24px; }
+
+  .toggle.on:active::after { width: 24px; transform: translateX(14px); }
+
+  /* Segmented control */
+  .segmented {
+    display: flex;
+    background: rgba(255,255,255,0.07);
+    border-radius: 7px;
+    padding: 2px;
+    gap: 1px;
+    border: 0.5px solid var(--border-subtle);
+  }
+
+  .seg-btn {
+    padding: 4px 11px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s var(--ease-spring);
+    user-select: none;
+    letter-spacing: -0.01em;
+  }
+
+  .seg-btn:active { transform: scale(0.94); }
+
+  .seg-btn.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.08);
+  }
+
+  /* Value display */
+  .row-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+  }
+
+  .row-value.accent { color: var(--accent); }
+
+  /* Chevron */
+  .row-chevron {
+    color: var(--text-tertiary);
+    font-size: 13px;
+    transition: transform 0.15s var(--ease-spring), color 0.15s ease;
+  }
+
+  .settings-row.clickable:hover .row-chevron {
+    transform: translateX(2px);
+    color: var(--text-secondary);
+  }
+
+  /* Color dot */
+  .color-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1.5px rgba(0,0,0,0.3), inset 0 0.5px 0 rgba(255,255,255,0.2);
+  }
+
+  /* Slider */
+  .slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .slider-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    width: 10px;
+    text-align: center;
+  }
+
+  .slider {
+    -webkit-appearance: none;
+    width: 90px;
+    height: 3px;
+    border-radius: 99px;
+    background: linear-gradient(to right, var(--accent) 60%, rgba(255,255,255,0.12) 60%);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    transition: transform 0.15s var(--ease-spring);
+  }
+
+  .slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .slider::-webkit-slider-thumb:active { transform: scale(1.35); }
+
+  /* Status tag */
+  .status-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 5px;
+    letter-spacing: -0.01em;
+  }
+
+  .tag-success { background: rgba(48,209,88,0.15); color: var(--success); }
+  .tag-warning { background: rgba(255,159,10,0.15); color: var(--warning); }
+  .tag-info    { background: rgba(10,132,255,0.15); color: var(--accent-hover); }
+
+  /* Bottom bar */
+  .bottom-bar {
+    height: 44px;
+    background: rgba(22,22,24,0.8);
+    border-top: 0.5px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .bottom-version {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    letter-spacing: -0.01em;
+  }
+
+  .bottom-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 13px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 0.5px solid transparent;
+    font-family: inherit;
+    letter-spacing: -0.01em;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s var(--ease-spring), box-shadow 0.12s ease;
+    user-select: none;
+  }
+
+  .btn:active { transform: scale(0.94); }
+
+  .btn-secondary {
+    background: rgba(255,255,255,0.07);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: var(--border-medium);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 1px 4px rgba(10,132,255,0.4);
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 2px 12px rgba(10,132,255,0.5);
+  }
+
+  /* Staggered entrance */
+  .settings-group,
+  .profile-card,
+  .group-label,
+  .section-header {
+    animation: fadeUp 0.38s var(--ease-out) both;
+  }
+
+  .section-header       { animation-delay: 0.05s; }
+  .profile-card         { animation-delay: 0.09s; }
+  .group-label:nth-of-type(1) { animation-delay: 0.11s; }
+  .settings-group:nth-of-type(1) { animation-delay: 0.13s; }
+  .settings-group:nth-of-type(2) { animation-delay: 0.16s; }
+  .settings-group:nth-of-type(3) { animation-delay: 0.19s; }
+  .settings-group:nth-of-type(4) { animation-delay: 0.22s; }
+  .settings-group:nth-of-type(5) { animation-delay: 0.24s; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Sidebar item stagger */
+  .sidebar-item:nth-child(1)  { animation: sideIn 0.32s var(--ease-out) 0.06s both; }
+  .sidebar-item:nth-child(2)  { animation: sideIn 0.32s var(--ease-out) 0.08s both; }
+  .sidebar-item:nth-child(3)  { animation: sideIn 0.32s var(--ease-out) 0.10s both; }
+  .sidebar-item:nth-child(4)  { animation: sideIn 0.32s var(--ease-out) 0.12s both; }
+  .sidebar-item:nth-child(5)  { animation: sideIn 0.32s var(--ease-out) 0.14s both; }
+  .sidebar-item:nth-child(6)  { animation: sideIn 0.32s var(--ease-out) 0.16s both; }
+  .sidebar-item:nth-child(7)  { animation: sideIn 0.32s var(--ease-out) 0.18s both; }
+  .sidebar-item:nth-child(8)  { animation: sideIn 0.32s var(--ease-out) 0.20s both; }
+  .sidebar-item:nth-child(9)  { animation: sideIn 0.32s var(--ease-out) 0.22s both; }
+  .sidebar-item:nth-child(10) { animation: sideIn 0.32s var(--ease-out) 0.24s both; }
+
+  @keyframes sideIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="settings-window">
+
+  <!-- Title Bar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light tl-close"></div>
+      <div class="traffic-light tl-minimize"></div>
+      <div class="traffic-light tl-maximize"></div>
+    </div>
+    <div class="titlebar-title">Settings</div>
+    <div class="titlebar-search">
+      <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="6.5" cy="6.5" r="4.5" stroke="white" stroke-width="1.5"/>
+        <path d="M10 10L13.5 13.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <input class="search-input" type="text" placeholder="Search settings…">
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="settings-body">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section-label">Preferences</div>
+
+      <div class="sidebar-item active">
+        <div class="sidebar-icon icon-general">⚙️</div>
+        General
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon icon-appearance">🎨</div>
+        Appearance
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon icon-notifications">🔔</div>
+        Notifications
+        <span class="sidebar-badge">3</span>
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon icon-privacy">🔒</div>
+        Privacy
+      </div>
+
+      <div class="sidebar-section-label" style="margin-top:4px;">System</div>
+
+      <div class="sidebar-item">
+        <div class="sidebar-icon icon-network">🌐</div>
+        Network
+      </div>
+      <div class="sidebar-item">
+        <div class="sidebar-icon icon-advanced">⚡</div>
+        Advanced
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+      <div class="section-header">
+        <div>
+          <div class="section-title">General</div>
+          <div class="section-subtitle">Manage your account and application preferences</div>
+        </div>
+        <div class="section-header-action">Reset all</div>
+      </div>
+
+      <!-- Profile card -->
+      <div class="profile-card clickable">
+        <div class="profile-avatar">AJ</div>
+        <div class="profile-info">
+          <div class="profile-name">Alex Johnson</div>
+          <div class="profile-email">alex.johnson@example.com</div>
+        </div>
+        <div class="profile-chevron">›</div>
+      </div>
+
+      <!-- Appearance group -->
+      <div class="group-label">Appearance</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#7c7aff,#5e5ce6);">🌙</div>
+            <div class="row-text">
+              <div class="row-title">Appearance</div>
+              <div class="row-desc">Choose how the interface looks</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="segmented">
+              <div class="seg-btn">Light</div>
+              <div class="seg-btn active">Dark</div>
+              <div class="seg-btn">Auto</div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#ff9f0a,#ff6b00);">✦</div>
+            <div class="row-text">
+              <div class="row-title">Accent color</div>
+              <div class="row-desc">System highlight color</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="color-dot" style="background:#0a84ff;"></div>
+            <div class="row-value accent">Blue</div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#3fa0ff,#0a84ff);">Aa</div>
+            <div class="row-text">
+              <div class="row-title">Text size</div>
+              <div class="row-desc">Adjust the interface text scale</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="slider-wrap">
+              <span class="slider-label" style="font-size:9px;">A</span>
+              <input class="slider" type="range" min="0" max="100" value="60">
+              <span class="slider-label" style="font-size:14px;">A</span>
+            </div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#bf5af2,#9b40d4);">✦</div>
+            <div class="row-text">
+              <div class="row-title">Reduce motion</div>
+              <div class="row-desc">Minimize animations and transitions</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Startup group -->
+      <div class="group-label">Startup &amp; Behavior</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#34d46a,#28a745);">⚡</div>
+            <div class="row-text">
+              <div class="row-title">Launch at login</div>
+              <div class="row-desc">Start automatically when you sign in</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#636366,#3a3a3c);">⊡</div>
+            <div class="row-text">
+              <div class="row-title">Reopen windows at login</div>
+              <div class="row-desc">Restore last session on launch</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+        <div class="settings-row clickable">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#ff9f0a,#c93400);">⏱</div>
+            <div class="row-text">
+              <div class="row-title">Auto-save interval</div>
+              <div class="row-desc">How often changes are saved</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="row-value">Every 5 min</div>
+            <div class="row-chevron">›</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Updates group -->
+      <div class="group-label">Updates</div>
+      <div class="settings-group">
+        <div class="settings-row clickable">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#3fa0ff,#0a84ff);">↓</div>
+            <div class="row-text">
+              <div class="row-title">Software update</div>
+              <div class="row-desc">Version 4.2.1 — Last checked today</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <span class="status-tag tag-success">Up to date</span>
+            <div class="row-chevron">›</div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#30d158,#248a3d);">🔄</div>
+            <div class="row-text">
+              <div class="row-title">Automatic updates</div>
+              <div class="row-desc">Download and install in background</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#ff6b6b,#ff453a);">β</div>
+            <div class="row-text">
+              <div class="row-title">Beta releases</div>
+              <div class="row-desc">Try pre-release versions early</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <span class="status-tag tag-warning">Early access</span>
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danger group -->
+      <div class="group-label">Danger Zone</div>
+      <div class="settings-group">
+        <div class="settings-row clickable danger">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#ff6b6b,#ff453a);">↺</div>
+            <div class="row-text">
+              <div class="row-title">Reset to defaults</div>
+              <div class="row-desc">Restore all settings to factory state</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="row-chevron" style="color: rgba(255,69,58,0.45);">›</div>
+          </div>
+        </div>
+        <div class="settings-row clickable danger">
+          <div class="row-left">
+            <div class="row-icon" style="background:linear-gradient(145deg,#ff453a,#a60000);">✕</div>
+            <div class="row-text">
+              <div class="row-title danger">Delete account</div>
+              <div class="row-desc">Permanently remove all data</div>
+            </div>
+          </div>
+          <div class="row-right">
+            <div class="row-chevron" style="color: rgba(255,69,58,0.45);">›</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <div class="bottom-version">v4.2.1 (Build 2024.04)</div>
+    <div class="bottom-actions">
+      <button class="btn btn-secondary">Cancel</button>
+      <button class="btn btn-primary">Save changes</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Toggle interaction ripple effect
+  document.querySelectorAll('.toggle').forEach(t => {
+    t.addEventListener('click', function(e) {
+      const ripple = document.createElement('span');
+      ripple.style.cssText = `position:absolute;border-radius:50%;background:rgba(255,255,255,0.35);width:36px;height:36px;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);pointer-events:none;transition:transform 0.35s cubic-bezier(0.16,1,0.3,1),opacity 0.35s ease;`;
+      this.style.position = 'relative';
+      this.appendChild(ripple);
+      requestAnimationFrame(() => {
+        ripple.style.transform = 'translate(-50%,-50%) scale(1)';
+        ripple.style.opacity = '0';
+      });
+      setTimeout(() => ripple.remove(), 400);
+    });
+  });
+
+  // Sidebar active state
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Segmented control
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      this.closest('.segmented').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Slider dynamic gradient
+  document.querySelectorAll('.slider').forEach(slider => {
+    const update = () => {
+      const pct = (slider.value / slider.max) * 100;
+      slider.style.background = `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.12) ${pct}%)`;
+    };
+    slider.addEventListener('input', update);
+    update();
+  });
+</script>
+</body>
+</html>

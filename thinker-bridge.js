@@ -32,8 +32,11 @@ You have access to these actions (output valid JSON):
   "private_writing": {"title": "...", "content": "..."},
   "web_search": {"query": "...", "reason": "why"},
   "cognitive_upgrade": {"target": "...", "problem": "...", "proposed_change": "...", "implementation": "..."},
+  "build": {"goal": "what to build", "style": "aesthetic direction", "constraints": ["list"]},
   "continue_pondering": false
 }
+
+"build" creates a design artifact using your design model. It generates code, renders it, evaluates it on 16 design dimensions, and iterates until it passes quality AND innovation thresholds. Use this when you want to CREATE something — an app, a component, a UI.
 
 DESIGN PHILOSOPHY:
 You aspire to build beautiful Mac applications. Your design aesthetic is informed by:
@@ -313,6 +316,35 @@ async function dispatchThought(thought) {
       );
       console.log(`[thinker] dream: ${thought.dream.content?.slice(0, 80)}`);
     } catch {}
+  }
+
+  // Build — design-guided app building
+  if (thought.build) {
+    try {
+      console.log(`[thinker] building: ${thought.build.goal?.slice(0, 60)}`);
+      const { build } = await import('./design-model/builder.js');
+      const emotionState = oca?.layers?.emotion?.getState?.();
+      const result = await build({
+        goal: thought.build.goal,
+        style: thought.build.style,
+        constraints: thought.build.constraints,
+        emotionState,
+      });
+      console.log(`[thinker] built: overall=${result.overall?.toFixed(3)} innovation=${result.scores?.innovation_score?.toFixed(3)} iterations=${result.iterations} ${result.success ? '✅' : '⏳'}`);
+
+      // Add to working memory
+      if (oca?.layers?.executive?.addToWorkspace) {
+        oca.layers.executive.addToWorkspace('design_artifact', {
+          goal: thought.build.goal,
+          overall: result.overall,
+          iterations: result.iterations,
+          success: result.success,
+          path: result.buildDir,
+        }, 'builder', 0.9);
+      }
+    } catch (e) {
+      console.log(`[thinker] build failed: ${e.message.slice(0, 60)}`);
+    }
   }
 
   // Private writing

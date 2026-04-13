@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-1.0">
+<title>Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,400;1,9..144,200;1,9..144,300&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold:        #c9a84c;
+    --gold-dim:    rgba(201,168,76,0.55);
+    --gold-ghost:  rgba(201,168,76,0.12);
+    --gold-trace:  rgba(201,168,76,0.07);
+    --cream:       #ede4cc;
+    --cream-mid:   rgba(237,228,204,0.55);
+    --cream-low:   rgba(237,228,204,0.28);
+    --cream-ghost: rgba(237,228,204,0.08);
+    --green:       #6dbf82;
+    --red:         #d4705f;
+    --bg:          #0c0b08;
+    --surface:     #131109;
+    --surface-2:   #1a1710;
+    --border:      rgba(255,255,255,0.055);
+    --border-gold: rgba(201,168,76,0.18);
+  }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Instrument Sans', sans-serif;
+    padding: 3rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-gold);
+    border-radius: 24px;
+    width: 700px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.025),
+      0 32px 96px rgba(0,0,0,0.7),
+      0 8px 32px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(201,168,76,0.12);
+    position: relative;
+  }
+
+  /* Subtle warm vignette at top */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 160px;
+    background: radial-gradient(ellipse 70% 100px at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 36px 40px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+  }
+
+  .eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 400;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 10px;
+  }
+
+  .title {
+    font-family: 'Fraunces', serif;
+    font-size: 30px;
+    font-weight: 300;
+    font-optical-sizing: auto;
+    color: var(--cream);
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+  }
+
+  .title em {
+    font-style: italic;
+    font-weight: 200;
+    color: var(--gold);
+  }
+
+  .title-sub {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--cream-low);
+    letter-spacing: 0.01em;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+  }
+
+  .period-badge {
+    background: var(--gold-ghost);
+    border: 1px solid var(--border-gold);
+    border-radius: 100px;
+    padding: 7px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10.5px;
+    color: var(--gold);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .live-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 0 rgba(109,191,130,0.5);
+    animation: pulse 2.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(109,191,130,0.5); }
+    60%  { box-shadow: 0 0 0 5px rgba(109,191,130,0); }
+    100% { box-shadow: 0 0 0 0 rgba(109,191,130,0); }
+  }
+
+  .status-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px;
+    color: rgba(109,191,130,0.65);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    margin: 28px 40px 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-gold) 20%, var(--border-gold) 80%, transparent);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── KPI Row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0 40px;
+    padding: 24px 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .kpi {
+    padding: 0 24px;
+    position: relative;
+  }
+
+  .kpi:first-child {
+    padding-left: 0;
+  }
+
+  .kpi:last-child {
+    padding-right: 0;
+  }
+
+  .kpi + .kpi::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .kpi-label {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--cream-low);
+    letter-spacing: 0.025em;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 9.5px;
+  }
+
+  .kpi-value {
+    font-family: 'Fraunces', serif;
+    font-size: 32px;
+    font-weight: 300;
+    font-optical-sizing: auto;
+    color: var(--cream);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+
+  .kpi-value .unit {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 300;
+    opacity: 0.5;
+    letter-spacing: 0;
+    vertical-align: super;
+    margin-right: 1px;
+  }
+
+  .kpi-value .suffix {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    font-weight: 300;
+    opacity: 0.5;
+    letter-spacing: 0;
+    margin-left: 2px;
+  }
+
+  .trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 400;
+    padding: 4px 9px;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  .trend.up   { color: var(--green); background: rgba(109,191,130,0.1); border: 1px solid rgba(109,191,130,0.15); }
+  .trend.down { color: var(--red);   background: rgba(212,112,95,0.1);  border: 1px solid rgba(212,112,95,0.15); }
+  .trend.flat { color: var(--gold);  background: var(--gold-ghost);      border: 1px solid var(--border-gold); }
+
+  .trend svg { width: 9px; height: 9px; flex-shrink: 0; }
+
+  /* ── Chart Section ── */
+  .chart-section {
+    margin: 0 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .section-rule {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 24px;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .chart-title {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--cream-low);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px;
+    color: var(--cream-low);
+    letter-spacing: 0.04em;
+  }
+
+  .legend-line {
+    width: 16px;
+    height: 1.5px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .chart-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0 20px;
+    width: 28px;
+    flex-shrink: 0;
+  }
+
+  .y-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: rgba(237,228,204,0.18);
+    letter-spacing: 0.03em;
+    text-align: right;
+    line-height: 1;
+  }
+
+  .chart-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-svg-wrap {
+    height: 148px;
+    position: relative;
+  }
+
+  .chart-svg-wrap svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .x-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0 0;
+  }
+
+  .x-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: rgba(237,228,204,0.18);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin: 28px 40px 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+  }
+
+  .footer-note {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 11px;
+    color: var(--cream-low);
+    letter-spacing: 0.01em;
+  }
+
+  .footer-note strong {
+    color: var(--cream-mid);
+    font-weight: 500;
+  }
+
+  .footer-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .footer-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--gold-dim);
+    background: var(--gold-trace);
+    border: 1px solid var(--border-gold);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .footer-btn:hover {
+    background: var(--gold-ghost);
+    color: var(--gold);
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="eyebrow">Revenue Overview</div>
+      <h1 class="title">Growth <em>Analytics</em></h1>
+      <p class="title-sub">April 2026 · Compared to prior period</p>
+    </div>
+    <div class="header-right">
+      <div class="period-badge">Q2 2026</div>
+      <div class="status-row">
+        <div class="live-dot"></div>
+        <span class="status-text">LIVE</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-value"><span class="unit">$</span>2.84<span class="suffix">M</span></div>
+      <span class="trend up">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M1 8L5 2L9 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        +12.4%
+      </span>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Active Users</div>
+      <div class="kpi-value">48.2<span class="suffix">K</span></div>
+      <span class="trend up">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M1 8L5 2L9 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        +7.1%
+      </span>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Churn Rate</div>
+      <div class="kpi-value">1.8<span class="suffix">%</span></div>
+      <span class="trend flat">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M1 5H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        −0.2pp
+      </span>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-section">
+    <div class="section-rule"></div>
+    <div class="chart-header">
+      <span class="chart-title">Monthly Trend</span>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-line" style="background: #c9a84c;"></div>
+          Revenue
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="background: rgba(109,191,130,0.6);"></div>
+          Users
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="y-axis">
+        <span class="y-label">3M</span>
+        <span class="y-label">2M</span>
+        <span class="y-label">1M</span>
+        <span class="y-label">0</span>
+      </div>
+      <div class="chart-body">
+        <div class="chart-svg-wrap">
+          <svg viewBox="0 0 580 148" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#c9a84c" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#c9a84c" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stop-color="#6dbf82" stop-opacity="0.12"/>
+                <stop offset="100%" stop-color="#6dbf82" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Grid lines -->
+            <line x1="0" y1="0"   x2="580" y2="0"   stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="0" y1="49"  x2="580" y2="49"  stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="3 4"/>
+            <line x1="0" y1="98"  x2="580" y2="98"  stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="3 4"/>
+            <line x1="0" y1="147" x2="580" y2="147" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+
+            <!-- Area fills -->
+            <path d="M0,110 C40,105 80,88 116,78 C152,68 190,72 232,58 C274,44 310,52 348,38 C386,24 420,30 464,18 C500,8 540,14 580,4 L580,148 L0,148Z" fill="url(#goldGrad)"/>
+            <path d="M0,130 C40,126 80,118 116,108 C152,98 190,104 232,96 C274,88 310,80 348,72 C386,64 420,60 464,54 C500,50 540,44 580,38 L580,148 L0,148Z" fill="url(#greenGrad)"/>
+
+            <!-- Lines -->
+            <path d="M0,110 C40,105 80,88 116,78 C152,68 190,72 232,58 C274,44 310,52 348,38 C386,24 420,30 464,18 C500,8 540,14 580,4" stroke="#c9a84c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M0,130 C40,126 80,118 116,108 C152,98 190,104 232,96 C274,88 310,80 348,72 C386,64 420,60 464,54 C500,50 540,44 580,38" stroke="rgba(109,191,130,0.65)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+            <!-- Highlight dot -->
+            <circle cx="464" cy="18" r="3.5" fill="#0c0b08" stroke="#c9a84c" stroke-width="1.5"/>
+            <line x1="464" y1="18" x2="464" y2="147" stroke="rgba(201,168,76,0.15)" stroke-width="1" stroke-dasharray="3 4"/>
+
+            <!-- Tooltip -->
+            <rect x="424" y="0" width="80" height="34" rx="6" fill="#1a1710" stroke="rgba(201,168,76,0.25)" stroke-width="1"/>
+            <text x="464" y="12" text-anchor="middle" font-family="DM Mono, monospace" font-size="8" fill="rgba(201,168,76,0.6)" letter-spacing="0.05em">APR</text>
+            <text x="464" y="26" text-anchor="middle" font-family="DM Mono, monospace" font-size="10" fill="#ede4cc" letter-spacing="-0.02em">$2.84M</text>
+          </svg>
+        </div>
+        <div class="x-labels">
+          <span class="x-label">OCT</span>
+          <span class="x-label">NOV</span>
+          <span class="x-label">DEC</span>
+          <span class="x-label">JAN</span>
+          <span class="x-label">FEB</span>
+          <span class="x-label">MAR</span>
+          <span class="x-label">APR</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p class="footer-note">Last updated <strong>today, 09:41 AM</strong> · Auto-refresh every 5 min</p>
+    <div class="footer-actions">
+      <button class="footer-btn">EXPORT</button>
+      <button class="footer-btn">SHARE</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

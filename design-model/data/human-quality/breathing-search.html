@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Breathing Search</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-warm: oklch(0.95 0.02 65);
+    --bg-peach: oklch(0.92 0.03 55);
+    --surface: oklch(0.99 0.005 70);
+    --text: oklch(0.22 0.02 55);
+    --text-secondary: oklch(0.48 0.02 60);
+    --text-dim: oklch(0.62 0.015 65);
+    --border: oklch(0.86 0.02 60);
+    --accent: oklch(0.65 0.10 40);
+    --shadow-warm: oklch(0.60 0.06 50 / 0.1);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    background:
+      radial-gradient(ellipse 900px 700px at 50% 45%, var(--bg-peach), var(--bg-warm));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* subtle warm texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 400px 350px at 25% 30%, oklch(0.93 0.04 45 / 0.3), transparent),
+      radial-gradient(ellipse 350px 300px at 78% 60%, oklch(0.94 0.03 75 / 0.25), transparent);
+    pointer-events: none;
+  }
+
+  .search-universe {
+    position: relative;
+    width: 900px; height: 700px;
+  }
+
+  /* the breathing search input */
+  .search-anchor {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+  }
+
+  .search-ring {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 340px; height: 340px;
+    border-radius: 50%;
+    border: 1px solid oklch(0.80 0.03 55 / 0.2);
+    pointer-events: none;
+    animation: breatheRing 6s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+  }
+  .search-ring:nth-child(2) {
+    width: 500px; height: 500px;
+    border-color: oklch(0.82 0.02 60 / 0.1);
+    animation-delay: -0.5s;
+    animation-duration: 6.5s;
+  }
+  .search-ring:nth-child(3) {
+    width: 660px; height: 660px;
+    border-color: oklch(0.85 0.015 65 / 0.06);
+    animation-delay: -1s;
+    animation-duration: 7s;
+  }
+
+  @keyframes breatheRing {
+    0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.6; }
+    50%      { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+  }
+
+  .search-box {
+    position: relative;
+    width: 320px;
+    animation: breathe 6s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(0.97); }
+    50%      { transform: scale(1.03); }
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 16px 20px 16px 44px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--text);
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 28px;
+    outline: none;
+    box-shadow:
+      0 2px 8px var(--shadow-warm),
+      0 12px 40px oklch(0.55 0.05 55 / 0.08);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    letter-spacing: 0.005em;
+  }
+  .search-input::placeholder {
+    color: var(--text-dim);
+  }
+  .search-input:focus {
+    border-color: oklch(0.72 0.08 45);
+    box-shadow:
+      0 2px 8px var(--shadow-warm),
+      0 12px 40px oklch(0.55 0.05 55 / 0.12),
+      0 0 0 3px oklch(0.75 0.06 50 / 0.1);
+  }
+
+  /* search icon */
+  .search-icon {
+    position: absolute;
+    left: 16px; top: 50%;
+    transform: translateY(-50%);
+    width: 18px; height: 18px;
+    pointer-events: none;
+  }
+  .search-icon circle {
+    fill: none;
+    stroke: var(--text-dim);
+    stroke-width: 1.8;
+  }
+  .search-icon line {
+    stroke: var(--text-dim);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  /* result cards in orbital positions */
+  .result-card {
+    position: absolute;
+    width: 200px;
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow:
+      0 2px 6px oklch(0.60 0.04 55 / 0.06),
+      0 8px 28px oklch(0.55 0.05 55 / 0.06);
+    cursor: default;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease;
+    animation: cardFloat 8s ease-in-out infinite alternate;
+  }
+  .result-card:hover {
+    transform: translateY(-4px) scale(1.03);
+    box-shadow:
+      0 4px 12px oklch(0.60 0.04 55 / 0.1),
+      0 16px 44px oklch(0.55 0.05 55 / 0.1);
+  }
+
+  @keyframes cardFloat {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(-6px); }
+  }
+
+  .result-relevance {
+    width: 32px; height: 3px;
+    border-radius: 2px;
+    margin-bottom: 10px;
+  }
+
+  .result-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.005em;
+    line-height: 1.35;
+  }
+
+  .result-snippet {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-top: 5px;
+    line-height: 1.45;
+    letter-spacing: 0.005em;
+  }
+
+  .result-meta {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* connecting gossamer threads to search center */
+  .thread-svg {
+    position: absolute;
+    inset: 0;
+    width: 900px; height: 700px;
+    pointer-events: none;
+  }
+  .thread-line {
+    fill: none;
+    stroke: oklch(0.75 0.03 55 / 0.12);
+    stroke-width: 0.6;
+    stroke-dasharray: 4 6;
+    animation: threadDash 12s linear infinite;
+  }
+  @keyframes threadDash {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -40; }
+  }
+
+  /* faint query text above input */
+  .query-hint {
+    position: absolute;
+    top: -32px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: oklch(0.55 0.03 55);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="search-universe">
+  <!-- gossamer threads from center to each card -->
+  <svg class="thread-svg" viewBox="0 0 900 700">
+    <line class="thread-line" x1="450" y1="350" x2="115" y2="148" />
+    <line class="thread-line" x1="450" y1="350" x2="680" y2="108" style="animation-delay:-3s;" />
+    <line class="thread-line" x1="450" y1="350" x2="80" y2="455" style="animation-delay:-1.5s;" />
+    <line class="thread-line" x1="450" y1="350" x2="730" y2="430" style="animation-delay:-5s;" />
+    <line class="thread-line" x1="450" y1="350" x2="380" y2="595" style="animation-delay:-7s;" />
+  </svg>
+
+  <!-- breathing rings -->
+  <div class="search-ring"></div>
+  <div class="search-ring"></div>
+  <div class="search-ring"></div>
+
+  <!-- search input -->
+  <div class="search-anchor">
+    <div class="search-box">
+      <div class="query-hint">5 results</div>
+      <svg class="search-icon" viewBox="0 0 20 20">
+        <circle cx="8.5" cy="8.5" r="5.5"/>
+        <line x1="13" y1="13" x2="18" y2="18"/>
+      </svg>
+      <input type="text" class="search-input" value="cognitive architecture patterns" spellcheck="false" readonly>
+    </div>
+  </div>
+
+  <!-- result cards — positioned orbitally, closer = more relevant -->
+  <div class="result-card" style="left: 20px; top: 98px; animation-delay: -0.5s; animation-duration: 7s;">
+    <div class="result-relevance" style="background: oklch(0.65 0.12 40); width: 40px;"></div>
+    <div class="result-title">Global Workspace Theory in Software Agents</div>
+    <div class="result-snippet">Applying Baars' model to multi-module cognitive systems with shared broadcast channels.</div>
+    <div class="result-meta">Paper -- 2024</div>
+  </div>
+
+  <div class="result-card" style="left: 585px; top: 58px; animation-delay: -2s; animation-duration: 9s;">
+    <div class="result-relevance" style="background: oklch(0.68 0.10 55); width: 35px;"></div>
+    <div class="result-title">Attention as Resource Allocation</div>
+    <div class="result-snippet">A framework for prioritizing sensory streams in embodied agents with bounded compute.</div>
+    <div class="result-meta">Blog -- 2025</div>
+  </div>
+
+  <div class="result-card" style="left: -14px; top: 405px; animation-delay: -4s; animation-duration: 8.5s;">
+    <div class="result-relevance" style="background: oklch(0.70 0.08 65); width: 28px;"></div>
+    <div class="result-title">Emotion-Driven Decision Making</div>
+    <div class="result-snippet">Somatic markers and gut-feel heuristics in autonomous planning loops.</div>
+    <div class="result-meta">Research -- 2023</div>
+  </div>
+
+  <div class="result-card" style="left: 635px; top: 380px; animation-delay: -6s; animation-duration: 7.5s;">
+    <div class="result-relevance" style="background: oklch(0.72 0.06 75); width: 22px;"></div>
+    <div class="result-title">Memory Consolidation During Idle</div>
+    <div class="result-snippet">How sleep-like states improve symbolic recall in transformer-based cognitive stacks.</div>
+    <div class="result-meta">Preprint -- 2026</div>
+  </div>
+
+  <div class="result-card" style="left: 285px; top: 545px; animation-delay: -1s; animation-duration: 8s;">
+    <div class="result-relevance" style="background: oklch(0.74 0.05 80); width: 18px;"></div>
+    <div class="result-title">Self-Modeling in Recursive Systems</div>
+    <div class="result-snippet">When an agent builds and maintains a model of its own inference process.</div>
+    <div class="result-meta">Talk -- 2025</div>
+  </div>
+</div>
+
+</body>
+</html>

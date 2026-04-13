@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @keyframes cardEntrance {
+    from { opacity: 0; transform: translateY(24px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes ringRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%) skewX(-12deg); }
+    100% { transform: translateX(300%) skewX(-12deg); }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(62, 207, 142, 0); }
+  }
+  @keyframes barFill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes floatBadge {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-2px); }
+  }
+  @keyframes orbDrift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(8px, -6px) scale(1.04); }
+    66% { transform: translate(-4px, 4px) scale(0.97); }
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0d;
+    font-family: 'DM Sans', sans-serif;
+    padding: 2rem;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 55% at 25% 15%, rgba(201, 155, 90, 0.08) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 45% at 85% 85%, rgba(100, 70, 160, 0.06) 0%, transparent 65%),
+      radial-gradient(ellipse 40% 30% at 60% 50%, rgba(62, 207, 142, 0.03) 0%, transparent 60%);
+    pointer-events: none;
+    animation: orbDrift 18s ease-in-out infinite;
+  }
+
+  .card {
+    width: 400px;
+    background: #13131a;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.03),
+      0 32px 80px rgba(0,0,0,0.7),
+      0 8px 24px rgba(0,0,0,0.5),
+      0 0 60px rgba(201,155,90,0.04);
+    position: relative;
+    animation: cardEntrance 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transition: box-shadow 0.5s ease, transform 0.5s ease;
+  }
+
+  .card:hover {
+    box-shadow:
+      0 0 0 1px rgba(201,155,90,0.12),
+      0 40px 100px rgba(0,0,0,0.75),
+      0 8px 32px rgba(0,0,0,0.5),
+      0 0 80px rgba(201,155,90,0.07);
+    transform: translateY(-3px);
+  }
+
+  /* ── BANNER ── */
+  .card-banner {
+    height: 140px;
+    background: linear-gradient(145deg, #120f06 0%, #1e1608 35%, #170f12 70%, #0f0e18 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .banner-noise {
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+
+  .banner-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 90% 70% at 50% 140%, rgba(201, 155, 90, 0.22) 0%, transparent 65%),
+      radial-gradient(ellipse 40% 40% at 15% -10%, rgba(201, 155, 90, 0.1) 0%, transparent 60%);
+  }
+
+  .banner-lines {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 22px,
+      rgba(201,155,90,0.025) 22px,
+      rgba(201,155,90,0.025) 23px
+    );
+  }
+
+  .banner-shimmer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .banner-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 0;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    animation: shimmer 4s ease-in-out 1.2s infinite;
+  }
+
+  .banner-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(30px);
+  }
+  .banner-orb-1 {
+    width: 120px; height: 120px;
+    background: rgba(201, 155, 90, 0.12);
+    top: -40px; right: 30px;
+    animation: orbDrift 12s ease-in-out infinite;
+  }
+  .banner-orb-2 {
+    width: 80px; height: 80px;
+    background: rgba(100, 70, 180, 0.08);
+    bottom: -20px; right: 80px;
+    animation: orbDrift 16s ease-in-out 3s infinite reverse;
+  }
+
+  .banner-tag {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(240, 236, 228, 0.4);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.5s both;
+  }
+
+  /* ── BODY ── */
+  .card-body {
+    padding: 0 28px 28px;
+  }
+
+  .avatar-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: -42px;
+    margin-bottom: 20px;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.15s both;
+  }
+
+  .avatar-wrap {
+    position: relative;
+    width: 84px;
+    height: 84px;
+  }
+
+  .avatar-ring-track {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    z-index: 0;
+  }
+
+  .avatar-ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      #c99b5a 60deg,
+      #e8c882 120deg,
+      #a07030 200deg,
+      transparent 280deg,
+      transparent 360deg
+    );
+    z-index: 1;
+    animation: ringRotate 6s linear infinite;
+    transition: animation-duration 0.4s ease;
+  }
+
+  .avatar-wrap:hover .avatar-ring {
+    animation-duration: 2s;
+  }
+
+  .avatar-inner {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: #13131a;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  .avatar-wrap:hover .avatar-inner {
+    transform: scale(1.04);
+  }
+
+  .avatar-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .status-dot {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #3ecf8e;
+    border: 2.5px solid #13131a;
+    z-index: 3;
+    animation: pulseGlow 2.5s ease-in-out infinite;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(201, 155, 90, 0.08);
+    border: 1px solid rgba(201, 155, 90, 0.2);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #c99b5a;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    cursor: default;
+    transition: background 0.25s, border-color 0.25s, transform 0.25s;
+    animation: floatBadge 4s ease-in-out infinite;
+  }
+
+  .badge:hover {
+    background: rgba(201, 155, 90, 0.14);
+    border-color: rgba(201, 155, 90, 0.35);
+    transform: scale(1.03);
+    animation-play-state: paused;
+  }
+
+  .badge-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #c99b5a;
+    opacity: 0.85;
+  }
+
+  /* ── IDENTITY ── */
+  .identity {
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.2s both;
+  }
+
+  .name {
+    font-family: 'Playfair Display', serif;
+    font-size: 25px;
+    font-weight: 500;
+    color: #f0ece4;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin-bottom: 4px;
+  }
+
+  .name em {
+    font-style: italic;
+    color: rgba(201, 155, 90, 0.75);
+  }
+
+  .handle {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: rgba(240, 236, 228, 0.3);
+    letter-spacing: 0.02em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .handle::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06), transparent);
+  }
+
+  .bio {
+    font-size: 13.5px;
+    font-weight: 300;
+    color: rgba(240, 236, 228, 0.5);
+    line-height: 1.7;
+    margin-bottom: 22px;
+    letter-spacing: 0.01em;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.28s both;
+  }
+
+  .bio em {
+    font-style: normal;
+    color: rgba(201, 155, 90, 0.85);
+    position: relative;
+  }
+
+  /* ── STATS ── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 22px;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.33s both;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 0;
+    position: relative;
+    cursor: default;
+    transition: background 0.25s;
+  }
+
+  .stat:hover {
+    background: rgba(201,155,90,0.05);
+  }
+
+  .stat + .stat::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 18%; height: 64%;
+    width: 1px;
+    background: rgba(255,255,255,0.07);
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 21px;
+    font-weight: 500;
+    color: #f0ece4;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    transition: color 0.25s;
+  }
+
+  .stat:hover .stat-value {
+    color: #e8c882;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    font-weight: 400;
+    color: rgba(240, 236, 228, 0.28);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── SKILL BARS ── */
+  .skills {
+    margin-bottom: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.38s both;
+  }
+
+  .skill-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .skill-name {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(240, 236, 228, 0.35);
+    letter-spacing: 0.04em;
+    width: 72px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+
+  .skill-track {
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .skill-fill {
+    height: 100%;
+    border-radius: 2px;
+    transform-origin: left;
+    animation: barFill 1s cubic-bezier(0.16,1,0.3,1) both;
+  }
+
+  .skill-fill-1 { background: linear-gradient(90deg, #a07030, #e8c882); width: 88%; animation-delay: 0.55s; }
+  .skill-fill-2 { background: linear-gradient(90deg, #5a4090, #9c70e0); width: 74%; animation-delay: 0.65s; }
+  .skill-fill-3 { background: linear-gradient(90deg, #1e7a50, #3ecf8e); width: 91%; animation-delay: 0.75s; }
+
+  .skill-pct {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: rgba(240,236,228,0.3);
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── TAGS ── */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 22px;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.42s both;
+  }
+
+  .tag {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(240, 236, 228, 0.38);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 7px;
+    padding: 5px 11px;
+    letter-spacing: 0.02em;
+    transition: color 0.22s ease, border-color 0.22s ease, background 0.22s ease, transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+    cursor: default;
+  }
+
+  .tag:hover {
+    color: rgba(201, 155, 90, 0.9);
+    border-color: rgba(201, 155, 90, 0.28);
+    background: rgba(201, 155, 90, 0.07);
+    transform: translateY(-2px) scale(1.04);
+  }
+
+  /* ── ACTIONS ── */
+  .actions {
+    display: flex;
+    gap: 10px;
+    animation: fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.47s both;
+  }
+
+  .btn-primary {
+    flex: 1;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #b8893a 0%, #c99b5a 50%, #d4a96a 100%);
+    border: none;
+    border-radius: 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: #0e0b04;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, filter 0.25s ease;
+    box-shadow: 0 4px 16px rgba(201,155,90,0.25), 0 1px 0 rgba(255,255,255,0.15) inset;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: -50%;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+    transform: skewX(-12deg);
+    transition: left 0.5s ease;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 28px rgba(201,155,90,0.4), 0 1px 0 rgba(255,255,255,0.15) inset;
+    filter: brightness(1.07);
+  }
+
+  .btn-primary:hover::after {
+    left: 140%;
+  }
+
+  .btn-primary:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 8px rgba(201,155,90,0.2);
+  }
+
+  .btn-secondary {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.22s, border-color 0.22s, transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s;
+    flex-shrink: 0;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.14);
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  .btn-secondary:active {
+    transform: scale(0.94);
+  }
+
+  .btn-icon {
+    width: 15px; height: 15px;
+    fill: none;
+    stroke: rgba(240,236,228,0.5);
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.22s;
+  }
+
+  .btn-secondary:hover .btn-icon {
+    stroke: rgba(240,236,228,0.8);
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- Banner -->
+  <div class="card-banner">
+    <div class="banner-noise"></div>
+    <div class="banner-lines"></div>
+    <div class="banner-orb banner-orb-1"></div>
+    <div class="banner-orb banner-orb-2"></div>
+    <div class="banner-glow"></div>
+    <div class="banner-shimmer"></div>
+    <div class="banner-tag">Available for work</div>
+  </div>
+
+  <!-- Body -->
+  <div class="card-body">
+
+    <!-- Avatar row -->
+    <div class="avatar-row">
+      <div class="avatar-wrap">
+        <div class="avatar-ring-track"></div>
+        <div class="avatar-ring"></div>
+        <div class="avatar-inner">
+          <svg class="avatar-svg" viewBox="0 0 84 84" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="84" height="84" fill="#1c1a14"/>
+            <ellipse cx="42" cy="34" rx="15" ry="17" fill="#2e2718"/>
+            <ellipse cx="42" cy="34" rx="11" ry="13" fill="#c99b5a" opacity="0.15"/>
+            <circle cx="42" cy="32" r="9" fill="#c99b5a" opacity="0.22"/>
+            <text x="42" y="38" text-anchor="middle" font-family="Playfair Display,serif" font-size="16" font-weight="500" fill="#e8c882" opacity="0.9">E</text>
+            <ellipse cx="42" cy="72" rx="22" ry="14" fill="#1a1810"/>
+          </svg>
+        </div>
+        <div class="status-dot"></div>
+      </div>
+      <div class="badge">
+        <div class="badge-dot"></div>
+        Senior Designer
+      </div>
+    </div>
+
+    <!-- Name -->
+    <div class="identity">
+      <div class="name">Elara <em>Voss</em></div>
+      <div class="handle">@elaravoss · Berlin</div>
+    </div>
+
+    <!-- Bio -->
+    <div class="bio">
+      Crafting <em>interfaces</em> that feel inevitable — where structure meets
+      silence and every pixel earns its place.
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value">4.2k</span>
+        <span class="stat-label">Following</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">38.1k</span>
+        <span class="stat-label">Followers</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">214</span>
+        <span class="stat-label">Projects</span>
+      </div>
+    </div>
+
+    <!-- Skill bars -->
+    <div class="skills">
+      <div class="skill-row">
+        <span class="skill-name">Product</span>
+        <div class="skill-track"><div class="skill-fill skill-fill-1"></div></div>
+        <span class="skill-pct">88%</span>
+      </div>
+      <div class="skill-row">
+        <span class="skill-name">Branding</span>
+        <div class="skill-track"><div class="skill-fill skill-fill-2"></div></div>
+        <span class="skill-pct">74%</span>
+      </div>
+      <div class="skill-row">
+        <span class="skill-name">Motion</span>
+        <div class="skill-track"><div class="skill-fill skill-fill-3"></div></div>
+        <span class="skill-pct">91%</span>
+      </div>
+    </div>
+
+    <!-- Tags -->
+    <div class="tags">
+      <span class="tag">Figma</span>
+      <span class="tag">Systems</span>
+      <span class="tag">Typography</span>
+      <span class="tag">Interaction</span>
+      <span class="tag">3D</span>
+      <span class="tag">CSS</span>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn-primary">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 1v12M1 7h12"/>
+        </svg>
+        Follow
+      </button>
+      <button class="btn-secondary" title="Message">
+        <svg class="btn-icon" viewBox="0 0 15 15">
+          <path d="M13 2H2a1 1 0 00-1 1v7a1 1 0 001 1h3l2 3 2-3h4a1 1 0 001-1V3a1 1 0 00-1-1z"/>
+        </svg>
+      </button>
+      <button class="btn-secondary" title="Share">
+        <svg class="btn-icon" viewBox="0 0 15 15">
+          <circle cx="11.5" cy="2.5" r="1.5"/>
+          <circle cx="11.5" cy="12.5" r="1.5"/>
+          <circle cx="3.5" cy="7.5" r="1.5"/>
+          <path d="M10 3.5L5 6.5M10 11.5L5 8.5"/>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

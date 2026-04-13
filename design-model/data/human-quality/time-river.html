@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Time River</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-deep: oklch(0.14 0.03 270);
+    --bg-twilight: oklch(0.18 0.05 280);
+    --water-dark: oklch(0.22 0.06 255);
+    --water-mid: oklch(0.30 0.07 240);
+    --water-light: oklch(0.38 0.06 230);
+    --water-shimmer: oklch(0.50 0.05 220 / 0.4);
+    --stone-past: oklch(0.45 0.04 250);
+    --stone-now: oklch(0.65 0.08 60);
+    --stone-future: oklch(0.58 0.06 280);
+    --text-soft: oklch(0.68 0.03 260);
+    --text-whisper: oklch(0.48 0.03 265);
+    --accent-glow: oklch(0.55 0.10 70 / 0.3);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: var(--bg-deep);
+  }
+
+  .scene {
+    width: 100%; height: 100%;
+    position: relative;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% 65%, oklch(0.20 0.06 270 / 0.5), transparent),
+      radial-gradient(ellipse 600px 300px at 30% 40%, oklch(0.18 0.04 300 / 0.3), transparent),
+      linear-gradient(180deg, oklch(0.12 0.04 280) 0%, var(--bg-twilight) 40%, oklch(0.16 0.05 265) 100%);
+  }
+
+  /* twilight sky hints */
+  .sky-wash {
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 320px;
+    background: linear-gradient(
+      180deg,
+      oklch(0.15 0.06 290) 0%,
+      oklch(0.18 0.08 300 / 0.4) 35%,
+      oklch(0.20 0.05 275 / 0.15) 70%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* the river bed */
+  .river {
+    position: absolute;
+    top: 340px; left: 0; right: 0; height: 220px;
+    overflow: visible;
+  }
+
+  .river-body {
+    position: absolute;
+    top: 30px; left: -40px; right: -40px;
+    height: 160px;
+    background:
+      linear-gradient(180deg,
+        oklch(0.26 0.07 248 / 0.0) 0%,
+        oklch(0.26 0.07 248 / 0.7) 15%,
+        var(--water-mid) 45%,
+        var(--water-dark) 85%,
+        oklch(0.20 0.05 255 / 0.5) 100%
+      );
+    border-radius: 50% / 20%;
+    clip-path: polygon(
+      0% 30%, 5% 22%, 12% 28%, 20% 18%, 28% 25%, 38% 15%,
+      48% 22%, 55% 12%, 65% 20%, 75% 14%, 85% 22%, 92% 16%, 100% 25%,
+      100% 78%, 93% 85%, 82% 78%, 72% 88%, 60% 80%, 48% 90%,
+      35% 82%, 22% 88%, 10% 80%, 0% 85%
+    );
+  }
+
+  /* current / flow lines */
+  .flow-line {
+    position: absolute;
+    height: 1px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, transparent, var(--water-shimmer), transparent);
+    animation: flowRight linear infinite;
+    pointer-events: none;
+  }
+  @keyframes flowRight {
+    from { transform: translateX(-200px); }
+    to   { transform: translateX(1600px); }
+  }
+
+  /* reflection shimmer on water surface */
+  .shimmer-layer {
+    position: absolute;
+    top: 30px; left: 0; right: 0; height: 160px;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        oklch(0.50 0.04 240 / 0.04) 3px,
+        transparent 6px
+      );
+    animation: shimmerDrift 12s linear infinite;
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  @keyframes shimmerDrift {
+    from { background-position: 0 0; }
+    to   { background-position: 200px 0; }
+  }
+
+  /* event stones */
+  .stone {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: default;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .stone:hover { transform: translateY(-4px) scale(1.05); }
+
+  .stone-shape {
+    border-radius: 45% 55% 50% 50% / 55% 45% 55% 45%;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px oklch(0.08 0.03 260 / 0.5);
+    transition: box-shadow 0.5s ease;
+  }
+  .stone:hover .stone-shape {
+    box-shadow: 0 8px 28px oklch(0.10 0.04 260 / 0.6);
+  }
+
+  .stone-icon {
+    font-size: 16px;
+    color: oklch(0.90 0.02 260 / 0.8);
+    filter: drop-shadow(0 1px 2px oklch(0.05 0.02 260 / 0.4));
+  }
+
+  .stone-label {
+    margin-top: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-soft);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px oklch(0.08 0.02 270 / 0.6);
+  }
+
+  .stone-date {
+    font-size: 9px;
+    color: var(--text-whisper);
+    margin-top: 2px;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* past stones: muted, settled */
+  .stone.past .stone-shape {
+    background: linear-gradient(145deg, oklch(0.38 0.04 255), oklch(0.32 0.05 260));
+  }
+
+  /* present stone: warm glow */
+  .stone.now .stone-shape {
+    background: linear-gradient(145deg, oklch(0.55 0.10 65), oklch(0.48 0.08 55));
+    box-shadow:
+      0 6px 20px oklch(0.08 0.03 260 / 0.5),
+      0 0 30px var(--accent-glow);
+  }
+  .stone.now .stone-label { color: var(--stone-now); }
+
+  /* future stones: shimmer */
+  .stone.future .stone-shape {
+    background: linear-gradient(145deg, oklch(0.42 0.07 280), oklch(0.36 0.06 290));
+    animation: futureGlow 3s ease-in-out infinite alternate;
+  }
+  @keyframes futureGlow {
+    0%   { box-shadow: 0 6px 20px oklch(0.08 0.03 260 / 0.5), 0 0 12px oklch(0.50 0.08 280 / 0.15); }
+    100% { box-shadow: 0 6px 20px oklch(0.08 0.03 260 / 0.5), 0 0 24px oklch(0.55 0.10 280 / 0.25); }
+  }
+  .stone.future .stone-label {
+    color: var(--stone-future);
+    animation: labelFlicker 4s ease-in-out infinite alternate;
+  }
+  @keyframes labelFlicker {
+    0%   { opacity: 0.6; }
+    100% { opacity: 1; }
+  }
+
+  /* connecting thread */
+  .thread {
+    position: absolute;
+    top: 412px;
+    left: 0; right: 0;
+    height: 2px;
+    pointer-events: none;
+  }
+  .thread svg {
+    width: 100%; height: 60px;
+    position: absolute; top: -30px;
+  }
+  .thread path {
+    fill: none;
+    stroke: oklch(0.40 0.04 255 / 0.25);
+    stroke-width: 1.2;
+    stroke-dasharray: 6 8;
+    animation: threadFlow 8s linear infinite;
+  }
+  @keyframes threadFlow {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -56; }
+  }
+
+  /* title */
+  .river-title {
+    position: absolute;
+    top: 60px; left: 80px;
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    color: oklch(0.60 0.04 275);
+  }
+  .river-subtitle {
+    position: absolute;
+    top: 98px; left: 80px;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-whisper);
+  }
+
+  /* bank details */
+  .bank-left, .bank-right {
+    position: absolute;
+    pointer-events: none;
+  }
+  .bank-left {
+    bottom: 180px; left: 30px;
+    width: 100px; height: 60px;
+    background: radial-gradient(ellipse, oklch(0.20 0.04 130 / 0.15), transparent);
+    filter: blur(16px);
+    border-radius: 50%;
+  }
+  .bank-right {
+    bottom: 170px; right: 50px;
+    width: 120px; height: 50px;
+    background: radial-gradient(ellipse, oklch(0.20 0.04 130 / 0.12), transparent);
+    filter: blur(20px);
+    border-radius: 50%;
+  }
+
+  /* bottom reflection zone */
+  .reflection {
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 200px;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      oklch(0.14 0.05 270 / 0.3) 50%,
+      oklch(0.12 0.04 275 / 0.6) 100%
+    );
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="scene">
+  <div class="sky-wash"></div>
+
+  <div class="river-title">This Week</div>
+  <div class="river-subtitle">April 7 -- 13, 2026</div>
+
+  <div class="river">
+    <div class="river-body"></div>
+    <div class="shimmer-layer"></div>
+  </div>
+
+  <!-- connecting thread -->
+  <div class="thread">
+    <svg viewBox="0 0 1440 60" preserveAspectRatio="none">
+      <path d="M 160,30 C 280,18 360,42 480,28 S 660,38 780,26 S 960,40 1080,30 S 1200,22 1300,32" />
+    </svg>
+  </div>
+
+  <!-- event stones -->
+  <div class="stone past" style="left: 130px; top: 368px;">
+    <div class="stone-shape" style="width: 48px; height: 44px;">
+      <span class="stone-icon">&#9998;</span>
+    </div>
+    <div class="stone-label">Draft submitted</div>
+    <div class="stone-date">Mon Apr 7</div>
+  </div>
+
+  <div class="stone past" style="left: 365px; top: 378px;">
+    <div class="stone-shape" style="width: 42px; height: 40px;">
+      <span class="stone-icon">&#9743;</span>
+    </div>
+    <div class="stone-label">Team sync</div>
+    <div class="stone-date">Tue Apr 8</div>
+  </div>
+
+  <div class="stone now" style="left: 620px; top: 362px;">
+    <div class="stone-shape" style="width: 56px; height: 52px;">
+      <span class="stone-icon">&#9733;</span>
+    </div>
+    <div class="stone-label">Launch day</div>
+    <div class="stone-date">Today</div>
+  </div>
+
+  <div class="stone future" style="left: 895px; top: 374px;">
+    <div class="stone-shape" style="width: 44px; height: 42px;">
+      <span class="stone-icon">&#9881;</span>
+    </div>
+    <div class="stone-label">Review cycle</div>
+    <div class="stone-date">Fri Apr 11</div>
+  </div>
+
+  <div class="stone future" style="left: 1160px; top: 382px;">
+    <div class="stone-shape" style="width: 38px; height: 36px;">
+      <span class="stone-icon">&#8635;</span>
+    </div>
+    <div class="stone-label">Retro</div>
+    <div class="stone-date">Sun Apr 13</div>
+  </div>
+
+  <!-- vegetation hints -->
+  <div class="bank-left"></div>
+  <div class="bank-right"></div>
+
+  <div class="reflection"></div>
+</div>
+
+<script>
+  // generate organic flow lines
+  const river = document.querySelector('.river');
+  for (let i = 0; i < 12; i++) {
+    const line = document.createElement('div');
+    line.className = 'flow-line';
+    const top = 50 + Math.random() * 120;
+    const width = 60 + Math.random() * 180;
+    const dur = 6 + Math.random() * 10;
+    const delay = Math.random() * 8;
+    line.style.cssText = `
+      top: ${top}px;
+      left: 0;
+      width: ${width}px;
+      animation-duration: ${dur}s;
+      animation-delay: -${delay}s;
+      opacity: ${0.15 + Math.random() * 0.25};
+    `;
+    river.appendChild(line);
+  }
+</script>
+
+</body>
+</html>

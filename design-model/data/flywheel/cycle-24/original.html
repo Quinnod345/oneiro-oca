@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nocturne</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300;1,400;1,600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #06060a;
+      overflow: hidden;
+      font-family: 'Space Mono', monospace;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 55% 55% at 18% 78%, rgba(120, 45, 200, 0.14) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 45% at 82% 18%, rgba(30, 80, 180, 0.1) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 40% at 55% 50%, rgba(160, 40, 80, 0.07) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .player {
+      width: 344px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow:
+        0 60px 120px -20px rgba(0, 0, 0, 0.85),
+        0 30px 60px -30px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(60px) saturate(160%);
+      -webkit-backdrop-filter: blur(60px) saturate(160%);
+      position: relative;
+    }
+
+    /* Subtle grain overlay */
+    .player::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 100;
+      border-radius: 22px;
+    }
+
+    /* ── Album Art ── */
+    .album-art {
+      width: 100%;
+      aspect-ratio: 1;
+      position: relative;
+      overflow: hidden;
+      background: #080512;
+    }
+
+    .art-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 80% at 20% 20%, rgba(72, 18, 130, 0.95) 0%, transparent 55%),
+        radial-gradient(ellipse 70% 70% at 78% 65%, rgba(15, 45, 100, 0.9) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 70% at 55% 95%, rgba(120, 20, 45, 0.7) 0%, transparent 50%),
+        radial-gradient(ellipse 45% 40% at 85% 15%, rgba(20, 65, 100, 0.75) 0%, transparent 50%),
+        #08051a;
+    }
+
+    .art-glow {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 35% 35% at 35% 30%, rgba(160, 90, 255, 0.28) 0%, transparent 55%),
+        radial-gradient(ellipse 25% 25% at 70% 58%, rgba(60, 140, 240, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse 30% 20% at 25% 75%, rgba(200, 60, 90, 0.18) 0%, transparent 50%);
+    }
+
+    /* Light beam */
+    .art-beam {
+      position: absolute;
+      top: -20%;
+      left: 28%;
+      width: 1px;
+      height: 160%;
+      background: linear-gradient(to bottom, transparent, rgba(180, 140, 255, 0.12) 30%, rgba(180, 140, 255, 0.06) 70%, transparent);
+      transform: rotate(-8deg);
+      pointer-events: none;
+    }
+
+    /* Vinyl disc */
+    .vinyl {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      animation: vinyl-spin 8s linear infinite;
+    }
+
+    .vinyl::before {
+      content: '';
+      position: absolute;
+      inset: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: radial-gradient(circle at 45% 42%, rgba(255,255,255,0.04) 0%, transparent 60%);
+    }
+
+    .vinyl::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(8, 5, 18, 0.85);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03);
+    }
+
+    /* Groove rings */
+    .vinyl-rings {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background:
+        repeating-radial-gradient(
+          circle at 50% 50%,
+          transparent 0px,
+          transparent 6px,
+          rgba(255,255,255,0.012) 6px,
+          rgba(255,255,255,0.012) 7px
+        );
+    }
+
+    @keyframes vinyl-spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    .vinyl.paused { animation-play-state: paused; }
+
+    /* Now Playing badge */
+    .badge {
+      position: absolute;
+      top: 13px;
+      right: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 100px;
+      padding: 5px 10px 5px 8px;
+      z-index: 5;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #c9a74b;
+      box-shadow: 0 0 8px rgba(201, 167, 75, 0.9);
+      animation: badge-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes badge-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.75); }
+    }
+
+    .badge-text {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.55);
+    }
+
+    /* Art bottom fade */
+    .art-fade {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 90px;
+      background: linear-gradient(to bottom, transparent 0%, rgba(8, 5, 18, 0.65) 100%);
+      z-index: 2;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      padding: 20px 22px 22px;
+      position: relative;
+      z-index: 5;
+    }
+
+    /* Track info row */
+    .track-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .track-info { flex: 1; min-width: 0; }
+
+    .track-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 27px;
+      color: #f2ede5;
+      letter-spacing: -0.025em;
+      line-height: 1.06;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-artist {
+      font-size: 9.5px;
+      letter-spacing: 0.135em;
+      text-transform: uppercase;
+      color: rgba(242, 237, 229, 0.34);
+      margin-top: 5px;
+    }
+
+    .like-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+      color: rgba(242, 237, 229, 0.22);
+      flex-shrink: 0;
+      margin-left: 8px;
+      margin-top: 3px;
+      transition: color 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      line-height: 0;
+    }
+
+    .like-btn:hover { color: rgba(242, 237, 229, 0.55); transform: scale(1.1); }
+    .like-btn.active { color: #c9a74b; }
+    .like-btn.active:hover { color: #e0be65; transform: scale(1.15); }
+
+    /* Progress */
+    .progress-wrap { margin-bottom: 20px; }
+
+    .progress-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      position: relative;
+      cursor: pointer;
+      margin-bottom: 9px;
+      transition: height 0.18s;
+    }
+
+    .progress-track:hover { height: 3px; }
+
+    .progress-fill {
+      height: 100%;
+      width: 37%;
+      background: linear-gradient(90deg, #a8821c, #e8c86a);
+      border-radius: 2px;
+      position: relative;
+      pointer-events: none;
+    }
+
+    .progress-thumb {
+      position: absolute;
+      right: -5px;
+      top: 50%;
+      transform: translateY(-50%) scale(0);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #eacf72;
+      box-shadow: 0 0 0 2px rgba(234, 207, 114, 0.25), 0 0 14px rgba(200, 160, 60, 0.65);
+      transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .progress-track:hover .progress-thumb { transform: translateY(-50%) scale(1); }
+
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: rgba(242, 237, 229, 0.24);
+      letter-spacing: 0.06em;
+    }
+
+    /* Main controls */
+    .main-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+
+    .ctrl-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: rgba(242, 237, 229, 0.42);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px;
+      border-radius: 50%;
+      transition: color 0.16s, background 0.16s, transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
+      line-height: 0;
+    }
+
+    .ctrl-btn:hover {
+      color: rgba(242, 237, 229, 0.88);
+      background: rgba(255, 255, 255, 0.055);
+      transform: scale(1.1);
+    }
+
+    .ctrl-btn:active { transform: scale(0.93); }
+
+    .play-btn {
+      width: 54px;
+      height: 54px;
+      background: linear-gradient(148deg, #c4a044 0%, #edce78 52%, #c4a044 100%);
+      color: #100c04 !important;
+      border-radius: 50%;
+      padding: 0 !important;
+      box-shadow:
+        0 5px 24px rgba(196, 160, 68, 0.38),
+        0 2px 8px rgba(0,0,0,0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.32),
+        inset 0 -1px 0 rgba(0,0,0,0.15);
+      margin: 0 10px;
+      transition:
+        box-shadow 0.2s,
+        transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1) !important,
+        color 0.16s !important,
+        background 0.16s !important;
+    }
+
+    .play-btn:hover {
+      background: linear-gradient(148deg, #d4b050 0%, #f8de88 52%, #d4b050 100%) !important;
+      box-shadow:
+        0 8px 32px rgba(196, 160, 68, 0.52),
+        0 3px 12px rgba(0,0,0,0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.36),
+        inset 0 -1px 0 rgba(0,0,0,0.12) !important;
+      transform: scale(1.07) !important;
+      color: #100c04 !important;
+    }
+
+    /* Secondary row */
+    .secondary-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .left-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .sm-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: rgba(242, 237, 229, 0.26);
+      padding: 6px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.16s, background 0.16s;
+      line-height: 0;
+    }
+
+    .sm-btn:hover {
+      color: rgba(242, 237, 229, 0.65);
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .sm-btn.active { color: #c9a74b; }
+    .sm-btn.active:hover { color: #e0be65; }
+
+    /* EQ bars */
+    .eq {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 13px;
+      margin-left: 8px;
+    }
+
+    .eq-bar {
+      width: 2px;
+      background: rgba(201, 167, 75, 0.55);
+      border-radius: 1px;
+      animation: eq-anim var(--d, 0.8s) ease-in-out infinite alternate;
+    }
+
+    @keyframes eq-anim {
+      from { height: var(--lo, 3px); }
+      to   { height: var(--hi, 11px); }
+    }
+
+    .eq.paused .eq-bar {
+      animation-play-state: paused;
+      height: 4px;
+    }
+
+    /* Volume */
+    .vol-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .vol-icon {
+      color: rgba(242, 237, 229, 0.28);
+      line-height: 0;
+      flex-shrink: 0;
+    }
+
+    input[type="range"].vol {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 76px;
+      height: 2px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      background: linear-gradient(
+        to right,
+        rgba(201, 167, 75, 0.6) 0%,
+        rgba(201, 167, 75, 0.6) var(--v, 70%),
+        rgba(255,255,255,0.09) var(--v, 70%),
+        rgba(255,255,255,0.09) 100%
+      );
+    }
+
+    input[type="range"].vol::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(242, 237, 229, 0.62);
+      cursor: pointer;
+      transition: background 0.18s, transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 0 6px rgba(0,0,0,0.4);
+    }
+
+    input[type="range"].vol:hover::-webkit-slider-thumb {
+      background: #eacf72;
+      transform: scale(1.35);
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.045);
+      margin: 0 22px;
+    }
+
+    /* Queue section */
+    .queue {
+      padding: 13px 22px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .q-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .q-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 5px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .q-thumb-1 { background: linear-gradient(135deg, #1a2040, #0d1a35); }
+    .q-thumb-2 { background: linear-gradient(135deg, #2a1430, #151028); }
+
+    .q-meta { min-width: 0; }
+
+    .q-label {
+      font-size: 8.5px;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: rgba(242, 237, 229, 0.2);
+      margin-bottom: 1px;
+    }
+
+    .q-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 13.5px;
+      color: rgba(242, 237, 229, 0.42);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .q-divider {
+      width: 1px;
+      height: 28px;
+      background: rgba(255,255,255,0.05);
+      flex-shrink: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="player" role="region" aria-label="Music Player">
+
+  <!-- Album Art -->
+  <div class="album-art">
+    <div class="art-bg"></div>
+    <div class="art-glow"></div>
+    <div class="art-beam"></div>
+    <div class="vinyl" id="vinyl">
+      <div class="vinyl-rings"></div>
+    </div>
+    <div class="badge">
+      <div class="badge-dot" id="badge-dot"></div>
+      <span class="badge-text">Now Playing</span>
+    </div>
+    <div class="art-fade"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+
+    <div class="track-row">
+      <div class="track-info">
+        <div class="track-title">Clair de lune</div>
+        <div class="track-artist">Debussy · Suite bergamasque</div>
+      </div>
+      <button class="like-btn active" id="likeBtn" aria-label="Like" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-track" id="progressTrack" role="slider" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="37">
+        <div class="progress-fill" id="progressFill">
+          <div class="progress-thumb"></div>
+        </div>
+      </div>
+      <div class="time-row">
+        <span id="curTime">2:14</span>
+        <span>5:59</span>
+      </div>
+    </div>
+
+    <div class="main-controls">
+      <button class="ctrl-btn" aria-label="Previous track">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+        </svg>
+      </button>
+
+      <button class="ctrl-btn play-btn" id="playBtn" aria-label="Pause">
+        <svg id="iconPause" width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+        <svg id="iconPlay" width="21" height="21" viewBox="0 0 24 24" fill="currentColor" style="display:none;margin-left:2px">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </button>
+
+      <button class="ctrl-btn" aria-label="Next track">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="secondary-row">
+      <div class="left-group">
+        <button class="sm-btn" aria-label="Shuffle">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+          </svg>
+        </button>
+        <button class="sm-btn active" aria-label="Repeat" aria-pressed="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+          </svg>
+        </button>
+        <div class="eq" id="eq">
+          <div class="eq-bar" style="--lo:2px;--hi:9px;--d:0.65s;animation-delay:0s"></div>
+          <div class="eq-bar" style="--lo:4px;--hi:13px;--d:0.48s;animation-delay:0.08s"></div>
+          <div class="eq-bar" style="--lo:2px;--hi:7px;--d:0.82s;animation-delay:0.18s"></div>
+          <div class="eq-bar" style="--lo:5px;--hi:11px;--d:0.57s;animation-delay:0.04s"></div>
+        </div>
+      </div>
+
+      <div class="vol-group">
+        <span class="vol-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5zm7-.17v6.34L9.83 13H7v-2h2.83L12 8.83z"/>
+          </svg>
+        </span>
+        <input type="range" class="vol" id="vol" min="0" max="100" value="70" aria-label="Volume">
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Queue -->
+  <div class="queue">
+    <div class="q-item">
+      <div class="q-thumb q-thumb-1"></div>
+      <div class="q-meta">
+        <div class="q-label">Up next</div>
+        <div class="q-title">Gymnopédie No. 1</div>
+      </div>
+    </div>
+    <div class="q-divider"></div>
+    <div class="q-item">
+      <div class="q-thumb q-thumb-2"></div>
+      <div class="q-meta">
+        <div class="q-label">Then</div>
+        <div class="q-title">Arabesque No. 1</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const TOTAL = 359;
+  let progress = 37;
+  let playing = true;
+  let lastTs = null;
+
+  const progressTrack = document.getElementById('progressTrack');
+  const progressFill  = document.getElementById('progressFill');
+  const curTimeEl     = document.getElementById('curTime');
+  const playBtn       = document.getElementById('playBtn');
+  const iconPlay      = document.getElementById('iconPlay');
+  const iconPause     = document.getElementById('iconPause');
+  const vinyl         = document.getElementById('vinyl');
+  const eq            = document.getElementById('eq');
+  const badgeDot      = document.getElementById('badge-dot');
+  const vol           = document.getElementById('vol');
+  const likeBtn       = document.getElementById('likeBtn');
+
+  function fmt(s) {
+    return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+
+  function setProgress(p) {
+    progress = Math.max(0, Math.min(100, p));
+    progressFill.style.width = progress + '%';
+    progressTrack.setAttribute('aria-valuenow', Math.round(progress));
+    curTimeEl.textContent = fmt(Math.round(TOTAL * progress / 100));
+  }
+
+  function setPlaying(p) {
+    playing = p;
+    iconPause.style.display = p ? 'block' : 'none';
+    iconPlay.style.display  = p ? 'none'  : 'block';
+    vinyl.classList.toggle('paused', !p);
+    eq.classList.toggle('paused', !p);
+    badgeDot.style.animationPlayState = p ? 'running' : 'paused';
+    playBtn.setAttribute('aria-label', p ? 'Pause' : 'Play');
+  }
+
+  playBtn.addEventListener('click', () => setPlaying(!playing));
+
+  progressTrack.addEventListener('click', (e) => {
+    const r = progressTrack.getBoundingClientRect();
+    setProgress(((e.clientX - r.left) / r.width) * 100);
+  });
+
+  let dragging = false;
+  progressTrack.addEventListener('mousedown', () => dragging = true);
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const r = progressTrack.getBoundingClientRect();
+    setProgress(((e.clientX - r.left) / r.width) * 100);
+  });
+  window.addEventListener('mouseup', () => dragging = false);
+
+  function updateVol() {
+    vol.style.setProperty('--v', vol.value + '%');
+  }
+  vol.addEventListener('input', updateVol);
+  updateVol();
+
+  likeBtn.addEventListener('click', function() {
+    const active = this.classList.toggle('active');
+    this.setAttribute('aria-pressed', active);
+  });
+
+  document.querySelectorAll('.sm-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const active = this.classList.toggle('active');
+      if (this.hasAttribute('aria-pressed')) {
+        this.setAttribute('aria-pressed', active);
+      }
+    });
+  });
+
+  function tick(ts) {
+    if (playing && lastTs !== null) {
+      const delta = (ts - lastTs) / 1000;
+      setProgress(progress + (delta / TOTAL) * 100);
+    }
+    lastTs = playing ? ts : null;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+</script>
+
+</body>
+</html>

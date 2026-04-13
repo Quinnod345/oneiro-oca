@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Revenue Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,400&family=Outfit:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0e0c09;
+      --card:         #1a1610;
+      --card-2:       #231e16;
+      --card-3:       #2d2719;
+      --border:       #38301f;
+      --border-sub:   #27221a;
+      --amber:        #d4843a;
+      --amber-hi:     #eeaa60;
+      --amber-lo:     #9a5e1a;
+      --cream:        #f0e4cc;
+      --cream-dim:    #b89870;
+      --muted:        #766050;
+      --green:        #6dc49a;
+      --green-bg:     rgba(109,196,154,.10);
+      --green-border: rgba(109,196,154,.18);
+      --red:          #e07565;
+      --red-bg:       rgba(224,117,101,.10);
+      --red-border:   rgba(224,117,101,.18);
+    }
+
+    body {
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* Ambient glow behind card */
+    .scene {
+      position: relative;
+    }
+    .scene::before {
+      content: '';
+      position: absolute;
+      inset: -60px;
+      background: radial-gradient(ellipse 60% 50% at 70% 30%, rgba(212,132,58,.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card {
+      width: 700px;
+      max-width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 38px 40px 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.025) inset,
+        0 2px 4px rgba(0,0,0,.35),
+        0 16px 56px rgba(0,0,0,.55);
+    }
+
+    /* Noise grain */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: .028;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Corner warmth */
+    .card::after {
+      content: '';
+      position: absolute;
+      top: -100px; right: -100px;
+      width: 340px; height: 340px;
+      background: radial-gradient(circle, rgba(212,132,58,.07) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card > * { position: relative; z-index: 1; }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+
+    .eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 400;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 5px;
+    }
+
+    .card-title {
+      font-family: 'Fraunces', serif;
+      font-size: 21px;
+      font-weight: 500;
+      color: var(--cream);
+      letter-spacing: -.02em;
+    }
+
+    .tabs {
+      display: flex;
+      background: var(--card-2);
+      border: 1px solid var(--border-sub);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+      margin-top: 2px;
+    }
+
+    .tab {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      padding: 5px 13px;
+      border-radius: 7px;
+      transition: background .14s, color .14s;
+      letter-spacing: .02em;
+    }
+
+    .tab:hover { color: var(--cream-dim); }
+
+    .tab.active {
+      background: var(--card-3);
+      color: var(--cream);
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      margin-bottom: 6px;
+    }
+
+    .hero-num {
+      font-family: 'Fraunces', serif;
+      font-size: 58px;
+      font-weight: 500;
+      color: var(--cream);
+      letter-spacing: -.045em;
+      line-height: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      border-radius: 100px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12.5px;
+      font-weight: 400;
+      margin-bottom: 7px;
+    }
+
+    .badge.up   { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .badge.down { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
+
+    .hero-sub {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 30px;
+    }
+
+    /* ── CHART ── */
+    .chart-area {
+      position: relative;
+      margin: 0 -8px;
+      margin-bottom: 6px;
+    }
+
+    #chart {
+      width: 100%;
+      height: 170px;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .chart-x {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      margin-bottom: 26px;
+    }
+
+    .chart-x span {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+
+    /* Tooltip */
+    #tip {
+      position: absolute;
+      background: var(--card-3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .12s;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45);
+      white-space: nowrap;
+    }
+
+    #tip-mo {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    #tip-val {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--cream);
+      letter-spacing: -.02em;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: var(--border-sub);
+      margin-bottom: 26px;
+    }
+
+    /* ── KPI ROW ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .kpi {
+      padding: 0 28px;
+      position: relative;
+    }
+    .kpi:first-child { padding-left: 0; }
+    .kpi:last-child  { padding-right: 0; }
+
+    .kpi:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      right: 0; top: 15%; bottom: 15%;
+      width: 1px;
+      background: var(--border-sub);
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 7px;
+      letter-spacing: .01em;
+    }
+
+    .kpi-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .kpi-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 23px;
+      font-weight: 400;
+      color: var(--cream);
+      letter-spacing: -.025em;
+    }
+
+    .kpi-delta {
+      font-family: 'DM Mono', monospace;
+      font-size: 11.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .kpi-delta.up   { color: var(--green); }
+    .kpi-delta.down { color: var(--red); }
+
+    /* Mini spark SVG */
+    .spark { display: block; width: 100%; height: 28px; }
+
+    /* ── FOOTER ── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-sub);
+    }
+
+    .live {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
+      50%       { opacity: .6; box-shadow: 0 0 3px var(--green); }
+    }
+
+    .tz {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="scene">
+<div class="card">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="eyebrow">Analytics · Q2 2026</div>
+      <div class="card-title">Revenue Overview</div>
+    </div>
+    <div class="tabs">
+      <button class="tab">1W</button>
+      <button class="tab active">1M</button>
+      <button class="tab">3M</button>
+      <button class="tab">1Y</button>
+    </div>
+  </div>
+
+  <!-- Hero KPI -->
+  <div class="hero">
+    <div class="hero-num">$284,750</div>
+    <div class="badge up">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5,7.5 5.5,3.5 9.5,7.5"/></svg>
+      +12.4%
+    </div>
+  </div>
+  <div class="hero-sub">vs $253,340 in March 2026</div>
+
+  <!-- Chart -->
+  <div class="chart-area">
+    <svg id="chart" viewBox="0 0 660 160" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#9a5e1a"/>
+          <stop offset="45%"  stop-color="#d4843a"/>
+          <stop offset="100%" stop-color="#eeaa60"/>
+        </linearGradient>
+        <linearGradient id="ag" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stop-color="#d4843a" stop-opacity=".28"/>
+          <stop offset="75%"  stop-color="#d4843a" stop-opacity=".04"/>
+          <stop offset="100%" stop-color="#d4843a" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
+    <div id="tip">
+      <div id="tip-mo"></div>
+      <div id="tip-val"></div>
+    </div>
+  </div>
+
+  <!-- X-axis labels -->
+  <div class="chart-x" id="xlabels"></div>
+
+  <div class="divider"></div>
+
+  <!-- KPI Row -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">Total Orders</div>
+      <div class="kpi-row">
+        <div class="kpi-val">4,821</div>
+        <div class="kpi-delta up">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,6.5 4.5,2.5 8,6.5"/></svg>8.2%
+        </div>
+      </div>
+      <svg class="spark" id="s1" viewBox="0 0 100 28" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg. Order Value</div>
+      <div class="kpi-row">
+        <div class="kpi-val">$59.07</div>
+        <div class="kpi-delta up">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,6.5 4.5,2.5 8,6.5"/></svg>3.8%
+        </div>
+      </div>
+      <svg class="spark" id="s2" viewBox="0 0 100 28" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Retention Rate</div>
+      <div class="kpi-row">
+        <div class="kpi-val">68.4%</div>
+        <div class="kpi-delta down">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,2.5 4.5,6.5 8,2.5"/></svg>1.2%
+        </div>
+      </div>
+      <svg class="spark" id="s3" viewBox="0 0 100 28" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="live">
+      <div class="live-dot"></div>
+      Live data · updated just now
+    </div>
+    <div class="tz">UTC −05:00</div>
+  </div>
+
+</div>
+</div>
+
+<script>
+  const NS = 'http://www.w3.org/2000/svg';
+
+  /* ── DATA ── */
+  const months = ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+  const values = [52000,48400,61200,74800,68300,82100,79400,91200,87600,95800,104200,112000];
+
+  const sparkData = {
+    s1: [3.1,4.2,3.8,5.1,4.6,6.0,5.5,7.2,6.8,8.4,8.0,9.5],
+    s2: [4.8,4.6,5.2,5.0,5.8,5.5,6.0,5.9,6.4,6.8,6.6,7.2],
+    s3: [8.0,8.2,7.8,8.4,7.6,7.9,7.4,7.8,7.2,7.5,7.0,6.8],
+  };
+
+  /* ── SMOOTH PATH ── */
+  function catmull(pts, tension = .36) {
+    if (pts.length < 2) return '';
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i-1)];
+      const p1 = pts[i];
+      const p2 = pts[i+1];
+      const p3 = pts[Math.min(pts.length-1, i+2)];
+      const c1x = p1[0] + (p2[0]-p0[0]) * tension;
+      const c1y = p1[1] + (p2[1]-p0[1]) * tension;
+      const c2x = p2[0] - (p3[0]-p1[0]) * tension;
+      const c2y = p2[1] - (p3[1]-p1[1]) * tension;
+      d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2[0].toFixed(2)},${p2[1].toFixed(2)}`;
+    }
+    return d;
+  }
+
+  /* ── MAIN CHART ── */
+  function buildChart() {
+    const svg = document.getElementById('chart');
+    const W = 660, H = 160, pT = 18, pB = 12, pL = 4, pR = 4;
+    const cW = W - pL - pR, cH = H - pT - pB;
+
+    const min = Math.min(...values) * .90;
+    const max = Math.max(...values) * 1.02;
+
+    const pts = values.map((v, i) => [
+      pL + (i / (values.length-1)) * cW,
+      pT + (1 - (v - min) / (max - min)) * cH
+    ]);
+
+    /* Gridlines */
+    for (let g = 0; g <= 3; g++) {
+      const y = pT + (g/3) * cH;
+      const el = document.createElementNS(NS, 'line');
+      Object.entries({x1:0,x2:W,y1:y,y2:y,stroke:'#27221a','stroke-width':'1'}).forEach(([k,v])=>el.setAttribute(k,v));
+      svg.appendChild(el);
+    }
+
+    /* Area */
+    const ap = catmull(pts);
+    const areaEl = document.createElementNS(NS, 'path');
+    areaEl.setAttribute('d', ap + ` L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`);
+    areaEl.setAttribute('fill', 'url(#ag)');
+    svg.appendChild(areaEl);
+
+    /* Line */
+    const lineEl = document.createElementNS(NS, 'path');
+    lineEl.setAttribute('d', ap);
+    lineEl.setAttribute('fill', 'none');
+    lineEl.setAttribute('stroke', 'url(#lg)');
+    lineEl.setAttribute('stroke-width', '2.5');
+    lineEl.setAttribute('stroke-linecap', 'round');
+    lineEl.setAttribute('filter', 'url(#glow)');
+    svg.appendChild(lineEl);
+
+    /* Hover vline */
+    const vl = document.createElementNS(NS, 'line');
+    Object.entries({y1:pT,y2:H,stroke:'#3a3020','stroke-width':'1','stroke-dasharray':'3,3'}).forEach(([k,v])=>vl.setAttribute(k,v));
+    vl.style.opacity = '0';
+    svg.appendChild(vl);
+
+    /* Dots */
+    const dotEls = pts.map((pt, i) => {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]);
+      c.setAttribute('r', '4');
+      c.setAttribute('fill', '#d4843a');
+      c.setAttribute('stroke', '#1a1610');
+      c.setAttribute('stroke-width', '2');
+      c.style.opacity = '0';
+      svg.appendChild(c);
+      return c;
+    });
+
+    /* Interaction */
+    const tip = document.getElementById('tip');
+    const tipMo = document.getElementById('tip-mo');
+    const tipVal = document.getElementById('tip-val');
+    const wrap = document.querySelector('.chart-area');
+
+    svg.addEventListener('mousemove', e => {
+      const r = svg.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (W / r.width);
+      let ni = 0, nd = Infinity;
+      pts.forEach((pt, i) => { const d = Math.abs(pt[0]-mx); if (d < nd) { nd=d; ni=i; } });
+      const pt = pts[ni];
+
+      vl.setAttribute('x1', pt[0]); vl.setAttribute('x2', pt[0]);
+      vl.style.opacity = '1';
+      dotEls.forEach((d, i) => d.style.opacity = i === ni ? '1' : '0');
+
+      tip.style.opacity = '1';
+      tipMo.textContent = months[ni];
+      tipVal.textContent = '$' + (values[ni]/1000).toFixed(1) + 'k';
+
+      const wr = wrap.getBoundingClientRect();
+      let lx = e.clientX - wr.left - 44;
+      const ty = (pt[1] / H) * r.height - 64;
+      lx = Math.max(0, Math.min(lx, wr.width - 100));
+      tip.style.left = lx + 'px';
+      tip.style.top  = ty + 'px';
+    });
+
+    svg.addEventListener('mouseleave', () => {
+      vl.style.opacity = '0';
+      tip.style.opacity = '0';
+      dotEls.forEach(d => d.style.opacity = '0');
+    });
+  }
+
+  /* ── X-AXIS LABELS ── */
+  function buildXLabels() {
+    const c = document.getElementById('xlabels');
+    months.forEach((m, i) => {
+      const s = document.createElement('span');
+      s.textContent = m;
+      if (i !== 0 && i !== months.length-1 && i % 2 !== 0) s.style.visibility = 'hidden';
+      c.appendChild(s);
+    });
+  }
+
+  /* ── SPARKLINES ── */
+  function buildSpark(id, data, up) {
+    const svg = document.getElementById(id);
+    const W = 100, H = 28, pad = 2;
+    const min = Math.min(...data), max = Math.max(...data);
+    const range = max - min || 1;
+
+    const pts = data.map((v, i) => [
+      pad + (i / (data.length-1)) * (W - pad*2),
+      pad + (1 - (v-min)/range) * (H - pad*2)
+    ]);
+
+    /* Area fill */
+    const area = document.createElementNS(NS, 'path');
+    const lp = catmull(pts, .32);
+    area.setAttribute('d', lp + ` L${pts[pts.length-1][0]},${H} L${pts[0][0]},${H} Z`);
+    area.setAttribute('fill', up ? 'rgba(109,196,154,.08)' : 'rgba(224,117,101,.08)');
+    svg.appendChild(area);
+
+    /* Line */
+    const line = document.createElementNS(NS, 'path');
+    line.setAttribute('d', lp);
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', up ? '#6dc49a' : '#e07565');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+
+    /* End dot */
+    const last = pts[pts.length-1];
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', last[0]); dot.setAttribute('cy', last[1]);
+    dot.setAttribute('r', '2.2');
+    dot.setAttribute('fill', up ? '#6dc49a' : '#e07565');
+    svg.appendChild(dot);
+  }
+
+  /* ── TABS ── */
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+
+  /* ── INIT ── */
+  buildChart();
+  buildXLabels();
+  buildSpark('s1', sparkData.s1, true);
+  buildSpark('s2', sparkData.s2, true);
+  buildSpark('s3', sparkData.s3, false);
+</script>
+</body>
+</html>

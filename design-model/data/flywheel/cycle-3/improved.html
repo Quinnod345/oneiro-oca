@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#DDDCDA;
+  --win:#F0EFec;
+  --sidebar:rgba(224,223,220,0.97);
+  --sidebar-border:rgba(0,0,0,0.08);
+  --toolbar:#ECEAE7;
+  --card:#FFFFFF;
+  --hover:rgba(0,0,0,0.048);
+  --sel:rgba(0,112,255,0.09);
+  --border:rgba(0,0,0,0.07);
+  --t1:#18181A;
+  --t2:#636366;
+  --t3:#AEAEB2;
+  --accent:#0071E3;
+  --accent-soft:rgba(0,113,227,0.11);
+  --green:#28C840;
+  --orange:#FF9F0A;
+  --red:#FF5F57;
+  --f:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+body{font-family:var(--f);background:var(--bg);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
+.bg-grain{position:fixed;inset:0;pointer-events:none;opacity:.022;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");z-index:9999}
+.window{width:1020px;height:660px;background:var(--win);border-radius:12px;box-shadow:0 28px 80px rgba(0,0,0,0.24),0 0 0 .5px rgba(0,0,0,0.13),inset 0 1px 0 rgba(255,255,255,0.72);display:flex;flex-direction:column;overflow:hidden}
+
+/* Titlebar */
+.titlebar{height:38px;background:var(--toolbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;flex-shrink:0}
+.tls{display:flex;gap:8px;align-items:center}
+.tl{width:12px;height:12px;border-radius:50%;cursor:pointer;transition:filter .12s}
+.tl:hover{filter:brightness(.8)}
+.tl-c{background:#FF5F57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.15)}
+.tl-m{background:#FEBC2E;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.12)}
+.tl-x{background:#28C840;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.12)}
+.titlebar-mid{flex:1;text-align:center;font-size:12.5px;font-weight:600;color:var(--t2);letter-spacing:-.01em}
+.titlebar-r{width:56px;display:flex;justify-content:flex-end}
+
+/* Toolbar */
+.toolbar{height:50px;background:var(--toolbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:5px;flex-shrink:0}
+.tbtn{width:28px;height:28px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background .12s,color .12s;flex-shrink:0}
+.tbtn:hover{background:var(--hover);color:var(--t1)}
+.tbtn.active{background:var(--accent-soft);color:var(--accent)}
+.tbtn:disabled{opacity:.28;cursor:not-allowed;pointer-events:none}
+.tdiv{width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0}
+.tsp{flex:1}
+.view-tog{display:flex;background:rgba(0,0,0,0.055);border-radius:7px;padding:2px;gap:1px;flex-shrink:0}
+.vbtn{width:27px;height:24px;border-radius:5px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:all .15s}
+.vbtn.on{background:#fff;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,0.12),inset 0 .5px 0 rgba(255,255,255,.8)}
+.search-wrap{position:relative;flex-shrink:0}
+.srch-ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);pointer-events:none;transition:color .2s}
+.search-wrap:focus-within .srch-ico{color:var(--accent)}
+.search{width:200px;height:28px;background:rgba(0,0,0,0.06);border:1px solid transparent;border-radius:7px;padding:0 10px 0 29px;font-family:var(--f);font-size:12.5px;font-weight:500;color:var(--t1);outline:none;transition:all .22s cubic-bezier(.4,0,.2,1)}
+.search::placeholder{color:var(--t3)}
+.search:focus{background:#fff;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,0.13);width:240px}
+
+/* Layout */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:192px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--sidebar-border);overflow-y:auto;padding:8px 0 16px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.sidebar::-webkit-scrollbar{width:0}
+.s-sect{margin-bottom:4px}
+.s-lbl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;padding:10px 14px 3px}
+.s-item{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:6px;margin:0 4px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--t1);transition:background .1s;user-select:none;position:relative}
+.s-item:hover{background:rgba(0,0,0,0.05)}
+.s-item.on{background:rgba(0,113,227,0.1);color:var(--accent)}
+.s-ico{width:16px;height:16px;flex-shrink:0;opacity:.75}
+.s-item.on .s-ico{opacity:1}
+.s-badge{margin-left:auto;font-size:10px;font-weight:700;background:rgba(0,0,0,0.08);color:var(--t2);border-radius:10px;padding:1px 6px;min-width:18px;text-align:center}
+.s-item.on .s-badge{background:rgba(0,113,227,0.15);color:var(--accent)}
+.tag-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sidebar-storage{margin:12px 8px 0;background:rgba(0,0,0,0.05);border-radius:8px;padding:10px 10px 9px}
+.storage-label{font-size:10.5px;font-weight:600;color:var(--t2);margin-bottom:6px;display:flex;justify-content:space-between}
+.storage-label span{font-weight:400;color:var(--t3)}
+.storage-bar{height:4px;background:rgba(0,0,0,0.1);border-radius:2px;overflow:hidden}
+.storage-fill{height:100%;width:73%;background:linear-gradient(90deg,var(--accent),#5BA8FF);border-radius:2px}
+.storage-detail{font-size:10px;color:var(--t3);margin-top:5px}
+
+/* Content */
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.breadcrumbs{height:34px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:2px;flex-shrink:0;background:rgba(240,239,236,.88);backdrop-filter:blur(8px);overflow:hidden}
+.bc-item{font-size:12px;font-weight:500;color:var(--t2);cursor:pointer;padding:3px 5px;border-radius:4px;display:flex;align-items:center;gap:3px;transition:all .12s;white-space:nowrap;user-select:none}
+.bc-item:hover{color:var(--t1);background:var(--hover)}
+.bc-item.cur{color:var(--t1);font-weight:600}
+.bc-sep{color:var(--t3);font-size:13px;user-select:none;flex-shrink:0;line-height:1}
+
+/* Sort bar */
+.sort-bar{height:28px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:0;flex-shrink:0;background:rgba(240,239,236,.6)}
+.sort-col{font-size:11px;font-weight:600;color:var(--t3);display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;padding:0 6px 0 0;transition:color .12s}
+.sort-col:hover{color:var(--t2)}
+.sort-col.active{color:var(--t2)}
+.sort-col svg{opacity:.6}
+.sort-name{flex:1}
+.sort-kind{width:120px;flex-shrink:0}
+.sort-size{width:80px;flex-shrink:0;text-align:right;padding-right:4px}
+.sort-mod{width:130px;flex-shrink:0}
+
+/* File list */
+.file-wrap{flex:1;overflow-y:auto;padding:4px 0 20px}
+.file-wrap::-webkit-scrollbar{width:5px}
+.file-wrap::-webkit-scrollbar-track{background:transparent}
+.file-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:3px}
+
+/* List view rows */
+.flist-item{display:flex;align-items:center;padding:0 14px;height:34px;cursor:pointer;transition:background .08s;user-select:none;position:relative}
+.flist-item:hover{background:rgba(0,0,0,0.038)}
+.flist-item.sel{background:rgba(0,113,227,0.09)}
+.flist-item.sel:hover{background:rgba(0,113,227,0.12)}
+.flist-item + .flist-item{border-top:1px solid rgba(0,0,0,0.033)}
+.fi-icon{width:22px;height:22px;flex-shrink:0;margin-right:9px;display:flex;align-items:center;justify-content:center}
+.fi-name-wrap{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.fi-name{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.fi-tag{height:16px;padding:0 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap;display:flex;align-items:center}
+.tag-blue{background:rgba(0,113,227,0.1);color:#0071E3}
+.tag-green{background:rgba(40,200,64,0.12);color:#1D9A31}
+.tag-orange{background:rgba(255,159,10,0.12);color:#C17700}
+.tag-red{background:rgba(255,95,87,0.12);color:#D63B35}
+.tag-purple{background:rgba(130,80,255,0.12);color:#7238E0}
+.fi-kind{width:120px;flex-shrink:0;font-size:12px;color:var(--t3);white-space:nowrap}
+.fi-size{width:80px;flex-shrink:0;font-size:12px;color:var(--t3);text-align:right;padding-right:4px}
+.fi-mod{width:130px;flex-shrink:0;font-size:12px;color:var(--t3)}
+.fi-more{width:24px;height:24px;border-radius:5px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t3);opacity:0;transition:opacity .12s,background .12s}
+.flist-item:hover .fi-more{opacity:1}
+.fi-more:hover{background:var(--hover);color:var(--t2)}
+
+/* Section header */
+.section-header{padding:12px 14px 4px;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em}
+
+/* Status bar */
+.statusbar{height:26px;border-top:1px solid var(--border);background:var(--toolbar);display:flex;align-items:center;padding:0 14px;gap:12px;flex-shrink:0}
+.sb-item{font-size:11px;color:var(--t3);font-weight:500;display:flex;align-items:center;gap:4px}
+.sb-sep{width:1px;height:10px;background:var(--border)}
+.sb-r{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+/* Preview pane */
+.preview{width:220px;flex-shrink:0;border-left:1px solid var(--border);background:var(--win);display:flex;flex-direction:column;overflow:hidden}
+.preview-header{height:38px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;justify-content:space-between;flex-shrink:0}
+.preview-title{font-size:11.5px;font-weight:700;color:var(--t2);letter-spacing:-.01em}
+.preview-close{width:20px;height:20px;border-radius:4px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t3)}
+.preview-close:hover{background:var(--hover);color:var(--t2)}
+.preview-thumb{margin:12px;border-radius:8px;background:linear-gradient(140deg,#E8F0FF 0%,#D4E3FF 100%);height:130px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:1px solid rgba(0,0,0,0.06)}
+.preview-icon-lg{display:flex;flex-direction:column;align-items:center;gap:6px}
+.preview-icon-lg svg{filter:drop-shadow(0 3px 8px rgba(0,100,200,0.18))}
+.preview-meta{padding:0 12px;flex:1;overflow-y:auto}
+.preview-meta::-webkit-scrollbar{width:0}
+.preview-fname{font-size:13px;font-weight:700;color:var(--t1);line-height:1.3;margin-bottom:10px;word-break:break-word}
+.meta-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.meta-key{font-size:11px;color:var(--t3);font-weight:600}
+.meta-val{font-size:11px;color:var(--t2);font-weight:500;text-align:right;max-width:130px;word-break:break-all}
+.meta-divider{height:1px;background:var(--border);margin:10px 0}
+.preview-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+.preview-actions{padding:10px 12px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0}
+.pa-btn{flex:1;height:26px;border-radius:6px;border:none;cursor:pointer;font-family:var(--f);font-size:11.5px;font-weight:600;transition:all .12s}
+.pa-btn-ghost{background:rgba(0,0,0,0.06);color:var(--t2)}
+.pa-btn-ghost:hover{background:rgba(0,0,0,0.1);color:var(--t1)}
+.pa-btn-primary{background:var(--accent);color:#fff}
+.pa-btn-primary:hover{background:#0077ED}
+
+/* Upload drop zone hint */
+.drop-hint{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;border:1.5px dashed rgba(0,113,227,0.3);color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.drop-hint:hover{background:var(--accent-soft);border-style:solid}
+
+/* Inline progress */
+.upload-row{background:rgba(0,113,227,0.04)}
+.upload-progress{position:absolute;bottom:0;left:14px;right:14px;height:2px;background:rgba(0,0,0,0.06);border-radius:1px;overflow:hidden}
+.upload-fill{height:100%;background:var(--accent);border-radius:1px;animation:prog 2.4s ease-in-out infinite alternate}
+@keyframes prog{from{width:42%}to{width:87%}}
+</style>
+</head>
+<body>
+<div class="bg-grain"></div>
+<div class="window">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="tls">
+      <div class="tl tl-c"></div>
+      <div class="tl tl-m"></div>
+      <div class="tl tl-x"></div>
+    </div>
+    <div class="titlebar-mid">Documents</div>
+    <div class="titlebar-r"></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <!-- Nav -->
+    <button class="tbtn" disabled title="Back">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 11L5 7l4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="tbtn" title="Forward">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 11l4-4-4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="tdiv"></div>
+    <!-- Actions -->
+    <button class="tbtn" title="New Folder">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.5 4.5A1 1 0 012.5 3.5h3.086a1 1 0 01.707.293L7 4.5h5.5a1 1 0 011 1v6a1 1 0 01-1 1h-11a1 1 0 01-1-1V4.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.5 7v4M5.5 9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
+    <button class="tbtn" title="Upload">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 9.5V2.5m0 0L5 5m2.5-2.5L10 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 11.5v.5a1 1 0 001 1h8a1 1 0 001-1v-.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </button>
+    <button class="tbtn" title="Share">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="11.5" cy="3.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="3.5" cy="7.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="11.5" cy="11.5" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5 6.7l5-2.5M5 8.3l5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+    <div class="tdiv"></div>
+    <button class="tbtn active" title="Get Info">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.35"/><path d="M7.5 6.5v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="7.5" cy="4.5" r=".75" fill="currentColor"/></svg>
+    </button>
+    <div class="tsp"></div>
+    <!-- Drop hint -->
+    <div class="drop-hint">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V2M6 2L4 4M6 2l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 9.5v.5a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      Drop files to upload
+    </div>
+    <div class="tdiv"></div>
+    <!-- View toggle -->
+    <div class="view-tog">
+      <button class="vbtn" title="Grid">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="7.5" y="1" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="7.5" y="7.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+      </button>
+      <button class="vbtn on" title="List">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 3.5h10M1.5 6.5h10M1.5 9.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+      <button class="vbtn" title="Columns">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1.5h3.5v10H1zM4.75 1.5h3.5v10H4.75zM8.5 1.5H12v10H8.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="tdiv"></div>
+    <!-- Search -->
+    <div class="search-wrap">
+      <div class="srch-ico">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.4"/><path d="M9 9l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+      <input class="search" type="text" placeholder="Search Documents…">
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="s-sect">
+        <div class="s-lbl">Favorites</div>
+        <div class="s-item on">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><path d="M2 3a1 1 0 011-1h3.172a1 1 0 01.707.293L8 3.586V3a1 1 0 011-1h4a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3z" fill="currentColor" opacity=".8"/></svg>
+          Documents
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Recents
+          <span class="s-badge">12</span>
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><path d="M13 3H3a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V4a1 1 0 00-1-1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Downloads
+          <span class="s-badge">3</span>
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><path d="M2 13l4-8 3 5 2-3 3 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Desktop
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 5.5v3l2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Shared with Me
+          <span class="s-badge">5</span>
+        </div>
+      </div>
+
+      <div class="s-sect">
+        <div class="s-lbl">Locations</div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 4V3.5a1 1 0 011-1h3a1 1 0 011 1V4" stroke="currentColor" stroke-width="1.3"/></svg>
+          iCloud Drive
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><path d="M8 10.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9z" stroke="currentColor" stroke-width="1.3"/><path d="M8 10.5V14m-3 0h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Macintosh HD
+        </div>
+        <div class="s-item">
+          <svg class="s-ico" viewBox="0 0 16 16" fill="none"><rect x="3" y="6" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6V4.5a3 3 0 016 0V6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Encrypted Vault
+        </div>
+      </div>
+
+      <div class="s-sect">
+        <div class="s-lbl">Tags</div>
+        <div class="s-item"><div class="tag-dot" style="background:#FF5F57"></div> Work</div>
+        <div class="s-item"><div class="tag-dot" style="background:#28C840"></div> Personal</div>
+        <div class="s-item"><div class="tag-dot" style="background:#0071E3"></div> Projects</div>
+        <div class="s-item"><div class="tag-dot" style="background:#FF9F0A"></div> Review</div>
+      </div>
+
+      <div class="sidebar-storage">
+        <div class="storage-label">Storage <span>146 GB of 200 GB</span></div>
+        <div class="storage-bar"><div class="storage-fill"></div></div>
+        <div class="storage-detail">54 GB available · Optimize…</div>
+      </div>
+    </div>
+
+    <!-- File content + preview -->
+    <div style="display:flex;flex:1;overflow:hidden;min-width:0">
+
+      <!-- File list -->
+      <div class="content">
+        <!-- Breadcrumbs -->
+        <div class="breadcrumbs">
+          <div class="bc-item">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 11c0-2.485 2.015-4 4.5-4s4.5 1.515 4.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            Quinn
+          </div>
+          <div class="bc-sep">›</div>
+          <div class="bc-item">iCloud Drive</div>
+          <div class="bc-sep">›</div>
+          <div class="bc-item cur">Documents</div>
+        </div>
+
+        <!-- Sort bar -->
+        <div class="sort-bar">
+          <div class="sort-col sort-name active">
+            Name
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M4.5 2v5M2.5 5l2 2 2-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="sort-col sort-kind">Kind</div>
+          <div class="sort-col sort-size">Size</div>
+          <div class="sort-col sort-mod">Modified</div>
+          <div style="width:32px;flex-shrink:0"></div>
+        </div>
+
+        <!-- Files -->
+        <div class="file-wrap">
+          <div class="section-header">Pinned</div>
+
+          <!-- Folder: Design System -->
+          <div class="flist-item sel">
+            <div class="fi-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5a1.5 1.5 0 011.5-1.5H7.88a1.5 1.5 0 011.06.44l1.12 1.12H16a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0116 17H4.5A1.5 1.5 0 013 15.5V5z" fill="#0071E3" opacity=".18"/><path d="M3 5a1.5 1.5 0 011.5-1.5H7.88a1.5 1.5 0 011.06.44l1.12 1.12H16a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0116 17H4.5A1.5 1.5 0 013 15.5V5z" stroke="#0071E3" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Design System v3</div>
+              <div class="fi-tag tag-blue">Projects</div>
+            </div>
+            <div class="fi-kind">Folder</div>
+            <div class="fi-size">—</div>
+            <div class="fi-mod">Today, 10:41 AM</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Folder: Contracts -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5a1.5 1.5 0 011.5-1.5H7.88a1.5 1.5 0 011.06.44l1.12 1.12H16a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0116 17H4.5A1.5 1.5 0 013 15.5V5z" fill="#FF9F0A" opacity=".15"/><path d="M3 5a1.5 1.5 0 011.5-1.5H7.88a1.5 1.5 0 011.06.44l1.12 1.12H16a1.5 1.5 0 011.5 1.5v9A1.5 1.5 0 0116 17H4.5A1.5 1.5 0 013 15.5V5z" stroke="#FF9F0A" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Contracts 2026</div>
+              <div class="fi-tag tag-orange">Review</div>
+            </div>
+            <div class="fi-kind">Folder</div>
+            <div class="fi-size">—</div>
+            <div class="fi-mod">Apr 9, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <div class="section-header">Files — 14 items</div>
+
+          <!-- PDF: Q1 Report -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#FF5F57" opacity=".12"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#FF5F57" stroke-width="1.3"/><text x="9" y="13.5" text-anchor="middle" font-size="5.5" font-weight="800" fill="#FF5F57" font-family="system-ui">PDF</text></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Q1 2026 Financial Report.pdf</div>
+              <div class="fi-tag tag-red">Work</div>
+            </div>
+            <div class="fi-kind">PDF Document</div>
+            <div class="fi-size">4.2 MB</div>
+            <div class="fi-mod">Apr 11, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Keynote -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#0071E3" opacity=".1"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#0071E3" stroke-width="1.3"/><path d="M5 8h8M5 11h5" stroke="#0071E3" stroke-width="1.3" stroke-linecap="round"/><rect x="5" y="5" width="4" height="1.5" rx=".5" fill="#0071E3" opacity=".6"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Product Roadmap 2026.key</div>
+            </div>
+            <div class="fi-kind">Keynote</div>
+            <div class="fi-size">18.7 MB</div>
+            <div class="fi-mod">Apr 10, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Uploading file -->
+          <div class="flist-item upload-row" style="position:relative">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#28C840" opacity=".1"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#28C840" stroke-width="1.3" stroke-dasharray="2 2"/><path d="M9 13V7M9 7L7 9M9 7l2 2" stroke="#28C840" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name" style="color:var(--t2)">Brand Assets Final.zip</div>
+              <div class="fi-tag tag-green" style="font-weight:600">Uploading…</div>
+            </div>
+            <div class="fi-kind" style="color:var(--t3)">ZIP Archive</div>
+            <div class="fi-size" style="color:var(--t3)">247 MB</div>
+            <div class="fi-mod" style="color:var(--accent);font-weight:600">63%</div>
+            <button class="fi-more" style="opacity:1">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="upload-progress"><div class="upload-fill"></div></div>
+          </div>
+
+          <!-- Numbers -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#28C840" opacity=".1"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#28C840" stroke-width="1.3"/><path d="M5 6h8M5 9.5h8M5 13h5" stroke="#28C840" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Budget Tracker 2026.numbers</div>
+              <div class="fi-tag tag-red">Work</div>
+            </div>
+            <div class="fi-kind">Numbers</div>
+            <div class="fi-size">1.1 MB</div>
+            <div class="fi-mod">Apr 8, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Word doc -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#0071E3" opacity=".08"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#5590D6" stroke-width="1.3"/><path d="M5 7h8M5 10h8M5 13h4" stroke="#5590D6" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">NDA — Acme Corp.docx</div>
+              <div class="fi-tag tag-orange">Review</div>
+            </div>
+            <div class="fi-kind">Word Document</div>
+            <div class="fi-size">328 KB</div>
+            <div class="fi-mod">Apr 3, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Image -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#8250FF" opacity=".1"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#8250FF" stroke-width="1.3"/><path d="M3.5 14.5l4-5 2.5 3 1.5-2 3 4" stroke="#8250FF" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="7" r="1.2" fill="#8250FF" opacity=".7"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Cover Illustration — Final.png</div>
+              <div class="fi-tag tag-purple">Personal</div>
+            </div>
+            <div class="fi-kind">PNG Image</div>
+            <div class="fi-size">8.6 MB</div>
+            <div class="fi-mod">Apr 1, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <!-- Archive -->
+          <div class="flist-item">
+            <div class="fi-icon">
+              <svg width="18" height="20" viewBox="0 0 18 20" fill="none"><rect x="1" y="1" width="16" height="18" rx="2" fill="#FF9F0A" opacity=".1"/><rect x="1" y="1" width="16" height="18" rx="2" stroke="#FF9F0A" stroke-width="1.3"/><path d="M5 5h8v2H5zM7 10v4M9 10v4" stroke="#FF9F0A" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="fi-name-wrap">
+              <div class="fi-name">Archive — March 2026.zip</div>
+            </div>
+            <div class="fi-kind">ZIP Archive</div>
+            <div class="fi-size">94.2 MB</div>
+            <div class="fi-mod">Mar 31, 2026</div>
+            <button class="fi-more">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="3" r="1" fill="currentColor"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="11" r="1" fill="currentColor"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Statusbar -->
+        <div class="statusbar">
+          <div class="sb-item">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3a1 1 0 011-1h2.586a1 1 0 01.707.293L7 3H10a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            16 items
+          </div>
+          <div class="sb-sep"></div>
+          <div class="sb-item">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 8.5l3-4 2.5 3L9 6l3 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            127.4 MB selected
+          </div>
+          <div class="sb-sep"></div>
+          <div class="sb-item" style="color:var(--accent)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 8V3M6 3L4 5M6 3l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M1.5 9v.5a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            Uploading 1 file (63%)
+          </div>
+          <div class="sb-r">
+            <div class="sb-item">54 GB available</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview pane -->
+      <div class="preview">
+        <div class="preview-header">
+          <div class="preview-title">Inspector</div>
+          <button class="preview-close">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="preview-thumb">
+          <div class="preview-icon-lg">
+            <svg width="54" height="54" viewBox="0 0 54 54" fill="none">
+              <path d="M5 13a4 4 0 014-4H21.5a4 4 0 012.83 1.17L27.5 13.33H45a4 4 0 014 4v25a4 4 0 01-4 4H9a4 4 0 01-4-4V13z" fill="#0071E3" opacity=".18"/>
+              <path d="M5 13a4 4 0 014-4H21.5a4 4 0 012.83 1.17L27.5 13.33H45a4 4 0 014 4v25a4 4 0 01-4 4H9a4 4 0 01-4-4V13z" stroke="#0071E3" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M16 28h22M16 33h14" stroke="#0071E3" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M16 23h8" stroke="#0071E3" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <div style="font-size:11px;font-weight:700;color:#0071E3;opacity:.7">FOLDER</div>
+          </div>
+        </div>
+        <div class="preview-meta">
+          <div class="preview-fname">Design System v3</div>
+          <div class="meta-row">
+            <span class="meta-key">Kind</span>
+            <span class="meta-val">Folder</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Items</span>
+            <span class="meta-val">34 files, 6 folders</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Size</span>
+            <span class="meta-val">1.24 GB on disk</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Created</span>
+            <span class="meta-val">Feb 14, 2026</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Modified</span>
+            <span class="meta-val">Today, 10:41 AM</span>
+          </div>
+          <div class="meta-divider"></div>
+          <div class="meta-row">
+            <span class="meta-key">Shared with</span>
+            <span class="meta-val" style="color:var(--accent)">4 people</span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-key">Permissions</span>
+            <span class="meta-val">Read &amp; Write</span>
+          </div>
+          <div class="meta-divider"></div>
+          <div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:6px">Tags</div>
+          <div class="preview-tags">
+            <div class="fi-tag tag-blue">Projects</div>
+            <div class="fi-tag tag-red">Work</div>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:var(--t3);margin-bottom:6px">Comments</div>
+          <div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-bottom:8px">Main design token library and component archive. Updated for Q2 rebrand.</div>
+        </div>
+        <div class="preview-actions">
+          <button class="pa-btn pa-btn-ghost">Share</button>
+          <button class="pa-btn pa-btn-primary">Open</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#E4E3E0;
+  --win:#F2F1EE;
+  --sidebar:rgba(228,227,224,0.96);
+  --sidebar-border:rgba(0,0,0,0.09);
+  --toolbar:#F2F1EE;
+  --card:#FFFFFF;
+  --hover:rgba(0,0,0,0.045);
+  --sel:rgba(0,112,255,0.09);
+  --border:rgba(0,0,0,0.07);
+  --t1:#18181A;
+  --t2:#636366;
+  --t3:#AEAEB2;
+  --accent:#0071E3;
+  --accent2:#0077ED;
+  --f:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+body{font-family:var(--f);background:var(--bg);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
+.bg-grain{position:fixed;inset:0;pointer-events:none;opacity:.025;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");z-index:9999}
+.window{width:980px;height:640px;background:var(--win);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,0.22),0 0 0 .5px rgba(0,0,0,0.14),inset 0 1px 0 rgba(255,255,255,0.7);display:flex;flex-direction:column;overflow:hidden}
+.titlebar{height:38px;background:var(--toolbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;flex-shrink:0;-webkit-app-region:drag}
+.tls{display:flex;gap:8px;align-items:center}
+.tl{width:12px;height:12px;border-radius:50%;cursor:pointer;transition:filter .12s;-webkit-app-region:no-drag}
+.tl:hover{filter:brightness(.82)}
+.tl-c{background:#FF5F57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.15)}
+.tl-m{background:#FEBC2E;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.12)}
+.tl-x{background:#28C840;box-shadow:inset 0 0 0 .5px rgba(0,0,0,0.12)}
+.titlebar-mid{flex:1;text-align:center;font-size:12.5px;font-weight:600;color:var(--t2);letter-spacing:-.01em}
+.titlebar-r{width:56px}
+.toolbar{height:50px;background:var(--toolbar);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:6px;flex-shrink:0}
+.tbtn{width:28px;height:28px;border-radius:6px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background .12s,color .12s;flex-shrink:0}
+.tbtn:hover{background:var(--hover);color:var(--t1)}
+.tbtn:disabled{opacity:.28;cursor:not-allowed;pointer-events:none}
+.tdiv{width:1px;height:18px;background:var(--border);margin:0 3px;flex-shrink:0}
+.tsp{flex:1}
+.view-tog{display:flex;background:rgba(0,0,0,0.055);border-radius:7px;padding:2px;gap:1px;flex-shrink:0}
+.vbtn{width:27px;height:24px;border-radius:5px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:all .15s}
+.vbtn.on{background:#fff;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,0.12),inset 0 .5px 0 rgba(255,255,255,.8)}
+.search-wrap{position:relative;flex-shrink:0}
+.srch-ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--t3);pointer-events:none;transition:color .2s}
+.search-wrap:focus-within .srch-ico{color:var(--accent)}
+.search{width:210px;height:28px;background:rgba(0,0,0,0.06);border:1px solid transparent;border-radius:7px;padding:0 10px 0 29px;font-family:var(--f);font-size:12.5px;font-weight:500;color:var(--t1);outline:none;transition:all .22s cubic-bezier(.4,0,.2,1)}
+.search::placeholder{color:var(--t3)}
+.search:focus{background:#fff;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,0.13);width:250px}
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:200px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--sidebar-border);overflow-y:auto;padding:8px 0;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.sidebar::-webkit-scrollbar{width:0}
+.s-sect{margin-bottom:2px}
+.s-lbl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;padding:10px 14px 3px}
+.s-item{display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:6px;margin:0 4px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--t1);transition:background .1s;user-select:none}
+.s-item:hover{background:rgba(0,0,0,0.05)}
+.s-item.on{background:rgba(0,113,227,0.1);color:var(--accent)}
+.s-ico{width:18px;height:18px;flex-shrink:0}
+.tag-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.breadcrumbs{height:34px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:2px;flex-shrink:0;background:rgba(242,241,238,.85);backdrop-filter:blur(8px);overflow:hidden}
+.bc-item{font-size:12px;font-weight:500;color:var(--t2);cursor:pointer;padding:3px 5px;border-radius:4px;display:flex;align-items:center;gap:3px;transition:all .12s;white-space:nowrap;user-select:none}
+.bc-item:hover{color:var(--t1);background:var(--hover)}
+.bc-item.cur{color:var(--t1);font-weight:600}
+.bc-sep{color:var(--t3);font-size:13px;user-select:none;flex-shrink:0;line-height:1}
+.file-wrap{flex:1;overflow-y:auto;padding:14px}
+.file-wrap::-webkit-scrollbar{width:5px}
+.file-wrap::-webkit-scrollbar-track{background:transparent}
+.file-wrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.13);border-radius:3px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:2px}
+.fgrid-item{display:flex;flex-direction:column;align-items:center;padding:12px 8px 10px;border-radius:8px;cursor:pointer;transition:background .1s;user-select:none;position:relative}
+.fgrid-item:hover{background:var(--hover)}
+.fgrid-item.sel{background:var(--sel)}
+.fgrid-item.sel:hover{background:rgba(0,112,255,0.12)}
+.ficon-lg{width:56px;height:56px;margin-bottom:7px;flex-shrink:0;transition:transform .15s cubic-bezier(.34,1.56,.64,1)}
+.fgrid-item:hover .ficon-lg{transform:scale(1.06) translateY(-1px)}
+.fname-lg{font-size:11.5px;font-weight:500;color:var(--t1);text-align:center;line-height:1.35;max-width:96px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.fgrid-item.sel .fname-lg{color:var(--accent)}
+.flist{display:flex;flex-direction:column}
+.lhdr{display:grid;grid-template-columns:1fr 128px 72px 96px;padding:0 10px 0 12px;height:26px;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(242,241,238,.96);backdrop-filter:blur(8px);z-index:1}
+.lhdr-c{font-size:10.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.055em;cursor:pointer;display:flex;align-items:center;gap:2px;user-select:none;transition:color .12s}
+.lhdr-c:hover{color:var(--t2)}
+.flist-item{display:grid;grid-template-columns:1fr 128px 72px 96px;padding:0 10px 0 12px;height:34px;align-items:center;border-radius:6px;cursor:pointer;transition:background .1s;user-select:none}
+.flist-item:hover{background:var(--hover)}
+.flist-item.sel{background:var(--sel)}
+.ln{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:var(--t1);overflow:hidden;min-width:0}
+.ln span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flist-item.sel .ln span{color:var(--accent)}
+.ficon-sm{width:20px;height:20px;flex-shrink:0}
+.ld,.ls,.lk{font-size:12px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statusbar{height:24px;border-top:1px solid var(--border);background:var(--toolbar);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sbar-txt{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.01em}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;opacity:.35;padding:40px;pointer-events:none}
+.empty p{font-size:12.5px;font-weight:600;color:var(--t2);margin-top:6px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="bg-grain"></div>
+<div class="window">
+  <div class="titlebar">
+    <div class="tls">
+      <div class="tl tl-c"></div>
+      <div class="tl tl-m"></div>
+      <div class="tl tl-x"></div>
+    </div>
+    <div class="titlebar-mid" id="win-title">Documents</div>
+    <div class="titlebar-r"></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="tbtn" id="btn-back" title="Back" disabled>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 11.5L4.5 7 9 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="tbtn" id="btn-fwd" title="Forward" disabled>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2.5L9.5 7 5 11.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="tdiv"></div>
+    <div class="view-tog">
+      <button class="vbtn on" id="vbtn-grid" title="Grid View">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x=".75" y=".75" width="4.5" height="4.5" rx="1.25" stroke="currentColor" stroke-width="1.25"/><rect x="7.75" y=".75" width="4.5" height="4.5" rx="1.25" stroke="currentColor" stroke-width="1.25"/><rect x=".75" y="7.75" width="4.5" height="4.5" rx="1.25" stroke="currentColor" stroke-width="1.25"/><rect x="7.75" y="7.75" width="4.5" height="4.5" rx="1.25" stroke="currentColor" stroke-width="1.25"/></svg>
+      </button>
+      <button class="vbtn" id="vbtn-list" title="List View">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><line x1="1" y1="2.5" x2="12" y2="2.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><line x1="1" y1="6.5" x2="12" y2="6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/><line x1="1" y1="10.5" x2="12" y2="10.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="tdiv"></div>
+    <button class="tbtn" title="Arrange by">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M4 7h6M6 10h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </button>
+    <button class="tbtn" title="More options">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="3" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><circle cx="11" cy="7" r="1.2" fill="currentColor"/></svg>
+    </button>
+    <div class="tsp"></div>
+    <div class="search-wrap">
+      <svg class="srch-ico" width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5.2" cy="5.2" r="3.6" stroke="currentColor" stroke-width="1.3"/><path d="M7.8 7.8L10.5 10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input type="text" class="search" placeholder="Search" id="search-in">
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar" id="sidebar">
+      <div class="s-sect">
+        <div class="s-lbl">Favorites</div>
+        <div class="s-item" data-loc="AirDrop">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="6.5" r="2.8" fill="#007AFF" opacity=".2"/><circle cx="9" cy="6.5" r="1.7" fill="#007AFF"/><path d="M5.5 14C5.5 11.5 7 9.5 9 9.5s3.5 2 3.5 4.5" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round"/><path d="M3 12A7 7 0 0 0 9 15.5 7 7 0 0 0 15 12" stroke="#007AFF" stroke-width="1.2" stroke-linecap="round" opacity=".55"/></svg>
+          AirDrop
+        </div>
+        <div class="s-item" data-loc="Recents">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.3" stroke="#007AFF" stroke-width="1.3"/><path d="M9 5.5V9l2.5 2" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Recents
+        </div>
+        <div class="s-item on" data-loc="Documents">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><path d="M4 2.5h7L14 6v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z" fill="#007AFF" opacity=".18"/><path d="M4 2.5h7L14 6v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z" stroke="#007AFF" stroke-width="1.3"/><path d="M11 2.5V6h3" stroke="#007AFF" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Documents
+        </div>
+        <div class="s-item" data-loc="Desktop">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="10" rx="1.5" fill="#007AFF" opacity=".15" stroke="#007AFF" stroke-width="1.3"/><path d="M6 15h6M9 13v2" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Desktop
+        </div>
+        <div class="s-item" data-loc="Downloads">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><path d="M9 3v8M6.5 8.5 9 11l2.5-2.5" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13.5v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Downloads
+        </div>
+        <div class="s-item" data-loc="Home">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><path d="M2.5 8.5 9 2.5l6.5 6" stroke="#007AFF" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 8v6.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8" stroke="#007AFF" stroke-width="1.3" stroke-linejoin="round"/><rect x="6.5" y="10.5" width="5" height="5" rx=".5" fill="#007AFF" opacity=".2"/></svg>
+          Home
+        </div>
+      </div>
+      <div class="s-sect">
+        <div class="s-lbl">Locations</div>
+        <div class="s-item" data-loc="Macintosh HD">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><rect x="2" y="5" width="14" height="9" rx="2" fill="#8E8E93" opacity=".18" stroke="#8E8E93" stroke-width="1.3"/><circle cx="9" cy="9.5" r="1.5" fill="#8E8E93"/><path d="M5.5 5V4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1" stroke="#8E8E93" stroke-width="1.3"/></svg>
+          Macintosh HD
+        </div>
+        <div class="s-item" data-loc="iCloud Drive">
+          <svg class="s-ico" viewBox="0 0 18 18" fill="none"><path d="M14 13H5A3 3 0 0 1 5 7a3.5 3.5 0 0 1 .5.05A4 4 0 0 1 10 4.5a4 4 0 0 1 4 4.5 2.5 2.5 0 0 1 0 4z" fill="#007AFF" opacity=".18" stroke="#007AFF" stroke-width="1.3"/></svg>
+          iCloud Drive
+        </div>
+      </div>
+      <div class="s-sect">
+        <div class="s-lbl">Tags</div>
+        <div class="s-item" data-loc="tag-red"><span class="tag-dot" style="background:#FF3B30"></span>Red</div>
+        <div class="s-item" data-loc="tag-orange"><span class="tag-dot" style="background:#FF9500"></span>Orange</div>
+        <div class="s-item" data-loc="tag-blue"><span class="tag-dot" style="background:#007AFF"></span>Blue</div>
+        <div class="s-item" data-loc="tag-green"><span class="tag-dot" style="background:#34C759"></span>Green</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="breadcrumbs" id="bc"></div>
+      <div class="file-wrap" id="fw">
+        <div class="fgrid" id="fg"></div>
+        <div class="flist" id="fl" style="display:none">
+          <div class="lhdr">
+            <div class="lhdr-c">Name</div>
+            <div class="lhdr-c">Date Modified</div>
+            <div class="lhdr-c">Size</div>
+            <div class="lhdr-c">Kind</div>
+          </div>
+          <div id="li"></div>
+        </div>
+      </div>
+      <div class="statusbar"><span class="sbar-txt" id="stxt">15 items · 3.4 GB available</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const FILES=[
+  {id:1,n:'Projects',t:'folder',m:'Today, 2:41 PM',sz:'—',k:'Folder',c:'#0071E3'},
+  {id:2,n:'Design Assets',t:'folder',m:'Yesterday, 11:20 AM',sz:'—',k:'Folder',c:'#0071E3'},
+  {id:3,n:'Archive',t:'folder',m:'Mar 28, 2024',sz:'—',k:'Folder',c:'#0071E3'},
+  {id:4,n:'Work',t:'folder',m:'Apr 1, 2024',sz:'—',k:'Folder',c:'#0071E3'},
+  {id:5,n:'design-system.pdf',t:'pdf',m:'Apr 10, 2024',sz:'4.2 MB',k:'PDF Document',c:'#FF3B30'},
+  {id:6,n:'brand-guidelines.pdf',t:'pdf',m:'Mar 15, 2024',sz:'12.8 MB',k:'PDF Document',c:'#FF3B30'},
+  {id:7,n:'hero-banner.png',t:'image',m:'Apr 11, 2024',sz:'2.1 MB',k:'PNG Image',c:'#30D158'},
+  {id:8,n:'profile-photo.jpg',t:'image',m:'Feb 22, 2024',sz:'3.8 MB',k:'JPEG Image',c:'#30D158'},
+  {id:9,n:'app.tsx',t:'code',m:'Today, 9:15 AM',sz:'14 KB',k:'TypeScript',c:'#FFD60A'},
+  {id:10,n:'index.html',t:'html',m:'Today, 10:45 AM',sz:'8 KB',k:'HTML Document',c:'#FF9500'},
+  {id:11,n:'keynote-final.key',t:'keynote',m:'Apr 8, 2024',sz:'28.5 MB',k:'Keynote',c:'#0071E3'},
+  {id:12,n:'budget-2024.xlsx',t:'sheet',m:'Mar 30, 2024',sz:'1.1 MB',k:'Spreadsheet',c:'#34C759'},
+  {id:13,n:'meeting-recording.mp4',t:'video',m:'Apr 9, 2024',sz:'342 MB',k:'MPEG-4 Video',c:'#BF5AF2'},
+  {id:14,n:'notes.md',t:'text',m:'Today, 8:00 AM',sz:'4 KB',k:'Markdown',c:'#8E8E93'},
+  {id:15,n:'podcast-ep12.mp3',t:'audio',m:'Apr 5, 2024',sz:'8.7 MB',k:'MP3 Audio',c:'#FF375F'},
+];
+
+function ico(t,c,s){
+  s=s||56;const r=s*.08;
+  const defs={
+    folder:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <path d="M4 20C4 17.2 6.2 15 9 15H22l4 5h21c2.8 0 5 2.2 5 5v18c0 2.8-2.2 5-5 5H9c-2.8 0-5-2.2-5-5V20z" fill="${c}" opacity=".9"/>
+      <path d="M4 20C4 17.2 6.2 15 9 15H22l4 5h21c2.8 0 5 2.2 5 5v18c0 2.8-2.2 5-5 5H9c-2.8 0-5-2.2-5-5V20z" fill="url(#fg${s})"/>
+      <defs><linearGradient id="fg${s}" x1="28" y1="15" x2="28" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="white" stop-opacity=".18"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs>
+    </svg>`,
+    pdf:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="6" y="3" width="44" height="50" rx="5" fill="white"/>
+      <rect x="6" y="3" width="44" height="50" rx="5" fill="${c}" opacity=".1"/>
+      <rect x="6" y="3" width="44" height="50" rx="5" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <path d="M34 3v10a4 4 0 0 0 4 4h12" stroke="${c}" stroke-width="1.4" stroke-opacity=".4" stroke-linejoin="round"/>
+      <path d="M34 3L50 17" stroke="${c}" stroke-width="1.4" stroke-opacity=".3" stroke-linejoin="round"/>
+      <rect x="8" y="31" width="40" height="15" rx="3.5" fill="${c}"/>
+      <text x="28" y="42.5" font-size="9.5" font-weight="800" fill="white" text-anchor="middle" font-family="system-ui,sans-serif" letter-spacing=".05em">PDF</text>
+    </svg>`,
+    image:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="9" width="46" height="38" rx="5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".35"/>
+      <rect x="5" y="9" width="46" height="38" rx="5" fill="${c}" opacity=".08"/>
+      <circle cx="18" cy="21" r="4.5" fill="${c}" opacity=".65"/>
+      <path d="M5 37l12-11 9 8 9-13 16 15" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
+    </svg>`,
+    code:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="${c}" opacity=".08"/>
+      <path d="M19 21l-9 7 9 7" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M37 21l9 7-9 7" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="32" y1="17" x2="24" y2="39" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+    </svg>`,
+    html:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="${c}" opacity=".08"/>
+      <path d="M17 21l-8 7 8 7" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M39 21l8 7-8 7" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M29 17l-4 22" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+    </svg>`,
+    keynote:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="${c}" opacity=".12" stroke="${c}" stroke-width="1.4" stroke-opacity=".35"/>
+      <rect x="10" y="14" width="36" height="22" rx="2.5" fill="${c}" opacity=".25"/>
+      <line x1="28" y1="36" x2="28" y2="44" stroke="${c}" stroke-width="2" stroke-linecap="round"/>
+      <line x1="21" y1="44" x2="35" y2="44" stroke="${c}" stroke-width="2" stroke-linecap="round"/>
+    </svg>`,
+    sheet:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <rect x="5" y="5" width="46" height="46" rx="5" fill="${c}" opacity=".08"/>
+      <rect x="10" y="13" width="16" height="9" rx="1.5" fill="${c}" opacity=".35"/>
+      <line x1="29" y1="13" x2="29" y2="43" stroke="${c}" stroke-width="1.4" opacity=".4"/>
+      <line x1="10" y1="25" x2="46" y2="25" stroke="${c}" stroke-width="1.4" opacity=".4"/>
+      <line x1="10" y1="34" x2="46" y2="34" stroke="${c}" stroke-width="1.4" opacity=".4"/>
+    </svg>`,
+    video:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="5" y="10" width="46" height="36" rx="5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <rect x="5" y="10" width="46" height="36" rx="5" fill="${c}" opacity=".08"/>
+      <circle cx="28" cy="28" r="11" fill="${c}" opacity=".18"/>
+      <path d="M24 23l11 5-11 5V23z" fill="${c}" opacity=".85"/>
+    </svg>`,
+    text:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <rect x="7" y="5" width="42" height="46" rx="4.5" fill="white" stroke="${c}" stroke-width="1.4" stroke-opacity=".3"/>
+      <rect x="7" y="5" width="42" height="46" rx="4.5" fill="${c}" opacity=".06"/>
+      <line x1="16" y1="21" x2="40" y2="21" stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+      <line x1="16" y1="28" x2="40" y2="28" stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+      <line x1="16" y1="35" x2="32" y2="35" stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+    </svg>`,
+    audio:`<svg width="${s}" height="${s}" viewBox="0 0 56 56" fill="none">
+      <circle cx="28" cy="28" r="23" fill="${c}" opacity=".1" stroke="${c}" stroke-width="1.4" stroke-opacity=".35"/>
+      <circle cx="28" cy="28" r="14" fill="${c}" opacity=".18"/>
+      <circle cx="28" cy="28" r="4" fill="${c}" opacity=".8"/>
+      <path d="M28 12v5M28 39v5M12 28h5M39 28h5" stroke="${c}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>
+    </svg>`,
+  };
+  return defs[t]||defs.text;
+}
+
+let view='grid', sel=null, q='', hist=['Documents'], histIdx=0;
+
+function setBreadcrumbs(){
+  const bc=document.getElementById('bc');
+  const path=hist[histIdx];
+  if(path==='Documents'){
+    bc.innerHTML=`<div class="bc-item" data-bc="Home"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5L5 1l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 4.5v4.5h6V4.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg> Quinn</div><span class="bc-sep">›</span><div class="bc-item cur">Documents</div>`;
+  } else {
+    bc.innerHTML=`<div class="bc-item" data-bc="Home"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 5L5 1l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 4.5v4.5h6V4.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg> Quinn</div><span class="bc-sep">›</span><div class="bc-item" data-bc="Documents">Documents</div><span class="bc-sep">›</span><div class="bc-item cur">${path}</div>`;
+  }
+  document.getElementById('win-title').textContent=path;
+  document.getElementById('btn-back').disabled=histIdx<=0;
+  document.getElementById('btn-fwd').disabled=histIdx>=hist.length-1;
+}
+
+function renderEmpty(label){
+  const fg=document.getElementById('fg');
+  const li=document.getElementById('li');
+  const empty=`<div class="empty">${ico('folder','#8E8E93',44)}<p>${label}</p></div>`;
+  fg.innerHTML=`<div style="grid-column:1/-1;height:380px">${empty}</div>`;
+  li.innerHTML='';
+  document.getElementById('stxt').textContent='0 items · 3.4 GB available';
+}
+
+function render(){
+  const isDoc=hist[histIdx]==='Documents';
+  if(!isDoc){renderEmpty('This folder is empty');return;}
+  const filt=FILES.filter(f=>f.n.toLowerCase().includes(q.toLowerCase()));
+  const fg=document.getElementById('fg');
+  const li=document.getElementById('li');
+
+  if(!filt.length){
+    const empty=`<div class="empty"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="20" stroke="#AEAEB2" stroke-width="1.5" stroke-dasharray="3 3"/><path d="M15 22h14M22 15v14" stroke="#AEAEB2" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg><p>No results for "${q}"</p></div>`;
+    fg.innerHTML=`<div style="grid-column:1/-1;height:380px">${empty}</div>`;
+    li.innerHTML='';
+    document.getElementById('stxt').textContent='0 results';
+    return;
+  }
+
+  fg.innerHTML=filt.map(f=>`
+    <div class="fgrid-item${sel===f.id?' sel':''}" data-id="${f.id}">
+      <div class="ficon-lg">${ico(f.t,f.c,56)}</div>
+      <div class="fname-lg">${f.n}</div>
+    </div>`).join('');
+
+  li.innerHTML=filt.map(f=>`
+    <div class="flist-item${sel===f.id?' sel':''}" data-id="${f.id}">
+      <div class="ln"><div class="ficon-sm">${ico(f.t,f.c,20)}</div><span>${f.n}</span></div>
+      <div class="ld">${f.m}</div>
+      <div class="ls">${f.sz}</div>
+      <div class="lk">${f.k}</div>
+    </div>`).join('');
+
+  document.querySelectorAll('.fgrid-item,.flist-item').forEach(el=>{
+    el.addEventListener('click',e=>{
+      const id=parseInt(el.dataset.id);
+      sel=sel===id?null:id;
+      render();
+    });
+    el.addEventListener('dblclick',e=>{
+      const id=parseInt(el.dataset.id);
+      const f=FILES.find(x=>x.id===id);
+      if(f&&f.t==='folder'){
+        hist=hist.slice(0,histIdx+1);
+        hist.push(f.n);
+        histIdx++;
+        sel=null;
+        setBreadcrumbs();
+        render();
+      }
+    });
+  });
+
+  const sf=FILES.find(f=>f.id===sel);
+  document.getElementById('stxt').textContent=sf
+    ?`"${sf.n}" selected · 3.4 GB available`
+    :(q?`${filt.length} item${filt.length!==1?'s':''} matching "${q}"`:`${filt.length} items · 3.4 GB available`);
+}
+
+document.getElementById('btn-back').addEventListener('click',()=>{
+  if(histIdx>0){histIdx--;sel=null;setBreadcrumbs();render();}
+});
+document.getElementById('btn-fwd').addEventListener('click',()=>{
+  if(histIdx<hist.length-1){histIdx++;sel=null;setBreadcrumbs();render();}
+});
+
+document.getElementById('vbtn-grid').addEventListener('click',()=>{
+  view='grid';
+  document.getElementById('vbtn-grid').classList.add('on');
+  document.getElementById('vbtn-list').classList.remove('on');
+  document.getElementById('fg').style.display='grid';
+  document.getElementById('fl').style.display='none';
+});
+
+document.getElementById('vbtn-list').addEventListener('click',()=>{
+  view='list';
+  document.getElementById('vbtn-list').classList.add('on');
+  document.getElementById('vbtn-grid').classList.remove('on');
+  document.getElementById('fg').style.display='none';
+  document.getElementById('fl').style.display='flex';
+});
+
+document.getElementById('search-in').addEventListener('input',e=>{
+  q=e.target.value;sel=null;render();
+});
+
+document.querySelectorAll('.s-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.s-item').forEach(i=>i.classList.remove('on'));
+    item.classList.add('on');
+    const loc=item.dataset.loc;
+    sel=null;q='';
+    document.getElementById('search-in').value='';
+    hist=['Documents'];
+    histIdx=0;
+    if(loc==='Documents'){
+      setBreadcrumbs();render();
+    } else {
+      hist=[loc];histIdx=0;
+      setBreadcrumbs();render();
+    }
+  });
+});
+
+setBreadcrumbs();
+render();
+</script>
+</body>
+</html>

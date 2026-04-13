@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@500;600&family=Jost:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --success:     #3ecf8e;
+    --success-bg:  rgba(62, 207, 142, 0.10);
+    --info:        #5b9cf6;
+    --info-bg:     rgba(91, 156, 246, 0.10);
+    --warning:     #f5a623;
+    --warning-bg:  rgba(245, 166, 35, 0.10);
+    --toast-bg:    #1a1714;
+    --toast-edge:  #2a2520;
+    --text-hi:     #ede8df;
+    --text-lo:     #7a7168;
+    --shadow:      0 12px 40px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Jost', sans-serif;
+    background: #ede8df;
+    background-image:
+      radial-gradient(ellipse 70% 60% at 15% 55%, rgba(215,205,188,.55) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 45% at 85% 20%, rgba(200,190,172,.40) 0%, transparent 60%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* ── Demo stage ── */
+  .stage { text-align: center; user-select: none; }
+
+  .stage-label {
+    font-family: 'Cormorant', serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 600;
+    color: #1a1612;
+    letter-spacing: -.025em;
+    line-height: 1.1;
+    margin-bottom: .35rem;
+  }
+
+  .stage-sub {
+    font-size: .82rem;
+    font-weight: 300;
+    color: #9a9188;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 2.6rem;
+  }
+
+  .btns { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+
+  .btn {
+    padding: .6rem 1.35rem;
+    border: none;
+    border-radius: 7px;
+    font-family: 'Jost', sans-serif;
+    font-size: .78rem;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform .14s cubic-bezier(.4,0,.2,1), box-shadow .14s cubic-bezier(.4,0,.2,1);
+    will-change: transform;
+  }
+  .btn:hover  { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  .btn:active { transform: translateY(0);    box-shadow: none; }
+
+  .btn-success { background: var(--success); color: #0c2618; }
+  .btn-info    { background: var(--info);    color: #0b1a38; }
+  .btn-warning { background: var(--warning); color: #2d1a03; }
+
+  /* ── Toast container ── */
+  #tc {
+    position: fixed;
+    bottom: 22px;
+    right: 22px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+    pointer-events: none;
+    width: 370px;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    pointer-events: all;
+    width: 100%;
+    background: var(--toast-bg);
+    border: 1px solid var(--toast-edge);
+    border-radius: 11px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+    animation: tIn .42s cubic-bezier(.34,1.4,.64,1) both;
+    will-change: transform, opacity;
+  }
+
+  .toast.out {
+    animation: tOut .26s cubic-bezier(.4,0,1,1) forwards;
+  }
+
+  @keyframes tIn {
+    from { transform: translateX(calc(100% + 22px)) scale(.95); opacity: 0; }
+    to   { transform: translateX(0) scale(1); opacity: 1; }
+  }
+  @keyframes tOut {
+    from { transform: translateX(0) scale(1); opacity: 1; }
+    to   { transform: translateX(calc(100% + 22px)) scale(.96); opacity: 0; }
+  }
+
+  /* colored left strip */
+  .toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+  }
+  .toast.success::before { background: var(--success); }
+  .toast.info::before    { background: var(--info); }
+  .toast.warning::before { background: var(--warning); }
+
+  /* inner layout */
+  .toast-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 14px 13px 14px 17px;
+  }
+
+  /* icon pill */
+  .t-icon {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .toast.success .t-icon { background: var(--success-bg); }
+  .toast.info    .t-icon { background: var(--info-bg); }
+  .toast.warning .t-icon { background: var(--warning-bg); }
+
+  .t-icon svg { width: 14px; height: 14px; display: block; }
+  .toast.success .t-icon svg { color: var(--success); }
+  .toast.info    .t-icon svg { color: var(--info); }
+  .toast.warning .t-icon svg { color: var(--warning); }
+
+  /* text */
+  .t-text { flex: 1; min-width: 0; }
+
+  .t-title {
+    font-family: 'Cormorant', serif;
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--text-hi);
+    line-height: 1.25;
+    margin-bottom: 3px;
+    letter-spacing: -.01em;
+  }
+
+  .t-msg {
+    font-size: .79rem;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text-lo);
+    line-height: 1.55;
+    letter-spacing: .005em;
+  }
+
+  /* close */
+  .t-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #3a3530;
+    padding: 3px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color .14s, background .14s;
+    margin-top: 1px;
+  }
+  .t-close:hover { color: var(--text-lo); background: rgba(255,255,255,.06); }
+  .t-close svg { width: 12px; height: 12px; display: block; }
+
+  /* progress drain */
+  .t-bar {
+    height: 2px;
+    background: rgba(255,255,255,.04);
+    position: relative;
+    overflow: hidden;
+  }
+  .t-bar-fill {
+    position: absolute;
+    inset: 0;
+    transform-origin: left center;
+    animation: drain linear forwards;
+  }
+  .toast.success .t-bar-fill { background: var(--success); }
+  .toast.info    .t-bar-fill { background: var(--info); }
+  .toast.warning .t-bar-fill { background: var(--warning); }
+
+  @keyframes drain {
+    from { transform: scaleX(1); opacity: 1; }
+    to   { transform: scaleX(0); opacity: .5; }
+  }
+
+  /* a11y */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+  }
+
+  @media (max-width: 430px) {
+    #tc { left: 12px; right: 12px; bottom: 14px; width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1 class="stage-label">Notifications</h1>
+  <p class="stage-sub">Trigger a toast</p>
+  <div class="btns">
+    <button class="btn btn-success" onclick="show('success')">Success</button>
+    <button class="btn btn-info"    onclick="show('info')">Info</button>
+    <button class="btn btn-warning" onclick="show('warning')">Warning</button>
+  </div>
+</div>
+
+<div id="tc" role="region" aria-live="polite" aria-label="Notifications"></div>
+
+<script>
+const DURATION = 5200;
+
+const POOL = {
+  success: [
+    { title: 'Changes saved',       msg:  'Your work has been committed to the project.' },
+    { title: 'Upload complete',     msg:  'All assets processed and ready to use.' },
+    { title: 'Payment confirmed',   msg:  'Transaction settled without any issues.' },
+  ],
+  info: [
+    { title: 'Update available',    msg:  'A new version is ready whenever you are.' },
+    { title: 'Syncing',             msg:  'Your data is syncing across all devices.' },
+    { title: 'Reminder set',        msg:  'You\'ll be notified 15 minutes before.' },
+  ],
+  warning: [
+    { title: 'Storage nearly full', msg:  'You\'re using 92% of available space.' },
+    { title: 'Session expiring',    msg:  'You\'ll be signed out in 5 minutes.' },
+    { title: 'Unsaved changes',     msg:  'Some edits haven\'t been saved yet.' },
+  ],
+};
+
+const SVG = {
+  success: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,7 5.5,10.5 12,4"/></svg>`,
+  info:    `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="6.5" x2="7" y2="10"/><circle cx="7" cy="4.5" r=".6" fill="currentColor" stroke="none"/></svg>`,
+  warning: `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 1.5L13 12.5H1L7 1.5Z"/><line x1="7" y1="5.5" x2="7" y2="8.5"/><circle cx="7" cy="10.5" r=".6" fill="currentColor" stroke="none"/></svg>`,
+  close:   `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1.5" y1="1.5" x2="10.5" y2="10.5"/><line x1="10.5" y1="1.5" x2="1.5" y2="10.5"/></svg>`,
+};
+
+const idx = { success: 0, info: 0, warning: 0 };
+
+function show(type) {
+  const { title, msg } = POOL[type][idx[type]++ % POOL[type].length];
+  const tc = document.getElementById('tc');
+
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.setAttribute('role', 'alert');
+  el.innerHTML = `
+    <div class="toast-body">
+      <div class="t-icon">${SVG[type]}</div>
+      <div class="t-text">
+        <div class="t-title">${title}</div>
+        <div class="t-msg">${msg}</div>
+      </div>
+      <button class="t-close" aria-label="Dismiss">${SVG.close}</button>
+    </div>
+    <div class="t-bar">
+      <div class="t-bar-fill" style="animation-duration:${DURATION}ms"></div>
+    </div>`;
+
+  tc.appendChild(el);
+
+  const close = el.querySelector('.t-close');
+  const bar   = el.querySelector('.t-bar-fill');
+
+  let timer = setTimeout(() => dismiss(el), DURATION);
+
+  el.addEventListener('mouseenter', () => {
+    clearTimeout(timer);
+    bar.style.animationPlayState = 'paused';
+  });
+  el.addEventListener('mouseleave', () => {
+    bar.style.animationPlayState = 'running';
+    timer = setTimeout(() => dismiss(el), 900);
+  });
+
+  close.addEventListener('click', () => { clearTimeout(timer); dismiss(el); });
+}
+
+function dismiss(el) {
+  if (el._gone) return;
+  el._gone = true;
+  el.classList.add('out');
+  el.addEventListener('animationend', () => el.remove(), { once: true });
+}
+</script>
+</body>
+</html>
