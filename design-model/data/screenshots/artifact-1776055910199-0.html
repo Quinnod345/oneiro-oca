@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  background:radial-gradient(ellipse 120% 100% at 60% 40%,#1a2a3a 0%,#0d0d10 55%,#0a0a0d 100%);
+}
+.bg-blur{
+  position:fixed;inset:0;pointer-events:none;overflow:hidden;
+}
+.blob{
+  position:absolute;border-radius:50%;filter:blur(80px);opacity:.18;
+}
+.blob1{width:400px;height:300px;background:#2060c0;top:10%;left:20%}
+.blob2{width:300px;height:250px;background:#6030a0;bottom:15%;right:15%}
+.blob3{width:250px;height:200px;background:#103050;top:50%;left:50%}
+
+.panel{
+  width:340px;
+  background:rgba(28,28,30,.85);
+  backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px;
+  box-shadow:0 32px 80px rgba(0,0,0,.7),0 2px 0 rgba(255,255,255,.05) inset,0 0 0 0.5px rgba(0,0,0,.6);
+  overflow:hidden;
+  position:relative;
+}
+.panel-header{
+  padding:20px 20px 16px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.app-row{display:flex;align-items:center;gap:11px;margin-bottom:2px}
+.app-icon{
+  width:36px;height:36px;border-radius:8px;flex-shrink:0;
+  background:linear-gradient(145deg,#2c5fe6,#1a3db8);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(44,95,230,.4);
+  font-size:18px;
+}
+.app-name{
+  font-size:15px;font-weight:600;
+  color:#f2f2f7;letter-spacing:-.3px;
+}
+.app-sub{
+  font-size:11.5px;color:rgba(235,235,245,.4);
+  letter-spacing:.1px;margin-top:1px;
+}
+.section-label{
+  font-size:10.5px;font-weight:600;
+  color:rgba(235,235,245,.3);
+  letter-spacing:.8px;text-transform:uppercase;
+  padding:16px 20px 8px;
+}
+.rows{padding:0 8px 8px}
+.row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;border-radius:10px;
+  cursor:default;transition:background .15s;
+  gap:12px;
+}
+.row:hover{background:rgba(255,255,255,.05)}
+.row-text{flex:1;min-width:0}
+.row-label{
+  font-size:13.5px;font-weight:500;
+  color:#f2f2f7;letter-spacing:-.2px;
+  line-height:1.2;
+}
+.row-desc{
+  font-size:11.5px;color:rgba(235,235,245,.38);
+  margin-top:2px;line-height:1.35;
+}
+.divider{height:1px;background:rgba(255,255,255,.06);margin:0 12px}
+
+.toggle{position:relative;width:44px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.track{
+  position:absolute;inset:0;border-radius:13px;
+  background:#3a3a3c;cursor:pointer;
+  transition:background .22s cubic-bezier(.4,0,.2,1);
+}
+.track::after{
+  content:'';position:absolute;
+  left:3px;top:3px;width:20px;height:20px;
+  background:#fff;border-radius:50%;
+  box-shadow:0 1px 4px rgba(0,0,0,.5),0 1px 1px rgba(0,0,0,.3);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+}
+.toggle input:checked+.track{background:#30d158}
+.toggle input:checked+.track::after{transform:translateX(18px)}
+
+.footer{
+  padding:14px 16px 16px;
+  border-top:1px solid rgba(255,255,255,.07);
+  display:flex;justify-content:flex-end;
+}
+.done-btn{
+  height:30px;padding:0 18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,.08) 100%);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:7px;
+  color:#f2f2f7;font-size:13px;font-weight:500;
+  font-family:inherit;cursor:pointer;
+  letter-spacing:-.1px;
+  box-shadow:0 1px 0 rgba(255,255,255,.1) inset,0 1px 3px rgba(0,0,0,.3);
+  transition:all .12s;
+}
+.done-btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.24) 0%,rgba(255,255,255,.13) 100%);border-color:rgba(255,255,255,.26)}
+.done-btn:active{transform:scale(.97);opacity:.85}
+</style>
+</head>
+<body>
+<div class="bg-blur">
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <div class="app-row">
+      <div class="app-icon">◆</div>
+      <div>
+        <div class="app-name">Oneiro</div>
+        <div class="app-sub">Menu Bar Preferences</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">General</div>
+  <div class="rows">
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Launch at Login</div>
+        <div class="row-desc">Start automatically on boot</div>
+      </div>
+      <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+    </div>
+    <div class="divider"></div>
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Show in Menu Bar</div>
+        <div class="row-desc">Display icon in the system menu bar</div>
+      </div>
+      <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+    </div>
+    <div class="divider"></div>
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Focus Mode Sync</div>
+        <div class="row-desc">Respect macOS Focus filters</div>
+      </div>
+      <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+    </div>
+    <div class="divider"></div>
+    <div class="row">
+      <div class="row-text">
+        <div class="row-label">Notifications</div>
+        <div class="row-desc">Allow sound and banner alerts</div>
+      </div>
+      <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="done-btn">Done</button>
+  </div>
+</div>
+</body>
+</html>

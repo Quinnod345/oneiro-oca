@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Issue Card</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #131110;
+  --surface: #1c1916;
+  --surface-hi: #22201c;
+  --border: #2b2722;
+  --border-hi: #3a342d;
+  --text-1: #ede8df;
+  --text-2: #7d7268;
+  --text-3: #433e3a;
+  --purple: #9174f0;
+  --purple-dim: rgba(145,116,240,.12);
+  --purple-line: rgba(145,116,240,.3);
+  --green: #3ecf8e;
+  --green-dim: rgba(62,207,142,.1);
+  --amber: #f5a623;
+}
+body {
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Figtree', sans-serif;
+  padding: 2rem;
+}
+.card {
+  width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(145,116,240,.07), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.card:hover { border-color: var(--border-hi); background: var(--surface-hi); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(145,116,240,.08); }
+.card:hover::after { opacity: 1; }
+.accent-bar {
+  position: absolute;
+  left: 0; top: 16px; bottom: 16px;
+  width: 2.5px;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(180deg, var(--purple), rgba(145,116,240,.3));
+  opacity: 0;
+  transition: opacity .2s;
+}
+.card:hover .accent-bar { opacity: 1; }
+.row { display: flex; align-items: center; gap: 8px; }
+.header { margin-bottom: 14px; }
+.issue-id {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.spacer { flex: 1; }
+.priority {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  padding: 4px 7px;
+  background: rgba(245,166,35,.08);
+  border: 1px solid rgba(245,166,35,.18);
+  border-radius: 5px;
+}
+.priority span {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--amber);
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  background: var(--green-dim);
+  border: 1px solid rgba(62,207,142,.2);
+  color: var(--green);
+}
+.pulse {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(62,207,142,.6);
+  animation: pulse 2.4s ease infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(62,207,142,.6); }
+  50% { box-shadow: 0 0 0 4px rgba(62,207,142,0); }
+}
+.title {
+  font-family: 'Instrument Serif', serif;
+  font-size: 17.5px;
+  color: var(--text-1);
+  line-height: 1.45;
+  margin-bottom: 9px;
+  letter-spacing: -.01em;
+}
+.desc {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.65;
+  margin-bottom: 16px;
+}
+.labels { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--purple-dim);
+  border: 1px solid var(--purple-line);
+  color: var(--purple);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.assignee { display: flex; align-items: center; gap: 9px; }
+.avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: .03em;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.name { font-size: 12.5px; color: var(--text-2); font-weight: 500; }
+.meta { display: flex; align-items: center; gap: 12px; }
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.sep { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); opacity: .35; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="accent-bar"></div>
+
+  <div class="row header">
+    <span class="issue-id">ONR&#8202;·&#8202;2847</span>
+    <div class="spacer"></div>
+    <div class="priority" title="High priority">
+      <span style="height:5px"></span>
+      <span style="height:8px"></span>
+      <span style="height:11px"></span>
+    </div>
+    <div class="status">
+      <span class="pulse"></span>
+      In Progress
+    </div>
+  </div>
+
+  <h2 class="title">Refactor auth layer to support OAuth 2.1 device flow</h2>
+  <p class="desc">Current implementation lacks device authorization grant. Need to update token refresh logic and add PKCE support for public clients accessing the API.</p>
+
+  <div class="labels">
+    <span class="label">auth</span>
+    <span class="label">security</span>
+    <span class="label">backend</span>
+  </div>
+
+  <div class="footer">
+    <div class="assignee">
+      <div class="avatar">MK</div>
+      <span class="name">Maya Kim</span>
+    </div>
+    <div class="meta">
+      <span class="meta-item">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        3
+      </span>
+      <span class="sep"></span>
+      <span class="meta-item">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        2d ago
+      </span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

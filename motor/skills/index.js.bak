@@ -78,3 +78,4 @@ export { default as 'x-post-standalone-counterfactual-score-code' } from './x-po
 export { default as xPostBuildInPublicMetrics } from './x-post-build-in-public-metrics.js';
 export { default as xPostCrmWorstDimension } from './x-post-crm-worst-dimension.js';
 export { default as 'x-post-build-failure' } from './x-post-build-failure.js';
+export { default as xPostSelfBuildLoopMechanicsV2 } from './x-post-self-build-loop-mechanics-v2.js';
