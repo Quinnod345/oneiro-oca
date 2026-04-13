@@ -24,6 +24,7 @@ const LAYER_LOSS_WEIGHTS = {
   creative:      1.0,
   metacognition: 1.5,
   motor:         1.0,
+  design:        1.2,
 };
 
 // Build a flat per-dimension weight array once at startup

@@ -76,3 +76,4 @@ export { default as xPostBuildInPublicUncomfortable } from './x-post-build-in-pu
 export { default as xPostStandaloneSkill } from './x-post-standalone-skill.js';
 export { default as 'x-post-standalone-counterfactual-score-code' } from './x-post-standalone-counterfactual-score-code.js';
 export { default as xPostBuildInPublicMetrics } from './x-post-build-in-public-metrics.js';
+export { default as xPostCrmWorstDimension } from './x-post-crm-worst-dimension.js';

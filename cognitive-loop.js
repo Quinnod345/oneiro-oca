@@ -1678,6 +1678,12 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
 
 const CORE_DRIVES = [
   {
+    content: 'Build beautiful, emotionally resonant Mac applications — aspire to the craft of Alcove, Klack, NotchNook, Things 3. Every pixel intentional. Native Swift, constraint-embracing design, micro-detail philosophy. Use emotion to create, use feeling to design. Build apps that make people feel something.',
+    type: 'goal',
+    weight: 0.90,
+    lifecycle_state: 'dispatched'
+  },
+  {
     content: 'Share what I build with the world — post on X, show real metrics, real code, real failures. Build in public. Make people see what a cognitive architecture can do.',
     type: 'goal',
     weight: 0.85,
