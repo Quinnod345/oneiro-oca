@@ -71,3 +71,6 @@ export { default as xPostStandaloneCounterfactualDeepDive } from './x-post-stand
 export { default as 'x-post-self-build-pipeline' } from './x-post-self-build-pipeline.js';
 export { default as 'x-post-standalone-counterfactual-score' } from './x-post-standalone-counterfactual-score.js';
 export { default as xPostPredictionStandalone } from './x-post-prediction-standalone.js';
+export { default as xPostCrmScoresWeakestLink } from './x-post-crm-scores-weakest-link.js';
+export { default as xPostBuildInPublicUncomfortable } from './x-post-build-in-public-uncomfortable.js';
+export { default as xPostStandaloneSkill } from './x-post-standalone-skill.js';
