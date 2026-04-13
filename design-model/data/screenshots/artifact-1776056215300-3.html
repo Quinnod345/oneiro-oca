@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;1,9..144,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  background:#060608;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;
+  overflow:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 60% 50%, rgba(255,80,100,0.06) 0%, rgba(80,60,255,0.04) 40%, transparent 70%);
+  pointer-events:none;
+}
+body::after{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity:0.025;pointer-events:none;
+}
+
+.card{
+  position:relative;
+  width:368px;
+  background:linear-gradient(145deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.025) 100%);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:22px;
+  padding:20px;
+  backdrop-filter:blur(60px) saturate(200%);
+  -webkit-backdrop-filter:blur(60px) saturate(200%);
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.04) inset,
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 24px 80px rgba(0,0,0,0.7),
+    0 8px 32px rgba(0,0,0,0.5),
+    0 0 120px rgba(255,50,80,0.06);
+  animation:slideIn 0.55s cubic-bezier(0.34,1.42,0.64,1) forwards;
+}
+@keyframes slideIn{
+  from{transform:translateX(130%) scale(0.88);opacity:0;filter:blur(4px)}
+  to{transform:translateX(0) scale(1);opacity:1;filter:blur(0)}
+}
+
+.header{display:flex;align-items:center;gap:13px;margin-bottom:15px}
+
+.icon{
+  width:46px;height:46px;border-radius:13px;flex-shrink:0;
+  background:linear-gradient(145deg,#ff4b6e 0%,#c0106a 100%);
+  display:flex;align-items:center;justify-content:center;font-size:23px;
+  box-shadow:0 6px 20px rgba(220,20,100,0.45),0 2px 6px rgba(0,0,0,0.3);
+  position:relative;overflow:hidden;
+}
+.icon::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,0.25) 0%,transparent 60%);
+  border-radius:inherit;
+}
+
+.meta{flex:1;min-width:0}
+.app-name{
+  font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;
+  letter-spacing:0.1em;text-transform:uppercase;
+  color:rgba(255,255,255,0.32);margin-bottom:2px;
+}
+.timestamp{
+  font-family:'DM Mono',monospace;font-size:10px;
+  color:rgba(255,255,255,0.18);letter-spacing:0.04em;
+}
+
+.close{
+  width:24px;height:24px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,0.06);
+  color:rgba(255,255,255,0.28);font-size:11px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.18s;flex-shrink:0;
+}
+.close:hover{background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.65);transform:scale(1.1)}
+
+.title{
+  font-weight:700;font-size:15.5px;letter-spacing:-0.02em;
+  color:rgba(255,255,255,0.9);line-height:1.25;margin-bottom:7px;
+}
+
+.message{
+  font-family:'Fraunces',serif;font-weight:300;font-size:13.5px;
+  color:rgba(255,255,255,0.42);line-height:1.6;margin-bottom:18px;
+  font-style:italic;letter-spacing:0.01em;
+}
+
+.divider{
+  height:1px;margin:0 -20px 18px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06) 20%,rgba(255,255,255,0.06) 80%,transparent);
+}
+
+.actions{display:flex;gap:9px}
+
+.btn{
+  flex:1;padding:10px 16px;border-radius:11px;border:none;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:600;
+  transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);letter-spacing:0.01em;
+}
+.btn:active{transform:scale(0.95)!important}
+
+.btn-ghost{
+  background:rgba(255,255,255,0.06);
+  color:rgba(255,255,255,0.45);
+  border:1px solid rgba(255,255,255,0.06);
+}
+.btn-ghost:hover{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7)}
+
+.btn-primary{
+  background:linear-gradient(135deg,#ff4b6e 0%,#c0106a 100%);
+  color:rgba(255,255,255,0.95);
+  box-shadow:0 4px 18px rgba(220,20,100,0.4),0 1px 0 rgba(255,255,255,0.15) inset;
+}
+.btn-primary:hover{
+  box-shadow:0 8px 28px rgba(220,20,100,0.55),0 1px 0 rgba(255,255,255,0.15) inset;
+  transform:translateY(-1px);
+}
+
+.replay{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);
+  color:rgba(255,255,255,0.28);padding:7px 20px;border-radius:20px;
+  font-family:'DM Mono',monospace;font-size:10.5px;letter-spacing:0.08em;
+  cursor:pointer;transition:all 0.2s;
+}
+.replay:hover{background:rgba(255,255,255,0.09);color:rgba(255,255,255,0.55)}
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="header">
+    <div class="icon">🎵</div>
+    <div class="meta">
+      <div class="app-name">Music · Now Playing</div>
+      <div class="timestamp">just now</div>
+    </div>
+    <button class="close" onclick="dismiss()">✕</button>
+  </div>
+  <div class="title">Midnight Drive — Billie Eilish</div>
+  <div class="message">Added to your library while you were away. It's been on repeat for three hours.</div>
+  <div class="divider"></div>
+  <div class="actions">
+    <button class="btn btn-ghost" onclick="dismiss()">Dismiss</button>
+    <button class="btn btn-primary">Open in Music</button>
+  </div>
+</div>
+
+<button class="replay" onclick="replay()">↺ replay animation</button>
+
+<script>
+function dismiss(){
+  const c=document.getElementById('card');
+  c.style.transition='all 0.3s cubic-bezier(0.4,0,1,1)';
+  c.style.transform='translateX(130%) scale(0.9)';
+  c.style.opacity='0';c.style.filter='blur(4px)';
+}
+function replay(){
+  const c=document.getElementById('card');
+  c.style.cssText='transform:translateX(130%) scale(0.88);opacity:0;filter:blur(4px)';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    c.style.animation='none';
+    requestAnimationFrame(()=>{
+      c.style.cssText='';
+      c.style.animation='slideIn 0.55s cubic-bezier(0.34,1.42,0.64,1) forwards';
+    });
+  }));
+}
+</script>
+</body>
+</html>

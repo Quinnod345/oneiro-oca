@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;1,300&family=Lora:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #111010; --surface: #1a1918; --border: #272422;
+    --text: #e8e2d9; --muted: #6e6761;
+    --high: #e8784a; --med: #d4a853; --low: #7a9e7e; --done: #4a9e6e;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Lora', Georgia, serif;
+    min-height: 100vh; display: flex;
+    align-items: center; justify-content: center; padding: 2rem;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px; width: 100%; max-width: 440px;
+    padding: 2rem 2rem 1.5rem;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
+  }
+  .header { margin-bottom: 1.75rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;
+  }
+  h1 {
+    font-family: 'Fraunces', serif; font-weight: 300;
+    font-size: 2.25rem; line-height: 1.1; letter-spacing: -0.02em;
+  }
+  h1 em { font-style: italic; color: var(--med); }
+  .count { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--muted); margin-top: 0.5rem; }
+  .task-list { list-style: none; }
+  .task {
+    display: flex; align-items: flex-start; gap: 0.875rem;
+    padding: 0.9rem 0; border-bottom: 1px solid var(--border);
+    cursor: pointer; animation: up 0.4s ease both;
+  }
+  .task:last-child { border-bottom: none; }
+  .task:nth-child(1){animation-delay:.05s} .task:nth-child(2){animation-delay:.1s}
+  .task:nth-child(3){animation-delay:.15s} .task:nth-child(4){animation-delay:.2s}
+  .task:nth-child(5){animation-delay:.25s}
+  @keyframes up { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:none } }
+  .cb {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    border: 1.5px solid var(--border); margin-top: 2px;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, background 0.25s;
+  }
+  .cb::after {
+    content: ''; width: 5px; height: 9px;
+    border-right: 1.5px solid #fff; border-bottom: 1.5px solid #fff;
+    transform: rotate(45deg) scale(0); margin-top: -2px;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .task:hover .cb { border-color: var(--muted); }
+  .task.done .cb { background: var(--done); border-color: var(--done); }
+  .task.done .cb::after { transform: rotate(45deg) scale(1); }
+  .task.done .name { text-decoration: line-through; color: var(--muted); }
+  .body { flex: 1; min-width: 0; }
+  .name { font-size: 0.9375rem; line-height: 1.4; transition: color 0.2s; }
+  .meta { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.25rem; }
+  .p {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.58rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.18em 0.55em; border-radius: 3px;
+  }
+  .p.h { color: var(--high); background: rgba(232,120,74,0.1); }
+  .p.m { color: var(--med); background: rgba(212,168,83,0.1); }
+  .p.l { color: var(--low); background: rgba(122,158,126,0.1); }
+  .due { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); }
+  .footer {
+    margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .add {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.4em 0.9em; cursor: pointer; transition: color 0.2s, border-color 0.2s;
+  }
+  .add:hover { color: var(--text); border-color: var(--muted); }
+  .prog { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="label">Today · Apr 13</div>
+    <h1>Good <em>morning,</em><br>Quinn.</h1>
+    <div class="count" id="count">5 tasks remaining</div>
+  </div>
+  <ul class="task-list" id="list">
+    <li class="task" onclick="toggle(this)">
+      <div class="cb"></div>
+      <div class="body">
+        <div class="name">Finalize Q2 roadmap presentation</div>
+        <div class="meta"><span class="p h">High</span><span class="due">Due today</span></div>
+      </div>
+    </li>
+    <li class="task" onclick="toggle(this)">
+      <div class="cb"></div>
+      <div class="body">
+        <div class="name">Review pull request for auth module</div>
+        <div class="meta"><span class="p h">High</span><span class="due">2h estimate</span></div>
+      </div>
+    </li>
+    <li class="task" onclick="toggle(this)">
+      <div class="cb"></div>
+      <div class="body">
+        <div class="name">Send invoice to Meridian Group</div>
+        <div class="meta"><span class="p m">Medium</span><span class="due">Apr 14</span></div>
+      </div>
+    </li>
+    <li class="task" onclick="toggle(this)">
+      <div class="cb"></div>
+      <div class="body">
+        <div class="name">Update design system documentation</div>
+        <div class="meta"><span class="p m">Medium</span><span class="due">This week</span></div>
+      </div>
+    </li>
+    <li class="task" onclick="toggle(this)">
+      <div class="cb"></div>
+      <div class="body">
+        <div class="name">Read — The Design of Everyday Things</div>
+        <div class="meta"><span class="p l">Low</span><span class="due">No due date</span></div>
+      </div>
+    </li>
+  </ul>
+  <div class="footer">
+    <button class="add">+ New Task</button>
+    <span class="prog" id="prog">0 of 5 done</span>
+  </div>
+</div>
+<script>
+  function toggle(el) {
+    el.classList.toggle('done');
+    const d = document.querySelectorAll('.task.done').length;
+    const t = document.querySelectorAll('.task').length;
+    document.getElementById('prog').textContent = `${d} of ${t} done`;
+    const r = t - d;
+    document.getElementById('count').textContent = `${r} task${r !== 1 ? 's' : ''} remaining`;
+  }
+</script>
+</body>
+</html>
