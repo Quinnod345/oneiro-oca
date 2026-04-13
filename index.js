@@ -19,11 +19,27 @@ import sensory from './sensory/perception.js';
 import executive from './executive/engine.js';
 import prospective from './memory/prospective.js';
 import { ingestCoOccurrenceConnections, maintainSynapses } from './neural-connections.js';
+import { loadModel as loadDesignModel } from './design-model/model.js';
+import { evaluateDesign } from './design-model/evaluate.js';
+import { computeDesignPolicy, policyToPromptContext } from './design/emotion-bridge.js';
+import { getTrainingFocus as getDesignTrainingFocus } from './design-model/trainer.js';
+import { evolveSkill as evolveDesignSkill, getEvolutionStatus as getDesignEvolutionStatus } from './design-model/skill-evolver.js';
 
 export const layers = {
   emotion, hypothesis, episodic, semantic, procedural,
   consolidation, metacognition, deliberation, reasoningController, simulation,
   causal, entityGraph, creative, sensory, executive, prospective
+};
+
+// Design subsystem — decoupled, any agent can use it
+export const design = {
+  model: loadDesignModel(),
+  evaluate: evaluateDesign,
+  computePolicy: computeDesignPolicy,
+  policyToContext: policyToPromptContext,
+  getTrainingFocus: getDesignTrainingFocus,
+  evolveSkill: evolveDesignSkill,
+  getEvolutionStatus: getDesignEvolutionStatus,
 };
 
 // ============================================================

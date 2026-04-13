@@ -16,6 +16,7 @@ export const LAYER_DIMS = {
   creative:      16,
   metacognition: 16,
   motor:         16,
+  design:        16,
 };
 
 export const LAYERS = Object.keys(LAYER_DIMS);

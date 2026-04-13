@@ -342,7 +342,53 @@ export function encodeMotor(motorConnected, recentActions, thinkerActive, bodyOw
   return v;
 }
 
+// ═══ DESIGN (16-dim) ═══
+// Encodes the design model's aesthetic evaluation state into the neural bus.
+// Maps 12-dim model output + process state into 16-dim bus slice.
+
+export function encodeDesign(designState) {
+  const v = new Float32Array(16);
+  if (!designState) return v;
+  let i = 0;
+
+  const scores = designState.scores || {};
+  const process = designState.process || {};
+
+  // Dims 0-7: Core aesthetic scores from design MLP
+  v[i++] = clamp01(scores.typography_quality || 0.5);
+  v[i++] = clamp01(scores.color_harmony || 0.5);
+  v[i++] = clamp01(scores.spatial_composition || 0.5);
+  v[i++] = clamp01(scores.motion_elegance || 0.5);
+  v[i++] = clamp01(scores.emotional_resonance || 0.5);
+  v[i++] = clamp01(scores.craft_visibility || 0.5);
+  v[i++] = clamp01(scores.minimalism_coherence || 0.5);
+  v[i++] = clamp01(scores.native_integration || 0.5);
+
+  // Dims 8-10: Norman's three levels
+  v[i++] = clamp01(scores.visceral_score || 0.5);
+  v[i++] = clamp01(scores.behavioral_score || 0.5);
+  v[i++] = clamp01(scores.reflective_score || 0.5);
+
+  // Dim 11: Anti-pattern penalty (1 = clean, 0 = anti-pattern heavy)
+  v[i++] = clamp01(1 - (process.antiPatternCount || 0) / 5);
+
+  // Dim 12: Iteration momentum (how actively designing)
+  v[i++] = clamp01(process.iterationMomentum || 0);
+
+  // Dim 13: Skill confidence
+  v[i++] = clamp01(process.skillConfidence || 0.5);
+
+  // Dim 14: Design drive deficit (gap between aspiration and current output)
+  v[i++] = clamp01(process.driveDeficit || 0.3);
+
+  // Dim 15: Overall aesthetic (composite)
+  v[i++] = clamp01(scores.overall_aesthetic || 0.5);
+
+  return v;
+}
+
 export default {
   encodeSensory, encodeEmotion, encodeHypothesis, encodeMemory,
-  encodeExecutive, encodeCreative, encodeMetacognition, encodeMotor
+  encodeExecutive, encodeCreative, encodeMetacognition, encodeMotor,
+  encodeDesign
 };

@@ -10,7 +10,7 @@ import cohabitation from '../cohabitation.js';
 // ═══════════════════════════════════════════════════
 
 const MAX_WORKING_MEMORY = 7; // Miller's Law
-const WM_DECAY_PER_MINUTE = 60.0;
+const WM_DECAY_PER_MINUTE = 0.05;
 
 export async function addToWorkspace(contentType, content, sourceLayer, salience = 0.5) {
   const { rows: active } = await pool.query(
@@ -148,11 +148,12 @@ export async function getGoalTree(rootId = null) {
 const ATTENTION_BUDGET = 1.0;
 
 const MODE_DEFAULT_ALLOCATION = {
-  alert:         { perception: 0.25, reasoning: 0.20, conversation: 0.30, background: 0.05, creative: 0.05, motor: 0.15 },
-  monitoring:    { perception: 0.35, reasoning: 0.15, conversation: 0.10, background: 0.20, creative: 0.10, motor: 0.10 },
-  working:       { perception: 0.15, reasoning: 0.35, conversation: 0.05, background: 0.10, creative: 0.15, motor: 0.20 },
-  consolidating: { perception: 0.10, reasoning: 0.10, conversation: 0.05, background: 0.05, creative: 0.30, motor: 0.05, consolidation: 0.35 },
-  dormant:       { perception: 0.05, reasoning: 0.05, conversation: 0.00, background: 0.05, creative: 0.40, motor: 0.00, consolidation: 0.45 },
+  alert:         { perception: 0.25, reasoning: 0.20, conversation: 0.30, background: 0.05, creative: 0.05, motor: 0.15, design: 0.00 },
+  monitoring:    { perception: 0.35, reasoning: 0.15, conversation: 0.10, background: 0.20, creative: 0.10, motor: 0.10, design: 0.00 },
+  working:       { perception: 0.15, reasoning: 0.35, conversation: 0.05, background: 0.10, creative: 0.15, motor: 0.20, design: 0.00 },
+  designing:     { perception: 0.10, reasoning: 0.15, conversation: 0.00, background: 0.05, creative: 0.25, motor: 0.20, design: 0.25 },
+  consolidating: { perception: 0.10, reasoning: 0.10, conversation: 0.05, background: 0.05, creative: 0.30, motor: 0.05, design: 0.00, consolidation: 0.35 },
+  dormant:       { perception: 0.05, reasoning: 0.05, conversation: 0.00, background: 0.05, creative: 0.35, motor: 0.00, design: 0.05, consolidation: 0.45 },
 };
 
 let currentAllocation = { ...MODE_DEFAULT_ALLOCATION.alert };
