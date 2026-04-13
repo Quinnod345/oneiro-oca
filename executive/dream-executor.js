@@ -320,6 +320,7 @@ Analyze this dream. Respond with JSON:
       "url": "url" (for browser),
       "path": "file path" (for file ops),
       "content": "content" (for file ops),
+      "posts": ["tweet text 1", "tweet text 2"] (for x_post — array of strings, each max 280 chars),
       "build_spec": {} (for self_build — see below),
       "priority": 0.0-1.0,
       "requires_quinn_review": false
@@ -731,7 +732,10 @@ async function executeTask(task, dreamId) {
           const xPoster = await import('../motor/skills/x-poster.js');
           // Presence-aware: x-poster checks idle internally and enforces draft when Quinn is present.
           // draftOnly: false here lets x-poster decide based on real idle time.
-          const postResult = await xPoster.postThread(task.posts || [task.content], {
+          // Normalize posts: LLM may put text in posts[] or content (string or object)
+          const rawPosts = task.posts?.length ? task.posts : [task.content];
+          const posts = rawPosts.map(p => (typeof p === 'string' ? p : p?.text || p?.content || JSON.stringify(p)));
+          const postResult = await xPoster.postThread(posts, {
             draftOnly: false,
             dreamId
           });
