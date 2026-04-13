@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Constellation</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0f;
+            --secondary-bg: #151520;
+            --accent-purple: #6366f1;
+            --accent-blue: #3b82f6;
+            --accent-pink: #ec4899;
+            --accent-orange: #f59e0b;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --glow-primary: rgba(99, 102, 241, 0.4);
+            --glow-secondary: rgba(236, 72, 153, 0.3);
+            --surface-glass: rgba(255, 255, 255, 0.03);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .constellation-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: radial-gradient(circle at 30% 40%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 60%, rgba(236, 72, 153, 0.03) 0%, transparent 50%);
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 320px;
+            height: 100%;
+            background: var(--surface-glass);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-subtle);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 32px 24px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .search-container {
+            padding: 0 24px 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .filters {
+            padding: 0 24px;
+            margin-bottom: 24px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn.active {
+            background: var(--accent-purple);
+            color: white;
+            border-color: var(--accent-purple);
+        }
+
+        .contact-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 24px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .contact-item:hover {
+            opacity: 0.7;
+        }
+
+        .contact-avatar-small {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 12px;
+            position: relative;
+        }
+
+        .contact-info {
+            flex: 1;
+        }
+
+        .contact-name-small {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .contact-relation {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .constellation-canvas {
+            position: absolute;
+            top: 0;
+            left: 320px;
+            width: calc(100% - 320px);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .contact-node {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+
+        .contact-node:hover {
+            transform: scale(1.1);
+            z-index: 50;
+        }
+
+        .contact-avatar {
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .contact-avatar::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .contact-node:hover .contact-avatar::before {
+            opacity: 1;
+        }
+
+        .contact-label {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .contact-node:hover .contact-label {
+            opacity: 1;
+        }
+
+        .interaction-glow {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+            pointer-events: none;
+            opacity: 0.3;
+            transform-origin: left center;
+        }
+
+        /* Contact node sizes and colors based on relationship closeness */
+        .node-family {
+            --node-size: 64px;
+            --glow-color: var(--glow-primary);
+        }
+
+        .node-close-friend {
+            --node-size: 56px;
+            --glow-color: var(--glow-secondary);
+        }
+
+        .node-friend {
+            --node-size: 48px;
+            --glow-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .node-colleague {
+            --node-size: 40px;
+            --glow-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .node-acquaintance {
+            --node-size: 32px;
+            --glow-color: rgba(100, 116, 139, 0.2);
+        }
+
+        .contact-node .contact-avatar {
+            width: var(--node-size);
+            height: var(--node-size);
+        }
+
+        .contact-node .contact-avatar::before {
+            background: var(--glow-color);
+        }
+
+        .contact-node .interaction-glow {
+            width: calc(var(--node-size) + 20px);
+            height: calc(var(--node-size) + 20px);
+            top: -10px;
+            left: -10px;
+            background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+        }
+
+        .stats-overlay {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: var(--surface-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 200px;
+        }
+
+        .stats-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Responsive contact positioning */
+        .contact-node[data-id="user"] { top: 400px; left: 200px; }
+        .contact-node[data-id="sarah"] { top: 250px; left: 150px; }
+        .contact-node[data-id="mike"] { top: 300px; left: 350px; }
+        .contact-node[data-id="emma"] { top: 180px; left: 280px; }
+        .contact-node[data-id="alex"] { top: 450px; left: 380px; }
+        .contact-node[data-id="lisa"] { top: 320px; left: 120px; }
+        .contact-node[data-id="david"] { top: 550px; left: 250px; }
+        .contact-node[data-id="maria"] { top: 200px; left: 450px; }
+        .contact-node[data-id="james"] { top: 480px; left: 500px; }
+        .contact-node[data-id="anna"] { top: 380px; left: 180px; }
+        .contact-node[data-id="tom"] { top: 150px; left: 380px; }
+        .contact-node[data-id="kate"] { top: 520px; left: 350px; }
+    </style>
+</head>
+<body>
+    <div class="constellation-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">Constellation</div>
+                <div class="subtitle">Social Network</div>
+            </div>
+            
+            <div class="search-container">
+                <input type="text" class="search-input" placeholder="Search contacts...">
+            </div>
+            
+            <div class="filters">
+                <div class="filter-label">Relationship</div>
+                <div class="filter-buttons">
+                    <button class="filter-btn active">All</button>
+                    <button class="filter-btn">Family</button>
+                    <button class="filter-btn">Friends</button>
+                    <button class="filter-btn">Work</button>
+                </div>
+            </div>
+            
+            <div class="contact-list">
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">Sarah Chen</div>
+                        <div class="contact-relation">Sister</div>
+                    </div>
+                </div>
+                
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #ec4899, #f43f5e);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">Mike Johnson</div>
+                        <div class="contact-relation">Best Friend</div>
+                    </div>
+                </div>
+                
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #10b981, #14b8a6);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">Emma Wilson</div>
+                        <div class="contact-relation">Close Friend</div>
+                    </div>
+                </div>
+                
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #f59e0b, #f97316);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">Alex Rodriguez</div>
+                        <div class="contact-relation">Colleague</div>
+                    </div>
+                </div>
+                
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #3b82f6, #6366f1);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">Lisa Park</div>
+                        <div class="contact-relation">Family</div>
+                    </div>
+                </div>
+                
+                <div class="contact-item">
+                    <div class="contact-avatar-small" style="background: linear-gradient(135deg, #ef4444, #f97316);"></div>
+                    <div class="contact-info">
+                        <div class="contact-name-small">David Kim</div>
+                        <div class="contact-relation">Friend</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="constellation-canvas">
+            <!-- Connection lines -->
+            <div class="connection-line" style="top: 420px; left: 240px; width: 140px; transform: rotate(25deg);"></div>
+            <div class="connection-line" style="top: 380px; left: 280px; width: 120px; transform: rotate(-15deg);"></div>
+            <div class="connection-line" style="top: 470px; left: 280px; width: 130px; transform: rotate(45deg);"></div>
+            
+            <!-- Contact nodes -->
+            <div class="contact-node node-family" data-id="user">
+                <div class="contact-avatar" style="background: radial-gradient(circle at 30% 30%, #ffffff, #e2e8f0);"></div>
+                <div class="interaction-glow"></div>
+                <div class="contact-label">You</div>
+            </div>
+            
+            <div class="contact-node node-family" data-id="sarah">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);"></div>
+                <div class="interaction-glow"></div>
+                <div class="contact-label">Sarah Chen</div>
+            </div>
+            
+            <div class="contact-node node-close-friend" data-id="mike">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #ec4899, #f43f5e);"></div>
+                <div class="interaction-glow"></div>
+                <div class="contact-label">Mike Johnson</div>
+            </div>
+            
+            <div class="contact-node node-close-friend" data-id="emma">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #10b981, #14b8a6);"></div>
+                <div class="interaction-glow"></div>
+                <div class="contact-label">Emma Wilson</div>
+            </div>
+            
+            <div class="contact-node node-colleague" data-id="alex">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #f59e0b, #f97316);"></div>
+                <div class="contact-label">Alex Rodriguez</div>
+            </div>
+            
+            <div class="contact-node node-family" data-id="lisa">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #3b82f6, #6366f1);"></div>
+                <div class="interaction-glow"></div>
+                <div class="contact-label">Lisa Park</div>
+            </div>
+            
+            <div class="contact-node node-friend" data-id="david">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #ef4444, #f97316);"></div>
+                <div class="contact-label">David Kim</div>
+            </div>
+            
+            <div class="contact-node node-colleague" data-id="maria">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);"></div>
+                <div class="contact-label">Maria Garcia</div>
+            </div>
+            
+            <div class="contact-node node-acquaintance" data-id="james">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #64748b, #94a3b8);"></div>
+                <div class="contact-label">James Wright</div>
+            </div>
+            
+            <div class="contact-node node-friend" data-id="anna">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #06b6d4, #0891b2);"></div>
+                <div class="contact-label">Anna Lee</div>
+            </div>
+            
+            <div class="contact-node node-colleague" data-id="tom">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #84cc16, #65a30d);"></div>
+                <div class="contact-label">Tom Brown</div>
+            </div>
+            
+            <div class="contact-node node-acquaintance" data-id="kate">
+                <div class="contact-avatar" style="background: linear-gradient(135deg, #a855f7, #9333ea);"></div>
+                <div class="contact-label">Kate Davis</div>
+            </div>
+        </div>
+        
+        <div class="stats-overlay">
+            <div class="stats-title">Network Stats</div>
+            <div class="stat-item">
+                <span class="stat-label">Total Contacts</span>
+                <span class="stat-value">127</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Active Today</span>
+                <span class="stat-value">23</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Close Connections</span>
+                <span class="stat-value">8</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">New This Month</span>
+                <span class="stat-value">5</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
