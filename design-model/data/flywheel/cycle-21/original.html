@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Browser</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0f0f0;
+    --sidebar-bg: rgba(236,236,236,0.85);
+    --surface: rgba(255,255,255,0.75);
+    --surface-solid: #ffffff;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.14);
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b6b6b;
+    --text-tertiary: #a0a0a0;
+    --accent: #007AFF;
+    --accent-light: rgba(0,122,255,0.12);
+    --accent-hover: rgba(0,122,255,0.08);
+    --selected-bg: rgba(0,122,255,0.13);
+    --hover-bg: rgba(0,0,0,0.04);
+    --toolbar-bg: rgba(248,248,248,0.92);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    --radius: 8px;
+    --radius-sm: 5px;
+    --radius-lg: 12px;
+    --sidebar-width: 196px;
+    --toolbar-height: 52px;
+    --statusbar-height: 24px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .window {
+    width: 960px;
+    height: 620px;
+    margin: 40px auto;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.12),
+      0 22px 70px rgba(0,0,0,0.22),
+      0 8px 24px rgba(0,0,0,0.12);
+    background: var(--surface-solid);
+    position: relative;
+  }
+
+  /* ── TITLEBAR ── */
+  .titlebar {
+    height: var(--toolbar-height);
+    background: var(--toolbar-bg);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    border-bottom: 1px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 10px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 7px;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    transition: filter 0.12s;
+  }
+  .traffic-light:hover { filter: brightness(0.88); }
+  .tl-close { background: #FF5F57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.14); }
+  .tl-min   { background: #FEBC2E; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.10); }
+  .tl-max   { background: #28C840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.10); }
+
+  .nav-btns {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: background 0.12s, color 0.12s;
+  }
+  .nav-btn:hover { background: var(--hover-bg); color: var(--text-primary); }
+  .nav-btn:active { background: rgba(0,0,0,0.09); }
+  .nav-btn svg { width: 15px; height: 15px; }
+
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+  }
+  .breadcrumb-item:hover { background: var(--hover-bg); color: var(--text-primary); }
+  .breadcrumb-item.active { color: var(--text-primary); }
+  .breadcrumb-sep {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .view-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.07);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    gap: 1px;
+  }
+
+  .view-btn {
+    width: 26px;
+    height: 22px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: all 0.12s;
+  }
+  .view-btn.active {
+    background: var(--surface-solid);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  .view-btn:not(.active):hover { color: var(--text-primary); }
+  .view-btn svg { width: 13px; height: 13px; }
+
+  .search-wrap {
+    position: relative;
+    width: 190px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    pointer-events: none;
+    display: flex;
+  }
+  .search-icon svg { width: 13px; height: 13px; }
+  .search-input {
+    width: 100%;
+    height: 28px;
+    background: rgba(0,0,0,0.06);
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 0 10px 0 28px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    outline: none;
+    transition: all 0.15s;
+  }
+  .search-input::placeholder { color: var(--text-tertiary); }
+  .search-input:focus {
+    background: var(--surface-solid);
+    border-color: rgba(0,122,255,0.5);
+    box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+  }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 8px 0;
+  }
+  .sidebar::-webkit-scrollbar { width: 0; }
+
+  .sidebar-section-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    padding: 10px 14px 4px;
+    user-select: none;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px 5px 14px;
+    border-radius: var(--radius-sm);
+    margin: 0 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+  }
+  .sidebar-item:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
+  .sidebar-item.active {
+    background: rgba(0,122,255,0.13);
+    color: var(--accent);
+  }
+  .sidebar-item .si-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar-item .si-icon svg { width: 15px; height: 15px; }
+  .sidebar-item span { flex: 1; }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #fafafa;
+  }
+
+  /* ── PATH BAR ── */
+  .path-bar {
+    height: 30px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 2px;
+    background: rgba(250,250,250,0.95);
+    flex-shrink: 0;
+  }
+
+  .path-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .path-chip:hover { background: var(--hover-bg); color: var(--text-primary); }
+  .path-chip svg { width: 11px; height: 11px; opacity: 0.6; }
+  .path-chip-sep { color: var(--text-tertiary); font-size: 10px; }
+
+  /* ── GRID VIEW ── */
+  .files-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .files-container::-webkit-scrollbar { width: 8px; }
+  .files-container::-webkit-scrollbar-track { background: transparent; }
+  .files-container::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.15);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .files-container::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); border: 2px solid transparent; background-clip: padding-box; }
+
+  .files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 4px;
+  }
+
+  .file-item-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.1s;
+    user-select: none;
+    position: relative;
+  }
+  .file-item-grid:hover { background: var(--hover-bg); }
+  .file-item-grid.selected { background: var(--selected-bg); }
+
+  .file-icon-grid {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .file-name-grid {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-primary);
+    text-align: center;
+    line-height: 1.3;
+    max-width: 84px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+  .file-item-grid.selected .file-name-grid {
+    color: var(--accent);
+  }
+
+  /* ── LIST VIEW ── */
+  .files-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .list-header {
+    display: grid;
+    grid-template-columns: 1fr 100px 90px 80px;
+    padding: 0 14px;
+    height: 26px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: rgba(248,248,248,0.9);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .list-col-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+    user-select: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .list-col-header:hover { color: var(--text-secondary); }
+  .list-col-header.sorted { color: var(--accent); }
+
+  .file-item-list {
+    display: grid;
+    grid-template-columns: 1fr 100px 90px 80px;
+    padding: 0 14px;
+    height: 34px;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    transition: background 0.08s;
+    user-select: none;
+  }
+  .file-item-list:hover { background: var(--hover-bg); }
+  .file-item-list.selected { background: var(--selected-bg); }
+
+  .file-name-list {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .file-name-list .icon-wrap {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .file-name-list .name-text {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-item-list.selected .name-text { color: var(--accent); }
+
+  .file-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-meta.mono {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+  }
+  .file-item-list.selected .file-meta { color: rgba(0,122,255,0.7); }
+
+  /* ── STATUS BAR ── */
+  .statusbar {
+    height: var(--statusbar-height);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 12px;
+    background: var(--toolbar-bg);
+    flex-shrink: 0;
+  }
+  .statusbar-text {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 400;
+  }
+  .statusbar-sep {
+    width: 1px;
+    height: 10px;
+    background: var(--border-strong);
+  }
+
+  /* ── FILE ICONS SVG ── */
+  .icon-folder { color: #F4A429; }
+  .icon-image  { color: #1FA5FF; }
+  .icon-video  { color: #E6425E; }
+  .icon-audio  { color: #A259FF; }
+  .icon-doc    { color: #3B82F6; }
+  .icon-pdf    { color: #E6425E; }
+  .icon-code   { color: #22C55E; }
+  .icon-archive{ color: #F97316; }
+  .icon-text   { color: #94A3B8; }
+  .icon-app    { color: #0EA5E9; }
+  .icon-font   { color: #C084FC; }
+  .icon-data   { color: #F59E0B; }
+
+  /* ── DRAG HIGHLIGHT ── */
+  .drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-light) !important; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--text-tertiary);
+    display: none;
+  }
+  .empty-state svg { width: 40px; height: 40px; opacity: 0.35; }
+  .empty-state p { font-size: 13px; font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <!-- TITLEBAR / TOOLBAR -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light tl-close"></div>
+      <div class="traffic-light tl-min"></div>
+      <div class="traffic-light tl-max"></div>
+    </div>
+
+    <div class="nav-btns">
+      <button class="nav-btn" title="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+      <button class="nav-btn" title="Forward">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="breadcrumbs">
+      <div class="breadcrumb-item" onclick="navigate('Home')">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        Home
+      </div>
+      <span class="breadcrumb-sep">›</span>
+      <div class="breadcrumb-item" onclick="navigate('Documents')">Documents</div>
+      <span class="breadcrumb-sep">›</span>
+      <div class="breadcrumb-item active">Projects</div>
+    </div>
+
+    <div class="toolbar-actions">
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-grid" onclick="setView('grid')" title="Icon View">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </button>
+        <button class="view-btn" id="btn-list" onclick="setView('list')" title="List View">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="search-wrap">
+        <span class="search-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </span>
+        <input class="search-input" type="text" placeholder="Search" id="search-input" oninput="filterFiles(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section-label">Favorites</div>
+      <div class="sidebar-item active" onclick="sidebarNav(this, 'Home')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        </span>
+        <span>Home</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Desktop')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </span>
+        <span>Desktop</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Documents')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </span>
+        <span>Documents</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Downloads')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </span>
+        <span>Downloads</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Pictures')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </span>
+        <span>Pictures</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Music')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </span>
+        <span>Music</span>
+      </div>
+
+      <div class="sidebar-section-label" style="margin-top:8px;">Locations</div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'Macintosh HD')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        </span>
+        <span>Macintosh HD</span>
+      </div>
+      <div class="sidebar-item" onclick="sidebarNav(this, 'iCloud')">
+        <span class="si-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+        </span>
+        <span>iCloud Drive</span>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+      <!-- PATH BAR -->
+      <div class="path-bar">
+        <div class="path-chip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          Home
+        </div>
+        <span class="path-chip-sep">›</span>
+        <div class="path-chip">Documents</div>
+        <span class="path-chip-sep">›</span>
+        <div class="path-chip">Projects</div>
+      </div>
+
+      <!-- FILES CONTAINER -->
+      <div class="files-container" id="files-container">
+        <div class="files-grid" id="files-grid"></div>
+        <div class="files-list" id="files-list" style="display:none;">
+          <div class="list-header">
+            <div class="list-col-header sorted">
+              Name
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="list-col-header">Date Modified</div>
+            <div class="list-col-header">Kind</div>
+            <div class="list-col-header">Size</div>
+          </div>
+          <div id="files-list-body"></div>
+        </div>
+        <div class="empty-state" id="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <p>No results found</p>
+        </div>
+      </div>
+
+      <!-- STATUS BAR -->
+      <div class="statusbar">
+        <span class="statusbar-text" id="status-count">18 items</span>
+        <div class="statusbar-sep"></div>
+        <span class="statusbar-text" id="status-selected"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const FILES = [
+    { name: 'Design Assets',    type: 'folder',  modified: 'Today, 9:41 AM',    kind: 'Folder',       size: '—',       color: '#F4A429' },
+    { name: 'Source Code',      type: 'folder',  modified: 'Yesterday, 3:12 PM', kind: 'Folder',       size: '—',       color: '#F4A429' },
+    { name: 'Archive',          type: 'folder',  modified: 'Apr 8, 2024',       kind: 'Folder',       size: '—',       color: '#F4A429' },
+    { name: 'Exports',          type: 'folder',  modified: 'Apr 10, 2024',      kind: 'Folder',       size: '—',       color: '#F4A429' },
+    { name: 'brand-guide.pdf',  type: 'pdf',     modified: 'Today, 8:20 AM',    kind: 'PDF Document', size: '4.2 MB',  color: '#E6425E' },
+    { name: 'cover.png',        type: 'image',   modified: 'Apr 11, 2024',      kind: 'PNG Image',    size: '2.1 MB',  color: '#1FA5FF' },
+    { name: 'hero.jpg',         type: 'image',   modified: 'Apr 11, 2024',      kind: 'JPEG Image',   size: '890 KB',  color: '#1FA5FF' },
+    { name: 'walkthrough.mov',  type: 'video',   modified: 'Apr 9, 2024',       kind: 'QuickTime',    size: '128 MB',  color: '#E6425E' },
+    { name: 'ambient.mp3',      type: 'audio',   modified: 'Apr 7, 2024',       kind: 'MP3 Audio',    size: '14 MB',   color: '#A259FF' },
+    { name: 'README.md',        type: 'text',    modified: 'Today, 10:05 AM',   kind: 'Markdown',     size: '18 KB',   color: '#94A3B8' },
+    { name: 'package.json',     type: 'code',    modified: 'Today, 9:58 AM',    kind: 'JSON',         size: '3.2 KB',  color: '#22C55E' },
+    { name: 'main.ts',          type: 'code',    modified: 'Today, 9:55 AM',    kind: 'TypeScript',   size: '24 KB',   color: '#22C55E' },
+    { name: 'styles.css',       type: 'code',    modified: 'Apr 10, 2024',      kind: 'CSS',          size: '8.4 KB',  color: '#22C55E' },
+    { name: 'data.csv',         type: 'data',    modified: 'Apr 9, 2024',       kind: 'CSV',          size: '1.1 MB',  color: '#F59E0B' },
+    { name: 'backup.zip',       type: 'archive', modified: 'Apr 8, 2024',       kind: 'ZIP Archive',  size: '234 MB',  color: '#F97316' },
+    { name: 'App.dmg',          type: 'app',     modified: 'Apr 6, 2024',       kind: 'Disk Image',   size: '89 MB',   color: '#0EA5E9' },
+    { name: 'Helvetica.ttf',    type: 'font',    modified: 'Apr 5, 2024',       kind: 'Font',         size: '480 KB',  color: '#C084FC' },
+    { name: 'notes.txt',        type: 'text',    modified: 'Apr 11, 2024',      kind: 'Text File',    size: '7 KB',    color: '#94A3B8' },
+  ];
+
+  const ICONS = {
+    folder:  `<svg width="48" height="48" viewBox="0 0 48 48" fill="none"><path d="M4 14a4 4 0 014-4h11.17a4 4 0 012.83 1.17l2.83 2.83H40a4 4 0 014 4v20a4 4 0 01-4 4H8a4 4 0 01-4-4V14z" fill="#F4A429" opacity=".85"/><path d="M4 20h40v18a4 4 0 01-4 4H8a4 4 0 01-4-4V20z" fill="#F4A429"/><path d="M4 20h40v1H4z" fill="rgba(0,0,0,0.06)"/></svg>`,
+    image:   `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#1FA5FF" opacity=".18"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#1FA5FF" stroke-width="1.5"/><circle cx="13" cy="15" r="3" fill="#1FA5FF" opacity=".7"/><path d="M3 29l11-11 7 7 5-5 10 10" stroke="#1FA5FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    video:   `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="8" width="28" height="26" rx="4" fill="#E6425E" opacity=".15"/><rect x="3" y="8" width="28" height="26" rx="4" stroke="#E6425E" stroke-width="1.5"/><path d="M31 16l8-5v20l-8-5V16z" fill="#E6425E" stroke="#E6425E" stroke-width="1.2" stroke-linejoin="round"/><path d="M14 17l8 4-8 4V17z" fill="#E6425E"/></svg>`,
+    audio:   `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#A259FF" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#A259FF" stroke-width="1.5"/><path d="M18 26V16l12-3v10" stroke="#A259FF" stroke-width="1.8" stroke-linecap="round"/><circle cx="15" cy="26" r="3" stroke="#A259FF" stroke-width="1.5"/><circle cx="27" cy="23" r="3" stroke="#A259FF" stroke-width="1.5"/></svg>`,
+    pdf:     `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#E6425E" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#E6425E" stroke-width="1.5"/><path d="M24 3v9h8" stroke="#E6425E" stroke-width="1.5" stroke-linecap="round"/><path d="M24 3l8 9" stroke="#E6425E" stroke-width="1.5" stroke-linecap="round"/><text x="8" y="30" font-family="system-ui" font-size="9" font-weight="700" fill="#E6425E">PDF</text></svg>`,
+    doc:     `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#3B82F6" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#3B82F6" stroke-width="1.5"/><line x1="10" y1="17" x2="26" y2="17" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="22" x2="26" y2="22" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="27" x2="20" y2="27" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    code:    `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#22C55E" opacity=".12"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#22C55E" stroke-width="1.5"/><path d="M15 16l-6 5 6 5M27 16l6 5-6 5M23 14l-4 14" stroke="#22C55E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    archive: `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="10" width="36" height="28" rx="4" fill="#F97316" opacity=".15"/><rect x="3" y="10" width="36" height="28" rx="4" stroke="#F97316" stroke-width="1.5"/><rect x="3" y="7" width="36" height="8" rx="2" fill="#F97316" opacity=".6"/><line x1="17" y1="22" x2="25" y2="22" stroke="#F97316" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="19" x2="21" y2="25" stroke="#F97316" stroke-width="2" stroke-linecap="round"/></svg>`,
+    text:    `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#94A3B8" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#94A3B8" stroke-width="1.5"/><line x1="10" y1="14" x2="26" y2="14" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="19" x2="26" y2="19" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="24" x2="26" y2="24" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="29" x2="19" y2="29" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    app:     `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="5" y="5" width="32" height="32" rx="8" fill="#0EA5E9" opacity=".2"/><rect x="5" y="5" width="32" height="32" rx="8" stroke="#0EA5E9" stroke-width="1.5"/><circle cx="21" cy="21" r="6" fill="#0EA5E9" opacity=".7"/><path d="M21 10v4M21 28v4M10 21h4M28 21h4" stroke="#0EA5E9" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    font:    `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#C084FC" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#C084FC" stroke-width="1.5"/><text x="9" y="30" font-family="Georgia,serif" font-size="22" font-weight="700" fill="#C084FC" opacity=".8">Aa</text></svg>`,
+    data:    `<svg width="42" height="42" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#F59E0B" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#F59E0B" stroke-width="1.5"/><line x1="3" y1="16" x2="39" y2="16" stroke="#F59E0B" stroke-width="1"/><line x1="3" y1="23" x2="39" y2="23" stroke="#F59E0B" stroke-width="1"/><line x1="15" y1="5" x2="15" y2="37" stroke="#F59E0B" stroke-width="1"/><line x1="27" y1="5" x2="27" y2="37" stroke="#F59E0B" stroke-width="1"/></svg>`,
+  };
+
+  const ICONS_SM = {
+    folder:  `<svg width="18" height="18" viewBox="0 0 48 48" fill="none"><path d="M4 14a4 4 0 014-4h11.17a4 4 0 012.83 1.17l2.83 2.83H40a4 4 0 014 4v20a4 4 0 01-4 4H8a4 4 0 01-4-4V14z" fill="#F4A429" opacity=".85"/><path d="M4 20h40v18a4 4 0 01-4 4H8a4 4 0 01-4-4V20z" fill="#F4A429"/></svg>`,
+    image:   `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#1FA5FF" opacity=".2"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#1FA5FF" stroke-width="2"/><circle cx="13" cy="15" r="3" fill="#1FA5FF"/><path d="M3 29l11-11 7 7 5-5 10 10" stroke="#1FA5FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    video:   `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="8" width="28" height="26" rx="4" fill="#E6425E" opacity=".15"/><rect x="3" y="8" width="28" height="26" rx="4" stroke="#E6425E" stroke-width="2"/><path d="M31 16l8-5v20l-8-5V16z" fill="#E6425E"/><path d="M14 17l8 4-8 4V17z" fill="#E6425E"/></svg>`,
+    audio:   `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#A259FF" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#A259FF" stroke-width="2"/><path d="M18 26V16l12-3v10" stroke="#A259FF" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="26" r="3" stroke="#A259FF" stroke-width="2"/><circle cx="27" cy="23" r="3" stroke="#A259FF" stroke-width="2"/></svg>`,
+    pdf:     `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#E6425E" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#E6425E" stroke-width="2"/><path d="M24 3v9h8" stroke="#E6425E" stroke-width="2"/><path d="M24 3l8 9" stroke="#E6425E" stroke-width="2"/></svg>`,
+    doc:     `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#3B82F6" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#3B82F6" stroke-width="2"/></svg>`,
+    code:    `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#22C55E" opacity=".12"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#22C55E" stroke-width="2"/><path d="M15 16l-6 5 6 5M27 16l6 5-6 5" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    archive: `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="10" width="36" height="28" rx="4" fill="#F97316" opacity=".15"/><rect x="3" y="10" width="36" height="28" rx="4" stroke="#F97316" stroke-width="2"/><rect x="3" y="7" width="36" height="8" rx="2" fill="#F97316" opacity=".6"/></svg>`,
+    text:    `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="4" y="3" width="28" height="36" rx="3" fill="#94A3B8" opacity=".15"/><rect x="4" y="3" width="28" height="36" rx="3" stroke="#94A3B8" stroke-width="2"/></svg>`,
+    app:     `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="5" y="5" width="32" height="32" rx="8" fill="#0EA5E9" opacity=".2"/><rect x="5" y="5" width="32" height="32" rx="8" stroke="#0EA5E9" stroke-width="2"/><circle cx="21" cy="21" r="6" fill="#0EA5E9" opacity=".7"/></svg>`,
+    font:    `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#C084FC" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#C084FC" stroke-width="2"/></svg>`,
+    data:    `<svg width="18" height="18" viewBox="0 0 42 42" fill="none"><rect x="3" y="5" width="36" height="32" rx="4" fill="#F59E0B" opacity=".15"/><rect x="3" y="5" width="36" height="32" rx="4" stroke="#F59E0B" stroke-width="2"/></svg>`,
+  };
+
+  let currentView = 'grid';
+  let selectedIndex = -1;
+  let currentFiles = [...FILES];
+
+  function renderGrid(files) {
+    const grid = document.getElementById('files-grid');
+    grid.innerHTML = files.map((f, i) => `
+      <div class="file-item-grid${selectedIndex === i ? ' selected' : ''}"
+           onclick="selectFile(${i}, event)"
+           ondblclick="openFile('${f.name}', '${f.type}')">
+        <div class="file-icon-grid">${ICONS[f.type] || ICONS.text}</div>
+        <div class="file-name-grid">${f.name}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderList(files) {
+    const body = document.getElementById('files-list-body');
+    body.innerHTML = files.map((f, i) => `
+      <div class="file-item-list${selectedIndex === i ? ' selected' : ''}"
+           onclick="selectFile(${i}, event)"
+           ondblclick="openFile('${f.name}', '${f.type}')">
+        <div class="file-name-list">
+          <span class="icon-wrap">${ICONS_SM[f.type] || ICONS_SM.text}</span>
+          <span class="name-text">${f.name}</span>
+        </div>
+        <span class="file-meta">${f.modified}</span>
+        <span class="file-meta">${f.kind}</span>
+        <span class="file-meta mono">${f.size}</span>
+      </div>
+    `).join('');
+  }
+
+  function render(files) {
+    const empty = document.getElementById('empty-state');
+    const grid = document.getElementById('files-grid');
+    const list = document.getElementById('files-list');
+
+    if (files.length === 0) {
+      empty.style.display = 'flex';
+      grid.style.display = 'none';
+      list.style.display = 'none';
+      document.getElementById('status-count').textContent = '0 items';
+      return;
+    }
+
+    empty.style.display = 'none';
+    document.getElementById('status-count').textContent = `${files.length} item${files.length !== 1 ? 's' : ''}`;
+
+    if (currentView === 'grid') {
+      grid.style.display = 'grid';
+      list.style.display = 'none';
+      renderGrid(files);
+    } else {
+      grid.style.display = 'none';
+      list.style.display = 'flex';
+      renderList(files);
+    }
+  }
+
+  function selectFile(idx, e) {
+    selectedIndex = selectedIndex === idx ? -1 : idx;
+    render(currentFiles);
+    const f = selectedIndex >= 0 ? currentFiles[selectedIndex] : null;
+    document.getElementById('status-selected').textContent = f ? `"${f.name}" selected — ${f.size}` : '';
+  }
+
+  function setView(view) {
+    currentView = view;
+    document.getElementById('btn-grid').classList.toggle('active', view === 'grid');
+    document.getElementById('btn-list').classList.toggle('active', view === 'list');
+    selectedIndex = -1;
+    render(currentFiles);
+  }
+
+  function filterFiles(query) {
+    const q = query.trim().toLowerCase();
+    currentFiles = q ? FILES.filter(f => f.name.toLowerCase().includes(q) || f.kind.toLowerCase().includes(q)) : [...FILES];
+    selectedIndex = -1;
+    document.getElementById('status-selected').textContent = '';
+    render(currentFiles);
+  }
+
+  function openFile(name, type) {
+    if (type === 'folder') {
+      document.querySelector('.breadcrumb-item.active').textContent = name;
+    }
+  }
+
+  function navigate(loc) {
+    document.querySelectorAll('.breadcrumb-item').forEach(el => el.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  function sidebarNav(el, name) {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (document.activeElement === document.getElementById('search-input')) return;
+    const len = currentFiles.length;
+    if (!len) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, len - 1);
+      render(currentFiles);
+      const f = currentFiles[selectedIndex];
+      document.getElementById('status-selected').textContent = `"${f.name}" selected — ${f.size}`;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      render(currentFiles);
+      const f = currentFiles[selectedIndex];
+      document.getElementById('status-selected').textContent = `"${f.name}" selected — ${f.size}`;
+    } else if (e.key === 'Escape') {
+      selectedIndex = -1;
+      render(currentFiles);
+      document.getElementById('status-selected').textContent = '';
+    }
+  });
+
+  // Init
+  render(currentFiles);
+</script>
+</body>
+</html>

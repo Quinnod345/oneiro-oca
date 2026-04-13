@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile Card</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1714;
+    --parchment: #f5f0e8;
+    --cream: #ede7d9;
+    --amber: #c8922a;
+    --amber-light: #e4b04a;
+    --muted: #8a8278;
+    --divider: rgba(138,130,120,0.2);
+    --card-bg: #faf7f2;
+    --shadow: 0 32px 80px rgba(26,23,20,0.14), 0 8px 24px rgba(26,23,20,0.08);
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e8e2d9;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 30% 20%, rgba(200,146,42,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 70%, rgba(26,23,20,0.06) 0%, transparent 60%);
+    font-family: 'DM Sans', sans-serif;
+    padding: 40px 20px;
+  }
+
+  .card {
+    width: 380px;
+    background: var(--card-bg);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Grain overlay */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    border-radius: 24px;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.6;
+  }
+
+  /* Header band */
+  .card-header {
+    height: 112px;
+    background: var(--ink);
+    background-image:
+      radial-gradient(ellipse 120% 200% at 110% 150%, rgba(200,146,42,0.22) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 120% at -10% -20%, rgba(200,146,42,0.10) 0%, transparent 50%);
+    position: relative;
+  }
+
+  .header-pattern {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    opacity: 0.15;
+  }
+
+  .header-pattern svg {
+    position: absolute;
+    right: -20px;
+    top: -20px;
+    width: 180px;
+    height: 180px;
+    opacity: 0.6;
+  }
+
+  /* Avatar */
+  .avatar-wrap {
+    position: absolute;
+    bottom: -44px;
+    left: 32px;
+    z-index: 2;
+  }
+
+  .avatar-ring {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, var(--amber-light), var(--amber), #a0711c);
+    box-shadow: 0 8px 24px rgba(200,146,42,0.35);
+  }
+
+  .avatar-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #2d2925;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 2.5px solid var(--card-bg);
+  }
+
+  .avatar-initials {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--amber-light);
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-top: 2px;
+  }
+
+  /* Badge */
+  .badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #3ecf6b;
+    border: 2.5px solid var(--card-bg);
+    z-index: 3;
+  }
+
+  /* Body */
+  .card-body {
+    padding: 56px 32px 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+
+  .handle {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.1px;
+  }
+
+  .role-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 14px;
+    background: rgba(200,146,42,0.10);
+    border: 1px solid rgba(200,146,42,0.22);
+    border-radius: 6px;
+    padding: 3px 9px;
+  }
+
+  .role-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--amber);
+  }
+
+  .role-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--amber);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .bio {
+    font-size: 14px;
+    font-weight: 300;
+    color: #5a5450;
+    line-height: 1.65;
+    margin-bottom: 24px;
+    font-style: italic;
+  }
+
+  .bio em {
+    font-style: normal;
+    color: var(--ink);
+    font-weight: 400;
+  }
+
+  /* Stats */
+  .stats {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: var(--cream);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(138,130,120,0.15);
+  }
+
+  .stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+  }
+
+  .stat + .stat::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: var(--divider);
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  /* Tags */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 26px;
+  }
+
+  .tag {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--divider);
+    border-radius: 100px;
+    padding: 4px 11px;
+    letter-spacing: 0.1px;
+    transition: border-color 0.18s, color 0.18s;
+    cursor: default;
+  }
+
+  .tag:hover {
+    border-color: rgba(200,146,42,0.4);
+    color: var(--amber);
+  }
+
+  /* Actions */
+  .actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 12px 16px;
+    transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s ease, background 0.15s ease;
+    letter-spacing: 0.1px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn:active {
+    transform: scale(0.97) !important;
+  }
+
+  .btn-primary {
+    background: var(--ink);
+    color: var(--parchment);
+    box-shadow: 0 4px 16px rgba(26,23,20,0.18);
+  }
+
+  .btn-primary:hover {
+    background: #2d2925;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(26,23,20,0.22);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid rgba(26,23,20,0.15);
+  }
+
+  .btn-secondary:hover {
+    background: var(--cream);
+    border-color: rgba(26,23,20,0.25);
+    transform: translateY(-2px);
+  }
+
+  .btn-icon {
+    width: 46px;
+    flex: none;
+    background: var(--cream);
+    color: var(--muted);
+    border: 1.5px solid rgba(138,130,120,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease, color 0.15s ease;
+  }
+
+  .btn-icon:hover {
+    background: var(--amber);
+    color: white;
+    border-color: var(--amber);
+    transform: translateY(-2px);
+  }
+
+  .btn-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Location row */
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .meta-item svg {
+    width: 13px;
+    height: 13px;
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+
+  .meta-text {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .meta-sep {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--divider);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="header-pattern">
+      <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="100" cy="100" r="80" stroke="#c8922a" stroke-width="0.8"/>
+        <circle cx="100" cy="100" r="55" stroke="#c8922a" stroke-width="0.8"/>
+        <circle cx="100" cy="100" r="30" stroke="#c8922a" stroke-width="0.8"/>
+        <line x1="20" y1="100" x2="180" y2="100" stroke="#c8922a" stroke-width="0.6"/>
+        <line x1="100" y1="20" x2="100" y2="180" stroke="#c8922a" stroke-width="0.6"/>
+        <line x1="43" y1="43" x2="157" y2="157" stroke="#c8922a" stroke-width="0.4"/>
+        <line x1="157" y1="43" x2="43" y2="157" stroke="#c8922a" stroke-width="0.4"/>
+      </svg>
+    </div>
+    <div class="avatar-wrap">
+      <div class="avatar-ring">
+        <div class="avatar-inner">
+          <span class="avatar-initials">EA</span>
+        </div>
+      </div>
+      <div class="badge"></div>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="name-row">
+      <span class="name">Elena Adeyemi</span>
+      <span class="handle">@elena.a</span>
+    </div>
+
+    <div class="role-tag">
+      <div class="role-dot"></div>
+      <span class="role-label">Product Design Lead</span>
+    </div>
+
+    <p class="bio">
+      Crafting digital experiences at the intersection of <em>human behavior</em> and <em>aesthetic clarity</em>. Formerly at Figma, Linear. Currently building the next generation of design tools.
+    </p>
+
+    <div class="meta-row">
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span class="meta-text">San Francisco, CA</span>
+      </div>
+      <div class="meta-sep"></div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span class="meta-text">Joined March 2019</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value">4.2k</span>
+        <span class="stat-label">Following</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">28.1k</span>
+        <span class="stat-label">Followers</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">312</span>
+        <span class="stat-label">Projects</span>
+      </div>
+    </div>
+
+    <div class="tags">
+      <span class="tag">Product Design</span>
+      <span class="tag">Systems Thinking</span>
+      <span class="tag">Motion</span>
+      <span class="tag">Research</span>
+      <span class="tag">Figma</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary">Follow</button>
+      <button class="btn btn-secondary">Message</button>
+      <button class="btn btn-icon" aria-label="More options">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

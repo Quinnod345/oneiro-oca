@@ -156,6 +156,60 @@ function detectAntiPatterns(code) {
 }
 
 // ═══════════════════════════════════════════════════
+// INNOVATION SIGNAL DETECTION
+// ═══════════════════════════════════════════════════
+
+function analyzeInnovationSignals(code) {
+  // Novel CSS techniques
+  const clipPaths = countMatches(code, /clip-path\s*:/gi);
+  const containerQueries = countMatches(code, /@container/gi);
+  const hasSelector = countMatches(code, /:has\(/gi);
+  const viewTransitions = countMatches(code, /view-transition/gi);
+  const scrollDriven = countMatches(code, /animation-timeline|scroll\(\)/gi);
+  const cssNesting = countMatches(code, /&\s*[.#\[:>+~]/g);
+  const subgrid = countMatches(code, /subgrid/gi);
+  const cssShapes = countMatches(code, /shape-outside|shape-margin/gi);
+
+  // Novel color approaches
+  const oklch = countMatches(code, /oklch\(/gi);
+  const colorMix = countMatches(code, /color-mix\(/gi);
+  const lightDark = countMatches(code, /light-dark\(/gi);
+
+  // Custom interaction patterns
+  const intersectionObserver = code.includes('IntersectionObserver') ? 1 : 0;
+  const resizeObserver = code.includes('ResizeObserver') ? 1 : 0;
+  const customElements = countMatches(code, /customElements\.define|class\s+\w+\s+extends\s+HTML/gi);
+  const webComponents = countMatches(code, /shadow(Root|DOM)|<template|<slot/gi);
+
+  // Progressive enhancement
+  const supportsQuery = countMatches(code, /@supports/gi);
+  const prefersContrast = code.includes('prefers-contrast') ? 1 : 0;
+  const prefersColorScheme = code.includes('prefers-color-scheme') ? 1 : 0;
+
+  // Novel HTML patterns
+  const popover = countMatches(code, /popover(target)?/gi);
+  const dialog = countMatches(code, /<dialog/gi);
+  const anchor = countMatches(code, /anchor-name|position-anchor/gi);
+
+  const novelCSSCount = clipPaths + containerQueries + hasSelector +
+    viewTransitions + scrollDriven + cssNesting + subgrid + cssShapes;
+  const novelInteractionCount = intersectionObserver + resizeObserver +
+    customElements + webComponents;
+  const novelColorCount = oklch + colorMix + lightDark;
+  const progressiveCount = supportsQuery + prefersContrast + prefersColorScheme;
+
+  return {
+    novelCSSCount,
+    novelInteractionCount,
+    novelColorCount,
+    progressiveCount,
+    totalNovelty: novelCSSCount + novelInteractionCount + novelColorCount + progressiveCount,
+    hasCuttingEdgeCSS: containerQueries > 0 || viewTransitions > 0 || scrollDriven > 0,
+    hasNovelHTMLPatterns: webComponents > 0 || customElements > 0 || popover > 0 || anchor > 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════
 // TYPOGRAPHY SCALE ANALYSIS
 // ═══════════════════════════════════════════════════
 
@@ -282,13 +336,17 @@ export function encodeFromCode(codeOrPath, context = {}) {
   v[i++] = clamp01(context.targetEmotion ?? 0.5);             // 50: target emotion
   v[i++] = normalize(context.designLevel ?? 2, 1, 7);         // 51: Seven Levels design level
   v[i++] = clamp01(context.referenceAppSimilarity ?? 0.5);    // 52: reference app similarity
-  v[i++] = normalize(antiPatterns.count, 0, 5);               // 53: anti-pattern count (inverted in model)
-  v[i++] = normalize(context.iterationNumber ?? 0, 0, 20);    // 54: iteration number
-  v[i++] = normalize(context.timeInvested ?? 0, 0, 3600);     // 55: time invested (seconds)
-  v[i++] = clamp01(context.userSatisfaction ?? 0.5);           // 56: user satisfaction history
-  v[i++] = normalize(context.skillVersion ?? 1, 1, 50);       // 57: skill version
-  v[i++] = clamp01(context.previousScore ?? 0.5);             // 58: previous overall score
-  v[i++] = clamp01(context.improvementDelta ?? 0);            // 59: improvement delta
+  // ── Dims 53-59: Innovation signals ──
+  const innovation = analyzeInnovationSignals(code);
+  v[i++] = normalize(innovation.totalNovelty, 0, 20);          // 53: total novelty signal count
+  v[i++] = normalize(innovation.novelCSSCount, 0, 10);         // 54: novel CSS techniques
+  v[i++] = normalize(innovation.novelInteractionCount, 0, 5);  // 55: novel interaction patterns
+  v[i++] = normalize(innovation.novelColorCount, 0, 5);        // 56: novel color approaches
+  v[i++] = normalize(innovation.progressiveCount, 0, 5);       // 57: progressive enhancement
+  v[i++] = clamp01(innovation.hasCuttingEdgeCSS ? 0.8 : 0.2);  // 58: cutting-edge CSS flag
+  v[i++] = clamp01(innovation.hasNovelHTMLPatterns ? 0.8 : 0.2); // 59: novel HTML patterns flag
+
+  // ── Dims 60-63: Context (retained) ──
   v[i++] = clamp01(context.confidence ?? 0.5);                // 60: confidence
   v[i++] = clamp01(context.novelty ?? 0.5);                   // 61: novelty of approach
   v[i++] = normalize(context.constraintCount ?? 0, 0, 10);    // 62: constraint count
@@ -302,10 +360,21 @@ export function encodeFromCode(codeOrPath, context = {}) {
 // ═══════════════════════════════════════════════════
 
 export async function encodeFromScreenshot(screenshotPath) {
-  // Phase 2: Will use MobileNet V2 via ONNX Runtime or MLX server
-  // For now, returns zeros — the code encoder is the primary path
-  console.log('[design-encoder] screenshot encoding not yet available (Phase 2)');
-  return new Float32Array(INPUT_DIM).fill(0.5);
+  // Phase 2b: Extract MobileNet V2 features via inference server
+  try {
+    const { extractFeatures, isServerRunning } = await import('./client.js');
+    if (!isServerRunning()) {
+      console.log('[design-encoder] Phase 2b server not running, using code fallback');
+      return new Float32Array(INPUT_DIM).fill(0.5);
+    }
+    const result = await extractFeatures(screenshotPath);
+    // Return 1280-dim MobileNet features (not 64-dim code features)
+    // The caller should handle the different dimensionality
+    return new Float32Array(result.features);
+  } catch (e) {
+    console.log('[design-encoder] screenshot encoding failed:', e.message);
+    return new Float32Array(INPUT_DIM).fill(0.5);
+  }
 }
 
 // ═══════════════════════════════════════════════════

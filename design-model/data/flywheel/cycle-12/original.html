@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to Oneiro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:            #0C0A08;
+    --surface:       rgba(255, 248, 238, 0.04);
+    --surface-hover: rgba(255, 248, 238, 0.07);
+    --border:        rgba(255, 248, 238, 0.08);
+    --border-accent: rgba(229, 162, 64, 0.18);
+    --text-primary:  #F2EDE6;
+    --text-secondary:#8A7E72;
+    --text-muted:    #52493F;
+    --accent:        #E5A23C;
+    --accent-soft:   rgba(229, 162, 60, 0.11);
+    --accent-glow:   rgba(229, 162, 60, 0.22);
+  }
+
+  html, body {
+    min-height: 100%;
+    background-color: var(--bg);
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 48px 20px;
+    background-image:
+      radial-gradient(ellipse 60% 50% at 25% 15%, rgba(229,162,60,0.05) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 78% 80%, rgba(180,100,30,0.06) 0%, transparent 65%);
+  }
+
+  /* Grain texture */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.28;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* ─── Card ─────────────────────────────────────────── */
+  .card {
+    position: relative;
+    z-index: 1;
+    max-width: 488px;
+    width: 100%;
+    padding: 64px 60px 56px;
+    background: rgba(16, 13, 9, 0.82);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    box-shadow:
+      0 0 0 0.5px rgba(255,248,238,0.04),
+      0 48px 96px rgba(0,0,0,0.65),
+      0 12px 32px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,248,238,0.07);
+    animation: cardIn 0.9s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(28px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
+  }
+
+  /* ─── App Icon ──────────────────────────────────────── */
+  .app-icon {
+    margin-bottom: 40px;
+    animation: iconIn 0.75s cubic-bezier(0.34, 1.4, 0.64, 1) 0.12s both;
+  }
+
+  @keyframes iconIn {
+    from { opacity: 0; transform: scale(0.72) rotate(-8deg); }
+    to   { opacity: 1; transform: scale(1)    rotate(0deg);  }
+  }
+
+  .app-icon svg {
+    width: 72px;
+    height: 72px;
+    filter: drop-shadow(0 10px 28px rgba(229,162,60,0.32)) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  }
+
+  /* ─── Header ────────────────────────────────────────── */
+  .header {
+    margin-bottom: 52px;
+    animation: fadeUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.22s both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  .eyebrow {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.135em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+    opacity: 0.9;
+  }
+
+  .title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 46px;
+    font-weight: 300;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+    margin-bottom: 18px;
+  }
+
+  .title em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-size: 14.5px;
+    font-weight: 300;
+    line-height: 1.68;
+    color: var(--text-secondary);
+    max-width: 310px;
+  }
+
+  /* ─── Features ──────────────────────────────────────── */
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 52px;
+  }
+
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 20px 18px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) both;
+  }
+
+  .feature:nth-child(1) { animation-delay: 0.38s; }
+  .feature:nth-child(2) { animation-delay: 0.48s; }
+  .feature:nth-child(3) { animation-delay: 0.58s; }
+
+  .feature:hover {
+    background: var(--surface-hover);
+    border-color: var(--border);
+  }
+
+  .feature-icon {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    background: var(--accent-soft);
+    border: 1px solid var(--border-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+
+  .feature-icon svg {
+    width: 19px;
+    height: 19px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .feature-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    margin-bottom: 5px;
+    line-height: 1.3;
+  }
+
+  .feature-desc {
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  /* ─── CTA ───────────────────────────────────────────── */
+  .cta {
+    animation: fadeUp 0.55s cubic-bezier(0.4,0,0.2,1) 0.68s both;
+  }
+
+  .btn-primary {
+    display: block;
+    width: 100%;
+    padding: 17px 32px;
+    background: var(--accent);
+    color: #1C1005;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34,1.5,0.64,1), box-shadow 0.2s ease, background 0.15s ease;
+    box-shadow:
+      0 5px 18px var(--accent-glow),
+      0 1px 3px rgba(0,0,0,0.25),
+      inset 0 1px 0 rgba(255,255,255,0.18);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.13) 0%, transparent 55%);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    background: #EAA846;
+    box-shadow:
+      0 10px 32px var(--accent-glow),
+      0 3px 8px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    transition-duration: 0.06s;
+    box-shadow: 0 2px 8px var(--accent-glow), 0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .btn-secondary {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    text-align: center;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: color 0.15s ease;
+  }
+
+  .btn-secondary:hover { color: var(--text-secondary); }
+
+  /* ─── Reduced motion ────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .card  { padding: 52px 36px 48px; }
+    .title { font-size: 38px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- App Icon -->
+  <div class="app-icon">
+    <svg viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#231808"/>
+          <stop offset="100%" stop-color="#140E04"/>
+        </linearGradient>
+        <linearGradient id="ring" x1="10" y1="10" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#F2BC5E"/>
+          <stop offset="100%" stop-color="#B87828"/>
+        </linearGradient>
+        <linearGradient id="dot" x1="28" y1="28" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#FBCF70"/>
+          <stop offset="100%" stop-color="#D08830"/>
+        </linearGradient>
+        <radialGradient id="glow" cx="36" cy="28" r="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#E5A23C" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#E5A23C" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="72" height="72" rx="18" fill="url(#bg)"/>
+      <rect width="72" height="72" rx="18" fill="url(#glow)"/>
+      <rect x="0.5" y="0.5" width="71" height="71" rx="17.5" stroke="rgba(229,162,60,0.28)" stroke-width="1"/>
+      <!-- Outer ring -->
+      <circle cx="36" cy="36" r="17" stroke="url(#ring)" stroke-width="1.4" opacity="0.55"/>
+      <!-- Cardinal tick marks -->
+      <line x1="36" y1="16" x2="36" y2="21" stroke="url(#ring)" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+      <line x1="36" y1="51" x2="36" y2="56" stroke="url(#ring)" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+      <line x1="16" y1="36" x2="21" y2="36" stroke="url(#ring)" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+      <line x1="51" y1="36" x2="56" y2="36" stroke="url(#ring)" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+      <!-- Inner ring -->
+      <circle cx="36" cy="36" r="9" stroke="url(#ring)" stroke-width="1" opacity="0.3"/>
+      <!-- Center dot -->
+      <circle cx="36" cy="36" r="4.5" fill="url(#dot)"/>
+      <!-- Glint -->
+      <ellipse cx="29" cy="22" rx="8" ry="5" fill="rgba(255,255,255,0.04)" transform="rotate(-20 29 22)"/>
+    </svg>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <p class="eyebrow">Welcome to Oneiro</p>
+    <h1 class="title">Your work,<br><em>clarified.</em></h1>
+    <p class="subtitle">A thoughtful workspace that quiets the noise and surfaces what matters — exactly when you need it.</p>
+  </div>
+
+  <!-- Features -->
+  <div class="features">
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="feature-title">Intelligent organisation</div>
+        <div class="feature-desc">Your tasks and notes arrange themselves around your thinking — never the other way around.</div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="feature-title">Effortless capture</div>
+        <div class="feature-desc">Get ideas out of your head in an instant. Oneiro handles the structure before you lose the thread.</div>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+        </svg>
+      </div>
+      <div>
+        <div class="feature-title">Deep focus, by design</div>
+        <div class="feature-desc">A quiet interface that steps back when you need to think, and surfaces exactly what you need when you do.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <button class="btn-primary">Get started</button>
+    <button class="btn-secondary">I already have an account</button>
+  </div>
+
+</div>
+
+</body>
+</html>

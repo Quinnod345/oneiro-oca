@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --success: #30d158;
+    --success-glow: rgba(48,209,88,0.18);
+    --success-dim: rgba(48,209,88,0.08);
+    --info: #0a84ff;
+    --info-glow: rgba(10,132,255,0.18);
+    --info-dim: rgba(10,132,255,0.08);
+    --warning: #ff9f0a;
+    --warning-glow: rgba(255,159,10,0.18);
+    --warning-dim: rgba(255,159,10,0.08);
+    --critical: #ff453a;
+    --critical-glow: rgba(255,69,58,0.18);
+    --critical-dim: rgba(255,69,58,0.08);
+  }
+
+  body {
+    background: #111113;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  .scene-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.18);
+  }
+
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, transform 0.1s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
+  .btn:active { transform: scale(0.96); }
+
+  .btn-success { color: var(--success); border-color: rgba(48,209,88,0.25); }
+  .btn-success:hover { background: var(--success-dim); }
+  .btn-info { color: var(--info); border-color: rgba(10,132,255,0.25); }
+  .btn-info:hover { background: var(--info-dim); }
+  .btn-warning { color: var(--warning); border-color: rgba(255,159,10,0.25); }
+  .btn-warning:hover { background: var(--warning-dim); }
+  .btn-critical { color: var(--critical); border-color: rgba(255,69,58,0.25); }
+  .btn-critical:hover { background: var(--critical-dim); }
+
+  /* ── Container ── */
+  #toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-end;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  /* ── Toast wrapper for layout animations ── */
+  .toast-wrapper {
+    pointer-events: all;
+    width: 380px;
+    padding-bottom: 8px;
+    will-change: transform, opacity;
+    transition: padding-bottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .toast-wrapper.collapsing {
+    padding-bottom: 0;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: relative;
+    width: 100%;
+    background: rgba(28, 28, 32, 0.82);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 16px;
+    padding: 14px 14px 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.04) inset,
+      0 1px 0 rgba(255,255,255,0.06) inset,
+      0 2px 6px rgba(0,0,0,0.2),
+      0 8px 24px rgba(0,0,0,0.35),
+      0 32px 64px rgba(0,0,0,0.25);
+    cursor: pointer;
+    transform: translateX(calc(100% + 24px)) scale(0.9);
+    opacity: 0;
+    will-change: transform, opacity, box-shadow;
+    transition:
+      transform 0.55s cubic-bezier(0.22, 1.4, 0.36, 1),
+      opacity 0.25s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .toast:hover {
+    border-color: rgba(255,255,255,0.14);
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.06) inset,
+      0 1px 0 rgba(255,255,255,0.08) inset,
+      0 2px 6px rgba(0,0,0,0.2),
+      0 12px 32px rgba(0,0,0,0.45),
+      0 32px 64px rgba(0,0,0,0.3);
+    transform: translateX(0) scale(1) translateY(-1px);
+  }
+
+  .toast.in {
+    transform: translateX(0) scale(1) translateY(0);
+    opacity: 1;
+  }
+
+  .toast.out {
+    transform: translateX(calc(100% + 24px)) scale(0.94);
+    opacity: 0;
+    transition:
+      transform 0.38s cubic-bezier(0.55, 0, 1, 0.6),
+      opacity 0.22s ease;
+  }
+
+  .toast.swipe-out {
+    transform: translateX(calc(100% + 60px)) scale(0.96) !important;
+    opacity: 0 !important;
+    transition:
+      transform 0.28s cubic-bezier(0.4, 0, 1, 1),
+      opacity 0.18s ease !important;
+  }
+
+  /* Ambient glow behind toast */
+  .toast::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 17px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .toast:hover::after { opacity: 1; }
+  .toast-success::after { box-shadow: 0 0 0 1px rgba(48,209,88,0.2); }
+  .toast-info::after    { box-shadow: 0 0 0 1px rgba(10,132,255,0.2); }
+  .toast-warning::after { box-shadow: 0 0 0 1px rgba(255,159,10,0.2); }
+  .toast-critical::after { box-shadow: 0 0 0 1px rgba(255,69,58,0.2); }
+
+  /* Accent side strip */
+  .toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 2.5px;
+    border-radius: 0 2px 2px 0;
+    opacity: 0.85;
+    transition: opacity 0.2s;
+  }
+  .toast:hover::before { opacity: 1; }
+  .toast-success::before { background: linear-gradient(180deg, rgba(48,209,88,0.9) 0%, rgba(48,209,88,0.4) 100%); }
+  .toast-info::before    { background: linear-gradient(180deg, rgba(10,132,255,0.9) 0%, rgba(10,132,255,0.4) 100%); }
+  .toast-warning::before { background: linear-gradient(180deg, rgba(255,159,10,0.9) 0%, rgba(255,159,10,0.4) 100%); }
+  .toast-critical::before { background: linear-gradient(180deg, rgba(255,69,58,0.9) 0%, rgba(255,69,58,0.4) 100%); }
+
+  /* ── Icon ── */
+  .toast-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0px;
+    opacity: 0;
+    transform: scale(0.5) rotate(-15deg);
+    transition: opacity 0.3s 0.15s ease, transform 0.4s 0.15s cubic-bezier(0.34, 1.6, 0.64, 1);
+  }
+  .toast.in .toast-icon {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  .toast-success .toast-icon { background: var(--success-glow); }
+  .toast-info    .toast-icon { background: var(--info-glow); }
+  .toast-warning .toast-icon { background: var(--warning-glow); }
+  .toast-critical .toast-icon { background: var(--critical-glow); }
+
+  /* ── Body ── */
+  .toast-body {
+    flex: 1;
+    min-width: 0;
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity 0.3s 0.08s ease, transform 0.35s 0.08s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .toast.in .toast-body {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .toast-eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    opacity: 0.55;
+  }
+  .toast-success .toast-eyebrow { color: var(--success); }
+  .toast-info    .toast-eyebrow { color: var(--info); }
+  .toast-warning .toast-eyebrow { color: var(--warning); }
+  .toast-critical .toast-eyebrow { color: var(--critical); }
+
+  .toast-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin-bottom: 3px;
+  }
+
+  .toast-message {
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.42);
+    line-height: 1.5;
+    letter-spacing: 0.005em;
+  }
+
+  /* ── Actions ── */
+  .toast-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.3s 0.2s ease, transform 0.35s 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .toast.in .toast-actions {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .toast-action {
+    padding: 5px 11px;
+    border-radius: 7px;
+    border: none;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.1s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .toast-action:active { transform: scale(0.95); }
+
+  .toast-action-primary {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85);
+  }
+  .toast-action-primary:hover { background: rgba(255,255,255,0.16); }
+
+  .toast-action-ghost {
+    background: transparent;
+    color: rgba(255,255,255,0.35);
+  }
+  .toast-action-ghost:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55); }
+
+  /* ── Close ── */
+  .toast-close {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: rgba(255,255,255,0.05);
+    cursor: pointer;
+    color: rgba(255,255,255,0.25);
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.12s, background 0.12s, transform 0.1s;
+    opacity: 0;
+    transform: scale(0.7);
+    transition: opacity 0.2s 0.25s ease, transform 0.3s 0.25s cubic-bezier(0.34, 1.6, 0.64, 1), color 0.12s, background 0.12s;
+  }
+  .toast.in .toast-close {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .toast-close:hover {
+    color: rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.1);
+    transform: scale(1.1) !important;
+  }
+  .toast-close:active { transform: scale(0.9) !important; }
+
+  /* ── Progress ── */
+  .toast-progress {
+    position: absolute;
+    left: 4px; right: 0; bottom: 0;
+    height: 2px;
+    border-radius: 0 0 16px 0;
+    overflow: hidden;
+  }
+  .toast-bar {
+    height: 100%;
+    width: 100%;
+    transform-origin: left;
+    border-radius: 0 0 0 0;
+    opacity: 0.5;
+  }
+  .toast-success .toast-bar { background: var(--success); }
+  .toast-info    .toast-bar { background: var(--info); }
+  .toast-warning .toast-bar { background: var(--warning); }
+  .toast-critical .toast-bar { background: var(--critical); }
+
+  /* ── Stacked badge (when collapsed) ── */
+  .toast-stack-badge {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* Pause on hover */
+  .toast-wrapper:hover .toast-bar {
+    animation-play-state: paused !important;
+  }
+
+  @keyframes shrink {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<p class="scene-label">Notification System</p>
+<div class="demo-grid">
+  <button class="btn btn-success" onclick="showToast('success')">Success</button>
+  <button class="btn btn-info"    onclick="showToast('info')">Info</button>
+  <button class="btn btn-warning" onclick="showToast('warning')">Warning</button>
+  <button class="btn btn-critical" onclick="showToast('critical')">Critical</button>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const DURATION = 5200;
+const MAX = 6;
+
+const CONFIGS = {
+  success: {
+    eyebrow: 'Success',
+    title: 'Changes saved',
+    message: 'Your work has been automatically synced to the cloud.',
+    actions: [{ label: 'View', primary: true }, { label: 'Dismiss', primary: false }],
+    icon: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M2.5 7L5.5 10L11.5 4" stroke="var(--success)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  },
+  info: {
+    eyebrow: 'Info',
+    title: 'Update available',
+    message: 'Version 3.2.1 is ready to install with performance improvements.',
+    actions: [{ label: 'Install now', primary: true }, { label: 'Later', primary: false }],
+    icon: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="5" stroke="var(--info)" stroke-width="1.5"/>
+      <path d="M7 5.5V7.5M7 9H7.01" stroke="var(--info)" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>`
+  },
+  warning: {
+    eyebrow: 'Warning',
+    title: 'Storage nearly full',
+    message: 'You\'ve used 87% of your storage. Free up space to continue syncing.',
+    actions: [{ label: 'Manage storage', primary: true }, { label: 'Ignore', primary: false }],
+    icon: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M7 2L12.5 11.5H1.5L7 2Z" stroke="var(--warning)" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M7 6V8.5M7 10H7.01" stroke="var(--warning)" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>`
+  },
+  critical: {
+    eyebrow: 'Critical',
+    title: 'Authentication failed',
+    message: 'Your session has expired due to suspicious activity. Please sign in again.',
+    actions: [{ label: 'Sign in', primary: true }, { label: 'Dismiss', primary: false }],
+    icon: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="5" stroke="var(--critical)" stroke-width="1.5"/>
+      <path d="M5 5L9 9M9 5L5 9" stroke="var(--critical)" stroke-width="1.75" stroke-linecap="round"/>
+    </svg>`
+  }
+};
+
+let toasts = [];
+let idCounter = 0;
+
+function showToast(type) {
+  if (toasts.length >= MAX) {
+    dismiss(toasts[0].id);
+  }
+
+  const cfg = CONFIGS[type];
+  const id = ++idCounter;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'toast-wrapper';
+  wrapper.dataset.id = id;
+
+  const actionsHtml = cfg.actions ? `
+    <div class="toast-actions">
+      ${cfg.actions.map(a => `
+        <button class="toast-action ${a.primary ? 'toast-action-primary' : 'toast-action-ghost'}"
+          onclick="event.stopPropagation(); dismiss(${id})">${a.label}</button>
+      `).join('')}
+    </div>
+  ` : '';
+
+  wrapper.innerHTML = `
+    <div class="toast toast-${type}" data-id="${id}">
+      <div class="toast-icon">${cfg.icon}</div>
+      <div class="toast-body">
+        <div class="toast-eyebrow">${cfg.eyebrow}</div>
+        <div class="toast-title">${cfg.title}</div>
+        <div class="toast-message">${cfg.message}</div>
+        ${actionsHtml}
+      </div>
+      <button class="toast-close" onclick="event.stopPropagation(); dismiss(${id})" aria-label="Close">
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+          <path d="M1 1L7 7M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="toast-progress">
+        <div class="toast-bar"></div>
+      </div>
+    </div>
+  `;
+
+  const container = document.getElementById('toast-container');
+  container.appendChild(wrapper);
+
+  const toastEl = wrapper.querySelector('.toast');
+  const bar = wrapper.querySelector('.toast-bar');
+
+  // Swipe-to-dismiss
+  setupSwipe(wrapper, toastEl, id);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toastEl.classList.add('in');
+      bar.style.animation = `shrink ${DURATION}ms linear forwards`;
+    });
+  });
+
+  const timer = setTimeout(() => dismiss(id), DURATION);
+
+  toasts.push({ id, wrapper, toastEl, timer });
+  updateStackDepth();
+}
+
+function setupSwipe(wrapper, toastEl, id) {
+  let startX = 0, currentX = 0, isDragging = false;
+
+  const onStart = (e) => {
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    startX = x;
+    isDragging = true;
+    toastEl.style.transition = 'box-shadow 0.2s ease';
+  };
+
+  const onMove = (e) => {
+    if (!isDragging) return;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    currentX = x - startX;
+    if (currentX < 0) return;
+    toastEl.style.transform = `translateX(${currentX}px) scale(${1 - currentX * 0.0003})`;
+    toastEl.style.opacity = `${1 - currentX / 280}`;
+  };
+
+  const onEnd = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    toastEl.style.transition = '';
+    if (currentX > 90) {
+      toastEl.classList.add('swipe-out');
+      setTimeout(() => dismiss(id, true), 280);
+    } else {
+      toastEl.style.transform = '';
+      toastEl.style.opacity = '';
+    }
+    currentX = 0;
+  };
+
+  toastEl.addEventListener('touchstart', onStart, { passive: true });
+  toastEl.addEventListener('touchmove', onMove, { passive: true });
+  toastEl.addEventListener('touchend', onEnd);
+  toastEl.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+}
+
+function dismiss(id, skipAnimation = false) {
+  const idx = toasts.findIndex(t => t.id === id);
+  if (idx === -1) return;
+
+  const { wrapper, toastEl, timer } = toasts[idx];
+  clearTimeout(timer);
+  toasts.splice(idx, 1);
+
+  if (!skipAnimation) {
+    toastEl.classList.remove('in');
+    toastEl.classList.add('out');
+  }
+
+  wrapper.classList.add('collapsing');
+  wrapper.style.maxHeight = wrapper.offsetHeight + 'px';
+
+  requestAnimationFrame(() => {
+    wrapper.style.transition = 'max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1), padding-bottom 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
+    wrapper.style.maxHeight = '0';
+    wrapper.style.paddingBottom = '0';
+    wrapper.style.overflow = 'hidden';
+  });
+
+  setTimeout(() => {
+    wrapper.remove();
+    updateStackDepth();
+  }, 420);
+
+  updateStackDepth();
+}
+
+function updateStackDepth() {
+  toasts.forEach((t, i) => {
+    const depth = toasts.length - 1 - i;
+    const scale = 1 - depth * 0.02;
+    const blur = depth * 0.5;
+    if (depth > 0) {
+      t.toastEl.style.filter = `blur(${blur}px)`;
+      t.toastEl.style.opacity = `${1 - depth * 0.1}`;
+    } else {
+      t.toastEl.style.filter = '';
+      t.toastEl.style.opacity = '';
+    }
+  });
+}
+</script>
+</body>
+</html>

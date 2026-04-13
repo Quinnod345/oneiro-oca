@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #E8E4DC;
+    --card: #FFFFFF;
+    --text-primary: #1C1C1E;
+    --text-secondary: #3A3A3C;
+    --text-tertiary: #8E8E93;
+    --text-muted: #C7C7CC;
+    --divider: #F2F2F7;
+    --hover: #F7F7FA;
+    --tag-bg: #F2F2F7;
+    --blue: #007AFF;
+    --green: #34C759;
+    --orange: #FF9500;
+    --red: #FF3B30;
+    --red-bg: #FFF1F0;
+    --orange-bg: #FFF8EE;
+    --blue-bg: #F0F6FF;
+    --green-bg: #F0FBF3;
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 56px 20px 80px;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    background-size: 128px;
+    pointer-events: none;
+    opacity: 0.4;
+    z-index: 0;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 480px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 22px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.85);
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 28px 28px 20px;
+  }
+
+  .header-eyebrow {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .header-title {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+  }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-count {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  /* Critical alert banner */
+  .critical-banner {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 14px;
+    background: var(--red-bg);
+    border: 1px solid rgba(255,59,48,0.15);
+    border-radius: 11px;
+    margin-bottom: 18px;
+  }
+
+  .critical-banner-icon {
+    width: 20px;
+    height: 20px;
+    background: var(--red);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .critical-banner-icon svg {
+    display: block;
+  }
+
+  .critical-banner-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--red);
+    line-height: 1.35;
+  }
+
+  .critical-banner-text span {
+    font-weight: 600;
+  }
+
+  /* Progress */
+  .progress-wrap {
+    height: 4px;
+    background: #F2F2F7;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #34C759 0%, #30D158 100%);
+    border-radius: 3px;
+    width: 30%;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 7px;
+  }
+
+  .progress-label-text {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .progress-label-pct {
+    font-size: 11.5px;
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* ── Section ── */
+  .section {
+    padding: 6px 0 10px;
+  }
+
+  .section + .section {
+    border-top: 1px solid var(--divider);
+  }
+
+  .section-label {
+    padding: 4px 28px 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .section-label-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .section-label-badge.critical {
+    background: rgba(255,59,48,0.12);
+    color: var(--red);
+  }
+
+  .section-label-badge.medium {
+    background: rgba(255,149,0,0.12);
+    color: var(--orange);
+  }
+
+  .section-label-badge.low {
+    background: rgba(0,122,255,0.10);
+    color: var(--blue);
+  }
+
+  /* ── Task Item ── */
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 22px 10px 20px;
+    gap: 12px;
+    cursor: default;
+    position: relative;
+    transition: background 0.12s ease;
+    user-select: none;
+  }
+
+  .task-item:hover {
+    background: var(--hover);
+  }
+
+  /* Priority stripe */
+  .task-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .task-item:hover::before { opacity: 0.7; }
+
+  .task-item[data-priority="high"]::before { background: var(--red); }
+  .task-item[data-priority="medium"]::before { background: var(--orange); }
+  .task-item[data-priority="low"]::before { background: var(--blue); }
+
+  /* High priority task gets subtle tinted bg */
+  .task-item[data-priority="high"]:not(.completed) {
+    background: rgba(255,59,48,0.025);
+  }
+  .task-item[data-priority="high"]:not(.completed):hover {
+    background: rgba(255,59,48,0.05);
+  }
+  .task-item[data-priority="high"]:not(.completed)::before {
+    opacity: 1;
+  }
+
+  .task-item.completed {
+    opacity: 0.38;
+  }
+
+  /* ── Checkbox ── */
+  .cb-wrap {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .cb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.75px solid #D1D1D6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
+      border-color 0.22s,
+      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .task-item[data-priority="high"]:not(.completed) .cb {
+    border-color: rgba(255,59,48,0.4);
+  }
+
+  .cb-wrap:hover .cb {
+    border-color: #AEAEB2;
+    transform: scale(1.06);
+  }
+
+  .cb-wrap:active .cb { transform: scale(0.93); }
+
+  .cb-wrap:hover .cb-svg { opacity: 0.2; }
+
+  .cb-svg { transition: opacity 0.15s ease; }
+
+  .task-item.completed .cb {
+    border-color: transparent;
+  }
+
+  .task-item[data-priority="high"].completed .cb { background: var(--red); }
+  .task-item[data-priority="medium"].completed .cb { background: var(--orange); }
+  .task-item[data-priority="low"].completed .cb { background: var(--blue); }
+  .task-item:not([data-priority]).completed .cb { background: var(--green); }
+
+  /* ── Task Content ── */
+  .task-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .task-name {
+    font-size: 14.5px;
+    font-weight: 450;
+    color: var(--text-primary);
+    line-height: 1.38;
+    letter-spacing: -0.1px;
+  }
+
+  .task-item.completed .task-name {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+  }
+
+  .task-item[data-priority="high"]:not(.completed) .task-name {
+    font-weight: 520;
+  }
+
+  /* Priority pill */
+  .priority-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px 2px 5px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    margin-top: 1px;
+  }
+
+  .priority-pill.high {
+    background: rgba(255,59,48,0.1);
+    color: var(--red);
+  }
+
+  .priority-pill.medium {
+    background: rgba(255,149,0,0.1);
+    color: var(--orange);
+  }
+
+  .priority-pill svg {
+    display: block;
+  }
+
+  /* Task meta row */
+  .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+  }
+
+  .task-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--tag-bg);
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+  }
+
+  .task-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .task-time.overdue {
+    color: var(--red);
+    font-weight: 500;
+  }
+
+  .task-time svg {
+    display: block;
+  }
+
+  /* Overdue badge */
+  .overdue-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    background: rgba(255,59,48,0.10);
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--red);
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Date Chip ── */
+  .date-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 28px 6px;
+  }
+
+  .date-chip-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+
+  .date-chip-line {
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  /* ── Empty State ── */
+  .empty-row {
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .empty-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--green-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .empty-text {
+    font-size: 13.5px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-eyebrow">Sunday, April 13</div>
+      <div class="header-row">
+        <div class="header-title">Today</div>
+        <div class="header-count">3 of 10 done</div>
+      </div>
+
+      <!-- Critical alert -->
+      <div class="critical-banner">
+        <div class="critical-banner-icon">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M5 2v3.5M5 7.5v.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="critical-banner-text">
+          <span>2 critical tasks</span> require your attention today
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-fill"></div>
+      </div>
+      <div class="progress-label">
+        <div class="progress-label-text">3 completed</div>
+        <div class="progress-label-pct">30%</div>
+      </div>
+    </div>
+
+    <!-- Critical Section -->
+    <div class="section">
+      <div class="section-label">
+        Critical
+        <span class="section-label-badge critical">2</span>
+      </div>
+
+      <div class="task-item" data-priority="high">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Finalize Q2 budget proposal for board review</div>
+            <div class="priority-pill high">
+              <svg width="7" height="7" viewBox="0 0 7 7" fill="currentColor"><circle cx="3.5" cy="3.5" r="3.5"/></svg>
+              High
+            </div>
+          </div>
+          <div class="task-meta">
+            <span class="overdue-badge">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              2 days overdue
+            </span>
+            <span class="task-tag">Finance</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-item" data-priority="high">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Respond to client escalation — Meridian account</div>
+            <div class="priority-pill high">
+              <svg width="7" height="7" viewBox="0 0 7 7" fill="currentColor"><circle cx="3.5" cy="3.5" r="3.5"/></svg>
+              High
+            </div>
+          </div>
+          <div class="task-meta">
+            <span class="task-time overdue">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              Due 9:00 AM
+            </span>
+            <span class="task-tag">Client</span>
+            <span class="task-tag">Urgent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Medium Section -->
+    <div class="section">
+      <div class="section-label">
+        Important
+        <span class="section-label-badge medium">3</span>
+      </div>
+
+      <div class="date-chip">
+        <span class="date-chip-label">Morning</span>
+        <div class="date-chip-line"></div>
+      </div>
+
+      <div class="task-item" data-priority="medium">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Prepare talking points for 1:1 with Alex</div>
+            <div class="priority-pill medium">
+              <svg width="7" height="7" viewBox="0 0 7 7" fill="currentColor"><circle cx="3.5" cy="3.5" r="3.5"/></svg>
+              Med
+            </div>
+          </div>
+          <div class="task-meta">
+            <span class="task-time">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              11:00 AM
+            </span>
+            <span class="task-tag">Team</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-item" data-priority="medium">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Review and merge open PRs on design system repo</div>
+          </div>
+          <div class="task-meta">
+            <span class="task-tag">Engineering</span>
+            <span class="task-tag">3 open</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="date-chip">
+        <span class="date-chip-label">Afternoon</span>
+        <div class="date-chip-line"></div>
+      </div>
+
+      <div class="task-item" data-priority="medium">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Write weekly status update for stakeholders</div>
+          </div>
+          <div class="task-meta">
+            <span class="task-time">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              3:00 PM
+            </span>
+            <span class="task-tag">Communication</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Low Priority / Routine -->
+    <div class="section">
+      <div class="section-label">
+        Routine
+        <span class="section-label-badge low">2</span>
+      </div>
+
+      <div class="task-item" data-priority="low">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Update project timeline in Notion</div>
+          </div>
+          <div class="task-meta">
+            <span class="task-tag">Planning</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-item" data-priority="low">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="8" viewBox="0 0 11 8" fill="none" opacity="0">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Read saved articles in reading list</div>
+          </div>
+          <div class="task-meta">
+            <span class="task-tag">Personal</span>
+            <span class="task-tag">5 articles</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Completed Section -->
+    <div class="section">
+      <div class="section-label">Completed</div>
+
+      <div class="task-item completed" data-priority="high">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg width="11" height="8" viewBox="0 0 11 8" fill="none">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Send NDA to legal for new vendor</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-item completed" data-priority="medium">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg width="11" height="8" viewBox="0 0 11 8" fill="none">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Morning standup</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-item completed">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg width="11" height="8" viewBox="0 0 11 8" fill="none">
+              <path d="M1 4L4 7L10 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-top">
+            <div class="task-name">Review overnight Slack messages</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

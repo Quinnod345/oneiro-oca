@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile Card</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #16130f;
+    --parchment: #f4efe6;
+    --cream: #ede6d8;
+    --amber: #c4871f;
+    --amber-light: #e0a83c;
+    --amber-glow: rgba(196,135,31,0.18);
+    --muted: #8c8278;
+    --subtle: #b5afa6;
+    --divider: rgba(138,130,120,0.18);
+    --card-bg: #faf6f0;
+    --shadow: 0 48px 96px rgba(16,13,10,0.18), 0 16px 40px rgba(16,13,10,0.10), 0 4px 12px rgba(16,13,10,0.06);
+    --shadow-sm: 0 2px 8px rgba(16,13,10,0.08);
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ddd7cc;
+    background-image:
+      radial-gradient(ellipse 100% 80% at 20% 10%, rgba(196,135,31,0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 90% at 85% 80%, rgba(16,13,10,0.08) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 50% at 60% 40%, rgba(255,255,255,0.12) 0%, transparent 50%);
+    font-family: 'DM Sans', sans-serif;
+    padding: 48px 20px;
+  }
+
+  .card {
+    width: 400px;
+    background: var(--card-bg);
+    border-radius: 28px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.6);
+  }
+
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 20;
+    mix-blend-mode: multiply;
+  }
+
+  /* Header */
+  .card-header {
+    height: 128px;
+    background: var(--ink);
+    background-image:
+      radial-gradient(ellipse 140% 180% at 115% 160%, rgba(196,135,31,0.28) 0%, transparent 50%),
+      radial-gradient(ellipse 90% 130% at -15% -10%, rgba(196,135,31,0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 80% at 50% 50%, rgba(255,255,255,0.025) 0%, transparent 60%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header-ornament {
+    position: absolute;
+    right: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.12;
+  }
+
+  .header-ornament svg {
+    display: block;
+  }
+
+  .header-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(196,135,31,0.3) 30%, rgba(196,135,31,0.5) 50%, rgba(196,135,31,0.3) 70%, transparent);
+  }
+
+  /* Avatar */
+  .avatar-wrap {
+    position: absolute;
+    bottom: -48px;
+    left: 36px;
+    z-index: 5;
+  }
+
+  .avatar-ring {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    padding: 2.5px;
+    background: conic-gradient(from 135deg, #a0711c, var(--amber-light), #e8c060, var(--amber), #a0711c);
+    box-shadow: 0 8px 28px rgba(196,135,31,0.4), 0 2px 8px rgba(16,13,10,0.2);
+    position: relative;
+  }
+
+  .avatar-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #2e2822, #1e1b17);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 3px solid var(--card-bg);
+  }
+
+  .avatar-initials {
+    font-family: 'Playfair Display', serif;
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--amber-light);
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-top: 2px;
+    text-shadow: 0 1px 12px rgba(224,168,60,0.4);
+  }
+
+  .badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #3ecf6b;
+    border: 3px solid var(--card-bg);
+    box-shadow: 0 2px 6px rgba(62,207,107,0.4);
+    z-index: 6;
+  }
+
+  /* Body */
+  .card-body {
+    padding: 62px 36px 36px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .name {
+    font-family: 'Playfair Display', serif;
+    font-size: 23px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.4px;
+    line-height: 1.15;
+  }
+
+  .verified {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(196,135,31,0.35);
+  }
+
+  .verified svg {
+    display: block;
+  }
+
+  .handle {
+    display: block;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.1px;
+    margin-bottom: 14px;
+  }
+
+  .role-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 16px;
+    background: var(--amber-glow);
+    border: 1px solid rgba(196,135,31,0.25);
+    border-radius: 7px;
+    padding: 4px 10px 4px 8px;
+  }
+
+  .role-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 2px rgba(196,135,31,0.2);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(196,135,31,0.2); }
+    50% { box-shadow: 0 0 0 4px rgba(196,135,31,0.08); }
+  }
+
+  .role-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--amber);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  .bio {
+    font-size: 13.5px;
+    font-weight: 300;
+    font-style: italic;
+    color: #625c56;
+    line-height: 1.72;
+    margin-bottom: 26px;
+    position: relative;
+    padding-left: 16px;
+    border-left: 1.5px solid rgba(196,135,31,0.25);
+  }
+
+  .bio em {
+    font-style: normal;
+    color: var(--ink);
+    font-weight: 400;
+  }
+
+  /* Divider ornament */
+  .divider-ornament {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+
+  .divider-ornament::before,
+  .divider-ornament::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  .divider-ornament span {
+    font-size: 10px;
+    color: var(--subtle);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* Stats */
+  .stats {
+    display: flex;
+    align-items: stretch;
+    background: var(--cream);
+    border-radius: 16px;
+    padding: 18px 8px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(138,130,120,0.14);
+    box-shadow: inset 0 1px 2px rgba(16,13,10,0.04), var(--shadow-sm);
+  }
+
+  .stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    position: relative;
+    padding: 0 8px;
+  }
+
+  .stat + .stat::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--divider);
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 21px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.6px;
+    line-height: 1;
+  }
+
+  .stat-value sup {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--amber);
+    letter-spacing: 0;
+    vertical-align: super;
+    margin-left: 0.5px;
+  }
+
+  .stat-label {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  /* Tags */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 28px;
+  }
+
+  .tag {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--divider);
+    border-radius: 100px;
+    padding: 4.5px 12px;
+    letter-spacing: 0.15px;
+    cursor: default;
+    transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.15s;
+  }
+
+  .tag:hover {
+    border-color: rgba(196,135,31,0.45);
+    color: var(--amber);
+    background: var(--amber-glow);
+    transform: translateY(-1px);
+  }
+
+  /* Actions */
+  .actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--ink);
+    background-image: linear-gradient(135deg, #2a251e 0%, var(--ink) 100%);
+    color: var(--parchment);
+    border: none;
+    border-radius: 12px;
+    padding: 13px 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 14px rgba(16,13,10,0.22), 0 1px 3px rgba(16,13,10,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(196,135,31,0.15) 0%, transparent 60%);
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn-primary:hover::before { opacity: 1; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,13,10,0.26); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    width: 46px;
+    height: 46px;
+    background: var(--cream);
+    border: 1px solid var(--divider);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s, transform 0.15s;
+    flex-shrink: 0;
+  }
+
+  .btn-secondary:hover {
+    background: var(--parchment);
+    border-color: rgba(196,135,31,0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary svg {
+    opacity: 0.55;
+    transition: opacity 0.18s;
+  }
+
+  .btn-secondary:hover svg { opacity: 0.85; }
+
+  /* Footer */
+  .card-footer {
+    padding: 0 36px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 36px;
+    right: 36px;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  .footer-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 18px;
+  }
+
+  .footer-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #3ecf6b;
+    box-shadow: 0 0 0 2px rgba(62,207,107,0.2);
+  }
+
+  .footer-text {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-weight: 400;
+    letter-spacing: 0.1px;
+  }
+
+  .footer-time {
+    font-size: 11px;
+    color: var(--subtle);
+    padding-top: 18px;
+    letter-spacing: 0.1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="header-ornament">
+      <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="80" cy="80" r="70" stroke="white" stroke-width="0.75"/>
+        <circle cx="80" cy="80" r="55" stroke="white" stroke-width="0.5"/>
+        <circle cx="80" cy="80" r="40" stroke="white" stroke-width="0.5"/>
+        <line x1="10" y1="80" x2="150" y2="80" stroke="white" stroke-width="0.5"/>
+        <line x1="80" y1="10" x2="80" y2="150" stroke="white" stroke-width="0.5"/>
+        <line x1="30.5" y1="30.5" x2="129.5" y2="129.5" stroke="white" stroke-width="0.4"/>
+        <line x1="129.5" y1="30.5" x2="30.5" y2="129.5" stroke="white" stroke-width="0.4"/>
+        <polygon points="80,18 87,76 80,84 73,76" stroke="white" stroke-width="0.5" fill="none"/>
+        <circle cx="80" cy="80" r="3" fill="white" opacity="0.4"/>
+      </svg>
+    </div>
+    <div class="header-line"></div>
+
+    <div class="avatar-wrap">
+      <div class="avatar-ring">
+        <div class="avatar-inner">
+          <span class="avatar-initials">MA</span>
+        </div>
+      </div>
+      <div class="badge"></div>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="name-row">
+      <span class="name">Margot Ashford</span>
+      <span class="verified">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 5L4 7L8 3" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </div>
+    <span class="handle">@margot.ashford</span>
+
+    <div class="role-tag">
+      <span class="role-dot"></span>
+      <span class="role-label">Creative Director</span>
+    </div>
+
+    <p class="bio">
+      Crafting <em>systems that breathe</em> — where structure and
+      instinct meet. Twelve years distilling complexity into
+      <em>clarity worth keeping.</em>
+    </p>
+
+    <div class="divider-ornament">
+      <span>Overview</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value">248<sup>k</sup></span>
+        <span class="stat-label">Followers</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">1.4<sup>k</sup></span>
+        <span class="stat-label">Projects</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">97<sup>%</sup></span>
+        <span class="stat-label">Retention</span>
+      </div>
+    </div>
+
+    <div class="tags">
+      <span class="tag">Brand Systems</span>
+      <span class="tag">Motion</span>
+      <span class="tag">Typography</span>
+      <span class="tag">Editorial</span>
+      <span class="tag">Art Direction</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary">Follow</button>
+      <button class="btn-secondary" title="Message">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M3 4h12a1 1 0 011 1v7a1 1 0 01-1 1H5.5L3 15V5a1 1 0 011-1z" stroke="#1a1714" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="btn-secondary" title="Save">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M4 3h10a1 1 0 011 1v11l-5-3-5 3V4a1 1 0 011-1z" stroke="#1a1714" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="card-footer">
+    <div class="footer-meta">
+      <span class="footer-dot"></span>
+      <span class="footer-text">Active now</span>
+    </div>
+    <span class="footer-time">Joined March 2019</span>
+  </div>
+</div>
+
+</body>
+</html>

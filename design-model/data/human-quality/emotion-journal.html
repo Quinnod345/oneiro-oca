@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Emotion Journal</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: oklch(0.96 0.005 90);
+    --surface: oklch(0.99 0.002 90);
+    --text: oklch(0.25 0.02 280);
+    --text-secondary: oklch(0.50 0.02 270);
+    --border: oklch(0.88 0.01 90);
+
+    /* emotion palettes */
+    --joy-a: oklch(0.78 0.14 75);
+    --joy-b: oklch(0.72 0.12 55);
+    --calm-a: oklch(0.72 0.08 160);
+    --calm-b: oklch(0.78 0.06 145);
+    --energy-a: oklch(0.70 0.18 25);
+    --energy-b: oklch(0.65 0.16 15);
+    --melancholy-a: oklch(0.35 0.12 280);
+    --melancholy-b: oklch(0.30 0.10 295);
+
+    /* active state (starts calm) */
+    --active-a: var(--calm-a);
+    --active-b: var(--calm-b);
+    --active-text: oklch(0.22 0.04 165);
+    --active-glow: oklch(0.72 0.06 155 / 0.2);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .journal {
+    width: 560px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+
+  /* header */
+  .header {
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .header .date {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the emotional shape */
+  .emotion-field {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .emotion-shape {
+    width: 260px; height: 260px;
+    border-radius: 42% 58% 55% 45% / 50% 44% 56% 50%;
+    background: linear-gradient(135deg, var(--active-a), var(--active-b));
+    transition: all 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    box-shadow: 0 20px 60px var(--active-glow);
+  }
+
+  .emotion-shape::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg,
+      oklch(1 0 0 / 0.12),
+      transparent 50%,
+      oklch(0 0 0 / 0.05)
+    );
+    pointer-events: none;
+  }
+
+  /* frosted inner label */
+  .emotion-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--active-text);
+    transition: color 1.2s ease, opacity 0.6s ease;
+    text-transform: lowercase;
+    backdrop-filter: blur(2px);
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: oklch(1 0 0 / 0.15);
+  }
+
+  /* mood selectors */
+  .mood-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .mood-btn {
+    width: 64px; height: 64px;
+    border: 2px solid var(--border);
+    border-radius: 38% 62% 48% 52% / 55% 42% 58% 45%;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mood-btn:hover {
+    transform: scale(1.08) translateY(-2px);
+    box-shadow: 0 6px 20px oklch(0.50 0.05 0 / 0.1);
+  }
+  .mood-btn.active {
+    border-color: oklch(0.50 0.08 0 / 0.3);
+    transform: scale(1.05);
+  }
+
+  .mood-swatch {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .mood-name {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    pointer-events: none;
+  }
+
+  .mood-btn[data-mood="joy"] .mood-swatch {
+    background: linear-gradient(135deg, var(--joy-a), var(--joy-b));
+  }
+  .mood-btn[data-mood="calm"] .mood-swatch {
+    background: linear-gradient(135deg, var(--calm-a), var(--calm-b));
+  }
+  .mood-btn[data-mood="energy"] .mood-swatch {
+    background: linear-gradient(135deg, var(--energy-a), var(--energy-b));
+  }
+  .mood-btn[data-mood="melancholy"] .mood-swatch {
+    background: linear-gradient(135deg, var(--melancholy-a), var(--melancholy-b));
+  }
+
+  /* input area */
+  .input-area {
+    width: 100%;
+    position: relative;
+  }
+
+  .feeling-input {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--text);
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    letter-spacing: 0.005em;
+  }
+  .feeling-input::placeholder {
+    color: oklch(0.65 0.01 270);
+  }
+  .feeling-input:focus {
+    border-color: oklch(0.70 0.06 155);
+    box-shadow: 0 0 0 3px oklch(0.72 0.06 155 / 0.12);
+  }
+
+  .timestamp {
+    margin-top: 10px;
+    font-size: 11px;
+    color: oklch(0.60 0.01 270);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  /* background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(oklch(0.80 0.01 90 / 0.3) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: 8px 8px;
+    pointer-events: none;
+    opacity: 0.3;
+  }
+</style>
+</head>
+<body>
+
+<div class="journal">
+  <div class="header">
+    <h1>How does today feel?</h1>
+    <div class="date">Sunday, April 13, 2026</div>
+  </div>
+
+  <div class="emotion-field">
+    <div class="emotion-shape" id="emotionShape"></div>
+    <div class="emotion-label" id="emotionLabel">calm</div>
+  </div>
+
+  <div class="mood-row">
+    <button class="mood-btn" data-mood="joy">
+      <div class="mood-swatch"></div>
+      <span class="mood-name">Joy</span>
+    </button>
+    <button class="mood-btn active" data-mood="calm">
+      <div class="mood-swatch"></div>
+      <span class="mood-name">Calm</span>
+    </button>
+    <button class="mood-btn" data-mood="energy">
+      <div class="mood-swatch"></div>
+      <span class="mood-name">Energy</span>
+    </button>
+    <button class="mood-btn" data-mood="melancholy">
+      <div class="mood-swatch"></div>
+      <span class="mood-name">Depth</span>
+    </button>
+  </div>
+
+  <div class="input-area">
+    <input type="text" class="feeling-input" placeholder="How are you feeling?" autocomplete="off" spellcheck="false">
+    <div class="timestamp" id="ts"></div>
+  </div>
+</div>
+
+<script>
+  const shape = document.getElementById('emotionShape');
+  const label = document.getElementById('emotionLabel');
+  const buttons = document.querySelectorAll('.mood-btn');
+  const tsEl = document.getElementById('ts');
+
+  const moods = {
+    joy: {
+      a: 'oklch(0.78 0.14 75)',
+      b: 'oklch(0.72 0.12 55)',
+      text: 'oklch(0.30 0.06 60)',
+      glow: 'oklch(0.75 0.12 65 / 0.25)',
+      radius: '48% 52% 42% 58% / 56% 48% 52% 44%',
+      label: 'joy'
+    },
+    calm: {
+      a: 'oklch(0.72 0.08 160)',
+      b: 'oklch(0.78 0.06 145)',
+      text: 'oklch(0.22 0.04 165)',
+      glow: 'oklch(0.72 0.06 155 / 0.2)',
+      radius: '42% 58% 55% 45% / 50% 44% 56% 50%',
+      label: 'calm'
+    },
+    energy: {
+      a: 'oklch(0.70 0.18 25)',
+      b: 'oklch(0.65 0.16 15)',
+      text: 'oklch(0.98 0.02 20)',
+      glow: 'oklch(0.68 0.16 20 / 0.25)',
+      radius: '55% 45% 50% 50% / 42% 58% 45% 55%',
+      label: 'energy'
+    },
+    melancholy: {
+      a: 'oklch(0.35 0.12 280)',
+      b: 'oklch(0.30 0.10 295)',
+      text: 'oklch(0.75 0.04 280)',
+      glow: 'oklch(0.32 0.10 285 / 0.3)',
+      radius: '46% 54% 58% 42% / 52% 48% 50% 50%',
+      label: 'melancholy'
+    }
+  };
+
+  function setMood(key) {
+    const m = moods[key];
+    shape.style.background = `linear-gradient(135deg, ${m.a}, ${m.b})`;
+    shape.style.borderRadius = m.radius;
+    shape.style.boxShadow = `0 20px 60px ${m.glow}`;
+    label.textContent = m.label;
+    label.style.color = m.text;
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.mood === key));
+  }
+
+  buttons.forEach(b => {
+    b.addEventListener('click', () => setMood(b.dataset.mood));
+    b.addEventListener('mouseenter', () => setMood(b.dataset.mood));
+  });
+
+  // timestamp
+  function updateTs() {
+    const now = new Date();
+    const h = now.getHours();
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    tsEl.textContent = `${h12}:${m} ${ampm}`;
+  }
+  updateTs();
+  setInterval(updateTs, 30000);
+</script>
+
+</body>
+</html>

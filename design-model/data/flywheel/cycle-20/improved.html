@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Card</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-page:        #0A0908;
+      --bg-card:        #141210;
+      --bg-card-inner:  #1A1714;
+      --bg-card-deep:   #111009;
+      --border:         #272320;
+      --border-light:   #322D28;
+      --border-gold:    rgba(196,163,90,0.18);
+      --gold:           #C4A35A;
+      --gold-bright:    #D4B870;
+      --gold-dim:       #8A6E3A;
+      --gold-pale:      #E8D49A;
+      --gold-glow:      rgba(196,163,90,0.15);
+      --text-primary:   #EDE8DF;
+      --text-secondary: #7A7268;
+      --text-tertiary:  #3E3830;
+      --text-muted:     #504840;
+    }
+
+    body {
+      background: var(--bg-page);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Sans', sans-serif;
+      padding: 40px 20px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 700px 600px at 50% 40%, rgba(196,163,90,0.035) 0%, transparent 65%),
+        radial-gradient(ellipse 400px 300px at 20% 80%, rgba(196,163,90,0.02) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .card {
+      width: 380px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(196,163,90,0.06),
+        0 40px 80px rgba(0,0,0,0.7),
+        0 12px 32px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(196,163,90,0.06);
+      position: relative;
+      transition: transform 0.4s cubic-bezier(0.22,1,0.36,1), box-shadow 0.4s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow:
+        0 0 0 1px rgba(196,163,90,0.1),
+        0 50px 100px rgba(0,0,0,0.75),
+        0 16px 40px rgba(0,0,0,0.5),
+        0 0 60px rgba(196,163,90,0.05),
+        inset 0 1px 0 rgba(196,163,90,0.08);
+    }
+
+    /* Header */
+    .card-header {
+      height: 96px;
+      background: linear-gradient(160deg, #1C1814 0%, #100E0B 55%, #181410 100%);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 220px 130px at 25% 90%, rgba(196,163,90,0.09) 0%, transparent 60%),
+        radial-gradient(ellipse 180px 100px at 85% 15%, rgba(196,163,90,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 120px 60px at 60% 60%, rgba(196,163,90,0.04) 0%, transparent 50%);
+    }
+
+    .card-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 20px; right: 20px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(196,163,90,0.22), transparent);
+    }
+
+    /* Grid texture overlay */
+    .header-texture {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image:
+        linear-gradient(rgba(196,163,90,0.8) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(196,163,90,0.8) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .header-ornament {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0.22;
+    }
+
+    .header-ornament-line {
+      width: 56px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold));
+    }
+
+    .header-ornament-line:last-child {
+      background: linear-gradient(90deg, var(--gold), transparent);
+    }
+
+    .header-ornament-center {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .header-ornament-diamond {
+      width: 4px;
+      height: 4px;
+      background: var(--gold);
+      transform: rotate(45deg);
+    }
+
+    .header-ornament-diamond.sm {
+      width: 3px;
+      height: 3px;
+      opacity: 0.6;
+    }
+
+    /* Avatar */
+    .avatar-wrap {
+      position: absolute;
+      bottom: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+
+    .avatar-ring-outer {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      padding: 1px;
+      background: conic-gradient(from 0deg, #7A5E2A 0deg, var(--gold-bright) 90deg, #C4A35A 160deg, #7A5E2A 220deg, var(--gold-bright) 300deg, #7A5E2A 360deg);
+      box-shadow:
+        0 0 0 3px var(--bg-card),
+        0 0 24px rgba(196,163,90,0.18),
+        0 6px 20px rgba(0,0,0,0.5);
+      animation: ring-spin 12s linear infinite;
+    }
+
+    @keyframes ring-spin {
+      from { background: conic-gradient(from 0deg, #7A5E2A 0deg, var(--gold-bright) 90deg, #C4A35A 160deg, #7A5E2A 220deg, var(--gold-bright) 300deg, #7A5E2A 360deg); }
+      to   { background: conic-gradient(from 360deg, #7A5E2A 0deg, var(--gold-bright) 90deg, #C4A35A 160deg, #7A5E2A 220deg, var(--gold-bright) 300deg, #7A5E2A 360deg); }
+    }
+
+    .avatar-ring-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      padding: 2.5px;
+      background: var(--bg-card);
+    }
+
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .avatar-svg {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+    }
+
+    .avatar-status {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #22C55E;
+      border: 2px solid var(--bg-card);
+      box-shadow: 0 0 8px rgba(34,197,94,0.5);
+      z-index: 3;
+    }
+
+    .avatar-status::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.2);
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.6; }
+      50% { transform: scale(1.5); opacity: 0; }
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 52px 28px 26px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(196,163,90,0.08);
+      border: 1px solid rgba(196,163,90,0.18);
+      border-radius: 100px;
+      padding: 4px 12px;
+      margin-bottom: 12px;
+      cursor: default;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .badge:hover {
+      background: rgba(196,163,90,0.13);
+      border-color: rgba(196,163,90,0.28);
+    }
+
+    .badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 8px rgba(196,163,90,0.8);
+      flex-shrink: 0;
+    }
+
+    .badge-text {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    /* Name */
+    .name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 30px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+      text-align: center;
+      line-height: 1.15;
+      margin-bottom: 5px;
+    }
+
+    .name em {
+      font-style: italic;
+      color: var(--gold-bright);
+    }
+
+    .handle {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+    }
+
+    /* Bio */
+    .bio {
+      font-size: 12.5px;
+      font-weight: 300;
+      color: #6A6258;
+      line-height: 1.65;
+      text-align: center;
+      max-width: 280px;
+      margin-bottom: 22px;
+      letter-spacing: 0.01em;
+    }
+
+    /* Divider */
+    .divider {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider-diamond {
+      width: 4px;
+      height: 4px;
+      background: var(--text-muted);
+      transform: rotate(45deg);
+      flex-shrink: 0;
+    }
+
+    /* Stats */
+    .stats {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 8px;
+      position: relative;
+      cursor: default;
+      transition: background 0.2s;
+    }
+
+    .stat:hover {
+      background: rgba(196,163,90,0.04);
+    }
+
+    .stat + .stat::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 18%; bottom: 18%;
+      width: 1px;
+      background: var(--border-light);
+    }
+
+    .stat-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1;
+      margin-bottom: 4px;
+      letter-spacing: 0.01em;
+    }
+
+    .stat-value span {
+      color: var(--gold);
+      font-size: 14px;
+      font-weight: 400;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    /* Tags */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 22px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .tag:hover {
+      border-color: var(--border-gold);
+      color: var(--gold);
+      background: rgba(196,163,90,0.06);
+    }
+
+    .tag-icon {
+      font-size: 10px;
+      opacity: 0.7;
+    }
+
+    /* Actions */
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 18px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      border: none;
+      outline: none;
+      transition: all 0.22s cubic-bezier(0.22,1,0.36,1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover::before { opacity: 1; }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-follow {
+      background: var(--gold);
+      color: #0C0B09;
+    }
+
+    .btn-follow::before {
+      background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+    }
+
+    .btn-follow:hover {
+      background: var(--gold-bright);
+      box-shadow: 0 4px 20px rgba(196,163,90,0.3), 0 0 0 1px rgba(196,163,90,0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-follow:active { transform: translateY(0) scale(0.97); }
+
+    .btn-message {
+      background: var(--bg-card-inner);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-light);
+    }
+
+    .btn-message::before {
+      background: rgba(196,163,90,0.05);
+    }
+
+    .btn-message:hover {
+      border-color: var(--border-gold);
+      color: var(--gold);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .btn-message:active { transform: translateY(0) scale(0.97); }
+
+    .btn-icon {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    /* Social row */
+    .social-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .social-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      position: relative;
+    }
+
+    .social-btn:hover {
+      border-color: var(--border-gold);
+      background: rgba(196,163,90,0.07);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .social-btn:active { transform: translateY(0) scale(0.95); }
+
+    .social-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: var(--text-secondary);
+      transition: fill 0.18s;
+    }
+
+    .social-btn:hover svg { fill: var(--gold); }
+
+    .social-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 2px;
+    }
+
+    .social-more {
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color 0.18s;
+    }
+
+    .social-more:hover { color: var(--gold); }
+
+    /* Footer */
+    .card-footer {
+      border-top: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card-deep);
+    }
+
+    .footer-member {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .footer-member-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.4;
+    }
+
+    .footer-member-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+    }
+
+    .footer-member-text strong {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .footer-share {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.18s;
+      letter-spacing: 0.02em;
+    }
+
+    .footer-share:hover {
+      color: var(--gold);
+      background: rgba(196,163,90,0.06);
+    }
+
+    .footer-share svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- Header band -->
+    <div class="card-header">
+      <div class="header-texture"></div>
+      <div class="header-ornament">
+        <div class="header-ornament-line"></div>
+        <div class="header-ornament-center">
+          <div class="header-ornament-diamond sm"></div>
+          <div class="header-ornament-diamond"></div>
+          <div class="header-ornament-diamond sm"></div>
+        </div>
+        <div class="header-ornament-line"></div>
+      </div>
+
+      <!-- Avatar -->
+      <div class="avatar-wrap">
+        <div class="avatar-ring-outer">
+          <div class="avatar-ring-inner">
+            <div class="avatar-img">
+              <svg class="avatar-svg" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#2A2018"/>
+                    <stop offset="100%" stop-color="#141010"/>
+                  </radialGradient>
+                  <radialGradient id="skinGrad" cx="50%" cy="30%" r="60%">
+                    <stop offset="0%" stop-color="#C8A882"/>
+                    <stop offset="100%" stop-color="#A07855"/>
+                  </radialGradient>
+                  <radialGradient id="hairGrad" cx="50%" cy="0%" r="70%">
+                    <stop offset="0%" stop-color="#3D2E1E"/>
+                    <stop offset="100%" stop-color="#1A1008"/>
+                  </radialGradient>
+                </defs>
+                <circle cx="40" cy="40" r="40" fill="url(#bgGrad)"/>
+                <ellipse cx="40" cy="78" rx="22" ry="14" fill="#1C140C" opacity="0.9"/>
+                <circle cx="40" cy="34" r="16" fill="url(#skinGrad)"/>
+                <ellipse cx="40" cy="20" rx="17" ry="15" fill="url(#hairGrad)"/>
+                <ellipse cx="40" cy="18" rx="14" ry="10" fill="#2A1E10"/>
+                <circle cx="34" cy="33" r="2.2" fill="#3A2510" opacity="0.6"/>
+                <circle cx="46" cy="33" r="2.2" fill="#3A2510" opacity="0.6"/>
+                <path d="M 35 40 Q 40 44 45 40" stroke="#8A5A35" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="avatar-status"></div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="card-body">
+
+      <div class="badge">
+        <div class="badge-dot"></div>
+        <span class="badge-text">Senior Contributor</span>
+      </div>
+
+      <div class="name">Elara <em>Voss</em></div>
+      <div class="handle">@elaravoss · she/her</div>
+
+      <p class="bio">Crafting immersive digital experiences at the intersection of motion design and systems thinking.</p>
+
+      <!-- Divider -->
+      <div class="divider">
+        <div class="divider-line"></div>
+        <div class="divider-diamond"></div>
+        <div class="divider-line"></div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value">14<span>k</span></div>
+          <div class="stat-label">Followers</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">382</div>
+          <div class="stat-label">Projects</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">4.9<span>★</span></div>
+          <div class="stat-label">Rating</div>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div class="tags">
+        <div class="tag"><span class="tag-icon">◈</span>Motion Design</div>
+        <div class="tag"><span class="tag-icon">◈</span>Systems</div>
+        <div class="tag"><span class="tag-icon">◈</span>3D Interfaces</div>
+        <div class="tag"><span class="tag-icon">◈</span>Creative Tech</div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn btn-follow">
+          <svg class="btn-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Follow
+        </button>
+        <button class="btn btn-message">
+          <svg class="btn-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H2C1.45 2 1 2.45 1 3v8c0 .55.45 1 1 1h4l2 2 2-2h4c.55 0 1-.45 1-1V3c0-.55-.45-1-1-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+          Message
+        </button>
+      </div>
+
+      <!-- Social -->
+      <div class="social-row">
+        <div class="social-btn" title="Dribbble">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm4.6 3.2c.8 1 1.3 2.2 1.4 3.6-1.4-.3-2.8-.4-4-.3-.2-.5-.4-1-.6-1.4 1.1-.6 2.3-1.4 3.2-1.9zM8 2.1c1.2 0 2.3.4 3.2 1-.8.5-1.9 1.2-2.9 1.7-.8-1.4-1.7-2.6-2.3-3.4.6-.2 1.3-.3 2-.3zM4.8 2.7c.6.8 1.5 2 2.2 3.4C5.5 6.7 3.8 7 2.2 7c.4-1.9 1.5-3.5 2.6-4.3zM2 8v-.1c1.8 0 3.7-.3 5.4-.9.2.3.3.7.5 1-2.1.6-3.8 1.9-4.8 3.3C2.4 10.3 2 9.2 2 8zm2 3.6c1-1.3 2.6-2.5 4.5-3 .7 1.8 1 3.6 1.1 5.2-2.1-.2-3.9-1.1-5.6-2.2zm6.6 2.1c-.1-1.5-.4-3.1-1-4.8 1.1-.2 2.4 0 3.6.3-.4 2-1.4 3.6-2.6 4.5z"/>
+          </svg>
+        </div>
+        <div class="social-btn" title="GitHub">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1C4.13 1 1 4.13 1 8c0 3.09 2 5.71 4.79 6.63.35.06.48-.15.48-.34v-1.2c-1.95.42-2.36-.94-2.36-.94-.32-.81-.78-1.03-.78-1.03-.64-.44.05-.43.05-.43.7.05 1.07.72 1.07.72.62 1.07 1.63.76 2.03.58.06-.45.24-.76.44-.94-1.56-.18-3.2-.78-3.2-3.47 0-.77.27-1.39.72-1.88-.07-.18-.31-.89.07-1.85 0 0 .59-.19 1.93.72A6.7 6.7 0 018 4.84c.6 0 1.2.08 1.76.23 1.34-.9 1.93-.72 1.93-.72.38.96.14 1.67.07 1.85.45.49.72 1.11.72 1.88 0 2.7-1.64 3.29-3.21 3.46.25.22.48.65.48 1.31v1.94c0 .19.13.4.48.34C13 13.71 15 11.09 15 8c0-3.87-3.13-7-7-7z"/>
+          </svg>
+        </div>
+        <div class="social-btn" title="Twitter / X">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12.6 1h2.3L9.9 6.6 16 15h-4.5L8 10.2 3.4 15H1.1l5.3-6L0 1h4.6l3.2 4.2L12.6 1zm-.8 12.6h1.3L4.3 2.3H3l8.8 11.3z"/>
+          </svg>
+        </div>
+        <div class="social-sep"></div>
+        <div class="social-more">+3 more</div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="card-footer">
+      <div class="footer-member">
+        <svg class="footer-member-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.4l-3.7 1.9.7-4.1L2 5.3l4.2-.7L8 1z" stroke="#C4A35A" stroke-width="1.2" stroke-linejoin="round"/>
+        </svg>
+        <span class="footer-member-text">Member since <strong>Jan 2021</strong></span>
+      </div>
+      <div class="footer-share">
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 2a2 2 0 100 4 2 2 0 000-4zM5 6a2 2 0 100 4 2 2 0 000-4zm6 4a2 2 0 100 4 2 2 0 000-4zm-5.3-2.7l4.6 2.4m0-4.8L5.7 7.3"/>
+        </svg>
+        Share
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

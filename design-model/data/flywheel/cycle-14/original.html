@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg-primary: #1c1c1e;
+    --bg-secondary: #2c2c2e;
+    --bg-tertiary: #3a3a3c;
+    --bg-hover: #3a3a3c;
+    --bg-glass: rgba(44, 44, 46, 0.85);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.12);
+    --text-primary: rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(255, 255, 255, 0.52);
+    --text-tertiary: rgba(255, 255, 255, 0.28);
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --accent-dim: rgba(10, 132, 255, 0.18);
+    --destructive: #ff453a;
+    --success: #30d158;
+    --toggle-off: #48484a;
+    --toggle-on: #30d158;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+  }
+
+  html, body {
+    height: 100%;
+    background: #111113;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .settings-window {
+    width: 680px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg), 0 0 0 0.5px rgba(255,255,255,0.08);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Title Bar */
+  .titlebar {
+    height: 52px;
+    background: rgba(28, 28, 30, 0.95);
+    border-bottom: 0.5px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 10px;
+    position: relative;
+    -webkit-app-region: drag;
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    transition: filter 0.15s ease;
+  }
+
+  .traffic-light:hover { filter: brightness(1.15); }
+
+  .tl-close { background: #ff5f57; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.25); }
+  .tl-minimize { background: #febc2e; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.25); }
+  .tl-maximize { background: #28c840; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.25); }
+
+  .titlebar-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    pointer-events: none;
+  }
+
+  /* Layout */
+  .settings-body {
+    display: flex;
+    height: 560px;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 200px;
+    background: rgba(28, 28, 30, 0.6);
+    border-right: 0.5px solid var(--border-subtle);
+    padding: 12px 8px;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px 4px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.12s ease;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-bottom: 1px;
+  }
+
+  .sidebar-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .sidebar-item.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .sidebar-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .icon-general { background: linear-gradient(135deg, #636366, #48484a); }
+  .icon-appearance { background: linear-gradient(135deg, #5e5ce6, #3634a3); }
+  .icon-notifications { background: linear-gradient(135deg, #ff453a, #d70015); }
+  .icon-privacy { background: linear-gradient(135deg, #30d158, #248a3d); }
+  .icon-network { background: linear-gradient(135deg, #0a84ff, #0040dd); }
+  .icon-advanced { background: linear-gradient(135deg, #ff9f0a, #c93400); }
+
+  /* Main Content */
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+  }
+
+  .main-content::-webkit-scrollbar {
+    width: 6px;
+  }
+  .main-content::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+  }
+
+  .section-header {
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+    margin-bottom: 4px;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: -0.005em;
+  }
+
+  /* Settings Groups */
+  .settings-group {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border-subtle);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .group-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0 0 8px 4px;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    border-bottom: 0.5px solid var(--border-subtle);
+    transition: background 0.1s ease;
+    cursor: default;
+    gap: 16px;
+  }
+
+  .settings-row:last-child {
+    border-bottom: none;
+  }
+
+  .settings-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .row-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-label {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.015em;
+    line-height: 1.3;
+  }
+
+  .row-description {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    letter-spacing: -0.005em;
+    line-height: 1.4;
+  }
+
+  .row-control {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Toggle Switch */
+  .toggle-wrapper {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    cursor: pointer;
+  }
+
+  .toggle-wrapper input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 13px;
+    background: var(--toggle-off);
+    transition: background 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.3);
+  }
+
+  .toggle-wrapper input:checked + .toggle-track {
+    background: var(--toggle-on);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.15);
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+  }
+
+  .toggle-wrapper input:checked ~ .toggle-thumb {
+    transform: translateX(18px);
+  }
+
+  /* Dropdown / Select */
+  .native-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--bg-tertiary);
+    border: 0.5px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    padding: 6px 28px 6px 10px;
+    cursor: pointer;
+    outline: none;
+    min-width: 140px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .native-select:hover {
+    border-color: rgba(255,255,255,0.2);
+    background-color: #444446;
+  }
+
+  .native-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22), var(--shadow-sm);
+  }
+
+  .native-select option {
+    background: #2c2c2e;
+    color: var(--text-primary);
+  }
+
+  /* Segmented Control */
+  .segmented-control {
+    display: flex;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    gap: 1px;
+    border: 0.5px solid var(--border-subtle);
+  }
+
+  .segment {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+    user-select: none;
+  }
+
+  .segment:hover:not(.segment-active) {
+    color: var(--text-primary);
+  }
+
+  .segment-active {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.08);
+  }
+
+  /* Slider */
+  .slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .slider-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    min-width: 12px;
+    text-align: center;
+  }
+
+  .native-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent) 60%, var(--bg-tertiary) 60%);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .native-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+
+  .native-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+  }
+
+  /* Color Swatch Picker */
+  .color-picker-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .color-swatch:hover { transform: scale(1.15); }
+
+  .color-swatch.selected::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid white;
+    opacity: 0.9;
+  }
+
+  .swatch-blue { background: #0a84ff; }
+  .swatch-purple { background: #bf5af2; }
+  .swatch-pink { background: #ff375f; }
+  .swatch-orange { background: #ff9f0a; }
+  .swatch-green { background: #30d158; }
+  .swatch-gray { background: #636366; }
+
+  /* Bottom Bar */
+  .bottom-bar {
+    height: 64px;
+    background: rgba(28, 28, 30, 0.9);
+    border-top: 0.5px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .status-text {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    letter-spacing: -0.005em;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
+  }
+
+  .button-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    height: 30px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    padding: 0 14px;
+    transition: all 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    -webkit-app-region: no-drag;
+  }
+
+  .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 0.5px solid var(--border-medium);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .btn-secondary:hover {
+    background: #444446;
+    border-color: rgba(255,255,255,0.18);
+  }
+
+  .btn-secondary:active {
+    background: #3a3a3c;
+    transform: scale(0.98);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 1px 3px rgba(10, 132, 255, 0.35), var(--shadow-sm);
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.45), var(--shadow-sm);
+  }
+
+  .btn-primary:active {
+    background: #0070d8;
+    transform: scale(0.98);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .btn-primary:focus {
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
+  }
+
+  /* Divider inside group */
+  .group-divider {
+    height: 0.5px;
+    background: var(--border-subtle);
+    margin: 0;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* Keyboard shortcut hint */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    min-width: 18px;
+    padding: 0 4px;
+    background: var(--bg-tertiary);
+    border: 0.5px solid var(--border-medium);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    letter-spacing: 0;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="settings-window">
+  <!-- Title Bar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light tl-close"></div>
+      <div class="traffic-light tl-minimize"></div>
+      <div class="traffic-light tl-maximize"></div>
+    </div>
+    <div class="titlebar-title">Settings</div>
+  </div>
+
+  <div class="settings-body">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-section-label">Preferences</div>
+
+      <a class="sidebar-item" href="#">
+        <div class="sidebar-icon icon-general">⚙</div>
+        General
+      </a>
+      <a class="sidebar-item active" href="#">
+        <div class="sidebar-icon icon-appearance">✦</div>
+        Appearance
+      </a>
+      <a class="sidebar-item" href="#">
+        <div class="sidebar-icon icon-notifications">
+          <svg width="10" height="12" viewBox="0 0 10 12" fill="none"><path d="M5 0.5C5 0.5 5 0.5 5 0.5C2.79 0.5 1 2.29 1 4.5V7.5L0 8.5V9.5H10V8.5L9 7.5V4.5C9 2.29 7.21 0.5 5 0.5ZM5 11.5C5.55 11.5 6 11.05 6 10.5H4C4 11.05 4.45 11.5 5 11.5Z" fill="white" opacity="0.9"/></svg>
+        </div>
+        Notifications
+        <span class="badge" style="margin-left:auto">3</span>
+      </a>
+      <a class="sidebar-item" href="#">
+        <div class="sidebar-icon icon-privacy">
+          <svg width="10" height="12" viewBox="0 0 10 12" fill="none"><rect x="2" y="5" width="6" height="6" rx="1" fill="white" opacity="0.9"/><path d="M3 5V3.5C3 2.12 3.9 1 5 1C6.1 1 7 2.12 7 3.5V5" stroke="white" stroke-opacity="0.9" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </div>
+        Privacy
+      </a>
+
+      <div class="sidebar-section-label" style="margin-top:8px">System</div>
+
+      <a class="sidebar-item" href="#">
+        <div class="sidebar-icon icon-network">
+          <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M5.5 2C7.43 2 9.18 2.8 10.43 4.07L11 3.5C9.6 2.08 7.65 1.18 5.5 1.18C3.35 1.18 1.4 2.08 0 3.5L0.57 4.07C1.82 2.8 3.57 2 5.5 2Z" fill="white" opacity="0.9"/><circle cx="5.5" cy="7" r="1" fill="white" opacity="0.9"/><path d="M5.5 3.82C6.97 3.82 8.3 4.42 9.27 5.38L9.84 4.81C8.72 3.7 7.19 3 5.5 3C3.81 3 2.28 3.7 1.16 4.81L1.73 5.38C2.7 4.42 4.03 3.82 5.5 3.82Z" fill="white" opacity="0.9"/></svg>
+        </div>
+        Network
+      </a>
+      <a class="sidebar-item" href="#">
+        <div class="sidebar-icon icon-advanced">⚡</div>
+        Advanced
+      </a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="section-header">
+        <div class="section-title">Appearance</div>
+        <div class="section-subtitle">Customize how the app looks and feels</div>
+      </div>
+
+      <!-- Theme Group -->
+      <div class="group-label">Theme</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Color Scheme</div>
+            <div class="row-description">Choose between light, dark, or system default</div>
+          </div>
+          <div class="row-control">
+            <div class="segmented-control">
+              <div class="segment">Light</div>
+              <div class="segment segment-active">Dark</div>
+              <div class="segment">Auto</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Accent Color</div>
+            <div class="row-description">Used for buttons and interactive elements</div>
+          </div>
+          <div class="row-control">
+            <div class="color-picker-row">
+              <div class="color-swatch swatch-blue selected"></div>
+              <div class="color-swatch swatch-purple"></div>
+              <div class="color-swatch swatch-pink"></div>
+              <div class="color-swatch swatch-orange"></div>
+              <div class="color-swatch swatch-green"></div>
+              <div class="color-swatch swatch-gray"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography Group -->
+      <div class="group-label">Typography</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Font Size</div>
+            <div class="row-description">Interface text size</div>
+          </div>
+          <div class="row-control">
+            <div class="slider-container">
+              <span class="slider-label">A</span>
+              <input type="range" class="native-slider" min="0" max="100" value="60">
+              <span class="slider-label" style="font-size:15px">A</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Font Family</div>
+            <div class="row-description">Applied to all text content</div>
+          </div>
+          <div class="row-control">
+            <select class="native-select">
+              <option selected>SF Pro (System)</option>
+              <option>New York</option>
+              <option>Helvetica Neue</option>
+              <option>Georgia</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Behavior Group -->
+      <div class="group-label">Behavior</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Reduce Motion</div>
+            <div class="row-description">Minimize animations throughout the interface</div>
+          </div>
+          <div class="row-control">
+            <label class="toggle-wrapper">
+              <input type="checkbox">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Translucency Effects</div>
+            <div class="row-description">Blur and vibrancy in sidebars and panels</div>
+          </div>
+          <div class="row-control">
+            <label class="toggle-wrapper">
+              <input type="checkbox" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Show Scrollbars</div>
+            <div class="row-description">When scrollbars appear in scroll areas</div>
+          </div>
+          <div class="row-control">
+            <select class="native-select" style="min-width:120px">
+              <option>Automatically</option>
+              <option selected>When Scrolling</option>
+              <option>Always</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Compact Mode</div>
+            <div class="row-description">Reduce spacing for denser information display</div>
+          </div>
+          <div class="row-control">
+            <label class="toggle-wrapper">
+              <input type="checkbox">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Sidebar Position</div>
+            <div class="row-description">Navigation sidebar placement</div>
+          </div>
+          <div class="row-control">
+            <div class="segmented-control">
+              <div class="segment segment-active">Left</div>
+              <div class="segment">Right</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications Group -->
+      <div class="group-label">Notifications</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Sound Effects</div>
+            <div class="row-description">Play audio cues for actions and alerts</div>
+          </div>
+          <div class="row-control">
+            <label class="toggle-wrapper">
+              <input type="checkbox" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="row-info">
+            <div class="row-label">Badge App Icon</div>
+            <div class="row-description">Show unread count on dock icon</div>
+          </div>
+          <div class="row-control">
+            <label class="toggle-wrapper">
+              <input type="checkbox" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Bottom Bar -->
+  <div class="bottom-bar">
+    <div class="status-text">
+      <span class="status-dot"></span>All changes saved
+    </div>
+    <div class="button-group">
+      <button class="btn btn-secondary">
+        Reset to Defaults
+      </button>
+      <button class="btn btn-primary">
+        <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4.5L4 7.5L10 1.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Toggle switch interaction
+  document.querySelectorAll('.toggle-wrapper input').forEach(input => {
+    input.addEventListener('change', function() {
+      const track = this.nextElementSibling;
+      const thumb = track.nextElementSibling;
+      // Toggle color already handled by CSS, this is for any JS-driven feedback
+    });
+  });
+
+  // Segmented control interaction
+  document.querySelectorAll('.segmented-control').forEach(control => {
+    control.querySelectorAll('.segment').forEach(segment => {
+      segment.addEventListener('click', function() {
+        control.querySelectorAll('.segment').forEach(s => s.classList.remove('segment-active'));
+        this.classList.add('segment-active');
+      });
+    });
+  });
+
+  // Color swatch selection
+  document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', function() {
+      const row = this.closest('.color-picker-row');
+      row.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+
+  // Slider - update gradient fill
+  document.querySelectorAll('.native-slider').forEach(slider => {
+    const update = () => {
+      const pct = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+      slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--bg-tertiary) ${pct}%)`;
+    };
+    slider.addEventListener('input', update);
+    update();
+  });
+
+  // Save button pulse feedback
+  document.querySelector('.btn-primary').addEventListener('click', function() {
+    const statusText = document.querySelector('.status-text');
+    statusText.innerHTML = '<span class="status-dot"></span>Saving…';
+    setTimeout(() => {
+      statusText.innerHTML = '<span class="status-dot"></span>All changes saved';
+    }, 900);
+  });
+</script>
+
+</body>
+</html>

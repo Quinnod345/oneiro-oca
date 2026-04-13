@@ -22,9 +22,60 @@ import { SCORE_NAMES, DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_E
  */
 export async function evaluateDesign(input, options = {}) {
   const t0 = Date.now();
+
+  // ── Try Phase 2b server first (MobileNet V2 + trained head) ──
+  try {
+    const client = await import('./client.js');
+    if (client.isServerRunning()) {
+      const serverInput = {};
+
+      if (input.screenshot) {
+        serverInput.screenshot = input.screenshot;
+      }
+
+      // Add code features if we have code
+      if (input.code || input.path) {
+        const code = input.code || input.path || '';
+        const codeFeatures = encodeFromCode(code, input.context || {});
+        serverInput.codeFeatures = Array.from(codeFeatures);
+      }
+
+      // Need at least screenshot or code features
+      if (serverInput.screenshot || serverInput.codeFeatures) {
+        const serverResult = await client.evaluate(serverInput);
+        const elapsed = Date.now() - t0;
+
+        const result = {
+          scores: serverResult.scores,
+          overall: serverResult.overall,
+          norman: serverResult.norman,
+          weakest: findWeakest(serverResult.scores, 3),
+          strongest: findStrongest(serverResult.scores, 3),
+          suggestions: generateSuggestions(serverResult.scores),
+          modelVersion: 'phase_2b',
+          paramCount: serverResult.param_count,
+          inferenceMs: elapsed,
+          backend: 'phase_2b',
+        };
+
+        if (options.detailed && (input.code || input.path)) {
+          const code = input.code || input.path;
+          result.analysis = analyzeDesignCode(code);
+          result.antiPatterns = detectAntiPatternDetails(code);
+          result.emotionalProfile = assessEmotionalProfile(result.scores);
+          result.referenceComparison = compareToReferences(result.scores);
+        }
+
+        return result;
+      }
+    }
+  } catch (e) {
+    // Phase 2b server unavailable — fall back to JS MLP
+  }
+
+  // ── Fallback: Phase 1 JS MLP ──
   const model = loadModel();
 
-  // Encode features based on input type
   let features;
   if (input.screenshot) {
     features = await encodeFromScreenshot(input.screenshot);
@@ -33,12 +84,10 @@ export async function evaluateDesign(input, options = {}) {
     features = encodeFromCode(code, input.context || {});
   }
 
-  // Run prediction
   const rawScores = model.predict(features);
   const scores = Object.fromEntries(SCORE_NAMES.map((n, i) => [n, rawScores[i]]));
   const elapsed = Date.now() - t0;
 
-  // Core result
   const result = {
     scores,
     overall: scores.overall_aesthetic,
@@ -53,9 +102,9 @@ export async function evaluateDesign(input, options = {}) {
     modelVersion: model.config.schemaVersion,
     paramCount: model.getParamCount(),
     inferenceMs: elapsed,
+    backend: 'phase_1_mlp',
   };
 
-  // Detailed analysis
   if (options.detailed && (input.code || input.path)) {
     const code = input.code || input.path;
     result.analysis = analyzeDesignCode(code);
@@ -71,7 +120,18 @@ export async function evaluateDesign(input, options = {}) {
 // QUICK SCORE (returns just the overall number)
 // ═══════════════════════════════════════════════════
 
-export function quickScore(code, context = {}) {
+export async function quickScore(code, context = {}) {
+  // Try Phase 2b server
+  try {
+    const client = await import('./client.js');
+    if (client.isServerRunning()) {
+      const codeFeatures = encodeFromCode(code, context);
+      const result = await client.evaluate({ codeFeatures: Array.from(codeFeatures) });
+      return result.overall;
+    }
+  } catch {}
+
+  // Fallback: JS MLP
   const model = loadModel();
   const features = encodeFromCode(code, context);
   const rawScores = model.predict(features);

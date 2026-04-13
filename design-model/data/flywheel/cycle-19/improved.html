@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,500;0,600;1,500&family=Jost:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --success:      #3ecf8e;
+    --success-bg:   rgba(62,207,142,.13);
+    --success-glow: rgba(62,207,142,.22);
+    --info:         #7eb3f8;
+    --info-bg:      rgba(126,179,248,.13);
+    --info-glow:    rgba(126,179,248,.22);
+    --warning:      #f5a623;
+    --warning-bg:   rgba(245,166,35,.13);
+    --warning-glow: rgba(245,166,35,.22);
+    --toast-bg:     #1b1916;
+    --toast-edge:   rgba(255,255,255,.065);
+    --text-hi:      #f2ede2;
+    --text-lo:      #706860;
+    --text-mid:     #a09278;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Jost', sans-serif;
+    background: #e6dfd3;
+    background-image:
+      radial-gradient(ellipse 75% 65% at 12% 58%, rgba(212,202,182,.65) 0%, transparent 62%),
+      radial-gradient(ellipse 55% 48% at 88% 18%, rgba(197,187,165,.48) 0%, transparent 58%),
+      radial-gradient(ellipse 42% 38% at 52% 98%, rgba(178,168,148,.32) 0%, transparent 52%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: background-color 1.4s ease;
+  }
+
+  /* Ambient reaction layer */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    transition: opacity 1.6s ease;
+    opacity: 0;
+    z-index: 0;
+  }
+  body.glow-success::after { background: radial-gradient(ellipse 55% 38% at 96% 96%, rgba(62,207,142,.07) 0%, transparent 70%); opacity: 1; }
+  body.glow-info::after    { background: radial-gradient(ellipse 55% 38% at 96% 96%, rgba(126,179,248,.07) 0%, transparent 70%); opacity: 1; }
+  body.glow-warning::after { background: radial-gradient(ellipse 55% 38% at 96% 96%, rgba(245,166,35,.07) 0%, transparent 70%); opacity: 1; }
+
+  /* ── Stage ── */
+  .stage { text-align: center; user-select: none; position: relative; z-index: 1; }
+
+  .stage-eyebrow {
+    font-size: .68rem;
+    font-weight: 400;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: #b2a898;
+    margin-bottom: .9rem;
+  }
+
+  .stage-label {
+    font-family: 'Cormorant', serif;
+    font-size: clamp(2.3rem, 5.5vw, 3.5rem);
+    font-weight: 600;
+    color: #181410;
+    letter-spacing: -.03em;
+    line-height: 1.04;
+    margin-bottom: .45rem;
+  }
+
+  .stage-sub {
+    font-family: 'Cormorant', serif;
+    font-style: italic;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: #a89880;
+    letter-spacing: .01em;
+    margin-bottom: 3.2rem;
+  }
+
+  .btns { display: flex; gap: .85rem; justify-content: center; flex-wrap: wrap; }
+
+  .btn {
+    position: relative;
+    padding: .68rem 1.6rem;
+    border: none;
+    border-radius: 9px;
+    font-family: 'Jost', sans-serif;
+    font-size: .74rem;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+    will-change: transform;
+    overflow: hidden;
+  }
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background .15s;
+  }
+  .btn:hover::after  { background: rgba(255,255,255,.13); }
+  .btn:hover  { transform: translateY(-3px); }
+  .btn:active { transform: translateY(-1px) scale(.98); }
+
+  .btn-success { background: var(--success); color: #062213; box-shadow: 0 4px 18px rgba(62,207,142,.35); }
+  .btn-info    { background: var(--info);    color: #061428; box-shadow: 0 4px 18px rgba(126,179,248,.35); }
+  .btn-warning { background: var(--warning); color: #221203; box-shadow: 0 4px 18px rgba(245,166,35,.35); }
+  .btn-success:hover { box-shadow: 0 8px 28px rgba(62,207,142,.45); }
+  .btn-info:hover    { box-shadow: 0 8px 28px rgba(126,179,248,.45); }
+  .btn-warning:hover { box-shadow: 0 8px 28px rgba(245,166,35,.45); }
+
+  /* ── Toast container ── */
+  #tc {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-end;
+    pointer-events: none;
+    width: 384px;
+  }
+
+  /* ── Wrapper (handles entrance/exit + collapse) ── */
+  .toast-wrapper {
+    width: 100%;
+    pointer-events: all;
+    animation: wIn .52s cubic-bezier(.34,1.22,.64,1) both;
+    will-change: transform, opacity;
+    padding-top: 10px;
+  }
+  .toast-wrapper.out {
+    animation: wOut .3s cubic-bezier(.55,0,1,.7) forwards;
+    pointer-events: none;
+  }
+
+  @keyframes wIn {
+    from { transform: translateX(calc(100% + 36px)) scale(.9); opacity: 0; }
+    55%  { opacity: 1; }
+    to   { transform: translateX(0) scale(1); opacity: 1; }
+  }
+  @keyframes wOut {
+    from { transform: translateX(0) scale(1); opacity: 1; }
+    to   { transform: translateX(calc(100% + 36px)) scale(.93); opacity: 0; }
+  }
+
+  /* ── Toast card ── */
+  .toast {
+    width: 100%;
+    background: var(--toast-bg);
+    border: 1px solid var(--toast-edge);
+    border-radius: 14px;
+    box-shadow:
+      0 18px 52px rgba(0,0,0,.52),
+      0 4px 12px rgba(0,0,0,.32),
+      inset 0 1px 0 rgba(255,255,255,.065);
+    overflow: hidden;
+    position: relative;
+    cursor: default;
+    transition:
+      transform .24s cubic-bezier(.34,1.4,.64,1),
+      box-shadow .24s ease;
+  }
+
+  .toast:hover { transform: translateY(-2px) scale(1.006); }
+
+  .toast.success:hover {
+    box-shadow: 0 22px 58px rgba(0,0,0,.56), 0 0 0 1px rgba(62,207,142,.14),
+                0 6px 30px var(--success-glow), inset 0 1px 0 rgba(255,255,255,.09);
+  }
+  .toast.info:hover {
+    box-shadow: 0 22px 58px rgba(0,0,0,.56), 0 0 0 1px rgba(126,179,248,.14),
+                0 6px 30px var(--info-glow), inset 0 1px 0 rgba(255,255,255,.09);
+  }
+  .toast.warning:hover {
+    box-shadow: 0 22px 58px rgba(0,0,0,.56), 0 0 0 1px rgba(245,166,35,.14),
+                0 6px 30px var(--warning-glow), inset 0 1px 0 rgba(255,255,255,.09);
+  }
+
+  /* glowing accent strip */
+  .toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 10px; bottom: 10px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+  }
+  .toast.success::before { background: var(--success); box-shadow: 0 0 10px var(--success); }
+  .toast.info::before    { background: var(--info);    box-shadow: 0 0 10px var(--info); }
+  .toast.warning::before { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+
+  /* subtle top sheen */
+  .toast::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.09) 40%, transparent 100%);
+    pointer-events: none;
+  }
+
+  /* ── Body ── */
+  .toast-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 15px 14px 14px 18px;
+  }
+
+  /* ── Icon ── */
+  .t-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    position: relative;
+    transition: transform .24s cubic-bezier(.34,1.56,.64,1);
+  }
+  .toast:hover .t-icon { transform: scale(1.09); }
+  .toast.success .t-icon { background: var(--success-bg); }
+  .toast.info    .t-icon { background: var(--info-bg); }
+  .toast.warning .t-icon { background: var(--warning-bg); }
+
+  /* pulse ring */
+  .t-icon::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: 14px;
+    opacity: 0;
+    animation: pulse 2.6s ease-out .4s both;
+  }
+  .toast.success .t-icon::after { background: var(--success-bg); }
+  .toast.info    .t-icon::after { background: var(--info-bg); }
+  .toast.warning .t-icon::after { background: var(--warning-bg); }
+
+  @keyframes pulse {
+    0%   { opacity: 0; transform: scale(.75); }
+    28%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.7); }
+  }
+
+  .t-icon svg { width: 15px; height: 15px; display: block; }
+  .toast.success .t-icon svg { color: var(--success); }
+  .toast.info    .t-icon svg { color: var(--info); }
+  .toast.warning .t-icon svg { color: var(--warning); }
+
+  /* ── Text ── */
+  .t-text { flex: 1; min-width: 0; }
+
+  .t-title {
+    font-family: 'Cormorant', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-hi);
+    line-height: 1.2;
+    margin-bottom: 3px;
+    letter-spacing: -.013em;
+  }
+
+  .t-msg {
+    font-size: .775rem;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--text-lo);
+    line-height: 1.62;
+    letter-spacing: .008em;
+  }
+
+  /* action buttons */
+  .t-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .t-action {
+    background: rgba(255,255,255,.03);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 6px;
+    font-family: 'Jost', sans-serif;
+    font-size: .67rem;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 3.5px 10px;
+    transition: background .15s, border-color .15s, transform .15s cubic-bezier(.34,1.56,.64,1);
+  }
+  .toast.success .t-action { color: var(--success); }
+  .toast.info    .t-action { color: var(--info); }
+  .toast.warning .t-action { color: var(--warning); }
+  .t-action:hover {
+    background: rgba(255,255,255,.07);
+    border-color: rgba(255,255,255,.13);
+    transform: translateY(-1px);
+  }
+  .t-action:active { transform: translateY(0) scale(.97); }
+
+  /* ── Close ── */
+  .t-close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #383230;
+    padding: 4px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color .15s, background .15s, transform .18s cubic-bezier(.34,1.56,.64,1);
+  }
+  .t-close:hover {
+    color: var(--text-mid);
+    background: rgba(255,255,255,.07);
+    transform: scale(1.12) rotate(8deg);
+  }
+  .t-close:active { transform: scale(.95); }
+  .t-close svg { width: 11px; height: 11px; display: block; }
+
+  /* ── Progress bar ── */
+  .t-bar {
+    height: 2px;
+    background: rgba(255,255,255,.03);
+    position: relative;
+    overflow: hidden;
+  }
+  .t-bar-fill {
+    position: absolute;
+    inset: 0;
+    transform-origin: left center;
+    animation: drain linear forwards;
+  }
+  .toast.success .t-bar-fill { background: linear-gradient(90deg, var(--success), rgba(62,207,142,.35)); }
+  .toast.info    .t-bar-fill { background: linear-gradient(90deg, var(--info),    rgba(126,179,248,.35)); }
+  .toast.warning .t-bar-fill { background: linear-gradient(90deg, var(--warning), rgba(245,166,35,.35)); }
+
+  @keyframes drain {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+
+  /* Pause on hover */
+  .toast:hover .t-bar-fill { animation-play-state: paused; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <p class="stage-eyebrow">UI Component</p>
+  <h1 class="stage-label">Toast Notifications</h1>
+  <p class="stage-sub">Ephemeral messages, delivered with grace</p>
+  <div class="btns">
+    <button class="btn btn-success" onclick="show('success')">Success</button>
+    <button class="btn btn-info"    onclick="show('info')">Info</button>
+    <button class="btn btn-warning" onclick="show('warning')">Warning</button>
+  </div>
+</div>
+
+<div id="tc"></div>
+
+<script>
+const DATA = {
+  success: [
+    { title: 'Changes committed',    msg: 'Your work is safe — every edit has been preserved.',          action: null },
+    { title: 'Upload complete',      msg: 'Three files landed quietly, exactly where they belong.',      action: 'View files' },
+    { title: 'Profile updated',      msg: 'A new version of you, visible to the world.',                 action: null },
+    { title: 'Payment settled',      msg: 'The transaction cleared without a sound.',                    action: 'See receipt' },
+    { title: 'Export ready',         msg: 'Your document is packaged and waiting.',                      action: 'Download' },
+  ],
+  info: [
+    { title: 'New version ready',    msg: 'A refined build awaits — whenever you\'re prepared.',         action: 'Update now' },
+    { title: 'Session restored',     msg: 'Picking up from exactly where you left off.',                 action: null },
+    { title: 'Syncing devices',      msg: 'Pulling the latest across your connected spaces.',            action: null },
+    { title: 'Keyboard shortcut',    msg: 'Hold ⌥ while dragging to duplicate any element.',            action: 'Learn more' },
+    { title: 'Scheduled backup',     msg: 'Your next automatic backup runs at midnight.',                action: null },
+  ],
+  warning: [
+    { title: 'Unsaved changes',      msg: 'Leaving now risks losing what you\'ve carefully built.',      action: 'Save first' },
+    { title: 'Storage running low',  msg: 'Only 340 MB remain — old exports may need clearing.',         action: 'Manage' },
+    { title: 'Unstable connection',  msg: 'Sync is paused until your signal steadies.',                  action: null },
+    { title: 'Session expiring',     msg: 'You\'ll be signed out in five minutes.',                      action: 'Stay signed in' },
+    { title: 'Rate limit near',      msg: 'You\'ve used 90% of your monthly quota.',                     action: 'Review plan' },
+  ],
+};
+
+const ICONS = {
+  success: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="2.5 8.5 6.5 12.5 13.5 4.5" stroke-dasharray="20" stroke-dashoffset="20" style="animation:drawLine .45s .12s cubic-bezier(.4,0,.2,1) forwards"/>
+  </svg>`,
+  info: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <circle cx="8" cy="8" r="6.2"/>
+    <line x1="8" y1="7.2" x2="8" y2="11.2"/>
+    <circle cx="8" cy="5.2" r=".75" fill="currentColor" stroke="none"/>
+  </svg>`,
+  warning: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2L14.8 14H1.2Z"/>
+    <line x1="8" y1="6.5" x2="8" y2="9.8"/>
+    <circle cx="8" cy="11.8" r=".75" fill="currentColor" stroke="none"/>
+  </svg>`,
+};
+
+const DURATION = 4400;
+let toastCount = 0;
+const used = { success: [], info: [], warning: [] };
+
+function pickData(type) {
+  const pool = DATA[type];
+  if (used[type].length >= pool.length) used[type] = [];
+  const avail = pool.map((_, i) => i).filter(i => !used[type].includes(i));
+  const idx = avail[Math.floor(Math.random() * avail.length)];
+  used[type].push(idx);
+  return pool[idx];
+}
+
+function show(type) {
+  const d = pickData(type);
+  const id = ++toastCount;
+  const tc = document.getElementById('tc');
+
+  // ambient body glow
+  document.body.className = 'glow-' + type;
+  setTimeout(() => { if (document.body.className === 'glow-' + type) document.body.className = ''; }, 3600);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'toast-wrapper';
+  wrapper.dataset.id = id;
+
+  const actionHtml = d.action
+    ? `<div class="t-actions"><button class="t-action" onclick="dismissId(${id})">${d.action}</button></div>`
+    : '';
+
+  wrapper.innerHTML = `
+    <div class="toast ${type}">
+      <div class="toast-body">
+        <div class="t-icon">${ICONS[type]}</div>
+        <div class="t-text">
+          <div class="t-title">${d.title}</div>
+          <div class="t-msg">${d.msg}</div>
+          ${actionHtml}
+        </div>
+        <button class="t-close" onclick="dismissId(${id})" aria-label="Dismiss">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
+          </svg>
+        </button>
+      </div>
+      <div class="t-bar">
+        <div class="t-bar-fill" style="animation-duration:${DURATION}ms"></div>
+      </div>
+    </div>`;
+
+  tc.prepend(wrapper);
+
+  // cap visible toasts at 4
+  const visible = tc.querySelectorAll('.toast-wrapper:not(.out)');
+  if (visible.length > 4) dismissWrapper(visible[visible.length - 1]);
+
+  // auto-dismiss
+  let remaining = DURATION;
+  let startedAt = Date.now();
+  wrapper._timer = setTimeout(() => dismissId(id), DURATION);
+
+  const toastEl = wrapper.querySelector('.toast');
+  toastEl.addEventListener('mouseenter', () => {
+    clearTimeout(wrapper._timer);
+    remaining -= (Date.now() - startedAt);
+  });
+  toastEl.addEventListener('mouseleave', () => {
+    startedAt = Date.now();
+    wrapper._timer = setTimeout(() => dismissId(id), Math.max(remaining, 800));
+  });
+}
+
+function dismissId(id) {
+  const w = document.querySelector(`[data-id="${id}"]`);
+  if (w) dismissWrapper(w);
+}
+
+function dismissWrapper(wrapper) {
+  if (wrapper.classList.contains('out')) return;
+  clearTimeout(wrapper._timer);
+  wrapper.classList.add('out');
+
+  wrapper.addEventListener('animationend', () => {
+    // smooth height collapse after slide-out
+    const h = wrapper.scrollHeight;
+    wrapper.style.height = h + 'px';
+    wrapper.style.overflow = 'hidden';
+    wrapper.style.paddingTop = '0';
+    wrapper.style.transition = 'height .28s cubic-bezier(.4,0,.2,1), padding .28s';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      wrapper.style.height = '0';
+    }));
+    wrapper.addEventListener('transitionend', () => wrapper.remove(), { once: true });
+  }, { once: true });
+}
+
+// Escape to dismiss newest
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const first = document.querySelector('#tc .toast-wrapper:not(.out)');
+  if (first) dismissWrapper(first);
+});
+
+// inject checkmark keyframe
+const s = document.createElement('style');
+s.textContent = '@keyframes drawLine { to { stroke-dashoffset: 0; } }';
+document.head.appendChild(s);
+</script>
+</body>
+</html>

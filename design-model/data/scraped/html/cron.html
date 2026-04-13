@@ -1,0 +1,524 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cron Calendar</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+      body {
+        /* Default text settings */
+        /* Type weight 100-900 in 100 increments; Medium is 500: http://www.webtype.com/info/articles/fonts-weights/ */
+        font-size: 22px;
+        line-height: 170%;
+        font-weight: 400;
+        color: #ccc;
+      }
+
+      body > * {
+        padding: 0 140px;
+      }
+
+      header {
+        height: 120px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+      }
+
+      header a,
+      footer a {
+        text-decoration: none;
+      }
+
+      header nav {
+        width: 100%;
+      }
+
+      .nav-menu {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .nav-menu li {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      header nav a {
+        margin-left: 40px;
+      }
+
+      .nav-menu-button {
+        display: none;
+      }
+
+      .primary-link-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 24px;
+        font-size: 22px;
+        line-height: 22px;
+        text-align: center;
+        white-space: nowrap;
+        text-decoration: none;
+        border-radius: 9999px;
+        background: #ff4700;
+      }
+
+      .primary-link-button.glow {
+        --glow: 0px 0px 100px rgba(255, 71, 0, 0.2);
+        --glow-hover: 0px 0px 25px 0px rgba(255, 71, 0, 0.4);
+
+        box-shadow: var(--glow);
+        transition-property: opacity, box-shadow;
+        transition-duration: 0.175s;
+      }
+
+      .primary-link-button.glow:hover {
+        box-shadow: var(--glow-hover);
+      }
+
+      #logotype {
+        height: 40px;
+        width: auto;
+        /* Prevent extra space below a nested image. */
+        display: block;
+      }
+
+      .banner {
+        display: flex;
+        align-items: center;
+        margin: 24px auto 0 auto;
+        flex: 0 0 auto;
+        min-height: 44px;
+        padding: 0 24px 1px 24px;
+        background: #161412;
+        border: none;
+        border-radius: 4px;
+        box-shadow: inset 0px 0px 0px 0.5px rgba(255, 71, 0, 0.5), 0 0 28px rgba(255, 72, 0, 0.2);
+        color: #fff;
+        line-height: 1;
+        cursor: pointer;
+        outline: none;
+        font-size: 15px;
+        font-weight: 400;
+        text-decoration: none;
+        letter-spacing: 0.15px;
+        transition: 0.175s box-shadow;
+      }
+
+      .banner:hover {
+        box-shadow: inset 0px 0px 0px 0.5px rgba(255, 71, 0, 0.75), 0 0 28px rgba(255, 72, 0, 0.2);
+      }
+
+      main {
+        margin: 0px;
+        flex: 1 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      footer {
+        flex: 0 0 auto;
+        min-height: 120px;
+        background-color: #0f0d0a;
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+
+      h1 {
+        font-size: 140px;
+        line-height: 90%;
+        letter-spacing: -3px;
+        color: #fff;
+        margin: 0px 0px 40px 0px;
+      }
+
+      h2 {
+        font-size: 40px;
+        font-weight: 600;
+        line-height: 120%;
+        color: #fff;
+        margin: 0;
+        text-transform: unset;
+        letter-spacing: unset;
+        margin: 0 0 20px 0;
+      }
+
+      h4 {
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0.8;
+        margin: 20px 0;
+      }
+
+      p {
+        margin: 0 0 20px 0;
+      }
+
+      a {
+        text-decoration: underline;
+      }
+
+      strong {
+        font-weight: 600;
+        color: #fff;
+      }
+
+      img,
+      video {
+        width: 100%;
+      }
+
+      video {
+        border-radius: 16px;
+        margin: 20px 0;
+      }
+
+      .content {
+        max-width: 1000px;
+        margin: 80px 0;
+      }
+
+      .cta {
+        padding: 40px 0 100px 0;
+      }
+
+      .left {
+        align-self: flex-start;
+      }
+
+      .left img {
+        order: -1;
+      }
+
+      .right {
+        align-self: flex-end;
+      }
+
+      .horizontal {
+        display: flex;
+        align-items: center;
+      }
+
+      .horizontal.left .text {
+        margin: 0 0 0 40px;
+      }
+
+      .horizontal.right .text {
+        margin: 0 20px 0 0;
+      }
+
+      .primary {
+        color: #fa0;
+      }
+
+      .symbol {
+        opacity: 0.7;
+      }
+
+      .nobr {
+        white-space: nowrap;
+      }
+
+      ul.integrations {
+        list-style-type: none;
+        margin: -12px 0 0 50px;
+        padding: 0;
+        font-size: 14px;
+      }
+
+      .integrations li {
+        display: inline;
+        margin: 0 16px 0 0;
+        padding: 4px 12px;
+        font-weight: 500;
+        color: #fff;
+        opacity: 0.8;
+        background: rgba(255, 170, 0, 0.15);
+        border-radius: 999px;
+      }
+
+      .integrations li:last-child {
+        margin: 0;
+      }
+
+      /* Responsiveness -- default design is for a large screen, this step down is for a small screen, and below is mobile. */
+      @media only screen and (max-width: 1000px) {
+        body > * {
+          padding: 0 40px;
+        }
+
+        footer {
+          padding-top: 20px;
+        }
+
+        h1 {
+          font-size: 120px;
+          letter-spacing: -2.5px;
+          margin: 0px 0px 20px 0px;
+        }
+
+        header nav a {
+          margin-left: 20px;
+        }
+
+        main {
+          margin: 20px 0px;
+        }
+
+        h2 {
+          font-size: 30px;
+        }
+
+        h4 {
+          font-size: 16px;
+        }
+
+        .content {
+          max-width: 800px;
+          margin: 40px 0;
+        }
+
+        ul.integrations {
+          margin: -12px 0 0 34px;
+          font-size: 11px;
+        }
+
+        .integrations li {
+          margin: 0 16px 0 0;
+          padding: 3px 10px;
+        }
+      }
+
+      @media only screen and (max-width: 768px) {
+        body {
+          font-size: 16px;
+        }
+
+        body > * {
+          padding: 0 16px;
+        }
+
+        body.showing-menu main,
+        body.showing-menu footer {
+          display: none;
+        }
+
+        header {
+          height: auto;
+          display: flex;
+          justify-content: space-between;
+          padding: 28px 16px;
+          margin-bottom: 24px;
+        }
+
+        header nav {
+          width: auto;
+        }
+
+        .nav-menu {
+          display: none;
+          position: absolute;
+          top: 76px;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          padding: 16px 0;
+          background: #161412;
+          overflow: auto;
+        }
+
+        body.showing-menu .nav-menu {
+          display: unset;
+        }
+
+        .nav-menu li a {
+          display: block;
+          padding: 16px;
+          margin: 0;
+          font-size: 24px;
+        }
+
+        .nav-menu-button {
+          display: unset;
+        }
+
+        body.showing-menu .nav-menu-icon-show {
+          display: none;
+        }
+
+        .nav-menu-icon-hide {
+          display: none;
+        }
+
+        body.showing-menu .nav-menu-icon-hide {
+          display: unset;
+        }
+
+        .nav-menu .primary-link-button {
+          width: 100%;
+          margin: 0 24px;
+        }
+
+        main {
+          margin: 20px 0px;
+        }
+
+        footer {
+          height: 100px;
+          padding-top: 10px;
+        }
+
+        h1 {
+          font-size: 80px;
+          letter-spacing: -2px;
+          margin: 20px 0;
+        }
+
+        h2 {
+          font-size: 18px;
+          line-height: 140%;
+          margin: 0 0 8px 0;
+        }
+
+        h4 {
+          font-size: 12px;
+          letter-spacing: 2px;
+          margin: 20px 0 4px 0;
+        }
+
+        p {
+          margin: 0 0 16px 0;
+        }
+
+        video {
+          border-radius: 0;
+          margin: 10px 0;
+          /* full-bleed */
+          width: 100vw;
+          position: relative;
+          left: 50%;
+          right: 50%;
+          margin-left: -50vw;
+          margin-right: -50vw;
+        }
+
+        .content {
+          margin: 20px 0;
+        }
+
+        .left img {
+          order: 0;
+        }
+
+        .horizontal {
+          flex-direction: column;
+        }
+
+        .horizontal.left .text,
+        .horizontal.right .text {
+          margin: 0;
+        }
+
+        ul.integrations {
+          margin: -4px 0 0 20px;
+          font-size: 8px;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+        }
+
+        .integrations li {
+          margin: 0 3px 0 0;
+          padding: 2px 6px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <a href="/">
+        <img id="logotype" src="./images/brand/cron-logotype-s.png" srcset="./images/brand/cron-logotype-s@2x.png 2x" alt="Cron logo">
+      </a>
+      <nav>
+        <ul class="nav-menu">
+          <li>
+            <a href="/blog">Blog</a>
+          </li>
+          <li>
+            <a href="/changelog">Changelog</a>
+          </li>
+          <li>
+            <a href="https://www.notion.so/help/category/notion-calendar" target="_blank">Docs</a>
+          </li>
+          <li>
+            <a href="https://calendar.notion.so/login" target="_blank">Login</a>
+          </li>
+          <li>
+            <a class="primary-link-button glow" href="https://calendar.notion.so/signup" target="_blank">Sign up</a>
+          </li>
+        </ul>
+        <div class="nav-menu-button">
+          <svg class="nav-menu-icon-show" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="3" width="20" height="2" fill="#fff"></rect>
+            <rect x="2" y="11" width="20" height="2" fill="#fff"></rect>
+            <rect x="2" y="19" width="20" height="2" fill="#fff"></rect>
+          </svg>
+          <svg class="nav-menu-icon-hide" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5.41431" y="4" width="20" height="2" transform="rotate(45 5.41431 4)" fill="#fff"></rect>
+            <rect x="19.5564" y="5.41431" width="20" height="2" transform="rotate(135 19.5564 5.41431)" fill="#fff"></rect>
+          </svg>
+        </div>
+      </nav>
+    </header>
+    <a class="banner" href="https://www.notion.so/product/calendar" target="_blank">Cron is now Notion Calendar&nbsp;&nbsp;→
+    </a>
+    <main>
+      <div class="content">
+        <h1>It’s about time.</h1>
+        <p>Cron is the next-generation calendar for professionals <span class="nobr">and teams.</span></p>
+        <img src="./images/product/cron-2023-02-28@2x.png" alt="Cron Calendar and Cron for iOS in dark mode">
+      </div>
+    </main>
+    <footer>
+      <ul class="legal">
+        <li class="nobr"><a href="/privacy" target="_blank">Privacy Policy</a></li>
+        <li class="nobr"><a href="/terms" target="_blank">Terms of Service</a></li>
+        <li class="nobr"><a href="https://calendar.notion.so" target="_blank">Web app</a></li>
+        <li class="nobr"><a href="https://www.notion.so/product/calendar/download" target="_blank">Download</a></li>
+      </ul>
+    </footer>
+    <script>
+      (function () {
+        // const apiURL = `http://localhost:5001`; // Use CORS Chrome extension for dev
+        const apiURL = `https://api.cron.com`;
+
+        let showingMobileNavMenu = false;
+
+        function toggleMobileNavMenu() {
+          showingMobileNavMenu = !showingMobileNavMenu;
+
+          if (showingMobileNavMenu) {
+            document.body.classList.add("showing-menu");
+          } else {
+            document.body.classList.remove("showing-menu");
+          }
+        }
+
+        function init() {
+          document.querySelector(".nav-menu-button").addEventListener("click", toggleMobileNavMenu);
+        }
+
+        init();
+      })();
+    </script>
+  
+
+</body></html>

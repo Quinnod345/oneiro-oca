@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #090910;
+  --surface: #111118;
+  --surface-2: #18181f;
+  --border: rgba(255,255,255,0.065);
+  --border-hi: rgba(255,255,255,0.13);
+  --text-1: #eeeef2;
+  --text-2: #888898;
+  --text-3: #50505e;
+
+  --green:  #4ade80; --green-dim:  rgba(74,222,128,0.1);
+  --blue:   #38bdf8; --blue-dim:   rgba(56,189,248,0.1);
+  --amber:  #fbbf24; --amber-dim:  rgba(251,191,36,0.1);
+  --red:    #f87171; --red-dim:    rgba(248,113,113,0.1);
+}
+
+html, body { height: 100%; }
+body {
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  background: var(--bg);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* ─── Demo Shell ─── */
+.demo {
+  text-align: center;
+  max-width: 440px;
+  padding: 48px 24px;
+}
+.demo-eyebrow {
+  font-family: 'Syne', sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 18px;
+}
+.demo-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text-1);
+  margin-bottom: 10px;
+}
+.demo-sub {
+  font-size: 14.5px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text-2);
+  line-height: 1.65;
+  margin-bottom: 44px;
+}
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 18px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-1);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.btn:hover { background: var(--surface-2); border-color: var(--border-hi); }
+.btn:active { transform: scale(0.965); }
+.btn-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.btn-success .btn-dot { background: var(--green);  color: var(--green); }
+.btn-info    .btn-dot { background: var(--blue);   color: var(--blue); }
+.btn-warning .btn-dot { background: var(--amber);  color: var(--amber); }
+.btn-error   .btn-dot { background: var(--red);    color: var(--red); }
+.btn-all {
+  grid-column: 1 / -1;
+  background: var(--surface-2);
+  border-color: rgba(255,255,255,0.09);
+  color: var(--text-2);
+  font-size: 12.5px;
+  padding: 10px;
+}
+.btn-all:hover { color: var(--text-1); }
+
+/* ─── Toast Container ─── */
+#toast-container {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  z-index: 9999;
+  pointer-events: none;
+  gap: 0;
+}
+
+/* ─── Toast ─── */
+.toast {
+  pointer-events: all;
+  position: relative;
+  width: 352px;
+  background: rgba(14, 14, 20, 0.91);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.05) inset,
+    0 2px 6px rgba(0,0,0,0.35),
+    0 8px 28px rgba(0,0,0,0.4),
+    0 20px 60px rgba(0,0,0,0.25);
+
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 13px 18px 15px;
+  margin-bottom: 8px;
+
+  /* Radial glow from left matching type color */
+  background-image: radial-gradient(ellipse 65% 100% at 0% 50%, var(--t-dim, transparent) 0%, transparent 100%);
+
+  /* Enter state */
+  transform: translateX(calc(100% + 26px)) scale(0.97);
+  opacity: 0;
+  transition:
+    transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Left accent bar */
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2.5px;
+  background: var(--t-color, transparent);
+  border-radius: 12px 0 0 12px;
+}
+
+/* Bottom edge shimmer line */
+.toast::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--t-color, transparent) 0%, transparent 60%);
+  opacity: 0.3;
+}
+
+.toast.visible {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+}
+
+.toast.collapsing {
+  transform: translateX(calc(100% + 26px)) scale(0.96);
+  opacity: 0;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 1, 1),
+    opacity 0.22s cubic-bezier(0.4, 0, 1, 1),
+    height 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+    padding-top 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+    padding-bottom 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Type colors via custom properties */
+.toast-success { --t-color: var(--green); --t-dim: var(--green-dim); }
+.toast-info    { --t-color: var(--blue);  --t-dim: var(--blue-dim); }
+.toast-warning { --t-color: var(--amber); --t-dim: var(--amber-dim); }
+.toast-error   { --t-color: var(--red);   --t-dim: var(--red-dim); }
+
+/* Icon */
+.toast-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--t-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 5px var(--t-color));
+}
+
+/* Content */
+.toast-body { flex: 1; min-width: 0; }
+.toast-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+  margin-bottom: 3px;
+}
+.toast-msg {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+/* Close button */
+.toast-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.toast-close:hover {
+  color: var(--text-2);
+  background: rgba(255,255,255,0.07);
+}
+
+/* Progress bar */
+.toast-progress {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: rgba(255,255,255,0.04);
+}
+.toast-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: var(--t-color);
+  opacity: 0.45;
+  animation: shrink linear forwards;
+}
+
+@keyframes shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transform: none !important;
+    transition: opacity 0.01ms !important;
+  }
+  .toast.collapsing { display: none; }
+  .toast-bar { animation-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<main class="demo">
+  <p class="demo-eyebrow">UI Component</p>
+  <h1 class="demo-title">Toast Notifications</h1>
+  <p class="demo-sub">Lightweight, non-intrusive feedback — stacked, timed, and forgettable by design.</p>
+
+  <div class="button-grid">
+    <button class="btn btn-success" onclick="Toast.success('Changes saved', 'Your workspace has been synced successfully.')">
+      <span class="btn-dot"></span> Success
+    </button>
+    <button class="btn btn-info" onclick="Toast.info('Sync in progress', 'Pulling latest changes from the remote.')">
+      <span class="btn-dot"></span> Info
+    </button>
+    <button class="btn btn-warning" onclick="Toast.warning('Storage at 92%', 'Free up space to avoid interruptions.')">
+      <span class="btn-dot"></span> Warning
+    </button>
+    <button class="btn btn-error" onclick="Toast.error('Upload failed', 'Connection timed out. Please retry.')">
+      <span class="btn-dot"></span> Error
+    </button>
+    <button class="btn btn-all" onclick="showAll()">show all four &rarr;</button>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+const ICONS = {
+  success: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M5.25 8.25L7 10l3.75-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  info: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M8 7.5V11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="8" cy="5.25" r="0.85" fill="currentColor"/>
+  </svg>`,
+  warning: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 2.5L14 13H2L8 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M8 7V9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="8" cy="11.25" r="0.8" fill="currentColor"/>
+  </svg>`,
+  error: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+  </svg>`,
+};
+
+const container = document.getElementById('toast-container');
+
+function dismiss(el) {
+  if (el.dataset.dismissing) return;
+  el.dataset.dismissing = '1';
+
+  const h = el.offsetHeight;
+  el.style.height = h + 'px';
+  el.style.overflow = 'hidden';
+  el.getBoundingClientRect(); // force reflow
+
+  el.classList.remove('visible');
+  el.classList.add('collapsing');
+
+  setTimeout(() => {
+    el.style.height = '0px';
+    el.style.marginBottom = '0px';
+    el.style.paddingTop = '0px';
+    el.style.paddingBottom = '0px';
+  }, 70);
+
+  setTimeout(() => el.remove(), 520);
+}
+
+const Toast = {
+  _show(type, title, msg, dur = 4800) {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.innerHTML = `
+      <span class="toast-icon">${ICONS[type]}</span>
+      <div class="toast-body">
+        <div class="toast-title">${title}</div>
+        ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
+      </div>
+      <button class="toast-close" aria-label="Dismiss">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      ${dur > 0 ? `<div class="toast-progress"><div class="toast-bar" style="animation-duration:${dur}ms"></div></div>` : ''}
+    `;
+    el.querySelector('.toast-close').addEventListener('click', () => dismiss(el));
+    container.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
+    if (dur > 0) setTimeout(() => dismiss(el), dur);
+  },
+  success: (t, m, d) => Toast._show('success', t, m, d),
+  info:    (t, m, d) => Toast._show('info',    t, m, d),
+  warning: (t, m, d) => Toast._show('warning', t, m, d),
+  error:   (t, m, d) => Toast._show('error',   t, m, d),
+};
+
+function showAll() {
+  Toast.success('All systems operational', 'Every service is running as expected.');
+  setTimeout(() => Toast.info('3 updates available', 'New version ready to install quietly.'), 110);
+  setTimeout(() => Toast.warning('API limit at 80%', 'Consider throttling request frequency.'), 220);
+  setTimeout(() => Toast.error('Payment declined', 'Card ending 4242 was not accepted.'), 330);
+}
+</script>
+</body>
+</html>

@@ -463,6 +463,36 @@ export const DESIGN_DIMENSIONS = [
     highSignals: ['everything works together', 'coherent vision', 'memorable experience'],
     lowSignals: ['incoherent mix', 'no unifying vision', 'forgettable'],
   },
+
+  // ── Innovation Dimensions (12-15) ──
+  {
+    name: 'innovation_score',
+    index: 12,
+    description: 'How novel and fresh is the design approach? Does it solve the problem in an unexpected way?',
+    highSignals: ['unexpected solutions', 'novel interaction patterns', 'creative constraint usage', 'unfamiliar-but-effective layouts', 'makes you think "I never thought of that"'],
+    lowSignals: ['template-following', 'predictable patterns', 'copy-paste aesthetics', 'conventional solutions', 'safe choices throughout'],
+  },
+  {
+    name: 'system_creativity',
+    index: 13,
+    description: 'How creatively do systems and components connect? Turning constraints into features, combining elements in unexpected ways.',
+    highSignals: ['constraint-to-feature transformation', 'novel component composition', 'creative system integration', 'emergent behavior from simple parts', 'hardware-software harmony'],
+    lowSignals: ['standard component assembly', 'isolated features', 'no system thinking', 'additive complexity', 'each part exists independently'],
+  },
+  {
+    name: 'design_distinctiveness',
+    index: 14,
+    description: 'How visually distinct is this from generic templates? Positive uniqueness that creates memorable identity.',
+    highSignals: ['unique visual identity', 'memorable visual elements', 'distinctive color/type choices', 'recognizable personality', 'would know it without the logo'],
+    lowSignals: ['generic template look', 'interchangeable with competitors', 'forgettable', 'cookie-cutter', 'could be any app'],
+  },
+  {
+    name: 'problem_level',
+    index: 15,
+    description: 'Seven Levels of Design score. Level 1 = direct solution, Level 7 = paradigm shift. Does this just execute, or does it redefine the problem?',
+    highSignals: ['problem redefinition', 'system redesign', 'paradigm shift', 'context transformation', 'makes the original problem irrelevant'],
+    lowSignals: ['direct solution only', 'no problem questioning', 'execution without insight', 'feature parity', 'just does what was asked'],
+  },
 ];
 
 // ═══════════════════════════════════════════════════
@@ -470,7 +500,7 @@ export const DESIGN_DIMENSIONS = [
 // ═══════════════════════════════════════════════════
 
 export const SCORE_NAMES = DESIGN_DIMENSIONS.map(d => d.name);
-export const OUTPUT_DIM = DESIGN_DIMENSIONS.length; // 12
+export const OUTPUT_DIM = DESIGN_DIMENSIONS.length; // 16
 
 // ═══════════════════════════════════════════════════
 // DIMENSION WEIGHTS FOR LOSS COMPUTATION
@@ -480,8 +510,8 @@ export const DIMENSION_WEIGHTS = {
   typography_quality:    1.2,
   color_harmony:         1.1,
   spatial_composition:   1.1,
-  motion_elegance:       0.9,   // harder to evaluate from static analysis
-  emotional_resonance:   1.3,   // the most important — this is what we're training for
+  motion_elegance:       0.9,
+  emotional_resonance:   1.3,
   craft_visibility:      1.2,
   minimalism_coherence:  1.0,
   native_integration:    1.0,
@@ -489,4 +519,8 @@ export const DIMENSION_WEIGHTS = {
   behavioral_score:      1.0,
   reflective_score:      1.1,
   overall_aesthetic:     1.5,   // highest weight — the composite matters most
+  innovation_score:      1.4,   // innovation is why we're here
+  system_creativity:     1.3,
+  design_distinctiveness: 1.2,
+  problem_level:         1.1,
 };

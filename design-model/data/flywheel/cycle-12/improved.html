@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to Oneiro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:              #090806;
+    --bg-mid:          #0F0D09;
+    --surface:         rgba(255, 248, 235, 0.035);
+    --surface-hover:   rgba(255, 248, 235, 0.065);
+    --border:          rgba(255, 248, 235, 0.07);
+    --border-accent:   rgba(212, 148, 48, 0.22);
+    --border-strong:   rgba(212, 148, 48, 0.32);
+    --text-primary:    #EDE8E0;
+    --text-secondary:  #7A6E62;
+    --text-tertiary:   #48403A;
+    --accent:          #D4923A;
+    --accent-bright:   #E8A84C;
+    --accent-soft:     rgba(212, 146, 58, 0.10);
+    --accent-glow:     rgba(212, 146, 58, 0.18);
+    --warm-shadow:     rgba(180, 100, 20, 0.12);
+  }
+
+  html, body {
+    min-height: 100%;
+    background-color: var(--bg);
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 56px 24px;
+    background-image:
+      radial-gradient(ellipse 70% 55% at 20% 10%, rgba(212,146,58,0.055) 0%, transparent 65%),
+      radial-gradient(ellipse 55% 45% at 80% 85%, rgba(160,88,20,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 55% 50%, rgba(212,146,58,0.025) 0%, transparent 70%);
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.22;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+
+  /* ─── Card ─────────────────────────────────────────── */
+  .card {
+    position: relative;
+    z-index: 1;
+    max-width: 500px;
+    width: 100%;
+    padding: 0;
+    background: linear-gradient(160deg, rgba(20,16,11,0.92) 0%, rgba(14,11,7,0.96) 100%);
+    border: 1px solid var(--border);
+    border-radius: 32px;
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    box-shadow:
+      0 0 0 0.5px rgba(255,248,235,0.04),
+      0 0 80px var(--warm-shadow),
+      0 56px 120px rgba(0,0,0,0.70),
+      0 16px 40px rgba(0,0,0,0.50),
+      inset 0 1px 0 rgba(255,248,235,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.3);
+    animation: cardIn 1s cubic-bezier(0.34, 1.1, 0.64, 1) both;
+    overflow: hidden;
+  }
+
+  /* Subtle top shimmer band */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,146,58,0.35) 35%,
+      rgba(232,168,76,0.5) 55%,
+      rgba(212,146,58,0.35) 70%,
+      transparent 100%);
+    z-index: 2;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(32px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .card-inner {
+    padding: 60px 56px 52px;
+  }
+
+  /* ─── App Icon ──────────────────────────────────────── */
+  .app-icon {
+    margin-bottom: 44px;
+    animation: iconIn 0.8s cubic-bezier(0.34, 1.4, 0.64, 1) 0.1s both;
+  }
+
+  @keyframes iconIn {
+    from { opacity: 0; transform: scale(0.68) rotate(-10deg); }
+    to   { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+
+  .app-icon svg {
+    width: 68px;
+    height: 68px;
+    filter:
+      drop-shadow(0 12px 32px rgba(212,146,58,0.38))
+      drop-shadow(0 4px 8px rgba(0,0,0,0.55))
+      drop-shadow(0 0 64px rgba(212,146,58,0.15));
+  }
+
+  /* ─── Header ────────────────────────────────────────── */
+  .header {
+    margin-bottom: 48px;
+    animation: fadeUp 0.65s cubic-bezier(0.4,0,0.2,1) 0.2s both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+    opacity: 0.85;
+  }
+
+  .eyebrow::before {
+    content: '';
+    display: block;
+    width: 18px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.6;
+  }
+
+  .title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 50px;
+    font-weight: 300;
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+  }
+
+  .title em {
+    font-style: italic;
+    font-weight: 300;
+    background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.75;
+    color: var(--text-secondary);
+    max-width: 300px;
+    letter-spacing: 0.008em;
+  }
+
+  /* ─── Divider ───────────────────────────────────────── */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      var(--border) 20%,
+      rgba(212,146,58,0.12) 50%,
+      var(--border) 80%,
+      transparent 100%);
+    margin-bottom: 40px;
+  }
+
+  /* ─── Features ──────────────────────────────────────── */
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 48px;
+  }
+
+  .feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 18px 16px;
+    border-radius: 18px;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: background 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+    animation: fadeUp 0.6s cubic-bezier(0.4,0,0.2,1) both;
+    position: relative;
+  }
+
+  .feature:nth-child(1) { animation-delay: 0.35s; }
+  .feature:nth-child(2) { animation-delay: 0.45s; }
+  .feature:nth-child(3) { animation-delay: 0.55s; }
+
+  .feature:hover {
+    background: var(--surface-hover);
+    border-color: var(--border);
+    transform: translateX(2px);
+  }
+
+  .feature-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--accent-soft);
+    border: 1px solid var(--border-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    position: relative;
+  }
+
+  .feature-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .feature-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .feature-content { flex: 1; }
+
+  .feature-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.012em;
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+
+  .feature-desc {
+    font-size: 12.5px;
+    font-weight: 300;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    letter-spacing: 0.005em;
+  }
+
+  /* ─── CTA ───────────────────────────────────────────── */
+  .cta {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: fadeUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.65s both;
+  }
+
+  .btn-primary {
+    display: block;
+    width: 100%;
+    padding: 16px 32px;
+    background: linear-gradient(160deg, var(--accent-bright) 0%, var(--accent) 100%);
+    color: #12090A;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.12) inset,
+      0 8px 24px rgba(212,146,58,0.35),
+      0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.12) inset,
+      0 12px 32px rgba(212,146,58,0.42),
+      0 4px 12px rgba(0,0,0,0.35);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    opacity: 0.85;
+  }
+
+  .btn-secondary {
+    display: block;
+    width: 100%;
+    padding: 14px 32px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 400;
+    letter-spacing: 0.005em;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface);
+    border-color: rgba(255,248,235,0.12);
+    color: var(--text-primary);
+  }
+
+  /* ─── Footer note ───────────────────────────────────── */
+  .footer-note {
+    padding: 18px 56px 28px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    animation: fadeUp 0.5s cubic-bezier(0.4,0,0.2,1) 0.8s both;
+  }
+
+  .footer-note span {
+    font-size: 11.5px;
+    font-weight: 300;
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+  }
+
+  .footer-note svg {
+    width: 13px;
+    height: 13px;
+    stroke: var(--text-tertiary);
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-inner">
+
+    <!-- App Icon -->
+    <div class="app-icon">
+      <svg viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="iconBg" cx="38%" cy="32%" r="70%">
+            <stop offset="0%" stop-color="#E8A84C"/>
+            <stop offset="55%" stop-color="#C47D28"/>
+            <stop offset="100%" stop-color="#8C4F10"/>
+          </radialGradient>
+          <radialGradient id="iconSheen" cx="30%" cy="20%" r="60%">
+            <stop offset="0%" stop-color="rgba(255,240,200,0.25)"/>
+            <stop offset="100%" stop-color="transparent"/>
+          </radialGradient>
+        </defs>
+        <rect width="72" height="72" rx="20" fill="url(#iconBg)"/>
+        <rect width="72" height="72" rx="20" fill="url(#iconSheen)"/>
+        <!-- Moon crescent -->
+        <path d="M43 22C38.5 22 34.5 24 31.8 27.2C35.5 28.6 38 32.1 38 36.2C38 40.3 35.5 43.8 31.8 45.2C34.5 48.4 38.5 50.4 43 50.4C51.3 50.4 58 44.0 58 36.2C58 28.4 51.3 22 43 22Z" fill="rgba(255,255,255,0.85)"/>
+        <circle cx="28" cy="28" r="4.5" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="21" cy="40" r="2.8" fill="rgba(255,255,255,0.3)"/>
+        <circle cx="32" cy="48" r="2" fill="rgba(255,255,255,0.3)"/>
+      </svg>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <div class="eyebrow">Your personal dream space</div>
+      <h1 class="title">Welcome to<br><em>Oneiro</em></h1>
+      <p class="subtitle">An intelligent companion for your inner world — recording, decoding, and illuminating the language of your dreams.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Features -->
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">Nightly capture</div>
+          <div class="feature-desc">Voice or text — log your dreams in seconds while they're still vivid.</div>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="M21 21l-4.35-4.35"/>
+            <path d="M8 11h6M11 8v6"/>
+          </svg>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">Pattern recognition</div>
+          <div class="feature-desc">Oneiro surfaces recurring symbols, emotions, and themes across your journal.</div>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-1.04Z"/>
+            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-1.04Z"/>
+          </svg>
+        </div>
+        <div class="feature-content">
+          <div class="feature-title">Deep interpretation</div>
+          <div class="feature-desc">Grounded analysis drawing on psychology, mythology, and your personal history.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta">
+      <button class="btn-primary">Begin your journey</button>
+      <button class="btn-secondary">Sign in to existing account</button>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer-note">
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+    <span>End-to-end encrypted &nbsp;·&nbsp; Private by design</span>
+  </div>
+</div>
+
+</body>
+</html>

@@ -24,15 +24,17 @@ SCORE_NAMES = [
     "minimalism_coherence", "native_integration",
     "visceral_score", "behavioral_score", "reflective_score",
     "overall_aesthetic",
+    "innovation_score", "system_creativity", "design_distinctiveness",
+    "problem_level",
 ]
 
-# Per-dimension loss weights (emotional_resonance and overall weighted highest)
+# Per-dimension loss weights
 DIMENSION_WEIGHTS = mx.array([
     1.2,  # typography_quality
     1.1,  # color_harmony
     1.1,  # spatial_composition
-    0.9,  # motion_elegance (harder from static image)
-    1.3,  # emotional_resonance (most important)
+    0.9,  # motion_elegance
+    1.3,  # emotional_resonance
     1.2,  # craft_visibility
     1.0,  # minimalism_coherence
     1.0,  # native_integration
@@ -40,6 +42,10 @@ DIMENSION_WEIGHTS = mx.array([
     1.0,  # behavioral_score
     1.1,  # reflective_score
     1.5,  # overall_aesthetic (highest weight)
+    1.4,  # innovation_score (innovation is why we're here)
+    1.3,  # system_creativity
+    1.2,  # design_distinctiveness
+    1.1,  # problem_level
 ], dtype=mx.float32)
 
 

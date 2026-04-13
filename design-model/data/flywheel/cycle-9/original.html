@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0f0d0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Instrument Sans', sans-serif;
+    padding: 2rem;
+  }
+
+  .card {
+    background: #1c1812;
+    border: 1px solid rgba(212, 175, 90, 0.15);
+    border-radius: 20px;
+    width: 680px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.03),
+      0 24px 80px rgba(0,0,0,0.6),
+      0 8px 24px rgba(0,0,0,0.4);
+    position: relative;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212,175,90,0.4), transparent);
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 28px 32px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .header-left {}
+
+  .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(212,175,90,0.6);
+    margin-bottom: 6px;
+  }
+
+  .title {
+    font-family: 'Fraunces', serif;
+    font-size: 26px;
+    font-weight: 400;
+    font-optical-sizing: auto;
+    color: #f2ead8;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .title em {
+    font-style: italic;
+    color: #d4af5a;
+    font-weight: 300;
+  }
+
+  .period-badge {
+    background: rgba(212,175,90,0.1);
+    border: 1px solid rgba(212,175,90,0.2);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: rgba(212,175,90,0.8);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    margin-top: 4px;
+  }
+
+  /* ── KPI Row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    margin: 28px 32px 0;
+    background: rgba(255,255,255,0.04);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .kpi {
+    background: rgba(255,255,255,0.02);
+    padding: 18px 20px;
+    position: relative;
+    transition: background 0.2s ease;
+  }
+
+  .kpi:hover {
+    background: rgba(212,175,90,0.05);
+  }
+
+  .kpi-label {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: rgba(242,234,216,0.4);
+    letter-spacing: 0.01em;
+    margin-bottom: 8px;
+  }
+
+  .kpi-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 22px;
+    font-weight: 400;
+    color: #f2ead8;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+
+  .kpi-value sup {
+    font-size: 12px;
+    font-weight: 300;
+    vertical-align: super;
+    opacity: 0.7;
+    letter-spacing: 0;
+  }
+
+  .trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .trend.up {
+    color: #7ecb8f;
+    background: rgba(126,203,143,0.1);
+  }
+
+  .trend.down {
+    color: #e07b6a;
+    background: rgba(224,123,106,0.1);
+  }
+
+  .trend.neutral {
+    color: rgba(212,175,90,0.8);
+    background: rgba(212,175,90,0.08);
+  }
+
+  .trend svg {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+
+  /* ── Chart Area ── */
+  .chart-area {
+    margin: 28px 32px 0;
+    position: relative;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .chart-title {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(242,234,216,0.5);
+    letter-spacing: 0.02em;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: rgba(242,234,216,0.4);
+    letter-spacing: 0.05em;
+  }
+
+  .legend-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .chart-svg-wrap {
+    position: relative;
+    height: 160px;
+  }
+
+  .chart-svg-wrap svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  /* ── Y-axis labels ── */
+  .y-labels {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0;
+    pointer-events: none;
+  }
+
+  .y-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px;
+    color: rgba(242,234,216,0.2);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  /* ── X-axis ── */
+  .x-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0 0;
+  }
+
+  .x-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9.5px;
+    color: rgba(242,234,216,0.2);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin: 24px 32px 28px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 11.5px;
+    color: rgba(242,234,216,0.3);
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #7ecb8f;
+    box-shadow: 0 0 0 0 rgba(126,203,143,0.4);
+    animation: pulse 2.4s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(126,203,143,0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(126,203,143,0); }
+    100% { box-shadow: 0 0 0 0 rgba(126,203,143,0); }
+  }
+
+  .cta-btn {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(212,175,90,0.8);
+    background: rgba(212,175,90,0.08);
+    border: 1px solid rgba(212,175,90,0.18);
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    letter-spacing: 0.01em;
+  }
+
+  .cta-btn:hover {
+    background: rgba(212,175,90,0.14);
+    color: #d4af5a;
+    border-color: rgba(212,175,90,0.3);
+  }
+
+  /* ── Sparklines in KPI ── */
+  .mini-spark {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    opacity: 0.35;
+  }
+
+  /* ── Tooltip dot ── */
+  .tooltip-group { pointer-events: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="label">Revenue Overview</div>
+      <div class="title">Growth <em>momentum</em></div>
+    </div>
+    <div class="period-badge">Q1 2026</div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+
+    <div class="kpi">
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-value"><sup>$</sup>2.84M</div>
+      <span class="trend up">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M2 7L5 3L8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        +18.4%
+      </span>
+      <!-- mini sparkline -->
+      <svg class="mini-spark" width="48" height="24" viewBox="0 0 48 24">
+        <polyline points="0,20 8,15 16,17 24,10 32,12 40,6 48,4"
+          fill="none" stroke="#7ecb8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">Active Users</div>
+      <div class="kpi-value">48,291</div>
+      <span class="trend up">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M2 7L5 3L8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        +6.1%
+      </span>
+      <svg class="mini-spark" width="48" height="24" viewBox="0 0 48 24">
+        <polyline points="0,18 8,16 16,14 24,13 32,9 40,11 48,7"
+          fill="none" stroke="#7ecb8f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      </svg>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-label">Churn Rate</div>
+      <div class="kpi-value">2.3<sup>%</sup></div>
+      <span class="trend down">
+        <svg viewBox="0 0 10 10" fill="none"><path d="M2 3L5 7L8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        −0.8pp
+      </span>
+      <svg class="mini-spark" width="48" height="24" viewBox="0 0 48 24">
+        <polyline points="0,6 8,9 16,8 24,12 32,13 40,16 48,18"
+          fill="none" stroke="#e07b6a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      </svg>
+    </div>
+
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-area">
+
+    <div class="chart-header">
+      <div class="chart-title">Monthly recurring revenue</div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#d4af5a;"></div>
+          Current
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:rgba(242,234,216,0.2);"></div>
+          Prior year
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-svg-wrap">
+
+      <svg viewBox="0 0 616 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+
+          <!-- Grid gradient -->
+          <linearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(255,255,255,0.06)"/>
+            <stop offset="100%" stop-color="rgba(255,255,255,0.01)"/>
+          </linearGradient>
+
+          <!-- Current line fill -->
+          <linearGradient id="fillCurrent" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#d4af5a" stop-opacity="0.22"/>
+            <stop offset="80%" stop-color="#d4af5a" stop-opacity="0.02"/>
+            <stop offset="100%" stop-color="#d4af5a" stop-opacity="0"/>
+          </linearGradient>
+
+          <!-- Prior line fill -->
+          <linearGradient id="fillPrior" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(242,234,216,0.12)"/>
+            <stop offset="100%" stop-color="rgba(242,234,216,0)"/>
+          </linearGradient>
+
+          <!-- Glow filter for current line -->
+          <filter id="lineGlow" x="-10%" y="-50%" width="120%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+
+        </defs>
+
+        <!-- Horizontal grid lines -->
+        <line x1="0" y1="0"   x2="616" y2="0"   stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+        <line x1="0" y1="40"  x2="616" y2="40"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+        <line x1="0" y1="80"  x2="616" y2="80"  stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+        <line x1="0" y1="120" x2="616" y2="120" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+        <line x1="0" y1="155" x2="616" y2="155" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+        <!-- Vertical guide lines -->
+        <line x1="88"  y1="0" x2="88"  y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="176" y1="0" x2="176" y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="264" y1="0" x2="264" y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="352" y1="0" x2="352" y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="440" y1="0" x2="440" y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+        <line x1="528" y1="0" x2="528" y2="155" stroke="rgba(255,255,255,0.025)" stroke-width="1" stroke-dasharray="2,4"/>
+
+        <!-- Prior year fill -->
+        <path d="M 0,130 C 44,125 66,118 88,115 C 110,112 132,110 176,105 C 220,100 242,98 264,92 C 286,86 308,84 352,78 C 396,72 418,76 440,70 C 462,64 484,60 528,55 C 550,52 572,50 616,48 L 616,155 L 0,155 Z"
+          fill="url(#fillPrior)"/>
+
+        <!-- Prior year line -->
+        <path d="M 0,130 C 44,125 66,118 88,115 C 110,112 132,110 176,105 C 220,100 242,98 264,92 C 286,86 308,84 352,78 C 396,72 418,76 440,70 C 462,64 484,60 528,55 C 550,52 572,50 616,48"
+          fill="none"
+          stroke="rgba(242,234,216,0.18)"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-dasharray="4,5"/>
+
+        <!-- Current year fill -->
+        <path d="M 0,118 C 44,112 66,105 88,98 C 110,91 132,88 176,80 C 220,72 242,68 264,58 C 286,48 308,44 352,36 C 396,28 418,32 440,24 C 462,16 484,14 528,10 C 550,8 572,6 616,4 L 616,155 L 0,155 Z"
+          fill="url(#fillCurrent)"/>
+
+        <!-- Current year line (glow layer) -->
+        <path d="M 0,118 C 44,112 66,105 88,98 C 110,91 132,88 176,80 C 220,72 242,68 264,58 C 286,48 308,44 352,36 C 396,28 418,32 440,24 C 462,16 484,14 528,10 C 550,8 572,6 616,4"
+          fill="none"
+          stroke="rgba(212,175,90,0.35)"
+          stroke-width="6"
+          stroke-linecap="round"
+          filter="url(#lineGlow)"/>
+
+        <!-- Current year line (crisp top) -->
+        <path d="M 0,118 C 44,112 66,105 88,98 C 110,91 132,88 176,80 C 220,72 242,68 264,58 C 286,48 308,44 352,36 C 396,28 418,32 440,24 C 462,16 484,14 528,10 C 550,8 572,6 616,4"
+          fill="none"
+          stroke="#d4af5a"
+          stroke-width="2"
+          stroke-linecap="round"/>
+
+        <!-- Tooltip / highlight point — March peak -->
+        <g class="tooltip-group">
+          <!-- Vertical crosshair -->
+          <line x1="440" y1="0" x2="440" y2="155" stroke="rgba(212,175,90,0.25)" stroke-width="1"/>
+          <!-- Outer ring -->
+          <circle cx="440" cy="24" r="7" fill="rgba(212,175,90,0.15)" stroke="rgba(212,175,90,0.5)" stroke-width="1"/>
+          <!-- Inner dot -->
+          <circle cx="440" cy="24" r="3" fill="#d4af5a"/>
+          <!-- Tooltip box -->
+          <rect x="404" y="2" width="80" height="16" rx="4" fill="rgba(28,24,18,0.95)" stroke="rgba(212,175,90,0.3)" stroke-width="1"/>
+          <text x="444" y="13.5" text-anchor="middle" font-family="DM Mono, monospace" font-size="9" fill="#d4af5a" letter-spacing="0.04em">$284K  ↑18%</text>
+        </g>
+
+      </svg>
+    </div>
+
+    <div class="x-labels">
+      <span class="x-label">OCT</span>
+      <span class="x-label">NOV</span>
+      <span class="x-label">DEC</span>
+      <span class="x-label">JAN</span>
+      <span class="x-label">FEB</span>
+      <span class="x-label">MAR</span>
+      <span class="x-label">NOW</span>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-note">
+      <div class="live-dot"></div>
+      Synced 2 min ago · Stripe + Chargebee
+    </div>
+    <button class="cta-btn">Full report →</button>
+  </div>
+
+</div>
+
+</body>
+</html>

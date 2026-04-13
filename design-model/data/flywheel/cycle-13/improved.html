@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toast Notifications</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --success:      #3ecf8e;
+  --success-soft: rgba(62, 207, 142, 0.11);
+  --info:         #5ba4f5;
+  --info-soft:    rgba(91, 164, 245, 0.11);
+  --warning:      #f5a522;
+  --warning-soft: rgba(245, 165, 34, 0.11);
+  --surface:      rgba(19, 19, 24, 0.86);
+  --border:       rgba(255,255,255,0.07);
+  --text-1:       rgba(255,255,255,0.92);
+  --text-2:       rgba(255,255,255,0.46);
+}
+
+html, body { height: 100%; }
+
+body {
+  background: #0c0c11;
+  background-image:
+    radial-gradient(ellipse 70% 55% at 18% 58%, rgba(62,207,142,0.035) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 82% 25%, rgba(91,164,245,0.035) 0%, transparent 60%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.stage { text-align: center; }
+
+.stage h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  color: rgba(255,255,255,0.68);
+  letter-spacing: -0.01em;
+  margin-bottom: 5px;
+}
+
+.stage p {
+  font-size: 13px;
+  color: rgba(255,255,255,0.22);
+  letter-spacing: 0.04em;
+  margin-bottom: 32px;
+}
+
+.btn-row { display: flex; gap: 9px; justify-content: center; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 19px;
+  border-radius: 10px; border: 1px solid transparent;
+  background: transparent;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  letter-spacing: 0.02em; cursor: pointer;
+  transition: background 0.13s, border-color 0.13s, transform 0.11s cubic-bezier(0.34, 1.56, 0.64, 1);
+  outline: none; -webkit-user-select: none; user-select: none;
+}
+.btn:active { transform: scale(0.93); }
+.btn .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.btn-s { color: var(--success); border-color: rgba(62,207,142,0.26); }
+.btn-s .dot { background: var(--success); }
+.btn-s:hover { background: rgba(62,207,142,0.07); border-color: rgba(62,207,142,0.5); }
+
+.btn-i { color: var(--info); border-color: rgba(91,164,245,0.26); }
+.btn-i .dot { background: var(--info); }
+.btn-i:hover { background: rgba(91,164,245,0.07); border-color: rgba(91,164,245,0.5); }
+
+.btn-w { color: var(--warning); border-color: rgba(245,165,34,0.26); }
+.btn-w .dot { background: var(--warning); }
+.btn-w:hover { background: rgba(245,165,34,0.07); border-color: rgba(245,165,34,0.5); }
+
+/* ─── Toast Container ─────────────────────── */
+#tc {
+  position: fixed; bottom: 26px; right: 26px;
+  z-index: 9999; pointer-events: none;
+  display: flex; flex-direction: column;
+  align-items: flex-end;
+}
+
+/* ─── Toast Wrapper (handles collapse space) ── */
+.tw {
+  pointer-events: none;
+  width: 376px;
+  overflow: hidden;
+  /* height collapses on dismiss */
+}
+
+/* ─── Toast Card ─────────────────────────── */
+.toast {
+  pointer-events: all;
+  position: relative;
+  width: 100%;
+  margin-bottom: 10px;
+  background: var(--surface);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid var(--border);
+  border-top-color: rgba(255,255,255,0.1);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.025) inset,
+    0 1px 0   rgba(255,255,255,0.055) inset,
+    0 2px 6px  rgba(0,0,0,0.3),
+    0 10px 28px rgba(0,0,0,0.52),
+    0 28px 52px rgba(0,0,0,0.28);
+  will-change: transform, opacity;
+  transform-origin: bottom center;
+}
+
+/* Entry: spring overshoot from below */
+@keyframes toastIn {
+  0%   { opacity: 0; transform: translateY(20px) scale(0.94); }
+  55%  { opacity: 1; transform: translateY(-4px) scale(1.008); }
+  75%  { transform: translateY(2px) scale(0.997); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Exit: slide right + fade */
+@keyframes toastOut {
+  0%   { opacity: 1; transform: translateX(0) scale(1); }
+  30%  { opacity: 1; transform: translateX(-4px) scale(1.005); }
+  100% { opacity: 0; transform: translateX(calc(100% + 40px)) scale(0.96); }
+}
+
+.toast.in  { animation: toastIn  0.46s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.toast.out { animation: toastOut 0.26s cubic-bezier(0.4, 0, 1, 1) forwards; }
+
+/* Wrapper height collapse after out */
+.tw.collapsing {
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.18s ease;
+  overflow: hidden;
+  opacity: 0;
+}
+
+/* Top shimmer line */
+.tshimmer {
+  position: absolute;
+  top: 0; left: 16px; right: 16px; height: 1px;
+  opacity: 0.55;
+  border-radius: 0 0 1px 1px;
+}
+.toast-s .tshimmer { background: linear-gradient(90deg, transparent, var(--success) 40%, transparent); }
+.toast-i .tshimmer { background: linear-gradient(90deg, transparent, var(--info)    40%, transparent); }
+.toast-w .tshimmer { background: linear-gradient(90deg, transparent, var(--warning) 40%, transparent); }
+
+/* Left accent */
+.toast::before {
+  content: ''; position: absolute;
+  left: 0; top: 11px; bottom: 11px; width: 2px;
+  border-radius: 0 2px 2px 0;
+}
+.toast-s::before { background: linear-gradient(180deg, var(--success), rgba(62,207,142,0.2)); }
+.toast-i::before { background: linear-gradient(180deg, var(--info),    rgba(91,164,245,0.2)); }
+.toast-w::before { background: linear-gradient(180deg, var(--warning), rgba(245,165,34,0.2)); }
+
+/* Body row */
+.tbody {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 14px 12px 12px 19px;
+}
+
+/* Icon */
+.ticon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px; position: relative;
+}
+.ticon::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.ticon svg { width: 15px; height: 15px; }
+
+.toast-s .ticon { background: var(--success-soft); color: var(--success); }
+.toast-i .ticon { background: var(--info-soft);    color: var(--info); }
+.toast-w .ticon { background: var(--warning-soft); color: var(--warning); }
+
+.ttext { flex: 1; min-width: 0; }
+
+.ttitle {
+  font-family: 'DM Serif Display', serif;
+  font-size: 15px; color: var(--text-1);
+  line-height: 1.3; margin-bottom: 3px; letter-spacing: 0.005em;
+}
+
+.tmsg {
+  font-size: 12.5px; font-weight: 400; color: var(--text-2);
+  line-height: 1.58; letter-spacing: 0.01em;
+}
+
+/* Actions row */
+.tactions {
+  display: flex; gap: 6px;
+  padding: 0 12px 12px 62px;
+}
+
+.taction {
+  display: inline-flex; align-items: center;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11.5px; font-weight: 500;
+  cursor: pointer; letter-spacing: 0.02em;
+  outline: none; border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  -webkit-user-select: none; user-select: none;
+}
+.taction:active { transform: scale(0.92); }
+
+.taction-primary {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--text-1);
+}
+.taction-primary:hover { background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.15); }
+
+.taction-ghost {
+  background: transparent; border-color: transparent;
+  color: var(--text-2);
+}
+.taction-ghost:hover { background: rgba(255,255,255,0.05); color: var(--text-1); }
+
+/* Close */
+.tclose {
+  width: 24px; height: 24px; border-radius: 6px; border: none;
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.18); flex-shrink: 0; padding: 0;
+  margin-top: 0; margin-right: -1px;
+  transition: background 0.11s, color 0.11s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tclose:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.62); }
+.tclose:active { transform: scale(0.86); }
+.tclose svg { width: 9px; height: 9px; }
+
+/* Progress */
+.ttrack { height: 2px; background: rgba(255,255,255,0.04); }
+
+@keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+.tbar {
+  height: 100%; transform-origin: left center;
+  animation: shrink var(--dur, 5s) linear forwards;
+}
+.toast-s .tbar { background: linear-gradient(90deg, rgba(62,207,142,0.35), rgba(62,207,142,0.65)); }
+.toast-i .tbar { background: linear-gradient(90deg, rgba(91,164,245,0.35), rgba(91,164,245,0.65)); }
+.toast-w .tbar { background: linear-gradient(90deg, rgba(245,165,34,0.35), rgba(245,165,34,0.65)); }
+
+.toast:hover .tbar { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast.in  { animation-duration: 0.01ms !important; }
+  .toast.out { animation-duration: 0.01ms !important; }
+  .tbar { animation-duration: 0.01ms !important; }
+  .tw.collapsing { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1>Notifications</h1>
+  <p>Trigger an event to preview a notification</p>
+  <div class="btn-row">
+    <button class="btn btn-s" onclick="showToast('s')"><span class="dot"></span>Deployment pushed</button>
+    <button class="btn btn-i" onclick="showToast('i')"><span class="dot"></span>Sync complete</button>
+    <button class="btn btn-w" onclick="showToast('w')"><span class="dot"></span>Rate limit warning</button>
+  </div>
+</div>
+
+<div id="tc"></div>
+
+<script>
+const TOASTS = {
+  s: {
+    cls: 'toast-s',
+    icon: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5 8.5 6 12 13.5 4"/></svg>`,
+    title: 'Deployment successful',
+    msg: 'oneiro-core v2.4.1 is live on production. All health checks passed.',
+    actions: [{ label: 'View logs', cls: 'taction-primary' }, { label: 'Dismiss', cls: 'taction-ghost' }],
+    dur: 5200
+  },
+  i: {
+    cls: 'toast-i',
+    icon: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="7.2" x2="8" y2="11.2"/><circle cx="8" cy="5.2" r="0.1" fill="currentColor" stroke-width="2"/></svg>`,
+    title: 'Repository synced',
+    msg: '14 commits merged from upstream. No conflicts detected.',
+    actions: [{ label: 'View diff', cls: 'taction-primary' }, { label: 'Dismiss', cls: 'taction-ghost' }],
+    dur: 4800
+  },
+  w: {
+    cls: 'toast-w',
+    icon: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5L14.5 13.5H1.5L8 2.5z"/><line x1="8" y1="7" x2="8" y2="10"/><circle cx="8" cy="12" r="0.1" fill="currentColor" stroke-width="2"/></svg>`,
+    title: 'Rate limit at 84%',
+    msg: 'API quota resets in 6 minutes. Consider pausing batch operations.',
+    actions: [{ label: 'View usage', cls: 'taction-primary' }, { label: 'Ignore', cls: 'taction-ghost' }],
+    dur: 5600
+  }
+};
+
+function showToast(type) {
+  const cfg = TOASTS[type];
+  const tc  = document.getElementById('tc');
+
+  const tw = document.createElement('div');
+  tw.className = 'tw';
+
+  const t = document.createElement('div');
+  t.className = `toast ${cfg.cls}`;
+  t.style.setProperty('--dur', (cfg.dur / 1000) + 's');
+
+  t.innerHTML = `
+    <div class="tshimmer"></div>
+    <div class="tbody">
+      <div class="ticon">${cfg.icon}</div>
+      <div class="ttext">
+        <div class="ttitle">${cfg.title}</div>
+        <div class="tmsg">${cfg.msg}</div>
+      </div>
+      <button class="tclose" aria-label="Close">
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <line x1="1.5" y1="1.5" x2="8.5" y2="8.5"/>
+          <line x1="8.5" y1="1.5" x2="1.5" y2="8.5"/>
+        </svg>
+      </button>
+    </div>
+    <div class="tactions">
+      ${cfg.actions.map(a => `<button class="taction ${a.cls}">${a.label}</button>`).join('')}
+    </div>
+    <div class="ttrack"><div class="tbar"></div></div>
+  `;
+
+  tw.appendChild(t);
+  tc.appendChild(tw);
+
+  // Force reflow before adding class so animation fires
+  t.getBoundingClientRect();
+  t.classList.add('in');
+
+  const timer = setTimeout(() => dismiss(tw), cfg.dur);
+  tw._timer = timer;
+
+  // Bind close + action buttons
+  t.querySelector('.tclose').addEventListener('click', () => dismiss(tw));
+  t.querySelectorAll('.taction').forEach(btn => btn.addEventListener('click', () => dismiss(tw)));
+}
+
+function dismiss(tw) {
+  const t = tw.querySelector('.toast');
+  if (!t || t.classList.contains('out')) return;
+  clearTimeout(tw._timer);
+
+  t.classList.remove('in');
+  t.classList.add('out');
+
+  // After out animation ends, collapse the wrapper height
+  t.addEventListener('animationend', () => {
+    const h = tw.offsetHeight;
+    tw.style.maxHeight = h + 'px';
+    tw.style.overflow  = 'hidden';
+
+    // Force reflow then collapse
+    tw.getBoundingClientRect();
+    tw.classList.add('collapsing');
+    tw.style.maxHeight = '0';
+
+    setTimeout(() => tw.remove(), 300);
+  }, { once: true });
+}
+</script>
+</body>
+</html>

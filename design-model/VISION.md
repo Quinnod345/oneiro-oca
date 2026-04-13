@@ -14,7 +14,7 @@ This model doesn't just score designs. It **feels** them. It channels emotion in
 
 ### 1. The Model (the brain)
 
-A scalable neural network that evaluates design quality across 12 dimensions:
+A scalable neural network that evaluates design quality across 16 dimensions:
 
 | Dimension | What It Measures |
 |-----------|-----------------|
@@ -30,16 +30,20 @@ A scalable neural network that evaluates design quality across 12 dimensions:
 | behavioral_score | Norman L2: usability and interaction quality |
 | reflective_score | Norman L3: meaning, identity, emotional bond |
 | overall_aesthetic | The gestalt — everything working together |
+| **innovation_score** | Novel approach, unexpected solutions |
+| **system_creativity** | Creative system connections (constraint→feature) |
+| **design_distinctiveness** | Unique visual identity vs generic templates |
+| **problem_level** | Seven Levels (1=execute → 7=paradigm shift) |
 
 **Growth path:**
 
 | Phase | Architecture | Params | Status |
 |-------|-------------|--------|--------|
-| 1 | JS MLP (64→256→128→64→12) + auto-expansion | 58K → 1M+ | **DONE** — trained, loss 0.039 |
-| 2a | MLX CNN backbone + SpatialAttention + DesignHead | 17.2M | **DONE** — needs more data for discrimination |
-| 2b | MobileNet V2 backbone (pretrained, frozen) + DesignHead | 675K trainable | **DONE** — discriminates quality tiers! |
-| 3 | Progressive Expert Network (7 expert columns) | 50-100M | Planned |
-| 4 | Self-training loop + comparative preference model | Unlimited | Planned |
+| 1 | JS MLP (64→256→128→64→16) + auto-expansion | 58K → 1M+ | **DONE** |
+| 2a | MLX CNN backbone + SpatialAttention + DesignHead | 17.2M | **DONE** (overfits with small data) |
+| 2b | MobileNet V2 backbone (pretrained, frozen) + DesignHead | 675K trainable | **DONE** — val loss 0.0095 |
+| 3 | Progressive Expert Network (8 expert columns) | 7.55M | **DONE** — 8 experts including innovation |
+| 4 | Self-training loop + comparative preference model | Unlimited | **IN PROGRESS** — flywheel built, preference training ready |
 
 ### 2. The Emotion Bridge (the heart)
 
@@ -111,37 +115,52 @@ The reference standard: constraint-embracing, minimalism with sophistication, mi
 ```
 design-model/
 ├── model.js           ✅ Phase 1 JS MLP (58K params, auto-expanding)
-├── encoder.js         ✅ 64-dim code feature extraction
+├── encoder.js         ✅ 64-dim code features + innovation signal detection
+├── evaluate.js        ✅ Standalone API — routes through Phase 2b/3 server with fallback
+├── client.js          ✅ Node.js Unix socket client for Python server
+├── server.js          ✅ Unix socket server (JS MLP fallback)
+├── knowledge.js       ✅ 16-dim design knowledge base (12 core + 4 innovation)
 ├── trainer.js         ✅ LLM-judge + comparative + self-play training
-├── evaluate.js        ✅ Standalone evaluation API
-├── server.js          ✅ Unix socket server
-├── knowledge.js       ✅ Design research knowledge base
 ├── skill-evolver.js   ✅ Skill iteration loop
-├── collect-data.js    ✅ Batch 1 data generation pipeline
-├── generate-batch-2.js ✅ Batch 2 data generation pipeline
-├── capture-real-world.js ✅ Real-world screenshot capture (Puppeteer)
-├── render-screenshots.js ✅ HTML→PNG rendering pipeline
-├── train-js.js        ✅ JS MLP training CLI
+├── flywheel.js        ✅ Self-improvement orchestrator (build→score→iterate→retrain)
+├── run-flywheel.js    ✅ CLI flywheel runner
+├── grading-server.js  ✅ Human grading web interface (localhost:3456)
+├── screenshot-capture.js ✅ Puppeteer HTML→PNG utility
+├── scrape-designs.js  ✅ Real-world site scraper (HTML/CSS/JS + screenshots)
+├── scrape-galleries.js ✅ Design gallery scraper (30+ sites)
+├── generate-human-quality.js ✅ Innovative AI design generator
+├── backfill-innovation.js ✅ Innovation score back-filler
+├── start-server.sh    ✅ Inference server process management
+├── grading-ui/        ✅ Quick/detailed grading, compare, stats views
 ├── weights/
-│   ├── model-v1-latest.json       ✅ JS MLP weights (TRAINED — 2,881 updates, loss 0.039)
-│   ├── mlx-design-v1.safetensors  ✅ MLX model weights (TRAINED — 40 epochs, val loss 0.003)
-│   └── train-history-v1.json      ✅ MLX training curves
+│   ├── model-v1-latest.json        ✅ JS MLP weights
+│   ├── design-head-v2.safetensors  ✅ Phase 2b head (675K, val loss 0.0095)
+│   ├── design-expert-v3.safetensors ✅ Phase 3 experts (7.55M, 8 experts)
+│   └── mobilenet_v2_imagenet.safetensors ✅ Frozen backbone (2.26M)
 ├── data/
-│   ├── manifest.json              ✅ 43+ samples (18 synthetic + 25 real-world)
+│   ├── manifest.json              ✅ 193 samples (ALL human-graded)
+│   ├── comparisons.json           ✅ 8 human preference pairs
+│   ├── flywheel-state.json        ✅ Flywheel state tracking
 │   ├── screenshots/               ✅ 18 HTML artifacts
-│   ├── pngs/                      ✅ 18 rendered PNG screenshots
-│   └── real-world/                ✅ 25 real-world design screenshots
+│   ├── pngs/                      ✅ 18 rendered PNGs
+│   ├── real-world/                ✅ 25 real-world screenshots
+│   ├── scraped/                   ✅ 74 scraped (full HTML/CSS/JS)
+│   ├── galleries/                 ✅ 55 gallery screenshots
+│   └── human-quality/             ✅ 6 innovative AI designs
 ├── mlx/
-│   ├── model.py       ✅ Phase 2a: 17.2M param CNN + attention
-│   ├── model_v2.py    ✅ Phase 2b: MobileNet V2 backbone + design head
-│   ├── data.py        ✅ Dataset management + augmentation
-│   ├── train.py       ✅ Phase 2a GPU training pipeline
-│   ├── train_v2.py    ✅ Phase 2b feature-based training (~30ms/epoch)
-│   ├── extract_features.py ✅ MobileNet V2 feature extraction (PyTorch)
-│   ├── convert_mobilenet.py ✅ PyTorch→MLX weight conversion
-│   ├── serve.py       ✅ MLX GPU inference server
-│   └── export.py      ✅ ONNX + Core ML export
-└── exports/           ⬜ Empty — no exports yet
+│   ├── model.py       ✅ Phase 2a CNN (17.2M)
+│   ├── model_v2.py    ✅ Phase 2b MobileNet + head
+│   ├── model_v3.py    ✅ Phase 3: 8 expert columns + lateral attention + aggregator
+│   ├── data.py        ✅ Dataset (16-dim, confidence weighting)
+│   ├── train.py       ✅ Phase 2a training
+│   ├── train_v2.py    ✅ Phase 2b training (coherence loss)
+│   ├── train_v3.py    ✅ Phase 3 progressive training (4 stages)
+│   ├── train_preference.py ✅ Bradley-Terry preference training
+│   ├── inference_server.py ✅ Phase 2b/3 inference server (auto-detects best model)
+│   ├── extract_features.py ✅ MobileNet feature extraction
+│   └── export.py      ⬜ ONNX + Core ML (untested)
+└── design/
+    └── emotion-bridge.js  ✅ PADCN/drives → design policy
 
 design/
 └── emotion-bridge.js  ✅ PADCN/drives → design policy
@@ -170,47 +189,69 @@ OCA Integration:
 - 58 samples, val loss 0.020
 - Overfits with small data — needs pretrained backbone for discrimination
 
-**Phase 2b: Pretrained MobileNet V2 + Design Head (675K trainable) — DISCRIMINATES**
+**Phase 2b: Pretrained MobileNet V2 + Design Head (675K trainable) — WORKING**
 - MobileNet V2 backbone: frozen ImageNet features (pre-extracted, 1280-dim)
-- Trainable design head: 675K params (512→256→128→64→12)
-- 58 samples, 50 train / 8 val
-- **Best validation loss: 0.008** (epoch 62 of 112)
-- Training time: **3.5 seconds total** (~30ms/epoch!)
-- **Quality discrimination proven:**
-  - Reference sites: predicts 0.91 (target 0.87-0.96)
-  - High quality: predicts 0.69-0.85 (target 0.73-0.84)
-  - Medium quality: predicts 0.47-0.73 (target 0.50-0.71)
-  - Low quality: predicts 0.10-0.12 (target 0.03-0.24)
+- Trainable design head: 675K params (384→256→128→64→12)
+- **132 samples** (33 synthetic + 25 old real-world + 74 scraped), 113 train / 19 val
+- **Best validation loss: 0.0035** (epoch 109 of 169)
+- Training time: **~7 seconds total** (~40ms/epoch)
+- **Tiered quality discrimination:**
+  - Exceptional (Apple, Stripe, Linear): predicts 0.91+ 
+  - Excellent (Supabase, Raycast, Framer): predicts 0.86-0.91
+  - Good (Notion, Todoist, Cal.com): predicts 0.80-0.85
+  - High synthetic: predicts 0.69-0.80
+  - Medium synthetic: predicts 0.63-0.76
+  - Low synthetic: predicts 0.06-0.07
 - Per-dimension MAE at best:
-  - typography: 0.056 | color: 0.063 | spatial: 0.032
-  - motion: 0.048 | emotion: 0.028 | craft: 0.038
-  - minimal: 0.054 | native: 0.095 | visceral: 0.034
-  - behavioral: 0.036 | reflective: 0.044 | overall: 0.093
+  - typography: 0.038 | color: 0.036 | spatial: 0.045
+  - motion: 0.056 | emotion: 0.042 | craft: 0.051
+  - minimal: 0.039 | native: 0.076 | visceral: 0.042
+  - behavioral: 0.031 | reflective: 0.044 | overall: 0.035
 
-**Real-World Training Data Sources:**
-Apple (macOS, iPhone, Design Awards, Developer), Screen Studio, Todoist, Arc,
-The Browser Company, Linear, Craft, Things 3, Bear, Raycast, Notion, Figma,
-Klack, Pixelmator Pro, Fantastical, Vercel, Stripe + scrolled views
+**Data Sources (46 real-world sites scraped with full HTML/CSS/JS):**
+Apple (Home, iPhone, Watch, AirPods, Developer), Stripe, Stripe Press,
+Linear, Vercel, Supabase, Resend, Clerk, Railway, PlanetScale, Neon,
+Arc, Browser Company, Things 3, Bear, Craft, Raycast, Screen Studio,
+Pixelmator, Fantastical, Klack, CleanShot, Spark Mail,
+Figma, Framer, Spline, Rive, LottieFiles,
+Notion, Todoist, Height, Amie, Cron,
+Awwwards, Lusion, Basement Studio,
+Pitch, Cal.com, Dub, Mintlify, Airbnb, Spotify Design
+
+### What's Done
+
+- ✅ Skill evolution loop — activated, v1 applied (innovation +0.166, overall 0.748→0.777)
+- ✅ OCA cognitive loop — index.js wired with `initServer()`, evaluate.js routes through Phase 2b/3
+- ✅ Overnight autonomous loop — 25 flywheel cycles, 50 samples, 3 retrains (val loss 0.0108)
+- ✅ Human grading UI — 193 designs graded with notes and coherence scores
+- ✅ 243 total training samples across 5 sources
 
 ### What's Next
 
-**IMMEDIATE: Expand Training Data**
-- Batch 2 generation in progress (20 more artifacts with new component types)
-- Target: 100+ samples for robust generalization
-- Add more real-world screenshots (dribbble portfolios, award-winning sites)
-- Retrain both models on expanded dataset
+**IMMEDIATE: Core ML Export**
+- Export Phase 2b DesignHead to Core ML format for Neural Engine inference
+- Target: <1ms inference on macOS/iOS Neural Engine
+- This makes the model usable inside real Swift/SwiftUI apps
+- Export ONNX as intermediate format, then convert to Core ML via coremltools
 
-**NEXT: Validation & Inference Integration**
-- Validate scores against human judgment (spot-check 10 samples)
-- Wire MLX inference server (`mlx/serve.py`) for real-time evaluation
-- Connect to OCA cognitive loop for live design feedback
+**NEXT: Scheduled Self-Training**
+- Create a scheduled task that runs the flywheel + retrain periodically
+- Target: 5 flywheel cycles daily, retrain weekly
+- Human grades from the grading UI flow in continuously
+- Scale to 1000+ samples over time
 
-**THEN: Progressive Growth**
-- Begin skill evolution loop (model scores → skill improvement → better artifacts)
-- Phase 2b: MobileNet V2 pretrained backbone (transfer learning, ~5M trainable params)
-- Phase 3: Expert columns (typography expert, color expert, etc., 50-100M params)
-- Phase 4: Self-training loop + comparative preference model (RLHF for design)
-- Core ML export for Neural Engine inference on macOS/iOS
+**THEN: Multi-Modal Input**
+- Evaluate RUNNING apps, not just static screenshots
+- Screen recording → frame extraction → temporal design evaluation
+- Evaluate motion/animation quality from video (currently scored from static image)
+- Evaluate interaction flows, not just single screens
+
+**FUTURE: Generative Design**
+- The model doesn't just evaluate — it PROPOSES specific design changes
+- "This sidebar would benefit from 8px more padding and a softer border-radius"
+- "The color temperature clashes — shift the accent 15deg warmer in oklch"
+- Gradient from evaluation → suggestion → specific CSS diff
+- Target: 1000+ human-graded samples, sub-0.05 MAE on all 16 dimensions
 
 ---
 

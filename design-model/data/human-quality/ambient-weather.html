@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Ambient Weather</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --sky-top: oklch(0.22 0.04 250);
+    --sky-mid: oklch(0.30 0.06 240);
+    --sky-low: oklch(0.35 0.05 235);
+    --rain-streak: oklch(0.55 0.03 230 / 0.18);
+    --mist: oklch(0.60 0.02 220 / 0.08);
+    --text-primary: oklch(0.82 0.02 220);
+    --text-dim: oklch(0.55 0.02 230);
+    --surface: oklch(0.18 0.03 245 / 0.85);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    background: oklch(0.10 0.02 260);
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .weather-card {
+    width: 400px; height: 300px;
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(175deg, var(--sky-top) 0%, var(--sky-mid) 45%, var(--sky-low) 100%);
+    box-shadow:
+      0 1px 0 oklch(0.40 0.03 230 / 0.12) inset,
+      0 24px 80px oklch(0.05 0.04 260 / 0.7),
+      0 4px 16px oklch(0.08 0.03 250 / 0.4);
+  }
+
+  /* cloud layer — drifting shapes */
+  .clouds {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .cloud {
+    position: absolute;
+    border-radius: 50%;
+    background: oklch(0.40 0.03 235 / 0.12);
+    filter: blur(28px);
+    animation: drift linear infinite;
+  }
+  .cloud:nth-child(1) {
+    width: 180px; height: 60px;
+    top: 22px; left: -60px;
+    animation-duration: 38s;
+  }
+  .cloud:nth-child(2) {
+    width: 140px; height: 45px;
+    top: 55px; left: 80px;
+    animation-duration: 52s;
+    animation-delay: -14s;
+    opacity: 0.7;
+  }
+  .cloud:nth-child(3) {
+    width: 200px; height: 50px;
+    top: 10px; left: 200px;
+    animation-duration: 44s;
+    animation-delay: -8s;
+    opacity: 0.5;
+  }
+  @keyframes drift {
+    from { transform: translateX(-100px); }
+    to   { transform: translateX(500px); }
+  }
+
+  /* rain streaks */
+  .rain-layer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .streak {
+    position: absolute;
+    width: 1px;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      var(--rain-streak) 30%,
+      oklch(0.65 0.04 225 / 0.25) 60%,
+      transparent 100%
+    );
+    animation: fall linear infinite;
+  }
+
+  @keyframes fall {
+    0%   { transform: translateY(-40px); opacity: 0; }
+    8%   { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { transform: translateY(320px); opacity: 0; }
+  }
+
+  /* mist at bottom */
+  .mist {
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 100px;
+    background: linear-gradient(to top, var(--mist), transparent);
+    pointer-events: none;
+    animation: mistPulse 7s ease-in-out infinite alternate;
+  }
+  @keyframes mistPulse {
+    0%   { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+
+  /* content */
+  .weather-content {
+    position: relative; z-index: 2;
+    padding: 32px 30px 28px;
+    height: 100%;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .location {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .temp-block {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .temp {
+    font-size: 64px;
+    font-weight: 200;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+  .temp-unit {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text-dim);
+    position: relative;
+    top: -18px;
+  }
+
+  .condition {
+    font-size: 14px;
+    font-weight: 400;
+    color: color-mix(in oklch, var(--text-primary), transparent 30%);
+    margin-top: 6px;
+    letter-spacing: 0.01em;
+  }
+
+  .bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .detail {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+  }
+  .detail + .detail { margin-top: 3px; }
+
+  .time-label {
+    font-size: 11px;
+    font-weight: 400;
+    color: oklch(0.45 0.02 230);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* puddle reflection glow at bottom center */
+  .puddle {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px; height: 30px;
+    border-radius: 50%;
+    background: oklch(0.35 0.05 230 / 0.15);
+    filter: blur(14px);
+    animation: puddleGlow 5s ease-in-out infinite alternate;
+  }
+  @keyframes puddleGlow {
+    0%   { opacity: 0.4; width: 150px; }
+    100% { opacity: 0.8; width: 170px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="weather-card">
+  <div class="clouds">
+    <div class="cloud"></div>
+    <div class="cloud"></div>
+    <div class="cloud"></div>
+  </div>
+
+  <div class="rain-layer" id="rain"></div>
+
+  <div class="mist"></div>
+  <div class="puddle"></div>
+
+  <div class="weather-content">
+    <div>
+      <div class="location">San Francisco</div>
+      <div class="temp-block">
+        <span class="temp">54</span>
+        <span class="temp-unit">&deg;</span>
+      </div>
+      <div class="condition">Light rain, overcast skies</div>
+    </div>
+    <div class="bottom-row">
+      <div>
+        <div class="detail">Humidity 89%</div>
+        <div class="detail">Wind 8 mph NW</div>
+      </div>
+      <div class="time-label">Sun 4:47 PM</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // generate rain streaks with organic variation
+  const rainLayer = document.getElementById('rain');
+  const streakCount = 35;
+  for (let i = 0; i < streakCount; i++) {
+    const s = document.createElement('div');
+    s.className = 'streak';
+    const left = (Math.random() * 110 - 5);
+    const h = 25 + Math.random() * 50;
+    const dur = 0.6 + Math.random() * 0.8;
+    const delay = Math.random() * 2.5;
+    // slight angle variation
+    const angle = -1.5 + Math.random() * 3;
+    s.style.cssText = `
+      left: ${left}%;
+      height: ${h}px;
+      animation-duration: ${dur}s;
+      animation-delay: ${delay}s;
+      transform: rotate(${angle}deg);
+      opacity: ${0.3 + Math.random() * 0.5};
+    `;
+    rainLayer.appendChild(s);
+  }
+</script>
+
+</body>
+</html>

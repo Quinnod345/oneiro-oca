@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0e0e0f;
+    font-family: 'DM Sans', sans-serif;
+    padding: 2rem;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 30% 20%, rgba(180,140,80,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(100,120,180,0.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .card {
+    position: relative;
+    width: 380px;
+    background: #16161a;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.07);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.5),
+      0 40px 80px rgba(0,0,0,0.6),
+      0 20px 40px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* Grain overlay */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.4;
+  }
+
+  .card-header {
+    position: relative;
+    height: 120px;
+    background: linear-gradient(135deg, #1a1608 0%, #1e1a0e 40%, #12121a 100%);
+    overflow: hidden;
+  }
+
+  .card-header::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180,145,60,0.15) 0%, transparent 70%),
+      linear-gradient(180deg, transparent 40%, rgba(22,22,26,0.9) 100%);
+  }
+
+  /* Decorative lines */
+  .card-header-lines {
+    position: absolute;
+    inset: 0;
+    opacity: 0.15;
+    overflow: hidden;
+  }
+
+  .card-header-lines::before {
+    content: '';
+    position: absolute;
+    top: -40px;
+    left: -40px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: 1px solid rgba(180,145,60,0.6);
+  }
+
+  .card-header-lines::after {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: -60px;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    border: 1px solid rgba(180,145,60,0.3);
+  }
+
+  .card-body {
+    padding: 0 28px 28px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .avatar-wrap {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    margin-top: -36px;
+    margin-bottom: 16px;
+  }
+
+  .avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid #16161a;
+    background: linear-gradient(135deg, #c8a84b 0%, #8b6914 40%, #d4a843 70%, #f0c96a 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 300;
+    color: #1a1408;
+    letter-spacing: -0.5px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(180,145,60,0.3),
+      0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  .avatar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+    border-radius: 50%;
+  }
+
+  .status-dot {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 13px;
+    height: 13px;
+    background: #3ecf8e;
+    border-radius: 50%;
+    border: 2.5px solid #16161a;
+    box-shadow: 0 0 8px rgba(62,207,142,0.5);
+  }
+
+  .name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 400;
+    color: #f0ece0;
+    letter-spacing: -0.3px;
+    line-height: 1;
+  }
+
+  .verified {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, #c8a84b, #8b6914);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-bottom: -1px;
+  }
+
+  .verified svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .handle {
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(240,236,224,0.35);
+    letter-spacing: 0.01em;
+    margin-bottom: 14px;
+  }
+
+  .bio {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15.5px;
+    font-weight: 300;
+    font-style: italic;
+    color: rgba(240,236,224,0.6);
+    line-height: 1.65;
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+  }
+
+  .bio-regular {
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-style: normal;
+    color: rgba(240,236,224,0.45);
+    line-height: 1.6;
+    margin-bottom: 22px;
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 20%, rgba(255,255,255,0.06) 80%, transparent);
+    margin-bottom: 22px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+
+  .stat {
+    background: rgba(255,255,255,0.02);
+    padding: 14px 10px;
+    text-align: center;
+    transition: background 0.2s ease;
+    cursor: default;
+  }
+
+  .stat:hover {
+    background: rgba(255,255,255,0.04);
+  }
+
+  .stat-value {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: #f0ece0;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: rgba(240,236,224,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 22px;
+  }
+
+  .tag {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: rgba(200,168,75,0.75);
+    background: rgba(200,168,75,0.08);
+    border: 1px solid rgba(200,168,75,0.15);
+    border-radius: 20px;
+    padding: 4px 11px;
+    letter-spacing: 0.02em;
+    transition: all 0.2s ease;
+    cursor: default;
+  }
+
+  .tag:hover {
+    background: rgba(200,168,75,0.14);
+    color: rgba(200,168,75,0.95);
+    border-color: rgba(200,168,75,0.28);
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 11px 16px;
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    letter-spacing: 0.01em;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #c8a84b 0%, #9a7a20 100%);
+    color: #1a1408;
+    box-shadow:
+      0 4px 16px rgba(180,145,60,0.25),
+      inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px) scale(1.01);
+    box-shadow:
+      0 8px 24px rgba(180,145,60,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.2);
+    filter: brightness(1.08);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0) scale(0.99);
+    transition-duration: 0.1s;
+  }
+
+  .btn-secondary {
+    background: rgba(255,255,255,0.05);
+    color: rgba(240,236,224,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.08);
+    color: rgba(240,236,224,0.9);
+    border-color: rgba(255,255,255,0.13);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary:active {
+    transform: translateY(0);
+    transition-duration: 0.1s;
+  }
+
+  .btn-icon {
+    width: 42px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-lines"></div>
+  </div>
+
+  <div class="card-body">
+    <div class="avatar-wrap">
+      <div class="avatar">M</div>
+      <div class="status-dot"></div>
+    </div>
+
+    <div class="name-row">
+      <span class="name">Margot Sinclair</span>
+      <span class="verified">
+        <svg viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 5.2L4 7.2L8 3" stroke="#1a1408" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </div>
+
+    <div class="handle">@margot.sinclair · San Francisco, CA</div>
+
+    <p class="bio">"Design is the silent ambassador of your brand."</p>
+    <p class="bio-regular">Product designer & typographer crafting interfaces that feel inevitable. Previously at Stripe and Linear. Open to collaborations.</p>
+
+    <div class="divider"></div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">4.2k</div>
+        <div class="stat-label">Following</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">38.6k</div>
+        <div class="stat-label">Followers</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">214</div>
+        <div class="stat-label">Works</div>
+      </div>
+    </div>
+
+    <div class="tags">
+      <span class="tag">Typography</span>
+      <span class="tag">Product Design</span>
+      <span class="tag">Design Systems</span>
+      <span class="tag">Motion</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary">Follow</button>
+      <button class="btn btn-secondary">Message</button>
+      <button class="btn btn-secondary btn-icon">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="2.5" cy="7.5" r="1.5" fill="currentColor"/>
+          <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/>
+          <circle cx="12.5" cy="7.5" r="1.5" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Navigation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,600&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --w: 256px;
+  --wc: 64px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --bg: #08080b;
+  --sb: #0c0c10;
+  --sb-hi: rgba(255,255,255,0.02);
+  --border: rgba(255,255,255,0.065);
+  --hover: rgba(255,255,255,0.042);
+  --active-bg: rgba(246,193,80,0.08);
+  --t1: #e4e1da;
+  --t2: #56546a;
+  --t3: #2c2b34;
+  --accent: #f6c150;
+  --accent-dim: rgba(246,193,80,0.55);
+  --accent-bg: rgba(246,193,80,0.08);
+  --red: #e05c5c;
+  --green: #5ce07a;
+  --font-b: 'Cormorant Garamond', Georgia, serif;
+  --font-u: 'Syne', system-ui, sans-serif;
+  --r: 7px;
+  --dur: 280ms;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--t1); font-family: var(--font-u); -webkit-font-smoothing: antialiased; }
+body { display: flex; }
+
+/* ── Sidebar ── */
+.sb {
+  position: relative;
+  width: var(--w);
+  height: 100vh;
+  background: var(--sb);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: visible;
+  transition: width var(--dur) var(--ease);
+  z-index: 100;
+}
+.sb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 130% 35% at 50% -5%, rgba(246,193,80,0.05) 0%, transparent 65%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
+  z-index: 0;
+}
+.sb > * { position: relative; z-index: 1; }
+.sb.collapsed { width: var(--wc); overflow: visible; }
+
+/* ── Header ── */
+.sb-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.brand-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(145deg, #f6c150 0%, #e07c35 100%);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(246,193,80,0.22), 0 2px 12px rgba(246,193,80,0.16);
+  transition: box-shadow 200ms var(--ease);
+}
+.brand-mark:hover { box-shadow: 0 0 0 1px rgba(246,193,80,0.35), 0 4px 18px rgba(246,193,80,0.25); }
+.brand-mark svg { opacity: 0.95; }
+.brand-text {
+  font-family: var(--font-b);
+  font-style: italic;
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--t1);
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.sb.collapsed .brand-text { opacity: 0; transform: translateX(-6px); pointer-events: none; }
+
+/* ── Collapse btn ── */
+.tog {
+  position: absolute;
+  right: -12px; top: 50%;
+  transform: translateY(-50%);
+  width: 24px; height: 24px;
+  background: var(--sb);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--t2);
+  z-index: 200;
+  transition: background 150ms, color 150ms, border-color 150ms, box-shadow 150ms;
+  flex-shrink: 0;
+}
+.tog:hover { background: rgba(255,255,255,0.07); color: var(--t1); border-color: rgba(255,255,255,0.12); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.tog-icon { display: flex; transition: transform var(--dur) var(--ease); }
+.sb.collapsed .tog-icon { transform: rotate(180deg); }
+
+/* ── Search ── */
+.sb-search {
+  padding: 10px 10px 2px;
+  flex-shrink: 0;
+  transition: padding var(--dur) var(--ease);
+}
+.sb.collapsed .sb-search { padding: 10px 10px 2px; }
+.search-wrap {
+  position: relative;
+  height: 32px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.028);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: border-color 150ms, background 150ms, width var(--dur) var(--ease), border-radius var(--dur) var(--ease);
+  cursor: pointer;
+}
+.search-wrap:hover { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); }
+.search-wrap:focus-within { border-color: rgba(246,193,80,0.35); background: rgba(246,193,80,0.04); }
+.sb.collapsed .search-wrap { border-radius: 50%; width: 36px; height: 36px; margin: 0 auto; justify-content: center; }
+.search-icon {
+  width: 32px; min-width: 32px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--t2);
+  flex-shrink: 0;
+  transition: color 150ms;
+}
+.sb.collapsed .search-wrap .search-icon { width: 36px; min-width: 36px; }
+.search-wrap:focus-within .search-icon { color: var(--accent); }
+.search-input {
+  flex: 1; border: none; background: transparent;
+  font-family: var(--font-u); font-size: 12px; font-weight: 500;
+  color: var(--t1); outline: none;
+  caret-color: var(--accent);
+  padding-right: 8px;
+  transition: opacity 180ms var(--ease);
+}
+.search-input::placeholder { color: var(--t2); }
+.sb.collapsed .search-input { opacity: 0; width: 0; pointer-events: none; }
+.search-kbd {
+  font-size: 9px; font-weight: 600;
+  color: var(--t3);
+  border: 1px solid var(--t3);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-right: 8px;
+  line-height: 14px;
+  flex-shrink: 0;
+  transition: opacity 180ms var(--ease);
+  font-family: var(--font-u);
+}
+.sb.collapsed .search-kbd { opacity: 0; width: 0; overflow: hidden; padding: 0; border: none; margin: 0; }
+
+/* ── Nav scroll area ── */
+.sb-nav {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 6px 0 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.06) transparent;
+}
+.sb-nav::-webkit-scrollbar { width: 4px; }
+.sb-nav::-webkit-scrollbar-track { background: transparent; }
+.sb-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+.sb-nav::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+
+/* ── Section label ── */
+.sec-label {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--t3);
+  padding: 14px 18px 4px;
+  white-space: nowrap;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+}
+.sb.collapsed .sec-label { opacity: 0; transform: translateX(-4px); pointer-events: none; }
+
+/* ── Nav item ── */
+.ni {
+  position: relative;
+  display: flex; align-items: center;
+  gap: 10px; height: 36px;
+  padding: 0 10px;
+  margin: 1px 8px;
+  border-radius: var(--r);
+  cursor: pointer; user-select: none;
+  overflow: visible;
+  transition: background 100ms var(--ease), padding var(--dur) var(--ease), gap var(--dur) var(--ease);
+}
+.ni::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r);
+  opacity: 0;
+  background: radial-gradient(ellipse 80% 60% at var(--mx, 50%) 50%, rgba(255,255,255,0.06) 0%, transparent 70%);
+  transition: opacity 300ms;
+  pointer-events: none;
+}
+.ni:hover::after { opacity: 1; }
+.ni:hover { background: var(--hover); }
+.ni.active { background: var(--active-bg); }
+.ni.active::before {
+  content: '';
+  position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 14px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+  transition: opacity 200ms var(--ease), height 200ms var(--spring);
+}
+.sb.collapsed .ni.active::before { opacity: 0; }
+.sb.collapsed .ni { padding: 0; justify-content: center; gap: 0; }
+
+/* Icon */
+.ni-icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--t2);
+  transition: color 120ms var(--ease), transform 200ms var(--spring);
+}
+.ni:hover .ni-icon { color: rgba(228,225,218,0.75); transform: scale(1.08); }
+.ni.active .ni-icon { color: var(--accent); }
+.sb.collapsed .ni { width: 36px; height: 36px; margin: 1px auto; border-radius: 8px; }
+.sb.collapsed .ni:hover .ni-icon { transform: scale(1.12); }
+
+/* Tooltip */
+.ni-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  background: #1a1920;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--t1);
+  font-size: 12px; font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease);
+  z-index: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  display: none;
+}
+.ni-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%; top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: rgba(255,255,255,0.1);
+}
+.ni-tooltip::after {
+  content: '';
+  position: absolute;
+  right: calc(100% - 1px); top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: #1a1920;
+}
+.sb.collapsed .ni-tooltip { display: block; }
+.sb.collapsed .ni:hover .ni-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Label / badge / chevron */
+.ni-label {
+  font-size: 13px; font-weight: 500;
+  color: var(--t1); flex: 1;
+  white-space: nowrap;
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  letter-spacing: 0.005em;
+}
+.ni.active .ni-label { color: var(--accent); font-weight: 600; }
+.sb.collapsed .ni-label { opacity: 0; transform: translateX(-4px); pointer-events: none; width: 0; overflow: hidden; }
+
+.ni-badge {
+  font-size: 10px; font-weight: 700;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 0 6px; border-radius: 20px;
+  height: 16px; line-height: 16px;
+  white-space: nowrap;
+  transition: opacity 180ms var(--ease);
+  border: 1px solid rgba(246,193,80,0.18);
+  flex-shrink: 0;
+}
+.ni-badge.red { background: rgba(224,92,92,0.1); color: var(--red); border-color: rgba(224,92,92,0.2); }
+.ni-badge.green { background: rgba(92,224,122,0.1); color: var(--green); border-color: rgba(92,224,122,0.2); }
+.sb.collapsed .ni-badge { opacity: 0; pointer-events: none; width: 0; overflow: hidden; padding: 0; border: none; }
+
+.ni-chev {
+  display: flex; flex-shrink: 0;
+  color: var(--t3);
+  transition: transform 220ms var(--ease), opacity 180ms var(--ease), color 120ms;
+}
+.ni:hover .ni-chev { color: var(--t2); }
+.ni.open .ni-chev { transform: rotate(90deg); color: var(--t2); }
+.sb.collapsed .ni-chev { opacity: 0; pointer-events: none; width: 0; overflow: hidden; }
+
+/* ── Nested list ── */
+.nested {
+  height: 0;
+  overflow: hidden;
+  transition: height 230ms var(--ease);
+  margin: 0 8px;
+}
+.sb.collapsed .nested { display: none; }
+
+.ni-sub {
+  display: flex; align-items: center;
+  gap: 8px; height: 30px;
+  padding: 0 10px 0 36px;
+  border-radius: var(--r);
+  cursor: pointer; user-select: none;
+  transition: background 100ms var(--ease);
+  position: relative;
+}
+.ni-sub::before {
+  content: '';
+  position: absolute;
+  left: 22px; top: 50%;
+  transform: translateY(-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--t3);
+  transition: background 120ms, transform 120ms var(--spring);
+}
+.ni-sub:hover { background: var(--hover); }
+.ni-sub:hover::before { background: var(--t2); transform: translateY(-50%) scale(1.3); }
+.ni-sub.active::before { background: var(--accent); }
+.ni-sub-label {
+  font-size: 12.5px; font-weight: 500;
+  color: var(--t2);
+  transition: color 120ms;
+  letter-spacing: 0.005em;
+}
+.ni-sub:hover .ni-sub-label { color: var(--t1); }
+.ni-sub.active .ni-sub-label { color: var(--accent); font-weight: 600; }
+.ni-sub-badge {
+  font-size: 9.5px; font-weight: 700;
+  background: rgba(224,92,92,0.1);
+  color: var(--red);
+  padding: 0 5px; border-radius: 20px;
+  height: 14px; line-height: 14px;
+  border: 1px solid rgba(224,92,92,0.18);
+  margin-left: auto;
+}
+
+/* ── Divider ── */
+.sb-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 12px;
+  flex-shrink: 0;
+  transition: opacity 180ms;
+}
+
+/* ── Footer / user ── */
+.sb-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 10px;
+}
+
+.user-row {
+  display: flex; align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+.user-row:hover { background: var(--hover); }
+.user-av {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #7c6aff 0%, #c45cd3 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  position: relative;
+}
+.user-av::after {
+  content: '';
+  position: absolute; bottom: 0; right: 0;
+  width: 8px; height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+  border: 2px solid var(--sb);
+}
+.user-info {
+  flex: 1; overflow: hidden;
+  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+}
+.sb.collapsed .user-info { opacity: 0; transform: translateX(-4px); pointer-events: none; width: 0; overflow: hidden; }
+.user-name { font-size: 12.5px; font-weight: 600; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 10.5px; font-weight: 500; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-more {
+  color: var(--t3);
+  display: flex;
+  flex-shrink: 0;
+  transition: opacity 180ms var(--ease), color 120ms;
+}
+.user-row:hover .user-more { color: var(--t2); }
+.sb.collapsed .user-more { opacity: 0; pointer-events: none; width: 0; overflow: hidden; }
+
+/* ── Tooltip for user when collapsed ── */
+.sb.collapsed .user-row {
+  justify-content: center;
+  padding: 7px 0;
+}
+
+/* ── Main area placeholder ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--t3);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+.main span { font-size: 28px; opacity: 0.3; }
+
+/* ── Status dot ── */
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(246,193,80,0.5);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(246,193,80,0.15);
+  animation: pulse 2.4s ease infinite;
+  transition: opacity 180ms var(--ease);
+}
+.sb.collapsed .status-dot { opacity: 0; width: 0; overflow: hidden; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(246,193,80,0.15); }
+  50% { box-shadow: 0 0 0 4px rgba(246,193,80,0.05); }
+}
+</style>
+</head>
+<body>
+
+<nav class="sb" id="sb">
+
+  <!-- Header -->
+  <div class="sb-head">
+    <div class="brand-mark">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 2L13.5 5.5V10.5L8 14L2.5 10.5V5.5L8 2Z" fill="rgba(10,8,4,0.6)" stroke="rgba(255,255,255,0.25)" stroke-width="0.5"/>
+        <circle cx="8" cy="8" r="2.5" fill="rgba(255,255,255,0.9)"/>
+      </svg>
+    </div>
+    <span class="brand-text">Oneiro</span>
+    <button class="tog" id="togBtn" aria-label="Toggle sidebar">
+      <span class="tog-icon">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M7.5 2.5L4.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </button>
+  </div>
+
+  <!-- Search -->
+  <div class="sb-search">
+    <div class="search-wrap" id="searchWrap">
+      <span class="search-icon">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8.5 8.5L11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <input class="search-input" placeholder="Search…" id="searchInput" type="text">
+      <span class="search-kbd">⌘K</span>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="sb-nav">
+
+    <div class="sec-label">Workspace</div>
+
+    <div class="ni active" data-label="Dashboard">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
+          <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.5"/>
+          <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.5"/>
+          <rect x="9" y="9" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.5"/>
+        </svg>
+      </span>
+      <span class="ni-label">Dashboard</span>
+      <span class="ni-tooltip">Dashboard</span>
+    </div>
+
+    <div class="ni" data-label="Analytics" id="ni-analytics">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 12L5.5 7.5L8.5 9.5L12 4.5L14 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="14" cy="6" r="1.5" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="ni-label">Analytics</span>
+      <span class="ni-badge">Live</span>
+      <span class="status-dot"></span>
+      <span class="ni-tooltip">Analytics</span>
+    </div>
+
+    <div class="ni" data-label="Projects" id="ni-projects">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="1.5" y="4" width="13" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M5 4V3C5 2.17 5.67 1.5 6.5 1.5H9.5C10.33 1.5 11 2.17 11 3V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="ni-label">Projects</span>
+      <span class="ni-chev">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="ni-tooltip">Projects</span>
+    </div>
+    <div class="nested" id="nest-projects">
+      <div class="ni-sub active">
+        <span class="ni-sub-label">Oneiro Core</span>
+      </div>
+      <div class="ni-sub">
+        <span class="ni-sub-label">Design System</span>
+        <span class="ni-sub-badge">3</span>
+      </div>
+      <div class="ni-sub">
+        <span class="ni-sub-label">API Gateway</span>
+      </div>
+      <div class="ni-sub">
+        <span class="ni-sub-label">Mobile App</span>
+      </div>
+    </div>
+
+    <div class="ni" data-label="Deployments" id="ni-deploys">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1.5L10.5 6.5H14.5L11 9.5L12.5 14.5L8 11.5L3.5 14.5L5 9.5L1.5 6.5H5.5L8 1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="ni-label">Deployments</span>
+      <span class="ni-chev">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="ni-tooltip">Deployments</span>
+    </div>
+    <div class="nested" id="nest-deploys">
+      <div class="ni-sub">
+        <span class="ni-sub-label">Production</span>
+      </div>
+      <div class="ni-sub">
+        <span class="ni-sub-label">Staging</span>
+        <span class="ni-sub-badge">2</span>
+      </div>
+      <div class="ni-sub">
+        <span class="ni-sub-label">Preview</span>
+      </div>
+    </div>
+
+    <div class="sb-divider"></div>
+    <div class="sec-label">Monitor</div>
+
+    <div class="ni" data-label="Logs">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" opacity="0.9"/>
+          <rect x="2" y="7" width="8.5" height="1.5" rx="0.75" fill="currentColor" opacity="0.6"/>
+          <rect x="2" y="11" width="10.5" height="1.5" rx="0.75" fill="currentColor" opacity="0.4"/>
+        </svg>
+      </span>
+      <span class="ni-label">Logs</span>
+      <span class="ni-badge red">12</span>
+      <span class="ni-tooltip">Logs</span>
+    </div>
+
+    <div class="ni" data-label="Alerts">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1.5C5.52 1.5 3.5 3.52 3.5 6V9.5L2 11.5H14L12.5 9.5V6C12.5 3.52 10.48 1.5 8 1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M6.5 11.5C6.5 12.33 7.17 13 8 13C8.83 13 9.5 12.33 9.5 11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="ni-label">Alerts</span>
+      <span class="ni-badge red">3</span>
+      <span class="ni-tooltip">Alerts</span>
+    </div>
+
+    <div class="ni" data-label="Metrics">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 13.5V9.5L5.5 6L8.5 8.5L11.5 4.5L14 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="ni-label">Metrics</span>
+      <span class="ni-tooltip">Metrics</span>
+    </div>
+
+    <div class="sb-divider"></div>
+    <div class="sec-label">System</div>
+
+    <div class="ni" data-label="Team">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="6" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M1.5 13.5C1.5 11.29 3.52 9.5 6 9.5C8.48 9.5 10.5 11.29 10.5 13.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <circle cx="11.5" cy="5" r="2" stroke="currentColor" stroke-width="1.3" opacity="0.6"/>
+          <path d="M13.5 13.5C13.5 12.29 12.67 11.27 11.5 10.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+      </span>
+      <span class="ni-label">Team</span>
+      <span class="ni-tooltip">Team</span>
+    </div>
+
+    <div class="ni" data-label="Settings">
+      <span class="ni-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 1.5V3M8 13V14.5M14.5 8H13M3 8H1.5M12.54 3.46L11.48 4.52M4.52 11.48L3.46 12.54M12.54 12.54L11.48 11.48M4.52 4.52L3.46 3.46" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="ni-label">Settings</span>
+      <span class="ni-tooltip">Settings</span>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="sb-foot">
+    <div class="user-row">
+      <div class="user-av">Q</div>
+      <div class="user-info">
+        <div class="user-name">Quinn O'Donnell</div>
+        <div class="user-role">Administrator</div>
+      </div>
+      <span class="user-more">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="3" r="1" fill="currentColor"/>
+          <circle cx="7" cy="7" r="1" fill="currentColor"/>
+          <circle cx="7" cy="11" r="1" fill="currentColor"/>
+        </svg>
+      </span>
+    </div>
+  </div>
+
+</nav>
+
+<div class="main">
+  <span>◈</span>
+  Main content area
+</div>
+
+<script>
+const sb = document.getElementById('sb');
+const togBtn = document.getElementById('togBtn');
+const searchWrap = document.getElementById('searchWrap');
+const searchInput = document.getElementById('searchInput');
+
+// Toggle collapse
+togBtn.addEventListener('click', () => {
+  sb.classList.toggle('collapsed');
+});
+
+// Search focus on click when collapsed
+searchWrap.addEventListener('click', () => {
+  if (sb.classList.contains('collapsed')) {
+    sb.classList.remove('collapsed');
+    setTimeout(() => searchInput.focus(), 200);
+  } else {
+    searchInput.focus();
+  }
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    if (sb.classList.contains('collapsed')) sb.classList.remove('collapsed');
+    setTimeout(() => searchInput.focus(), 50);
+  }
+  if (e.key === 'Escape') searchInput.blur();
+});
+
+// Nav item click — active state
+const navItems = document.querySelectorAll('.ni:not([id$="-projects"]):not([id$="-deploys"]):not([id$="-analytics"])');
+navItems.forEach(ni => {
+  if (!ni.querySelector('.ni-chev')) {
+    ni.addEventListener('click', () => {
+      document.querySelectorAll('.ni.active').forEach(a => a.classList.remove('active'));
+      ni.classList.add('active');
+    });
+  }
+});
+
+// Expandable nav items
+function makeExpandable(niId, nestId) {
+  const ni = document.getElementById(niId);
+  const nest = document.getElementById(nestId);
+  if (!ni || !nest) return;
+  let open = false;
+  ni.addEventListener('click', () => {
+    open = !open;
+    ni.classList.toggle('open', open);
+    if (open) {
+      nest.style.height = nest.scrollHeight + 'px';
+    } else {
+      nest.style.height = '0';
+    }
+  });
+}
+makeExpandable('ni-projects', 'nest-projects');
+makeExpandable('ni-deploys', 'nest-deploys');
+
+// Sub-item active
+document.querySelectorAll('.ni-sub').forEach(sub => {
+  sub.addEventListener('click', () => {
+    document.querySelectorAll('.ni-sub.active').forEach(a => a.classList.remove('active'));
+    sub.classList.add('active');
+  });
+});
+
+// Mouse gradient on hover
+document.querySelectorAll('.ni').forEach(ni => {
+  ni.addEventListener('mousemove', e => {
+    const rect = ni.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+    ni.style.setProperty('--mx', x + '%');
+  });
+});
+
+// Open projects by default
+document.getElementById('ni-projects').click();
+</script>
+</body>
+</html>

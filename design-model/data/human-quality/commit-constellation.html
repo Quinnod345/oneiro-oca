@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Commit Constellation</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --void: oklch(0.08 0.02 270);
+    --nebula-a: oklch(0.12 0.04 290);
+    --nebula-b: oklch(0.10 0.03 250);
+    --star-bright: oklch(0.92 0.03 220);
+    --star-mid: oklch(0.70 0.04 240);
+    --star-dim: oklch(0.45 0.03 260);
+    --line-color: oklch(0.30 0.03 250 / 0.35);
+    --label-color: oklch(0.50 0.02 260);
+    --branch-main: oklch(0.60 0.08 220);
+    --branch-feature: oklch(0.55 0.10 150);
+    --branch-hotfix: oklch(0.58 0.12 30);
+  }
+
+  body {
+    width: 1440px; height: 900px; overflow: hidden;
+    background: var(--void);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .space {
+    width: 100%; height: 100%;
+    position: relative;
+    background:
+      radial-gradient(ellipse 800px 600px at 35% 40%, oklch(0.11 0.05 290 / 0.5), transparent),
+      radial-gradient(ellipse 500px 400px at 72% 55%, oklch(0.10 0.04 240 / 0.4), transparent),
+      radial-gradient(ellipse 300px 250px at 20% 75%, oklch(0.09 0.03 200 / 0.3), transparent),
+      var(--void);
+  }
+
+  /* background star dust */
+  .dust {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .dust-dot {
+    position: absolute;
+    border-radius: 50%;
+    background: oklch(0.65 0.02 250);
+  }
+
+  /* constellation lines via SVG */
+  .constellation-svg {
+    position: absolute;
+    inset: 0;
+    width: 1440px; height: 900px;
+    pointer-events: none;
+  }
+  .branch-line {
+    fill: none;
+    stroke-width: 0.8;
+    stroke-linecap: round;
+  }
+  .branch-line.main { stroke: oklch(0.35 0.06 220 / 0.4); }
+  .branch-line.feature { stroke: oklch(0.30 0.07 150 / 0.35); }
+  .branch-line.hotfix { stroke: oklch(0.32 0.08 30 / 0.35); }
+
+  /* commit stars */
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    cursor: default;
+    transition: transform 0.3s ease;
+  }
+  .star:hover { transform: scale(1.4); }
+
+  .star-core {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .star-glow {
+    position: absolute;
+    inset: -60%;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: twinkle ease-in-out infinite alternate;
+  }
+
+  @keyframes twinkle {
+    0%   { opacity: 0.3; transform: scale(0.9); }
+    100% { opacity: 0.7; transform: scale(1.1); }
+  }
+
+  /* commit labels */
+  .star-label {
+    position: absolute;
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    color: var(--label-color);
+    pointer-events: none;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+  }
+  .star:hover .star-label { opacity: 1; }
+
+  .star-hash {
+    font-size: 8px;
+    color: oklch(0.38 0.02 260);
+    font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", "Fira Code", monospace;
+  }
+
+  /* branch legend */
+  .legend {
+    position: absolute;
+    bottom: 40px; left: 60px;
+    display: flex; gap: 20px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .legend-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .legend-text {
+    font-size: 10px;
+    color: var(--label-color);
+    letter-spacing: 0.04em;
+    font-weight: 400;
+  }
+
+  /* title */
+  .title {
+    position: absolute;
+    top: 44px; left: 60px;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: oklch(0.52 0.03 260);
+  }
+  .subtitle {
+    position: absolute;
+    top: 68px; left: 60px;
+    font-size: 11px;
+    color: oklch(0.38 0.02 265);
+    letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* merge flash */
+  .merge-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid oklch(0.50 0.06 220 / 0.2);
+    pointer-events: none;
+    animation: mergeRingPulse 4s ease-in-out infinite;
+  }
+  @keyframes mergeRingPulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50%      { transform: scale(1.5); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="space">
+  <div class="dust" id="dust"></div>
+
+  <div class="title">Commit History</div>
+  <div class="subtitle">oneiro-core/cognitive -- last 15 commits</div>
+
+  <!-- constellation lines -->
+  <svg class="constellation-svg" viewBox="0 0 1440 900">
+    <!-- main branch -->
+    <path class="branch-line main"
+          d="M 160,420 C 240,415 280,430 360,425
+             S 520,410 620,420
+             S 760,435 840,425
+             S 960,415 1060,430
+             S 1180,420 1280,425" />
+    <!-- feature branch (forks up from main around commit 3, merges back at commit 10) -->
+    <path class="branch-line feature"
+          d="M 360,425 C 400,390 440,340 520,320
+             S 660,310 740,315
+             S 820,330 880,350
+             S 940,400 1060,430" />
+    <!-- hotfix branch (forks down from main around commit 6, merges at commit 8) -->
+    <path class="branch-line hotfix"
+          d="M 620,420 C 660,460 700,500 760,510
+             S 800,500 840,425" />
+  </svg>
+
+  <!-- merge point indicators -->
+  <div class="merge-ring" style="left: 1048px; top: 418px; width: 24px; height: 24px;"></div>
+  <div class="merge-ring" style="left: 828px; top: 413px; width: 20px; height: 20px; animation-delay: -1.5s;"></div>
+
+  <div id="stars"></div>
+
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--branch-main);"></div>
+      <span class="legend-text">main</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--branch-feature);"></div>
+      <span class="legend-text">feature/design-model</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: var(--branch-hotfix);"></div>
+      <span class="legend-text">hotfix/emotion-fix</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // star dust background
+  const dustEl = document.getElementById('dust');
+  for (let i = 0; i < 120; i++) {
+    const d = document.createElement('div');
+    d.className = 'dust-dot';
+    const size = 0.5 + Math.random() * 1.5;
+    d.style.cssText = `
+      width: ${size}px; height: ${size}px;
+      left: ${Math.random() * 100}%;
+      top: ${Math.random() * 100}%;
+      opacity: ${0.15 + Math.random() * 0.35};
+    `;
+    dustEl.appendChild(d);
+  }
+
+  // commit data
+  const commits = [
+    { x: 160, y: 420, branch: 'main', size: 8, age: 14, msg: 'init cognitive module', hash: 'a3f1e02' },
+    { x: 270, y: 418, branch: 'main', size: 6, age: 12, msg: 'add base config', hash: 'b7c4d19' },
+    { x: 360, y: 425, branch: 'main', size: 10, age: 11, msg: 'refactor engine core', hash: 'c9e2a44' },
+    { x: 520, y: 320, branch: 'feature', size: 7, age: 10, msg: 'design encoder v1', hash: 'd1f8b37' },
+    { x: 520, y: 412, branch: 'main', size: 5, age: 10, msg: 'update deps', hash: 'e3a9c51' },
+    { x: 620, y: 420, branch: 'main', size: 9, age: 8, msg: 'emotion engine rewrite', hash: 'f5b2d68' },
+    { x: 740, y: 315, branch: 'feature', size: 12, age: 7, msg: 'train design-head-v2', hash: '71c3e82' },
+    { x: 760, y: 510, branch: 'hotfix', size: 6, age: 6, msg: 'fix emotion NaN crash', hash: '82d4f93' },
+    { x: 840, y: 425, branch: 'main', size: 8, age: 5, msg: 'merge hotfix', hash: '93e5a04' },
+    { x: 880, y: 350, branch: 'feature', size: 7, age: 4, msg: 'add flywheel loop', hash: 'a4f6b15' },
+    { x: 1060, y: 430, branch: 'main', size: 14, age: 3, msg: 'merge design-model', hash: 'b5a7c26' },
+    { x: 1160, y: 422, branch: 'main', size: 6, age: 2, msg: 'cleanup dead code', hash: 'c6b8d37' },
+    { x: 1220, y: 428, branch: 'main', size: 8, age: 1, msg: 'motor skills update', hash: 'd7c9e48' },
+    { x: 1280, y: 425, branch: 'main', size: 10, age: 0, msg: 'self-build x-post v3', hash: 'e8d0f59' },
+    { x: 1340, y: 420, branch: 'main', size: 7, age: 0, msg: 'HEAD', hash: 'd68bf4d' },
+  ];
+
+  const branchColors = {
+    main: { core: 'oklch(0.72 0.08 220)', glow: 'oklch(0.60 0.08 220 / 0.25)' },
+    feature: { core: 'oklch(0.68 0.10 150)', glow: 'oklch(0.55 0.10 150 / 0.25)' },
+    hotfix: { core: 'oklch(0.70 0.12 30)', glow: 'oklch(0.58 0.12 30 / 0.25)' },
+  };
+
+  const starsEl = document.getElementById('stars');
+
+  commits.forEach((c, i) => {
+    const colors = branchColors[c.branch];
+    // brightness based on recency (age 0 = brightest)
+    const brightness = Math.max(0.45, 0.92 - c.age * 0.035);
+    const twinkleDur = 2.5 + Math.random() * 3;
+    const twinkleDelay = Math.random() * 3;
+
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.cssText = `
+      left: ${c.x - c.size / 2}px;
+      top: ${c.y - c.size / 2}px;
+      width: ${c.size}px;
+      height: ${c.size}px;
+    `;
+
+    const labelSide = c.y < 400 ? 'top' : 'bottom';
+    const labelOffset = labelSide === 'top'
+      ? `bottom: ${c.size + 8}px; left: 50%; transform: translateX(-50%);`
+      : `top: ${c.size + 8}px; left: 50%; transform: translateX(-50%);`;
+
+    star.innerHTML = `
+      <div class="star-glow" style="
+        background: radial-gradient(circle, ${colors.glow}, transparent 70%);
+        animation-duration: ${twinkleDur}s;
+        animation-delay: ${twinkleDelay}s;
+      "></div>
+      <div class="star-core" style="
+        background: radial-gradient(circle at 40% 35%,
+          oklch(${brightness} 0.04 220),
+          ${colors.core} 60%,
+          oklch(${brightness - 0.15} 0.06 ${c.branch === 'feature' ? 150 : c.branch === 'hotfix' ? 30 : 220})
+        );
+        box-shadow: 0 0 ${c.size * 1.5}px ${colors.glow};
+      "></div>
+      <div class="star-label" style="${labelOffset}">
+        <span class="star-hash">${c.hash}</span> ${c.msg}
+      </div>
+    `;
+
+    starsEl.appendChild(star);
+  });
+</script>
+
+</body>
+</html>

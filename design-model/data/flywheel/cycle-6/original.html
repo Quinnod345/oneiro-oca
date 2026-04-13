@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0c;
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.08);
+    --border-bright: rgba(255,255,255,0.14);
+    --text-primary: rgba(255,255,255,0.92);
+    --text-secondary: rgba(255,255,255,0.38);
+    --text-tertiary: rgba(255,255,255,0.22);
+    --accent: #c8a96e;
+    --accent-dim: rgba(200,169,110,0.18);
+    --accent-glow: rgba(200,169,110,0.08);
+    --red: #e05c5c;
+    --player-w: 360px;
+  }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'DM Mono', monospace;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(200,169,110,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(100,80,180,0.04) 0%, transparent 60%);
+  }
+
+  .player {
+    width: var(--player-w);
+    background: rgba(14,14,18,0.85);
+    backdrop-filter: blur(40px) saturate(1.4);
+    -webkit-backdrop-filter: blur(40px) saturate(1.4);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.6),
+      0 32px 80px rgba(0,0,0,0.7),
+      0 8px 24px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+  }
+
+  /* Subtle inner glow at top */
+  .player::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12) 30%, rgba(200,169,110,0.2) 50%, rgba(255,255,255,0.12) 70%, transparent);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Album art area */
+  .album-area {
+    position: relative;
+    height: 220px;
+    overflow: hidden;
+  }
+
+  .album-art {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(ellipse 70% 80% at 30% 40%, #1a0e2e 0%, transparent 60%),
+      radial-gradient(ellipse 60% 70% at 75% 20%, #0e1e2a 0%, transparent 55%),
+      radial-gradient(ellipse 80% 60% at 55% 85%, #1e1208 0%, transparent 60%),
+      linear-gradient(135deg, #0e0a18 0%, #0a1018 40%, #130e08 100%);
+    position: relative;
+  }
+
+  /* Vinyl record decoration */
+  .vinyl {
+    position: absolute;
+    right: -30px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, #2a2a2a 0%, #1a1a1a 15%, #111 16%, #222 17%, #111 18%, #1a1a1a 35%, #0d0d0d 36%, #1a1a1a 55%, #111 56%, #1a1a1a 70%, #0a0a0a 100%);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.04),
+      inset 0 0 20px rgba(0,0,0,0.8),
+      0 8px 32px rgba(0,0,0,0.6);
+    animation: spin 8s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .vinyl.playing {
+    animation-play-state: running;
+  }
+
+  .vinyl::before {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #c8a96e 0%, #8a6e3a 60%, #5a4820 100%);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.4), 0 0 12px rgba(200,169,110,0.3);
+  }
+
+  .vinyl::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0a0a0a;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+  }
+
+  @keyframes spin {
+    from { transform: translateY(-50%) rotate(0deg); }
+    to   { transform: translateY(-50%) rotate(360deg); }
+  }
+
+  /* Shimmer lines on vinyl */
+  .vinyl-shimmer {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(30deg);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg, rgba(255,255,255,0.015) 2deg,
+      transparent 4deg, rgba(255,255,255,0.02) 6deg,
+      transparent 8deg
+    );
+    pointer-events: none;
+  }
+
+  /* Text overlaid on art */
+  .album-meta {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 28px 24px 20px;
+    background: linear-gradient(to top, rgba(10,10,14,0.95) 0%, rgba(10,10,14,0.7) 50%, transparent 100%);
+  }
+
+  .track-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 300;
+    color: var(--text-primary);
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .track-artist {
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--accent);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* Controls area */
+  .controls-area {
+    padding: 20px 24px 24px;
+  }
+
+  /* Progress bar */
+  .progress-container {
+    margin-bottom: 20px;
+  }
+
+  .time-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .time-label {
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-track {
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+    transition: height 0.15s ease;
+  }
+
+  .progress-track:hover {
+    height: 3px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent) 0%, rgba(200,169,110,0.7) 100%);
+    border-radius: 2px;
+    width: 38%;
+    position: relative;
+    transition: width 0.1s linear;
+  }
+
+  .progress-thumb {
+    position: absolute;
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(200,169,110,0.6);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .progress-track:hover .progress-thumb {
+    opacity: 1;
+  }
+
+  /* Playback controls */
+  .playback-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .ctrl-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    transition: color 0.15s ease, background 0.15s ease;
+    position: relative;
+  }
+
+  .ctrl-btn:hover {
+    color: var(--text-primary);
+    background: var(--surface-hover);
+  }
+
+  .ctrl-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .ctrl-btn.secondary svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .ctrl-btn.active {
+    color: var(--accent);
+  }
+
+  .ctrl-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Play button */
+  .play-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, rgba(200,169,110,0.15) 0%, rgba(200,169,110,0.06) 100%);
+    border: 1px solid rgba(200,169,110,0.25);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 20px rgba(200,169,110,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+  }
+
+  .play-btn:hover {
+    background: linear-gradient(145deg, rgba(200,169,110,0.22) 0%, rgba(200,169,110,0.1) 100%);
+    border-color: rgba(200,169,110,0.4);
+    box-shadow: 0 0 28px rgba(200,169,110,0.16), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: scale(1.05);
+  }
+
+  .play-btn:active {
+    transform: scale(0.96);
+    transition-duration: 0.08s;
+  }
+
+  .play-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .play-icon { display: block; }
+  .pause-icon { display: none; }
+
+  .play-btn.playing .play-icon { display: none; }
+  .play-btn.playing .pause-icon { display: block; }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    margin-bottom: 16px;
+  }
+
+  /* Bottom row: volume + extra controls */
+  .bottom-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .volume-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    padding: 0;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .volume-icon-btn:hover { color: var(--text-secondary); }
+  .volume-icon-btn svg { width: 14px; height: 14px; }
+
+  .volume-slider-wrap {
+    flex: 1;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .volume-track {
+    width: 100%;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .volume-fill {
+    height: 100%;
+    background: rgba(255,255,255,0.25);
+    border-radius: 2px;
+    width: 70%;
+    transition: background 0.15s ease;
+  }
+
+  .volume-slider-wrap:hover .volume-fill {
+    background: rgba(255,255,255,0.4);
+  }
+
+  .volume-thumb {
+    position: absolute;
+    right: -3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.6);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .volume-slider-wrap:hover .volume-thumb {
+    opacity: 1;
+  }
+
+  /* Queue preview */
+  .queue-section {
+    border-top: 1px solid var(--border);
+    padding: 0 24px 20px;
+  }
+
+  .queue-label {
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    padding: 14px 0 10px;
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+
+  .queue-item:hover {
+    background: var(--surface-hover);
+  }
+
+  .queue-num {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    width: 12px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .queue-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .queue-dot-1 {
+    background: linear-gradient(135deg, #1a0e2e, #0d1a2e);
+  }
+  .queue-dot-2 {
+    background: linear-gradient(135deg, #1e1208, #0e1808);
+  }
+
+  .queue-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .queue-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .queue-artist {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    letter-spacing: 0.06em;
+    margin-top: 1px;
+  }
+
+  .queue-dur {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="player">
+
+  <!-- Album art -->
+  <div class="album-area">
+    <div class="album-art">
+      <div class="vinyl" id="vinyl">
+        <div class="vinyl-shimmer"></div>
+      </div>
+    </div>
+    <div class="album-meta">
+      <div class="track-title">Nocturne in E♭ Major</div>
+      <div class="track-artist">Frédéric Chopin &nbsp;·&nbsp; Op. 9, No. 2</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-area">
+
+    <!-- Progress -->
+    <div class="progress-container">
+      <div class="time-row">
+        <span class="time-label" id="current-time">2:14</span>
+        <span class="time-label">5:51</span>
+      </div>
+      <div class="progress-track" id="progress-track">
+        <div class="progress-fill" id="progress-fill">
+          <div class="progress-thumb"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playback buttons -->
+    <div class="playback-row">
+
+      <!-- Shuffle -->
+      <button class="ctrl-btn secondary" id="shuffle-btn" title="Shuffle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 3 21 3 21 8"></polyline>
+          <line x1="4" y1="20" x2="21" y2="3"></line>
+          <polyline points="21 16 21 21 16 21"></polyline>
+          <line x1="15" y1="15" x2="21" y2="21"></line>
+        </svg>
+      </button>
+
+      <!-- Prev -->
+      <button class="ctrl-btn" id="prev-btn" title="Previous">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+        </svg>
+      </button>
+
+      <!-- Play/Pause -->
+      <button class="play-btn" id="play-btn" title="Play / Pause">
+        <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+      </button>
+
+      <!-- Next -->
+      <button class="ctrl-btn" id="next-btn" title="Next">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zm2-8.14L11.03 12 8 14.14V9.86zM16 6h2v12h-2z"/>
+        </svg>
+      </button>
+
+      <!-- Repeat -->
+      <button class="ctrl-btn secondary active" id="repeat-btn" title="Repeat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="17 1 21 5 17 9"></polyline>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+          <polyline points="7 23 3 19 7 15"></polyline>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+        </svg>
+      </button>
+
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Volume -->
+    <div class="bottom-row">
+      <button class="volume-icon-btn" id="mute-btn" title="Mute">
+        <svg id="vol-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+      </button>
+
+      <div class="volume-slider-wrap" id="volume-slider">
+        <div class="volume-track">
+          <div class="volume-fill" id="volume-fill">
+            <div class="volume-thumb"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Queue -->
+  <div class="queue-section">
+    <div class="queue-label">Up Next</div>
+
+    <div class="queue-item">
+      <span class="queue-num">2</span>
+      <div class="queue-dot queue-dot-1"></div>
+      <div class="queue-info">
+        <div class="queue-title">Clair de Lune</div>
+        <div class="queue-artist">Claude Debussy</div>
+      </div>
+      <span class="queue-dur">5:12</span>
+    </div>
+
+    <div class="queue-item">
+      <span class="queue-num">3</span>
+      <div class="queue-dot queue-dot-2"></div>
+      <div class="queue-info">
+        <div class="queue-title">Gymnopédie No. 1</div>
+        <div class="queue-artist">Erik Satie</div>
+      </div>
+      <span class="queue-dur">3:08</span>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  const playBtn = document.getElementById('play-btn');
+  const vinyl = document.getElementById('vinyl');
+  const shuffleBtn = document.getElementById('shuffle-btn');
+  const repeatBtn = document.getElementById('repeat-btn');
+  const progressTrack = document.getElementById('progress-track');
+  const progressFill = document.getElementById('progress-fill');
+  const currentTimeEl = document.getElementById('current-time');
+  const volumeSlider = document.getElementById('volume-slider');
+  const volumeFill = document.getElementById('volume-fill');
+  const muteBtn = document.getElementById('mute-btn');
+
+  let playing = false;
+  let progress = 38; // percent
+  let volume = 70;
+  let muted = false;
+  let totalSeconds = 351;
+  let currentSeconds = Math.round(totalSeconds * progress / 100);
+  let timer = null;
+
+  function formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  function updateProgress(pct) {
+    progress = Math.max(0, Math.min(100, pct));
+    progressFill.style.width = progress + '%';
+    currentSeconds = Math.round(totalSeconds * progress / 100);
+    currentTimeEl.textContent = formatTime(currentSeconds);
+  }
+
+  function tick() {
+    if (currentSeconds < totalSeconds) {
+      currentSeconds++;
+      progress = (currentSeconds / totalSeconds) * 100;
+      progressFill.style.width = progress + '%';
+      currentTimeEl.textContent = formatTime(currentSeconds);
+    } else {
+      pause();
+    }
+  }
+
+  function play() {
+    playing = true;
+    playBtn.classList.add('playing');
+    vinyl.classList.add('playing');
+    timer = setInterval(tick, 1000);
+  }
+
+  function pause() {
+    playing = false;
+    playBtn.classList.remove('playing');
+    vinyl.classList.remove('playing');
+    clearInterval(timer);
+  }
+
+  playBtn.addEventListener('click', () => {
+    playing ? pause() : play();
+  });
+
+  shuffleBtn.addEventListener('click', () => {
+    shuffleBtn.classList.toggle('active');
+  });
+
+  repeatBtn.addEventListener('click', () => {
+    repeatBtn.classList.toggle('active');
+  });
+
+  // Progress scrubbing
+  let scrubbing = false;
+
+  function scrub(e) {
+    const rect = progressTrack.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    updateProgress(pct);
+  }
+
+  progressTrack.addEventListener('mousedown', (e) => {
+    scrubbing = true;
+    scrub(e);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (scrubbing) scrub(e);
+  });
+
+  document.addEventListener('mouseup', () => {
+    scrubbing = false;
+  });
+
+  // Volume
+  let volScrubbing = false;
+
+  function setVolume(e) {
+    const rect = volumeSlider.getBoundingClientRect();
+    volume = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    volumeFill.style.width = volume + '%';
+    if (volume === 0) {
+      muted = true;
+      updateVolIcon(true);
+    } else {
+      muted = false;
+      updateVolIcon(false);
+    }
+  }
+
+  volumeSlider.addEventListener('mousedown', (e) => {
+    volScrubbing = true;
+    setVolume(e);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (volScrubbing) setVolume(e);
+  });
+
+  document.addEventListener('mouseup', () => {
+    volScrubbing = false;
+  });
+
+  function updateVolIcon(mute) {
+    const icon = document.getElementById('vol-icon');
+    if (mute) {
+      icon.innerHTML = `
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <line x1="23" y1="9" x2="17" y2="15"></line>
+        <line x1="17" y1="9" x2="23" y2="15"></line>
+      `;
+    } else {
+      icon.innerHTML = `
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+      `;
+    }
+  }
+
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    if (muted) {
+      volumeFill.style.width = '0%';
+    } else {
+      volumeFill.style.width = volume + '%';
+    }
+    updateVolIcon(muted);
+  });
+
+  // Init
+  updateProgress(progress);
+  volumeFill.style.width = volume + '%';
+</script>
+
+</body>
+</html>

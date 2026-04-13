@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #E8E4DC;
+    --card: #FFFFFF;
+    --text-primary: #1C1C1E;
+    --text-secondary: #8E8E93;
+    --text-tertiary: #C7C7CC;
+    --divider: #F2F2F7;
+    --hover: #F7F7FA;
+    --tag-bg: #F2F2F7;
+    --tag-text: #6E6E73;
+    --blue: #007AFF;
+    --green: #34C759;
+    --orange: #FF9500;
+    --red: #FF3B30;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 56px 20px 80px;
+  }
+
+  /* Subtle grain overlay on body */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    background-size: 128px;
+    pointer-events: none;
+    opacity: 0.4;
+    z-index: 0;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 468px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.8);
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  .header {
+    padding: 28px 28px 16px;
+  }
+
+  .header-eyebrow {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .header-title {
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.4px;
+  }
+
+  .header-count {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+  }
+
+  .progress-wrap {
+    margin-top: 14px;
+    height: 3px;
+    background: #F2F2F7;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #34C759 0%, #30D158 100%);
+    border-radius: 2px;
+    transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Section ─────────────────────────────────────── */
+  .section {
+    padding: 8px 0 12px;
+  }
+
+  .section + .section {
+    border-top: 1px solid var(--divider);
+  }
+
+  .section-label {
+    padding: 4px 28px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── Date Chip ───────────────────────────────────── */
+  .date-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 28px 4px;
+  }
+
+  .date-chip-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .date-chip-line {
+    flex: 1;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  /* ── Task Item ───────────────────────────────────── */
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 9px 28px 9px 24px;
+    gap: 11px;
+    cursor: default;
+    position: relative;
+    transition: background 0.12s ease;
+    user-select: none;
+  }
+
+  .task-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .task-item[data-priority="high"]::before { background: var(--red); }
+  .task-item[data-priority="medium"]::before { background: var(--orange); }
+  .task-item[data-priority="low"]::before { background: var(--blue); }
+
+  .task-item:hover {
+    background: var(--hover);
+  }
+
+  .task-item:hover::before {
+    opacity: 0.6;
+  }
+
+  .task-item.completed {
+    opacity: 0.42;
+    pointer-events: auto;
+  }
+
+  /* ── Checkbox ────────────────────────────────────── */
+  .cb-wrap {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .cb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.75px solid #D1D1D6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
+      border-color 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
+      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: visible;
+  }
+
+  .cb-wrap:hover .cb {
+    border-color: #AEAEB2;
+    transform: scale(1.06);
+  }
+
+  .cb-wrap:active .cb {
+    transform: scale(0.93);
+  }
+
+  /* Hover ghost check */
+  .cb-wrap:hover .cb-svg {
+    opacity: 0.18;
+  }
+
+  .cb-svg {
+    transition: opacity 0.15s ease;
+  }
+
+  .task-item.completed .cb {
+    transform: scale(1);
+    border-color: transparent;
+  }
+
+  .task-item[data-priority="high"].completed .cb { background: var(--red); }
+  .task-item[data-priority="medium"].completed .cb { background: var(--orange); }
+  .task-item[data-priority="low"].completed .cb { background: var(--blue); }
+  .task-item:not([data-priority]).completed .cb,
+  .task-item[data-priority="none"].completed .cb { background: var(--green); }
+
+  .check-path {
+    stroke-dasharray: 22;
+    stroke-dashoffset: 22;
+    transition: stroke-dashoffset 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
+  }
+
+  .task-item.completed .check-path {
+    stroke-dashoffset: 0;
+  }
+
+  /* ── Priority Dot ────────────────────────────────── */
+  .priority-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid #FFFFFF;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .task-item.completed .priority-dot {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  .dot-high { background: var(--red); }
+  .dot-medium { background: var(--orange); }
+  .dot-low { background: var(--blue); }
+
+  /* ── Task Body ───────────────────────────────────── */
+  .task-body {
+    flex: 1;
+    min-width: 0;
+    padding-top: 1px;
+  }
+
+  .task-title {
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text-primary);
+    line-height: 1.42;
+    letter-spacing: -0.1px;
+    transition: color 0.25s ease;
+    position: relative;
+  }
+
+  .task-title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 1.2px;
+    background: var(--text-secondary);
+    width: 0;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.06s;
+    border-radius: 1px;
+  }
+
+  .task-item.completed .task-title {
+    color: var(--text-secondary);
+  }
+
+  .task-item.completed .task-title::after {
+    width: 100%;
+  }
+
+  .task-note {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .tag {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--tag-text);
+    background: var(--tag-bg);
+    padding: 2px 7px;
+    border-radius: 5px;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Due Date ────────────────────────────────────── */
+  .task-due {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    margin-top: 3px;
+    letter-spacing: 0.01em;
+    transition: color 0.25s ease;
+  }
+
+  .due-overdue { color: var(--red) !important; }
+  .due-today { color: var(--orange) !important; }
+  .due-soon { color: var(--blue) !important; }
+
+  .task-item.completed .task-due {
+    color: var(--text-tertiary) !important;
+  }
+
+  /* ── Footer ──────────────────────────────────────── */
+  .footer {
+    padding: 12px 28px 22px;
+    border-top: 1px solid var(--divider);
+  }
+
+  .add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--blue);
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 500;
+    padding: 4px 0;
+    border-radius: 6px;
+    transition: opacity 0.15s ease;
+    letter-spacing: -0.1px;
+  }
+
+  .add-btn:hover { opacity: 0.65; }
+  .add-btn:active { opacity: 0.45; }
+
+  .add-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 122, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .add-icon svg {
+    display: block;
+  }
+
+  /* ── Reduced motion ──────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-eyebrow">Sunday · April 13</div>
+      <div class="header-row">
+        <div class="header-title">Today</div>
+        <div class="header-count" id="taskCount">4 tasks</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- Today Section -->
+    <div class="section" id="todaySection">
+
+      <!-- Task 1 -->
+      <div class="task-item" data-priority="high" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot dot-high"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Review design system proposals</div>
+          <div class="task-tags">
+            <span class="tag">Work</span>
+            <span class="tag">Design</span>
+          </div>
+        </div>
+        <div class="task-due due-overdue">Yesterday</div>
+      </div>
+
+      <!-- Task 2 -->
+      <div class="task-item" data-priority="medium" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot dot-medium"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Call with infrastructure team</div>
+          <div class="task-note">Conference room B · Agenda doc in Notion</div>
+          <div class="task-tags">
+            <span class="tag">Work</span>
+          </div>
+        </div>
+        <div class="task-due due-today">2:00 PM</div>
+      </div>
+
+      <!-- Task 3 — pre-completed -->
+      <div class="task-item completed" data-priority="none" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Send weekly update to the team</div>
+          <div class="task-tags">
+            <span class="tag">Work</span>
+          </div>
+        </div>
+        <div class="task-due">Morning</div>
+      </div>
+
+      <!-- Task 4 -->
+      <div class="task-item" data-priority="none" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Pick up dry cleaning</div>
+          <div class="task-note">Check if the downtown location is open</div>
+          <div class="task-tags">
+            <span class="tag">Personal</span>
+          </div>
+        </div>
+        <div class="task-due due-today">Today</div>
+      </div>
+
+    </div>
+
+    <!-- Upcoming Section -->
+    <div class="section">
+      <div class="section-label">Upcoming</div>
+
+      <div class="date-chip">
+        <span class="date-chip-label">Tomorrow</span>
+        <div class="date-chip-line"></div>
+      </div>
+
+      <!-- Task 5 -->
+      <div class="task-item" data-priority="high" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot dot-high"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Submit quarterly financial report</div>
+          <div class="task-tags">
+            <span class="tag">Work</span>
+            <span class="tag">Finance</span>
+          </div>
+        </div>
+        <div class="task-due due-soon">Mon, Apr 14</div>
+      </div>
+
+      <div class="date-chip">
+        <span class="date-chip-label">This week</span>
+        <div class="date-chip-line"></div>
+      </div>
+
+      <!-- Task 6 -->
+      <div class="task-item" data-priority="low" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot dot-low"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Book flights for NYC conference</div>
+          <div class="task-tags">
+            <span class="tag">Travel</span>
+          </div>
+        </div>
+        <div class="task-due">Apr 16</div>
+      </div>
+
+      <!-- Task 7 -->
+      <div class="task-item" data-priority="medium" onclick="toggle(this)">
+        <div class="cb-wrap">
+          <div class="cb">
+            <svg class="cb-svg" width="11" height="9" viewBox="0 0 11 9" fill="none">
+              <path class="check-path" d="M1.5 4L4.5 7L9.5 1.5" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot dot-medium"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Finish reading Shape Up</div>
+          <div class="task-note">Currently on chapter 6 of 18</div>
+          <div class="task-tags">
+            <span class="tag">Personal</span>
+            <span class="tag">Reading</span>
+          </div>
+        </div>
+        <div class="task-due">Apr 18</div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <button class="add-btn" onclick="this.blur()">
+        <div class="add-icon">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M5 1V9M1 5H9" stroke="#007AFF" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        New Task
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function toggle(el) {
+    el.classList.toggle('completed');
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const items = document.querySelectorAll('.task-item');
+    const done  = document.querySelectorAll('.task-item.completed');
+    const pct   = items.length ? (done.length / items.length) * 100 : 0;
+
+    document.getElementById('progressFill').style.width = pct + '%';
+
+    const todayItems = document.querySelectorAll('#todaySection .task-item');
+    const todayLeft  = Array.from(todayItems).filter(t => !t.classList.contains('completed')).length;
+    const count      = document.getElementById('taskCount');
+    count.textContent = todayLeft === 0
+      ? 'All done ✓'
+      : todayLeft === 1
+        ? '1 task remaining'
+        : `${todayLeft} tasks remaining`;
+  }
+
+  /* Init */
+  updateProgress();
+
+  /* Pre-animate the completed task checkmark on load */
+  document.querySelectorAll('.task-item.completed .check-path').forEach(p => {
+    p.style.transitionDelay = '0s';
+    p.style.strokeDashoffset = '0';
+  });
+</script>
+</body>
+</html>

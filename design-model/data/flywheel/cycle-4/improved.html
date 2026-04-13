@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Today</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:              #EDE9E1;
+      --surface:         #FDFCF9;
+      --surface-alt:     #F8F6F1;
+      --surface-deep:    #F2EFE8;
+      --border:          rgba(60, 50, 30, 0.08);
+      --border-strong:   rgba(60, 50, 30, 0.13);
+      --text-primary:    #1A1814;
+      --text-secondary:  #6B6860;
+      --text-muted:      #AAA89F;
+      --blue:            #2769D8;
+      --blue-soft:       rgba(39, 105, 216, 0.10);
+      --red:             #D94F45;
+      --red-soft:        rgba(217, 79, 69, 0.10);
+      --orange:          #C97A0A;
+      --orange-soft:     rgba(201, 122, 10, 0.10);
+      --green:           #2BA870;
+      --green-soft:      rgba(43, 168, 112, 0.10);
+      --purple:          #7B5CF5;
+      --purple-soft:     rgba(123, 92, 245, 0.10);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 16px 80px;
+      font-family: 'Outfit', -apple-system, sans-serif;
+    }
+
+    .card {
+      width: 460px;
+      background: var(--surface);
+      border-radius: 20px;
+      box-shadow:
+        0 0 0 1px var(--border),
+        0 2px 4px rgba(0,0,0,0.04),
+        0 8px 24px rgba(0,0,0,0.07),
+        0 32px 56px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      padding: 26px 26px 0;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .header-date {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 11.5px;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .header-title {
+      font-family: 'Fraunces', serif;
+      font-size: 31px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    .progress-ring-wrap {
+      position: relative;
+      width: 38px;
+      height: 38px;
+    }
+
+    .progress-ring { transform: rotate(-90deg); overflow: visible; }
+
+    .progress-ring-track {
+      fill: none;
+      stroke: var(--border-strong);
+      stroke-width: 2.5;
+    }
+
+    .progress-ring-fill {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-dasharray: 100.53;
+      stroke-dashoffset: 37.2;
+      transition: stroke-dashoffset 0.6s cubic-bezier(0.34, 1.2, 0.64, 1);
+    }
+
+    .progress-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--blue);
+      letter-spacing: -0.02em;
+    }
+
+    .time-remaining {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Day bands ── */
+    .day-bands {
+      display: flex;
+      gap: 3px;
+      padding-bottom: 20px;
+    }
+
+    .band {
+      height: 3px;
+      border-radius: 2px;
+      flex: 1;
+      background: var(--border-strong);
+      transition: background 0.2s;
+    }
+
+    .band.done  { background: var(--blue); }
+    .band.active { background: var(--blue); opacity: 0.4; }
+
+    /* ── Focus block ── */
+    .focus-block {
+      margin: 0 14px 4px;
+      background: var(--surface-deep);
+      border: 1px solid var(--border-strong);
+      border-radius: 13px;
+      padding: 14px 16px 15px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: default;
+    }
+
+    .focus-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 6px;
+    }
+
+    .focus-badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    .focus-content { flex: 1; min-width: 0; }
+
+    .focus-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+      margin-bottom: 5px;
+    }
+
+    .focus-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .focus-time {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .focus-tag {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--purple);
+      background: var(--purple-soft);
+      padding: 2px 7px;
+      border-radius: 100px;
+    }
+
+    .focus-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid #C8C5BC;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+      transition: border-color 0.18s, background 0.18s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    .focus-check:hover { border-color: #9E9B93; }
+
+    .focus-check:focus-visible { box-shadow: 0 0 0 3px rgba(39,105,216,0.22); }
+
+    /* ── Section ── */
+    .section-label {
+      padding: 14px 26px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── Task Item ── */
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 8px 26px;
+      cursor: default;
+      user-select: none;
+      transition: background 0.1s ease;
+      position: relative;
+    }
+
+    .task-item:hover { background: rgba(60, 50, 30, 0.025); }
+
+    .task-item.is-completing {
+      animation: collapseRow 0.38s cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    @keyframes collapseRow {
+      0%   { opacity: 1; max-height: 72px; padding-top: 8px; padding-bottom: 8px; transform: translateX(0); }
+      25%  { opacity: 1; transform: translateX(3px); }
+      60%  { opacity: 0; transform: translateX(10px); max-height: 72px; }
+      100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; transform: translateX(10px); }
+    }
+
+    /* ── Checkbox ── */
+    .check-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid #C8C5BC;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+      transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      -webkit-appearance: none;
+      outline: none;
+    }
+
+    .check-btn:focus-visible { box-shadow: 0 0 0 3px rgba(39,105,216,0.22); }
+
+    .task-item:hover .check-btn:not(.is-checked) { border-color: #9E9B93; }
+
+    .check-btn.is-checked {
+      border-color: var(--ck-color);
+      background-color: var(--ck-color);
+      animation: checkPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes checkPop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(0.82); }
+      100% { transform: scale(1); }
+    }
+
+    .check-icon {
+      width: 9px;
+      height: 9px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+
+    .check-btn.is-checked .check-icon { opacity: 1; }
+
+    /* ── Task body ── */
+    .task-body {
+      flex: 1;
+      min-width: 0;
+      padding-top: 1px;
+    }
+
+    .task-title {
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--text-primary);
+      line-height: 1.4;
+      letter-spacing: -0.005em;
+      transition: color 0.2s, text-decoration 0.2s;
+    }
+
+    .task-item.is-done .task-title {
+      color: var(--text-muted);
+      text-decoration: line-through;
+      text-decoration-color: var(--text-muted);
+    }
+
+    .task-row2 {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 3px;
+    }
+
+    .task-time {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .task-time.overdue { color: var(--red); }
+
+    .task-tag {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1.5px 6px;
+      border-radius: 100px;
+    }
+
+    .tag-blue   { color: var(--blue);   background: var(--blue-soft); }
+    .tag-green  { color: var(--green);  background: var(--green-soft); }
+    .tag-orange { color: var(--orange); background: var(--orange-soft); }
+    .tag-purple { color: var(--purple); background: var(--purple-soft); }
+    .tag-red    { color: var(--red);    background: var(--red-soft); }
+
+    .task-effort {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      opacity: 0.35;
+      transition: opacity 0.15s;
+    }
+
+    .task-item:hover .task-effort { opacity: 0.7; }
+
+    .effort-pip {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+    }
+
+    .effort-pip.empty { background: var(--border-strong); }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 6px 26px;
+    }
+
+    /* ── Overdue banner ── */
+    .overdue-banner {
+      margin: 8px 14px 0;
+      background: var(--red-soft);
+      border: 1px solid rgba(217, 79, 69, 0.15);
+      border-radius: 10px;
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .overdue-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      color: var(--red);
+    }
+
+    .overdue-text {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--red);
+      letter-spacing: -0.005em;
+    }
+
+    .overdue-count {
+      margin-left: auto;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--red);
+      background: rgba(217, 79, 69, 0.12);
+      padding: 1px 7px;
+      border-radius: 100px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 14px 26px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+
+    .footer-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .footer-stat-label {
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .footer-stat-value {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .footer-stat-value span {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: 0;
+    }
+
+    .add-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px 8px 11px;
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      border-radius: 100px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      outline: none;
+    }
+
+    .add-btn:hover {
+      background: var(--surface-deep);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    .add-btn:focus-visible { box-shadow: 0 0 0 3px rgba(39,105,216,0.22); }
+
+    .add-icon {
+      width: 15px;
+      height: 15px;
+      background: var(--blue);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .add-icon svg { display: block; }
+
+    /* ── Completed section toggle ── */
+    .completed-toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 26px 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .completed-toggle:hover .ct-label { color: var(--text-secondary); }
+
+    .ct-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: color 0.15s;
+    }
+
+    .ct-count {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--surface-deep);
+      border: 1px solid var(--border-strong);
+      padding: 1px 6px;
+      border-radius: 100px;
+    }
+
+    .ct-chevron {
+      margin-left: auto;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .completed-toggle.open .ct-chevron { transform: rotate(180deg); }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-date">Sunday, April 13</div>
+        <div class="header-title">Today</div>
+      </div>
+      <div class="header-meta">
+        <div class="progress-ring-wrap">
+          <svg class="progress-ring" width="38" height="38" viewBox="0 0 38 38">
+            <circle class="progress-ring-track" cx="19" cy="19" r="16"/>
+            <circle class="progress-ring-fill" cx="19" cy="19" r="16"/>
+          </svg>
+          <div class="progress-label">63%</div>
+        </div>
+        <div class="time-remaining">4h 20m left</div>
+      </div>
+    </div>
+
+    <!-- Day progress bands -->
+    <div class="day-bands">
+      <div class="band done"></div>
+      <div class="band done"></div>
+      <div class="band done"></div>
+      <div class="band done"></div>
+      <div class="band done"></div>
+      <div class="band active"></div>
+      <div class="band active"></div>
+      <div class="band"></div>
+      <div class="band"></div>
+      <div class="band"></div>
+      <div class="band"></div>
+      <div class="band"></div>
+    </div>
+  </div>
+
+  <!-- Overdue banner -->
+  <div class="overdue-banner">
+    <svg class="overdue-icon" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M8 4.5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
+    </svg>
+    <span class="overdue-text">1 task rolled over from yesterday</span>
+    <span class="overdue-count">+1</span>
+  </div>
+
+  <!-- Focus task -->
+  <div class="section-label" style="padding-bottom:8px;">Focus</div>
+  <div class="focus-block">
+    <div class="focus-content">
+      <div class="focus-badge">
+        <div class="focus-badge-dot"></div>
+        Top priority
+      </div>
+      <div class="focus-title">Finalize Q2 roadmap presentation for stakeholders</div>
+      <div class="focus-meta">
+        <div class="focus-time">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M5.5 3v2.5l1.5 1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          ~90 min
+        </div>
+        <span class="focus-tag">Work</span>
+      </div>
+    </div>
+    <button class="focus-check" style="--ck-color: var(--orange);" onclick="toggleFocusCheck(this)">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Morning -->
+  <div class="section-label">Morning</div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--green);">
+    <button class="check-btn is-checked" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Review overnight metrics dashboard</div>
+      <div class="task-row2">
+        <div class="task-time">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          15 min
+        </div>
+        <span class="task-tag tag-blue">Analytics</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--green);">
+    <button class="check-btn is-checked" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Team standup — sync on sprint blockers</div>
+      <div class="task-row2">
+        <div class="task-time">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          9:00 AM
+        </div>
+        <span class="task-tag tag-purple">Meeting</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Afternoon -->
+  <div class="section-label">Afternoon</div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--blue);">
+    <button class="check-btn" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Write design spec for onboarding v2</div>
+      <div class="task-row2">
+        <div class="task-time">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          ~60 min
+        </div>
+        <span class="task-tag tag-blue">Design</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--red);">
+    <button class="check-btn" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Respond to billing dispute — Acme Corp</div>
+      <div class="task-row2">
+        <div class="task-time overdue">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Overdue · Yesterday
+        </div>
+        <span class="task-tag tag-red">Urgent</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--green);">
+    <button class="check-btn" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Code review: auth middleware PR #284</div>
+      <div class="task-row2">
+        <div class="task-time">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          ~30 min
+        </div>
+        <span class="task-tag tag-green">Engineering</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Evening -->
+  <div class="section-label">Evening</div>
+
+  <div class="task-item" onclick="toggleTask(this)" style="--ck-color: var(--purple);">
+    <button class="check-btn" tabindex="-1">
+      <svg class="check-icon" viewBox="0 0 9 9" fill="none">
+        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="task-body">
+      <div class="task-title">Weekly personal review &amp; next-week plan</div>
+      <div class="task-row2">
+        <div class="task-time">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.8v2.2l1.4.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          ~20 min
+        </div>
+        <span class="task-tag tag-purple">Personal</span>
+      </div>
+    </div>
+    <div class="task-effort">
+      <div class="effort-pip"></div>
+      <div class="effort-pip empty"></div>
+      <div class="effort-pip empty"></div>
+    </div>
+  </div>
+
+  <!-- Completed toggle -->
+  <div class="divider"></div>
+  <div class="completed-toggle" onclick="this.classList.toggle('open')">
+    <span class="ct-label">Completed</span>
+    <span class="ct-count">2</span>
+    <svg class="ct-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div style="display:flex;gap:24px;">
+      <div class="footer-stat">
+        <div class="footer-stat-label">Done today</div>
+        <div class="footer-stat-value">2 <span>/ 7</span></div>
+      </div>
+      <div class="footer-stat">
+        <div class="footer-stat-label">Est. remaining</div>
+        <div class="footer-stat-value">3h <span>35m</span></div>
+      </div>
+    </div>
+    <button class="add-btn">
+      <div class="add-icon">
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+          <path d="M4.5 1.5v6M1.5 4.5h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      Add task
+    </button>
+  </div>
+
+</div>
+
+<script>
+  function toggleTask(item) {
+    const btn = item.querySelector('.check-btn');
+    const isDone = btn.classList.contains('is-checked');
+    if (isDone) {
+      btn.classList.remove('is-checked');
+      item.classList.remove('is-done');
+    } else {
+      btn.classList.add('is-checked');
+      item.classList.add('is-done');
+      item.classList.add('is-completing');
+      setTimeout(() => item.remove(), 380);
+    }
+  }
+
+  function toggleFocusCheck(btn) {
+    btn.classList.toggle('is-checked');
+  }
+</script>
+</body>
+</html>

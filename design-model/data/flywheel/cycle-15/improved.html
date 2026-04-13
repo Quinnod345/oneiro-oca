@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-window:       #16161a;
+    --bg-titlebar:     #1f1f25;
+    --bg-tabbar:       #1a1a20;
+    --bg-navigator:    #1c1c22;
+    --bg-editor:       #16161a;
+    --bg-statusbar:    #0f0f13;
+    --bg-line-active:  rgba(255,255,255,0.028);
+    --bg-nav-active:   rgba(99,148,255,0.14);
+    --border-subtle:   rgba(255,255,255,0.055);
+    --border-strong:   rgba(0,0,0,0.5);
+    --text-plain:      #d4d4d8;
+    --text-dim:        rgba(255,255,255,0.32);
+    --text-mid:        rgba(255,255,255,0.52);
+    --text-bright:     rgba(255,255,255,0.88);
+    --syn-keyword:     #f178b6;
+    --syn-type:        #62d4f5;
+    --syn-string:      #f97c6e;
+    --syn-comment:     #545f70;
+    --syn-number:      #e5c07b;
+    --syn-function:    #6dbfad;
+    --syn-attr:        #fd9557;
+    --syn-property:    #4db8d8;
+    --syn-macro:       #fd9557;
+    --syn-builtin:     #7ec8b9;
+    --accent:          #4a82ff;
+    --accent-glow:     rgba(74,130,255,0.15);
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  @keyframes lineHighlightPulse {
+    0%   { background: rgba(74,130,255,0.06); }
+    50%  { background: rgba(74,130,255,0.11); }
+    100% { background: rgba(74,130,255,0.06); }
+  }
+
+  @keyframes subtleFloat {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-1px); }
+  }
+
+  @keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 0 0.5px rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.5), 0 16px 60px rgba(0,0,0,0.7), 0 50px 120px rgba(0,0,0,0.6), 0 0 80px rgba(74,130,255,0.04); }
+    50%       { box-shadow: 0 0 0 0.5px rgba(255,255,255,0.08), 0 2px 4px rgba(0,0,0,0.5), 0 16px 60px rgba(0,0,0,0.7), 0 50px 120px rgba(0,0,0,0.6), 0 0 80px rgba(74,130,255,0.08); }
+  }
+
+  @keyframes tabActivate {
+    from { opacity: 0.6; transform: translateY(1px); }
+    to   { opacity: 1;   transform: translateY(0); }
+  }
+
+  @keyframes diagnosticSlide {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  body {
+    background: radial-gradient(ellipse at 50% 40%, #0f0f18 0%, #090910 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  }
+
+  /* ── Window ──────────────────────────────────────── */
+  .window {
+    width: 960px;
+    height: 640px;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-window);
+    animation: fadeSlideIn 0.5s cubic-bezier(0.22,1,0.36,1) both, glowPulse 6s ease-in-out infinite;
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.06),
+      0 2px 4px rgba(0,0,0,0.5),
+      0 16px 60px rgba(0,0,0,0.7),
+      0 50px 120px rgba(0,0,0,0.6);
+    position: relative;
+  }
+
+  .window::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 30%, rgba(255,255,255,0.16) 50%, rgba(255,255,255,0.12) 70%, transparent 100%);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  /* ── Title bar ───────────────────────────────────── */
+  .titlebar {
+    height: 42px;
+    background: var(--bg-titlebar);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    flex-shrink: 0;
+    user-select: none;
+    position: relative;
+  }
+
+  .titlebar::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04) 20%, rgba(255,255,255,0.04) 80%, transparent);
+  }
+
+  .traffic-lights {
+    display: flex;
+    gap: 8px;
+    margin-right: 12px;
+  }
+
+  .tl {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: default;
+    position: relative;
+    transition: filter 0.15s ease, transform 0.1s ease;
+    flex-shrink: 0;
+  }
+  .tl:hover { filter: brightness(1.18) saturate(1.12); transform: scale(1.08); }
+  .tl:active { transform: scale(0.95); }
+  .tl-close    { background: #ff5f57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.2), 0 0 6px rgba(255,95,87,0.3); }
+  .tl-minimize { background: #febc2e; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15), 0 0 6px rgba(254,188,46,0.2); }
+  .tl-maximize { background: #28c840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15), 0 0 6px rgba(40,200,64,0.2); }
+
+  .titlebar-center {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.015em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .titlebar-project {
+    color: var(--text-mid);
+    font-weight: 500;
+  }
+
+  .titlebar-sep {
+    color: var(--text-dim);
+    font-weight: 300;
+    opacity: 0.5;
+  }
+
+  .titlebar-file {
+    color: var(--text-dim);
+  }
+
+  .titlebar-branch {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    transition: background 0.15s ease, color 0.15s ease;
+    cursor: pointer;
+  }
+  .titlebar-branch:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-mid);
+  }
+
+  .branch-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #28c840;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(40,200,64,0.6);
+    animation: subtleFloat 3s ease-in-out infinite;
+  }
+
+  /* ── Tab bar ──────────────────────────────────────── */
+  .tabbar {
+    height: 37px;
+    background: var(--bg-tabbar);
+    border-bottom: 1px solid var(--border-strong);
+    display: flex;
+    align-items: flex-end;
+    padding-left: 10px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+    gap: 1px;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+
+  .tab {
+    height: 31px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 0 10px;
+    border-radius: 8px 8px 0 0;
+    font-size: 11.5px;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    position: relative;
+    transition: color 0.15s ease, background 0.15s ease;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text-mid); background: rgba(255,255,255,0.03); }
+
+  .tab.active {
+    background: var(--bg-editor);
+    color: var(--text-bright);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    border-left: 1px solid rgba(255,255,255,0.05);
+    border-right: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: -1px;
+    z-index: 1;
+    animation: tabActivate 0.18s ease both;
+  }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent) 40%, var(--accent) 60%, transparent);
+    opacity: 0.6;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .tab-file-icon {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .fi-swift  { background: #f05138; box-shadow: 0 0 4px rgba(240,81,56,0.4); }
+  .fi-js     { background: #f0db4f; box-shadow: 0 0 4px rgba(240,219,79,0.3); }
+  .fi-json   { background: #7d9b5e; }
+  .fi-ts     { background: #3178c6; box-shadow: 0 0 4px rgba(49,120,198,0.3); }
+  .fi-md     { background: #8a6bb1; }
+
+  .tab-modified {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fc9a3a;
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(252,154,58,0.5);
+  }
+
+  .tab-x {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.12s ease, transform 0.1s ease;
+    flex-shrink: 0;
+    margin-left: 1px;
+    color: var(--text-dim);
+  }
+  .tab:hover .tab-x,
+  .tab.active .tab-x { opacity: 1; }
+  .tab-x:hover { background: rgba(255,255,255,0.1); color: var(--text-mid); transform: scale(1.1); }
+  .tab-x:active { transform: scale(0.9); }
+
+  /* ── Body layout ──────────────────────────────────── */
+  .body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Navigator ────────────────────────────────────── */
+  .nav {
+    width: 210px;
+    background: var(--bg-navigator);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .nav-toolbar {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .nav-tool-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
+    color: var(--text-dim);
+  }
+  .nav-tool-btn:hover { background: rgba(255,255,255,0.07); color: var(--text-mid); }
+  .nav-tool-btn:active { transform: scale(0.9); }
+  .nav-tool-btn.active { color: var(--accent); background: var(--accent-glow); }
+
+  .nav-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 6px 0;
+  }
+  .nav-scroll::-webkit-scrollbar { width: 3px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+  .nav-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+  .nav-section {
+    margin-bottom: 2px;
+  }
+
+  .nav-section-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.12s ease;
+    user-select: none;
+  }
+  .nav-section-header:hover { color: var(--text-mid); }
+
+  .nav-chevron {
+    transition: transform 0.2s cubic-bezier(0.22,1,0.36,1);
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+  .nav-section-header:hover .nav-chevron { opacity: 1; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 22px;
+    font-size: 12px;
+    color: var(--text-mid);
+    cursor: pointer;
+    border-radius: 5px;
+    margin: 0 4px;
+    transition: background 0.1s ease, color 0.1s ease, transform 0.1s ease;
+    user-select: none;
+    position: relative;
+  }
+  .nav-item:hover {
+    background: rgba(255,255,255,0.055);
+    color: var(--text-bright);
+  }
+  .nav-item:active { transform: scale(0.98); }
+  .nav-item.active {
+    background: var(--bg-nav-active);
+    color: rgba(180,210,255,0.9);
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 3px;
+    bottom: 3px;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 6px rgba(74,130,255,0.5);
+  }
+
+  .nav-file-icon {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .nav-badge {
+    margin-left: auto;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(249,120,110,0.18);
+    color: #f9786e;
+    letter-spacing: 0.02em;
+    animation: diagnosticSlide 0.25s ease both;
+  }
+  .nav-badge.warn {
+    background: rgba(229,192,123,0.16);
+    color: #e5c07b;
+  }
+
+  .nav-group-spacer {
+    height: 6px;
+  }
+
+  /* ── Editor area ──────────────────────────────────── */
+  .editor-area {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── Breadcrumb ───────────────────────────────────── */
+  .breadcrumb {
+    height: 28px;
+    background: var(--bg-editor);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .breadcrumb-part {
+    transition: color 0.12s ease;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 3px;
+  }
+  .breadcrumb-part:hover { color: var(--text-bright); background: rgba(255,255,255,0.05); }
+  .breadcrumb-sep { opacity: 0.35; font-size: 10px; }
+  .breadcrumb-active { color: var(--text-mid); }
+
+  /* ── Editor ───────────────────────────────────────── */
+  .editor {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-editor);
+    display: flex;
+    position: relative;
+  }
+  .editor::-webkit-scrollbar { width: 8px; height: 8px; }
+  .editor::-webkit-scrollbar-track { background: transparent; }
+  .editor::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
+  .editor::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.13); background-clip: content-box; }
+
+  .editor-inner {
+    flex: 1;
+    padding: 14px 0;
+    min-width: max-content;
+  }
+
+  /* Minimap */
+  .minimap {
+    width: 72px;
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.12);
+    border-left: 1px solid var(--border-subtle);
+    position: relative;
+    overflow: hidden;
+    opacity: 0.7;
+  }
+
+  .minimap-viewport {
+    position: absolute;
+    top: 8px;
+    left: 0; right: 0;
+    height: 90px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .minimap-lines {
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .minimap-line {
+    height: 2px;
+    border-radius: 1px;
+    background: rgba(255,255,255,0.06);
+    transition: background 0.2s ease;
+  }
+  .minimap-line.keyword { background: rgba(241,120,182,0.35); }
+  .minimap-line.string  { background: rgba(249,124,110,0.3); }
+  .minimap-line.type    { background: rgba(98,212,245,0.3); }
+  .minimap-line.active  { background: rgba(74,130,255,0.4); width: 80%; }
+  .minimap-line.short   { width: 60%; }
+  .minimap-line.mid     { width: 80%; }
+  .minimap-line.long    { width: 100%; }
+
+  /* Line numbers + code */
+  .line-numbers {
+    width: 52px;
+    flex-shrink: 0;
+    text-align: right;
+    padding: 0 10px 0 0;
+    user-select: none;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-editor);
+  }
+
+  .code-lines {
+    flex: 1;
+    padding-right: 32px;
+  }
+
+  .line {
+    display: flex;
+    min-height: 22px;
+    align-items: baseline;
+    position: relative;
+    transition: background 0.15s ease;
+  }
+
+  .line:hover {
+    background: var(--bg-line-active);
+  }
+
+  .line.active {
+    background: rgba(74,130,255,0.06);
+    animation: lineHighlightPulse 3s ease-in-out infinite;
+  }
+
+  .ln {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 22px;
+    color: var(--text-dim);
+    padding-right: 18px;
+    min-width: 44px;
+    text-align: right;
+    transition: color 0.15s ease;
+    position: sticky;
+    left: 0;
+    background: var(--bg-editor);
+    z-index: 1;
+  }
+  .line.active .ln,
+  .line:hover .ln { color: var(--text-mid); }
+  .line.active .ln { color: rgba(74,130,255,0.8); font-weight: 500; }
+
+  .lc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 22px;
+    white-space: pre;
+    letter-spacing: 0.01em;
+    flex: 1;
+  }
+
+  /* Syntax colors */
+  .kw  { color: var(--syn-keyword); }
+  .ty  { color: var(--syn-type); }
+  .st  { color: var(--syn-string); }
+  .cm  { color: var(--syn-comment); font-style: italic; }
+  .nm  { color: var(--syn-number); }
+  .fn  { color: var(--syn-function); }
+  .at  { color: var(--syn-attr); }
+  .pr  { color: var(--syn-property); }
+  .mc  { color: var(--syn-macro); }
+  .pl  { color: var(--text-plain); }
+  .bi  { color: var(--syn-builtin); }
+  .op  { color: rgba(255,255,255,0.5); }
+
+  /* Cursor */
+  .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 15px;
+    background: var(--accent);
+    border-radius: 1px;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    box-shadow: 0 0 6px rgba(74,130,255,0.7);
+    animation: cursorBlink 1.1s ease-in-out infinite;
+  }
+
+  /* Selection highlight */
+  .sel {
+    background: rgba(74,130,255,0.22);
+    border-radius: 2px;
+    padding: 0 1px;
+    box-shadow: 0 0 0 1px rgba(74,130,255,0.1);
+  }
+
+  /* Bracket match */
+  .bracket-match {
+    background: rgba(255,255,255,0.07);
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 0 1px;
+  }
+
+  /* Error/warning squiggles */
+  .squiggle-err {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 3 L1.5 0 L3 3 L4.5 0 L6 3' stroke='%23f9786e' fill='none' stroke-width='1'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-position: bottom;
+    padding-bottom: 2px;
+  }
+  .squiggle-warn {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='M0 3 L1.5 0 L3 3 L4.5 0 L6 3' stroke='%23e5c07b' fill='none' stroke-width='1'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-position: bottom;
+    padding-bottom: 2px;
+  }
+
+  /* Indent guides */
+  .indent {
+    display: inline-block;
+    width: 20px;
+    border-left: 1px solid rgba(255,255,255,0.04);
+    height: 22px;
+    vertical-align: top;
+  }
+
+  /* Hover tooltip */
+  .hover-tooltip {
+    position: absolute;
+    top: 48px;
+    left: 86px;
+    background: #252530;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-bright);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(0,0,0,0.3);
+    z-index: 20;
+    animation: fadeSlideIn 0.18s cubic-bezier(0.22,1,0.36,1) both;
+    max-width: 340px;
+    pointer-events: none;
+  }
+
+  .tooltip-signature {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+
+  .tooltip-type-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(98,212,245,0.12);
+    color: var(--syn-type);
+    border: 1px solid rgba(98,212,245,0.2);
+    margin-bottom: 8px;
+    display: inline-block;
+  }
+
+  .tooltip-doc {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    font-size: 11.5px;
+    color: var(--text-mid);
+    line-height: 1.6;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 7px;
+    margin-top: 2px;
+  }
+
+  .tooltip-arrow {
+    position: absolute;
+    top: -5px;
+    left: 24px;
+    width: 8px;
+    height: 8px;
+    background: #252530;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    transform: rotate(45deg);
+    border-radius: 1px;
+  }
+
+  /* ── Status bar ───────────────────────────────────── */
+  .statusbar {
+    height: 26px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 0;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .statusbar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: rgba(255,255,255,0.2);
+  }
+
+  .statusbar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .sb-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.92);
+    padding: 0 8px;
+    height: 100%;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+  }
+  .sb-item:hover { background: rgba(0,0,0,0.12); }
+  .sb-item:active { background: rgba(0,0,0,0.2); }
+
+  .sb-sep {
+    width: 1px;
+    height: 14px;
+    background: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .sb-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .sb-error-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0,0,0,0.18);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-right: 4px;
+    font-size: 10.5px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .sb-dot-err { width: 5px; height: 5px; border-radius: 50%; background: #ff8080; }
+  .sb-dot-warn { width: 5px; height: 5px; border-radius: 50%; background: #ffd080; }
+
+  /* ── Completion popup ────────────────────────────── */
+  .completion {
+    position: absolute;
+    top: 196px;
+    left: 202px;
+    background: #20202a;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 9px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 30;
+    width: 280px;
+    animation: fadeSlideIn 0.2s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+  }
+
+  .completion-header {
+    padding: 6px 12px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .completion-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.08s ease;
+    font-size: 12.5px;
+  }
+  .completion-item:hover { background: rgba(255,255,255,0.04); }
+  .completion-item.selected {
+    background: var(--accent-glow);
+    border-left: 2px solid var(--accent);
+    padding-left: 10px;
+  }
+
+  .ci-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ci-fn { background: rgba(109,191,173,0.2); color: var(--syn-function); }
+  .ci-ty { background: rgba(98,212,245,0.2); color: var(--syn-type); }
+  .ci-kw { background: rgba(241,120,182,0.2); color: var(--syn-keyword); }
+  .ci-pr { background: rgba(77,184,216,0.2); color: var(--syn-property); }
+
+  .ci-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-bright);
+    flex: 1;
+  }
+  .ci-name em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .ci-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--syn-type);
+    opacity: 0.7;
+  }
+
+  .completion-item.selected .ci-name { color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <!-- Title bar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="tl tl-close"></div>
+      <div class="tl tl-minimize"></div>
+      <div class="tl tl-maximize"></div>
+    </div>
+    <div class="titlebar-center">
+      <span class="titlebar-project">Meridian</span>
+      <span class="titlebar-sep">›</span>
+      <span class="titlebar-file">NetworkClient.swift</span>
+    </div>
+    <div class="titlebar-branch">
+      <div class="branch-dot"></div>
+      feature/async-transport
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tabbar">
+    <div class="tab">
+      <div class="tab-file-icon fi-swift"></div>
+      AppDelegate.swift
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 1l5 5M6 1l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="tab active">
+      <div class="tab-file-icon fi-swift"></div>
+      NetworkClient.swift
+      <div class="tab-modified"></div>
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 1l5 5M6 1l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="tab">
+      <div class="tab-file-icon fi-ts"></div>
+      types.ts
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 1l5 5M6 1l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="tab">
+      <div class="tab-file-icon fi-json"></div>
+      config.json
+      <div class="tab-x">
+        <svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 1l5 5M6 1l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Navigator -->
+    <div class="nav">
+      <div class="nav-toolbar">
+        <div class="nav-tool-btn active" title="Files">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="4.5" height="5.5" rx="1" stroke="currentColor" stroke-width="1.1"/><rect x="7.5" y="1" width="4.5" height="2.5" rx="1" stroke="currentColor" stroke-width="1.1"/><rect x="7.5" y="5.5" width="4.5" height="6.5" rx="1" stroke="currentColor" stroke-width="1.1"/><rect x="1" y="8.5" width="4.5" height="3.5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>
+        </div>
+        <div class="nav-tool-btn" title="Search">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="3.5" stroke="currentColor" stroke-width="1.1"/><path d="M8.5 8.5l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="nav-tool-btn" title="Git">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="3" cy="3" r="1.5" stroke="currentColor" stroke-width="1.1"/><circle cx="3" cy="10" r="1.5" stroke="currentColor" stroke-width="1.1"/><circle cx="10" cy="5" r="1.5" stroke="currentColor" stroke-width="1.1"/><path d="M3 4.5v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4 3.3c1.5 0 4 0.7 4 1.7" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        </div>
+        <div class="nav-tool-btn" title="Diagnostics" style="margin-left:auto;">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1.5L11.5 10.5H1.5L6.5 1.5Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M6.5 5.5V7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="6.5" cy="9" r="0.6" fill="currentColor"/></svg>
+        </div>
+      </div>
+
+      <div class="nav-scroll">
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="nav-chevron" width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 2l3 2-3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Meridian
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            AppDelegate.swift
+          </div>
+          <div class="nav-item active">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            NetworkClient.swift
+            <div class="nav-badge warn">2</div>
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            RequestBuilder.swift
+            <div class="nav-badge">1</div>
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            ResponseParser.swift
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            TokenManager.swift
+          </div>
+        </div>
+        <div class="nav-group-spacer"></div>
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="nav-chevron" width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 2l3 2-3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Models
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            Session.swift
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-swift" style="width:10px;height:10px;border-radius:2px;"></div>
+            APIError.swift
+          </div>
+        </div>
+        <div class="nav-group-spacer"></div>
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <svg class="nav-chevron" width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 2l3 2-3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Config
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-json" style="width:10px;height:10px;border-radius:2px;"></div>
+            config.json
+          </div>
+          <div class="nav-item">
+            <div class="nav-file-icon fi-ts" style="width:10px;height:10px;border-radius:2px;"></div>
+            types.ts
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor area -->
+    <div class="editor-area">
+
+      <!-- Breadcrumb -->
+      <div class="breadcrumb">
+        <span class="breadcrumb-part">Meridian</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-part">Networking</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-part">NetworkClient.swift</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-part breadcrumb-active" style="color:var(--syn-function);">send(_:)</span>
+      </div>
+
+      <!-- Editor + minimap -->
+      <div class="editor">
+        <div class="editor-inner" style="display:flex;">
+          <!-- Line numbers -->
+          <div class="line-numbers">
+            <!-- rendered inline with code lines -->
+          </div>
+
+          <!-- Code content -->
+          <div style="flex:1; padding: 0 0 0 0;">
+
+            <!-- Lines -->
+            <div class="line"><span class="ln">1</span><span class="lc"><span class="cm">// NetworkClient.swift — async transport layer</span></span></div>
+            <div class="line"><span class="ln">2</span><span class="lc"><span class="cm">// © 2024 Meridian. MIT License.</span></span></div>
+            <div class="line"><span class="ln">3</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">4</span><span class="lc"><span class="kw">import</span> <span class="pl">Foundation</span></span></div>
+            <div class="line"><span class="ln">5</span><span class="lc"><span class="kw">import</span> <span class="pl">Combine</span></span></div>
+            <div class="line"><span class="ln">6</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">7</span><span class="lc"><span class="mc">@globalActor</span></span></div>
+            <div class="line"><span class="ln">8</span><span class="lc"><span class="kw">public actor</span> <span class="ty">NetworkClient</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">9</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">10</span><span class="lc">  <span class="kw">private let</span> <span class="pl">session</span><span class="op">:</span> <span class="ty">URLSession</span></span></div>
+            <div class="line"><span class="ln">11</span><span class="lc">  <span class="kw">private let</span> <span class="pl">decoder</span><span class="op">:</span> <span class="ty">JSONDecoder</span></span></div>
+            <div class="line"><span class="ln">12</span><span class="lc">  <span class="kw">private var</span> <span class="pl">retryPolicy</span><span class="op">:</span> <span class="ty">RetryPolicy</span></span></div>
+            <div class="line"><span class="ln">13</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">14</span><span class="lc">  <span class="kw">public init</span><span class="op">(</span></span></div>
+            <div class="line"><span class="ln">15</span><span class="lc">    <span class="at">configuration</span><span class="op">:</span> <span class="ty">URLSessionConfiguration</span> <span class="op">=</span> <span class="pl">.default</span><span class="op">,</span></span></div>
+            <div class="line"><span class="ln">16</span><span class="lc">    <span class="at">retryPolicy</span><span class="op">:</span> <span class="ty">RetryPolicy</span> <span class="op">=</span> <span class="pl">.exponential</span><span class="op">(</span><span class="at">maxAttempts</span><span class="op">:</span> <span class="nm">3</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">17</span><span class="lc">  <span class="op">) {</span></span></div>
+            <div class="line"><span class="ln">18</span><span class="lc">    <span class="kw">self</span><span class="op">.</span><span class="pr">session</span> <span class="op">=</span> <span class="ty">URLSession</span><span class="op">(</span><span class="at">configuration</span><span class="op">:</span> <span class="pl">configuration</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">19</span><span class="lc">    <span class="kw">self</span><span class="op">.</span><span class="pr">decoder</span> <span class="op">=</span> <span class="fn">makeDecoder</span><span class="op">()</span></span></div>
+            <div class="line"><span class="ln">20</span><span class="lc">    <span class="kw">self</span><span class="op">.</span><span class="pr">retryPolicy</span> <span class="op">=</span> <span class="pl">retryPolicy</span></span></div>
+            <div class="line"><span class="ln">21</span><span class="lc">  <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">22</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">23</span><span class="lc">  <span class="cm">/// Sends a typed request and decodes the response.</span></span></div>
+            <div class="line"><span class="ln">24</span><span class="lc">  <span class="mc">@discardableResult</span></span></div>
+            <div class="line active"><span class="ln">25</span><span class="lc">  <span class="kw">public func</span> <span class="fn">send</span><span class="op">&lt;</span><span class="ty">R</span><span class="op">: </span><span class="ty">Request</span><span class="op">&gt;(</span><span class="pl">_</span> <span class="at">req</span><span class="op">:</span> <span class="ty">R</span><span class="op">)</span> <span class="kw">async throws</span> <span class="op">-&gt;</span> <span class="ty">R</span><span class="op">.</span><span class="ty"><span class="squiggle-warn">Response</span></span> <span class="op">{</span><span class="cursor"></span></span></div>
+            <div class="line"><span class="ln">26</span><span class="lc">    <span class="kw">var</span> <span class="pl">attempt</span> <span class="op">=</span> <span class="nm">0</span></span></div>
+            <div class="line"><span class="ln">27</span><span class="lc">    <span class="kw">repeat</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">28</span><span class="lc">      <span class="kw">do</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">29</span><span class="lc">        <span class="kw">let</span> <span class="pl">urlReq</span> <span class="op">=</span> <span class="kw">try</span> <span class="fn">buildURLRequest</span><span class="op">(</span><span class="at">from</span><span class="op">:</span> <span class="pl">req</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">30</span><span class="lc">        <span class="kw">let</span> <span class="op">(</span><span class="pl">data</span><span class="op">,</span> <span class="pl">response</span><span class="op">)</span> <span class="op">=</span> <span class="kw">try await</span> <span class="pr">session</span><span class="op">.</span><span class="fn">data</span><span class="op">(</span><span class="at">for</span><span class="op">:</span> <span class="pl">urlReq</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">31</span><span class="lc">        <span class="kw">try</span> <span class="fn">validate</span><span class="op">(</span><span class="pl">response</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">32</span><span class="lc">        <span class="kw">return try</span> <span class="pr">decoder</span><span class="op">.</span><span class="fn">decode</span><span class="op">(</span><span class="ty">R</span><span class="op">.</span><span class="ty">Response</span><span class="op">.</span><span class="kw">self</span><span class="op">,</span> <span class="at">from</span><span class="op">:</span> <span class="pl">data</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">33</span><span class="lc">      <span class="op">}</span> <span class="kw">catch let</span> <span class="pl">err</span> <span class="kw">as</span> <span class="ty">APIError</span> <span class="kw">where</span> <span class="pl">err</span><span class="op">.</span><span class="pr">isRetryable</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">34</span><span class="lc">        <span class="kw">guard</span> <span class="pl">attempt</span> <span class="op">&lt;</span> <span class="pr">retryPolicy</span><span class="op">.</span><span class="pr">maxAttempts</span> <span class="kw">else</span> <span class="op">{</span> <span class="kw">throw</span> <span class="pl">err</span> <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">35</span><span class="lc">        <span class="kw">try await</span> <span class="fn">Task</span><span class="op">.</span><span class="fn">sleep</span><span class="op">(</span><span class="at">for</span><span class="op">:</span> <span class="pr">retryPolicy</span><span class="op">.</span><span class="fn">delay</span><span class="op">(</span><span class="at">attempt</span><span class="op">:</span> <span class="pl">attempt</span><span class="op">))</span></span></div>
+            <div class="line"><span class="ln">36</span><span class="lc">        <span class="pl">attempt</span> <span class="op">+=</span> <span class="nm">1</span></span></div>
+            <div class="line"><span class="ln">37</span><span class="lc">      <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">38</span><span class="lc">    <span class="op">}</span> <span class="kw">while true</span></span></div>
+            <div class="line"><span class="ln">39</span><span class="lc">  <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">40</span><span class="lc"></span></div>
+            <div class="line"><span class="ln">41</span><span class="lc">  <span class="kw">private func</span> <span class="fn">buildURLRequest</span><span class="op">&lt;</span><span class="ty">R</span><span class="op">: </span><span class="ty">Request</span><span class="op">&gt;(</span><span class="at">from</span> <span class="pl">req</span><span class="op">:</span> <span class="ty">R</span><span class="op">)</span> <span class="kw">throws</span> <span class="op">-&gt;</span> <span class="ty">URLRequest</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">42</span><span class="lc">    <span class="kw">var</span> <span class="pl">components</span> <span class="op">=</span> <span class="ty">URLComponents</span><span class="op">()</span></span></div>
+            <div class="line"><span class="ln">43</span><span class="lc">    <span class="pl">components</span><span class="op">.</span><span class="pr">scheme</span>  <span class="op">=</span> <span class="st">"https"</span></span></div>
+            <div class="line"><span class="ln">44</span><span class="lc">    <span class="pl">components</span><span class="op">.</span><span class="pr">host</span>    <span class="op">=</span> <span class="pl">req</span><span class="op">.</span><span class="pr">baseURL</span><span class="op">.</span><span class="pr">host</span></span></div>
+            <div class="line"><span class="ln">45</span><span class="lc">    <span class="pl">components</span><span class="op">.</span><span class="pr">path</span>    <span class="op">=</span> <span class="pl">req</span><span class="op">.</span><span class="pr">path</span></span></div>
+            <div class="line"><span class="ln">46</span><span class="lc">    <span class="kw">guard let</span> <span class="pl">url</span> <span class="op">=</span> <span class="pl">components</span><span class="op">.</span><span class="pr">url</span> <span class="kw">else</span> <span class="op">{</span></span></div>
+            <div class="line"><span class="ln">47</span><span class="lc">      <span class="kw">throw</span> <span class="ty">APIError</span><span class="op">.</span><span class="pl">malformedURL</span></span></div>
+            <div class="line"><span class="ln">48</span><span class="lc">    <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">49</span><span class="lc">    <span class="kw">return</span> <span class="fn">URLRequest</span><span class="op">(</span><span class="at">url</span><span class="op">:</span> <span class="pl">url</span><span class="op">)</span></span></div>
+            <div class="line"><span class="ln">50</span><span class="lc">  <span class="op">}</span></span></div>
+            <div class="line"><span class="ln">51</span><span class="lc"><span class="op">}</span></span></div>
+
+          </div>
+
+          <!-- Minimap -->
+          <div class="minimap">
+            <div class="minimap-viewport"></div>
+            <div class="minimap-lines">
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line"></div>
+              <div class="minimap-line keyword mid"></div>
+              <div class="minimap-line keyword short"></div>
+              <div class="minimap-line"></div>
+              <div class="minimap-line type long"></div>
+              <div class="minimap-line type mid"></div>
+              <div class="minimap-line"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line"></div>
+              <div class="minimap-line keyword short"></div>
+              <div class="minimap-line active long"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line string long"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line long"></div>
+              <div class="minimap-line mid"></div>
+              <div class="minimap-line short"></div>
+              <div class="minimap-line short"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Hover tooltip -->
+        <div class="hover-tooltip" style="top:178px; left: 86px;">
+          <div class="tooltip-arrow"></div>
+          <div class="tooltip-type-badge">func</div>
+          <div class="tooltip-signature">
+            <span style="color:var(--syn-keyword);">func</span>
+            <span style="color:var(--syn-function);">send</span>
+            <span style="color:rgba(255,255,255,0.5);">&lt;</span><span style="color:var(--syn-type);">R</span><span style="color:rgba(255,255,255,0.5);">: </span><span style="color:var(--syn-type);">Request</span><span style="color:rgba(255,255,255,0.5);">&gt;(</span>
+            <span style="color:var(--syn-attr);">_</span> <span style="color:var(--text-plain);">req: </span><span style="color:var(--syn-type);">R</span>
+            <span style="color:rgba(255,255,255,0.5);">) </span><span style="color:var(--syn-keyword);">async throws</span>
+            <span style="color:rgba(255,255,255,0.5);"> → </span><span style="color:var(--syn-type);">R.Response</span>
+          </div>
+          <div class="tooltip-doc">Sends a typed request over the async transport layer, applying retry logic and response validation before decoding.</div>
+        </div>
+
+        <!-- Completion popup -->
+        <div class="completion">
+          <div class="completion-header">Completions</div>
+          <div class="completion-item selected">
+            <div class="ci-icon ci-fn">f</div>
+            <span class="ci-name"><em>send</em>(_:)</span>
+            <span class="ci-type">R.Response</span>
+          </div>
+          <div class="completion-item">
+            <div class="ci-icon ci-fn">f</div>
+            <span class="ci-name"><em>send</em>Upload(_:data:)</span>
+            <span class="ci-type">Void</span>
+          </div>
+          <div class="completion-item">
+            <div class="ci-icon ci-ty">T</div>
+            <span class="ci-name"><em>Sen</em>dable</span>
+            <span class="ci-type">protocol</span>
+          </div>
+          <div class="completion-item">
+            <div class="ci-icon ci-pr">p</div>
+            <span class="ci-name"><em>sen</em>dTimeout</span>
+            <span class="ci-type">Duration</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Status bar -->
+      <div class="statusbar">
+        <div class="sb-item">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="3" cy="3" r="1.4" stroke="currentColor" stroke-width="1.1"/><circle cx="3" cy="8" r="1.4" stroke="currentColor" stroke-width="1.1"/><circle cx="8" cy="4.5" r="1.4" stroke="currentColor" stroke-width="1.1"/><path d="M3 4.4v2.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/><path d="M4 3.3c1.2 0 2.7 0.5 2.7 1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+          feature/async-transport
+        </div>
+        <div class="sb-sep"></div>
+        <div class="sb-error-badge">
+          <div class="sb-dot-err"></div>
+          1 error
+          <div class="sb-dot-warn" style="margin-left:4px;"></div>
+          2 warnings
+        </div>
+        <div class="sb-right">
+          <div class="sb-item">Ln 25, Col 48</div>
+          <div class="sb-sep"></div>
+          <div class="sb-item">Spaces: 2</div>
+          <div class="sb-sep"></div>
+          <div class="sb-item">Swift</div>
+          <div class="sb-sep"></div>
+          <div class="sb-item">UTF-8</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

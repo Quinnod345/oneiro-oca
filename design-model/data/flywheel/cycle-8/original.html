@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :root {
+    --bg-primary: #1c1c1e;
+    --bg-secondary: #2c2c2e;
+    --bg-tertiary: #3a3a3c;
+    --bg-elevated: #242426;
+    --surface: rgba(255,255,255,0.06);
+    --surface-hover: rgba(255,255,255,0.09);
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.12);
+    --text-primary: rgba(255,255,255,0.92);
+    --text-secondary: rgba(255,255,255,0.48);
+    --text-tertiary: rgba(255,255,255,0.28);
+    --accent: #0a84ff;
+    --accent-dim: rgba(10,132,255,0.18);
+    --accent-hover: #1a8fff;
+    --green: #30d158;
+    --green-dim: rgba(48,209,88,0.15);
+    --red: #ff453a;
+    --separator: rgba(255,255,255,0.07);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+  }
+
+  body {
+    font-family: -apple-system, "SF Pro Text", "SF Pro Display", BlinkMacSystemFont, system-ui, sans-serif;
+    background: #111113;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+
+  .window {
+    width: 560px;
+    background: var(--bg-primary);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 
+      0 0 0 0.5px rgba(0,0,0,0.8),
+      0 20px 60px rgba(0,0,0,0.7),
+      0 8px 20px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.07);
+    overflow: hidden;
+  }
+
+  /* Title bar */
+  .titlebar {
+    height: 52px;
+    background: rgba(28,28,30,0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--separator);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 16px;
+  }
+
+  .traffic-lights {
+    position: absolute;
+    left: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0,0,0,0.3);
+    cursor: default;
+    transition: filter 0.15s ease;
+    position: relative;
+  }
+
+  .dot:hover .dot-icon {
+    opacity: 1;
+  }
+
+  .dot-close { background: #ff5f57; }
+  .dot-minimize { background: #febc2e; }
+  .dot-maximize { background: #28c840; }
+
+  .titlebar-title {
+    font-size: 13px;
+    font-weight: 590;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+
+  /* Sidebar + content layout */
+  .body {
+    display: flex;
+    height: 520px;
+  }
+
+  .sidebar {
+    width: 160px;
+    background: rgba(255,255,255,0.025);
+    border-right: 1px solid var(--separator);
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    cursor: default;
+    transition: background 0.12s ease;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    user-select: none;
+  }
+
+  .nav-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .nav-item.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .nav-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .nav-item.active .nav-icon {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .nav-item:not(.active) .nav-icon {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+  }
+
+  .nav-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    padding: 8px 10px 4px;
+  }
+
+  /* Main content */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 24px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+
+  .content::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .content::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+  }
+
+  .section-header {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+    padding: 0 2px;
+  }
+
+  .section-header:not(:first-child) {
+    margin-top: 24px;
+  }
+
+  /* Card groups */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 16px;
+    min-height: 52px;
+    transition: background 0.1s ease;
+    cursor: default;
+    position: relative;
+  }
+
+  .row:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--separator);
+  }
+
+  .row:hover {
+    background: var(--surface-hover);
+  }
+
+  .row-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    padding-right: 16px;
+  }
+
+  .row-label {
+    font-size: 13.5px;
+    font-weight: 400;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  .row-desc {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    letter-spacing: -0.005em;
+    line-height: 1.4;
+  }
+
+  /* Toggle */
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 13px;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.22s cubic-bezier(0.4,0,0.2,1), border-color 0.22s ease;
+  }
+
+  .toggle input:checked + .toggle-track {
+    background: var(--green);
+    border-color: transparent;
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.06);
+    transition: transform 0.22s cubic-bezier(0.34,1.3,0.64,1);
+    pointer-events: none;
+  }
+
+  .toggle input:checked ~ .toggle-thumb {
+    transform: translateX(18px);
+  }
+
+  /* Select / Dropdown */
+  .select-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .select-wrap select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 400;
+    letter-spacing: -0.008em;
+    padding: 5px 26px 5px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    min-width: 110px;
+  }
+
+  .select-wrap select:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.18);
+  }
+
+  .select-wrap select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .select-wrap select option {
+    background: #2c2c2e;
+    color: var(--text-primary);
+  }
+
+  .select-chevron {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--text-tertiary);
+    display: flex;
+  }
+
+  .select-chevron svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Slider */
+  .slider-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px 16px;
+    min-height: auto;
+  }
+
+  .slider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .slider-value {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) 65%, rgba(255,255,255,0.12) 65%);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(0,0,0,0.1);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    cursor: grab;
+  }
+
+  .slider::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 0 4px var(--accent-dim);
+  }
+
+  .slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    cursor: grab;
+  }
+
+  /* Input text */
+  .text-input {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 12.5px;
+    letter-spacing: -0.008em;
+    padding: 5px 10px;
+    outline: none;
+    width: 130px;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+
+  .text-input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .text-input:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.16);
+  }
+
+  .text-input:focus {
+    border-color: var(--accent);
+    background: rgba(10,132,255,0.06);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .badge-green {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .badge-blue {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  /* Bottom bar */
+  .bottombar {
+    padding: 14px 20px;
+    border-top: 1px solid var(--separator);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(28,28,30,0.6);
+  }
+
+  .status-text {
+    font-size: 11.5px;
+    color: var(--text-tertiary);
+    letter-spacing: -0.005em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    outline: none;
+    line-height: 1;
+  }
+
+  .btn-secondary {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.16);
+  }
+
+  .btn-secondary:active {
+    background: rgba(255,255,255,0.06);
+    transform: scale(0.98);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(10,132,255,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 2px 8px rgba(10,132,255,0.5), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+
+  .btn-primary:active {
+    background: #0070d6;
+    transform: scale(0.98);
+    box-shadow: 0 1px 2px rgba(10,132,255,0.3);
+  }
+
+  .btn-primary:focus-visible {
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  /* Save feedback */
+  .btn-primary.saved {
+    background: var(--green);
+    box-shadow: 0 1px 3px rgba(48,209,88,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <!-- Title bar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="dot dot-close"></div>
+      <div class="dot dot-minimize"></div>
+      <div class="dot dot-maximize"></div>
+    </div>
+    <span class="titlebar-title">Settings</span>
+  </div>
+
+  <div class="body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="nav-section-label">General</div>
+      <div class="nav-item active">
+        <div class="nav-icon">⚙</div>
+        General
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">🔔</div>
+        Notifications
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">🎨</div>
+        Appearance
+      </div>
+      <div class="nav-section-label" style="margin-top:8px">Advanced</div>
+      <div class="nav-item">
+        <div class="nav-icon">🔒</div>
+        Privacy
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">⚡</div>
+        Performance
+      </div>
+      <div class="nav-item">
+        <div class="nav-icon">🔌</div>
+        Integrations
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <main class="content">
+
+      <div class="section-header">Application</div>
+      <div class="card">
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Launch at login</span>
+            <span class="row-desc">Start automatically when you log in</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Stay in menu bar</span>
+            <span class="row-desc">Keep running after closing the window</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Check for updates</span>
+            <span class="row-desc">Automatically install bug fixes</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox">
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+      </div>
+
+      <div class="section-header">Preferences</div>
+      <div class="card">
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Language</span>
+          </div>
+          <div class="select-wrap">
+            <select>
+              <option>English (US)</option>
+              <option>English (UK)</option>
+              <option>Français</option>
+              <option>Deutsch</option>
+              <option>日本語</option>
+            </select>
+            <span class="select-chevron">
+              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 3.5L5 6.5L8 3.5"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Date format</span>
+          </div>
+          <div class="select-wrap">
+            <select>
+              <option>MM/DD/YYYY</option>
+              <option>DD/MM/YYYY</option>
+              <option>YYYY-MM-DD</option>
+              <option>D MMM YYYY</option>
+            </select>
+            <span class="select-chevron">
+              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 3.5L5 6.5L8 3.5"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Default workspace</span>
+          </div>
+          <input class="text-input" type="text" placeholder="~/Documents" value="~/Projects">
+        </div>
+        <div class="row slider-row">
+          <div class="slider-header">
+            <div class="row-left" style="padding:0">
+              <span class="row-label">Sync interval</span>
+              <span class="row-desc">How often to sync in the background</span>
+            </div>
+            <span class="slider-value" id="sliderVal">65%</span>
+          </div>
+          <input
+            class="slider"
+            type="range"
+            min="0"
+            max="100"
+            value="65"
+            id="syncSlider"
+          >
+        </div>
+      </div>
+
+      <div class="section-header">Data & Privacy</div>
+      <div class="card">
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Analytics</span>
+            <span class="row-desc">Share anonymous usage data</span>
+          </div>
+          <span class="badge badge-green">Enabled</span>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Crash reports</span>
+            <span class="row-desc">Automatically send diagnostics</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" checked>
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+        </div>
+        <div class="row">
+          <div class="row-left">
+            <span class="row-label">Telemetry</span>
+          </div>
+          <div class="select-wrap">
+            <select>
+              <option>Minimal</option>
+              <option>Standard</option>
+              <option>Full</option>
+              <option>Disabled</option>
+            </select>
+            <span class="select-chevron">
+              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 3.5L5 6.5L8 3.5"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottombar">
+    <div class="status-text">
+      <div class="status-dot"></div>
+      All changes saved
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveSettings()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Slider live update
+  const slider = document.getElementById('syncSlider');
+  const sliderVal = document.getElementById('sliderVal');
+
+  slider.addEventListener('input', function() {
+    const pct = this.value;
+    sliderVal.textContent = pct + '%';
+    this.style.background = `linear-gradient(to right, var(--accent) ${pct}%, rgba(255,255,255,0.12) ${pct}%)`;
+  });
+
+  // Save button feedback
+  function saveSettings() {
+    const btn = document.getElementById('saveBtn');
+    btn.textContent = '✓ Saved';
+    btn.classList.add('saved');
+    setTimeout(() => {
+      btn.textContent = 'Save Changes';
+      btn.classList.remove('saved');
+    }, 1800);
+  }
+
+  // Reset
+  function resetForm() {
+    document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
+      cb.checked = [true, true, false, true][i] ?? false;
+    });
+    slider.value = 65;
+    sliderVal.textContent = '65%';
+    slider.style.background = 'linear-gradient(to right, var(--accent) 65%, rgba(255,255,255,0.12) 65%)';
+  }
+
+  // Sidebar navigation
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      this.classList.add('active');
+      const icons = ['⚙','🔔','🎨','🔒','⚡','🔌'];
+      document.querySelectorAll('.nav-item').forEach((n, i) => {
+        const icon = n.querySelector('.nav-icon');
+        if (icon) icon.textContent = icons[i] ?? '·';
+      });
+    });
+  });
+</script>
+</body>
+</html>
