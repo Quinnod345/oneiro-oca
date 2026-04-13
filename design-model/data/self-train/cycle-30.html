@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Flow - Transformation Timeline</title>
+    <style>
+        :root {
+            --primary-bg: #f8f9fa;
+            --surface: #ffffff;
+            --surface-elevated: #ffffff;
+            --border: #e9ecef;
+            --border-strong: #dee2e6;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --text-tertiary: #adb5bd;
+            --accent-prep: #e3f2fd;
+            --accent-prep-strong: #1976d2;
+            --accent-cook: #fff3e0;
+            --accent-cook-strong: #f57c00;
+            --accent-combine: #f3e5f5;
+            --accent-combine-strong: #7b1fa2;
+            --accent-finish: #e8f5e8;
+            --accent-finish-strong: #388e3c;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --flow-line: #cbd5e1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            line-height: 1.5;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .recipe-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 32px;
+            gap: 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .recipe-title {
+            flex: 1;
+        }
+
+        .recipe-title h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .recipe-meta {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .recipe-stats {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .timeline-container {
+            flex: 1;
+            position: relative;
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            padding: 40px;
+            overflow: hidden;
+        }
+
+        .timeline {
+            display: flex;
+            align-items: flex-start;
+            gap: 0;
+            height: 100%;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(to right, 
+                var(--accent-prep-strong) 0%,
+                var(--accent-prep-strong) 25%,
+                var(--accent-cook-strong) 25%,
+                var(--accent-cook-strong) 50%,
+                var(--accent-combine-strong) 50%,
+                var(--accent-combine-strong) 75%,
+                var(--accent-finish-strong) 75%,
+                var(--accent-finish-strong) 100%
+            );
+            transform: translateY(-1px);
+            z-index: 1;
+        }
+
+        .stage {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            padding: 0 16px;
+        }
+
+        .stage-header {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 2px solid var(--accent-prep-strong);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            z-index: 2;
+        }
+
+        .stage:nth-child(1) .stage-header {
+            background: var(--accent-prep);
+            color: var(--accent-prep-strong);
+            border-color: var(--accent-prep-strong);
+        }
+
+        .stage:nth-child(2) .stage-header {
+            background: var(--accent-cook);
+            color: var(--accent-cook-strong);
+            border-color: var(--accent-cook-strong);
+        }
+
+        .stage:nth-child(3) .stage-header {
+            background: var(--accent-combine);
+            color: var(--accent-combine-strong);
+            border-color: var(--accent-combine-strong);
+        }
+
+        .stage:nth-child(4) .stage-header {
+            background: var(--accent-finish);
+            color: var(--accent-finish-strong);
+            border-color: var(--accent-finish-strong);
+        }
+
+        .ingredients {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 280px;
+            align-items: center;
+        }
+
+        .ingredient {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+            width: 100%;
+            text-align: center;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .ingredient:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+
+        .process-steps {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, 20px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 280px;
+            align-items: center;
+        }
+
+        .step {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border-strong);
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 13px;
+            color: var(--text-primary);
+            box-shadow: var(--shadow-md);
+            width: 100%;
+            text-align: center;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .step-number {
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            background: var(--accent-prep-strong);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .stage:nth-child(2) .step-number {
+            background: var(--accent-cook-strong);
+        }
+
+        .stage:nth-child(3) .step-number {
+            background: var(--accent-combine-strong);
+        }
+
+        .stage:nth-child(4) .step-number {
+            background: var(--accent-finish-strong);
+        }
+
+        .final-dish {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, var(--accent-finish) 0%, var(--surface-elevated) 100%);
+            border: 2px solid var(--accent-finish-strong);
+            border-radius: 16px;
+            padding: 24px;
+            width: 280px;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .dish-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-finish-strong);
+            margin-bottom: 8px;
+        }
+
+        .dish-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .flow-connector {
+            position: absolute;
+            width: 1px;
+            background: var(--flow-line);
+            z-index: 1;
+        }
+
+        .connector-down {
+            top: 140px;
+            height: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .connector-up {
+            bottom: 140px;
+            height: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .stage:nth-child(1) .connector-down {
+            background: var(--accent-prep-strong);
+        }
+
+        .stage:nth-child(2) .connector-down {
+            background: var(--accent-cook-strong);
+        }
+
+        .stage:nth-child(3) .connector-down {
+            background: var(--accent-combine-strong);
+        }
+
+        .stage:nth-child(4) .connector-up {
+            background: var(--accent-finish-strong);
+        }
+
+        .time-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-tertiary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .stage:nth-child(1) .time-indicator {
+            background: var(--accent-prep-strong);
+        }
+
+        .stage:nth-child(2) .time-indicator {
+            background: var(--accent-cook-strong);
+        }
+
+        .stage:nth-child(3) .time-indicator {
+            background: var(--accent-combine-strong);
+        }
+
+        .stage:nth-child(4) .time-indicator {
+            background: var(--accent-finish-strong);
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-container">
+        <div class="header">
+            <div class="recipe-title">
+                <h1>Pan-Seared Salmon with Lemon Herb Butter</h1>
+                <div class="recipe-meta">4 servings • Created by Chef Marie</div>
+            </div>
+            <div class="recipe-stats">
+                <div class="stat">
+                    <span class="stat-value">25</span>
+                    <span class="stat-label">Minutes</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">4</span>
+                    <span class="stat-label">Servings</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">★ 4.8</span>
+                    <span class="stat-label">Rating</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="timeline-container">
+            <div class="timeline">
+                <div class="stage">
+                    <div class="stage-header">Prep</div>
+                    <div class="flow-connector connector-down"></div>
+                    
+                    <div class="ingredients">
+                        <div class="ingredient">4 salmon fillets (6oz each)</div>
+                        <div class="ingredient">2 lemons, juiced & zested</div>
+                        <div class="ingredient">4 tbsp butter</div>
+                        <div class="ingredient">Fresh herbs (dill, parsley)</div>
+                        <div class="ingredient">Salt & pepper</div>
+                        <div class="ingredient">2 tbsp olive oil</div>
+                    </div>
+
+                    <div class="process-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            Pat salmon dry and season with salt and pepper
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            Chop herbs finely and zest lemons
+                        </div>
+                    </div>
+
+                    <div class="time-indicator">8 min</div>
+                </div>
+
+                <div class="stage">
+                    <div class="stage-header">Cook</div>
+                    <div class="flow-connector connector-down"></div>
+
+                    <div class="process-steps">
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            Heat oil in large skillet over medium-high heat
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            Sear salmon skin-side up for 4-5 minutes
+                        </div>
+                        <div class="step">
+                            <div class="step-number">5</div>
+                            Flip and cook 3-4 minutes more
+                        </div>
+                    </div>
+
+                    <div class="time-indicator">10 min</div>
+                </div>
+
+                <div class="stage">
+                    <div class="stage-header">Combine</div>
+                    <div class="flow-connector connector-down"></div>
+
+                    <div class="process-steps">
+                        <div class="step">
+                            <div class="step-number">6</div>
+                            Remove salmon, reduce heat to low
+                        </div>
+                        <div class="step">
+                            <div class="step-number">7</div>
+                            Add butter, lemon juice, and herbs to pan
+                        </div>
+                        <div class="step">
+                            <div class="step-number">8</div>
+                            Swirl to create herb butter sauce
+                        </div>
+                    </div>
+
+                    <div class="time-indicator">5 min</div>
+                </div>
+
+                <div class="stage">
+                    <div class="stage-header">Finish</div>
+                    <div class="flow-connector connector-up"></div>
+
+                    <div class="process-steps">
+                        <div class="step">
+                            <div class="step-number">9</div>
+                            Return salmon to pan briefly
+                        </div>
+                        <div class="step">
+                            <div class="step-number">10</div>
+                            Spoon herb butter over fillets
+                        </div>
+                    </div>
+
+                    <div class="final-dish">
+                        <div class="dish-name">Pan-Seared Salmon</div>
+                        <div class="dish-description">Perfectly cooked salmon with a golden crust, topped with aromatic lemon herb butter sauce</div>
+                    </div>
+
+                    <div class="time-indicator">2 min</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
