@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic Studio</title>
+    <style>
+        :root {
+            --primary-bg: #0a0b0f;
+            --secondary-bg: #1a1d24;
+            --accent-bg: #2a2d36;
+            --text-primary: #ffffff;
+            --text-secondary: #b8bcc8;
+            --text-muted: #6b7280;
+            --border-color: #374151;
+            --glow-color: #60a5fa;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            gap: 24px;
+            padding: 24px;
+        }
+
+        .sidebar {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--glow-color), var(--success-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .harmony-controls {
+            flex: 1;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .harmony-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .harmony-btn {
+            padding: 16px 12px;
+            background: var(--accent-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .harmony-btn:hover {
+            background: var(--glow-color);
+            color: var(--primary-bg);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .harmony-btn.active {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
+        }
+
+        .main-stage {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            position: relative;
+        }
+
+        .keyboard-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .keyboard {
+            display: flex;
+            gap: 4px;
+            padding: 24px;
+            background: var(--primary-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--border-color);
+        }
+
+        .key {
+            width: 60px;
+            height: 200px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 16px;
+        }
+
+        .key:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .key.pressed {
+            transform: translateY(-2px) scale(0.98);
+            box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .key-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chord-display {
+            text-align: center;
+            padding: 20px;
+            background: var(--accent-bg);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .chord-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .chord-notes {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .right-panel {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .palette-export {
+            flex: 1;
+        }
+
+        .color-swatches {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .swatch {
+            height: 48px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .swatch:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .hex-code {
+            font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+        }
+
+        .export-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .export-btn {
+            padding: 12px 16px;
+            background: var(--accent-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn:hover {
+            background: var(--glow-color);
+            color: var(--primary-bg);
+        }
+
+        .export-btn.primary {
+            background: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        .export-btn.primary:hover {
+            background: #059669;
+        }
+
+        .tempo-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .tempo-slider {
+            flex: 1;
+            height: 4px;
+            background: var(--accent-bg);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .tempo-value {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 600;
+            min-width: 40px;
+        }
+
+        .visualization {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            width: 200px;
+            height: 120px;
+            background: var(--primary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .wave-form {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .wave-bar {
+            width: 3px;
+            background: var(--glow-color);
+            margin: 0 1px;
+            border-radius: 2px;
+            transition: height 0.1s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .key.playing {
+            animation: pulse 0.6s ease-in-out;
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .key[data-note="C"] { background: linear-gradient(180deg, #ff6b6b, #ee5a52); }
+        .key[data-note="C#"] { background: linear-gradient(180deg, #4ecdc4, #44a08d); }
+        .key[data-note="D"] { background: linear-gradient(180deg, #45b7d1, #2980b9); }
+        .key[data-note="D#"] { background: linear-gradient(180deg, #96ceb4, #85a98e); }
+        .key[data-note="E"] { background: linear-gradient(180deg, #feca57, #ff9ff3); }
+        .key[data-note="F"] { background: linear-gradient(180deg, #ff9ff3, #f368e0); }
+        .key[data-note="F#"] { background: linear-gradient(180deg, #54a0ff, #2e86de); }
+        .key[data-note="G"] { background: linear-gradient(180deg, #5f27cd, #341f97); }
+        .key[data-note="G#"] { background: linear-gradient(180deg, #00d2d3, #01a3a4); }
+        .key[data-note="A"] { background: linear-gradient(180deg, #ff6348, #e17055); }
+        .key[data-note="A#"] { background: linear-gradient(180deg, #a55eea, #8854d0); }
+        .key[data-note="B"] { background: linear-gradient(180deg, #26de81, #20bf6b); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <div class="logo">Chromatic Studio</div>
+                <div class="subtitle">Musical Color Harmony</div>
+                <div class="status-indicator"></div>
+            </div>
+            
+            <div class="harmony-controls">
+                <div class="section-title">Harmony Types</div>
+                <div class="harmony-grid">
+                    <button class="harmony-btn active" data-harmony="major">Major</button>
+                    <button class="harmony-btn" data-harmony="minor">Minor</button>
+                    <button class="harmony-btn" data-harmony="diminished">Diminished</button>
+                    <button class="harmony-btn" data-harmony="augmented">Augmented</button>
+                    <button class="harmony-btn" data-harmony="major7">Major 7th</button>
+                    <button class="harmony-btn" data-harmony="minor7">Minor 7th</button>
+                    <button class="harmony-btn" data-harmony="dominant7">Dom 7th</button>
+                    <button class="harmony-btn" data-harmony="suspended">Suspended</button>
+                </div>
+
+                <div class="section-title">Tempo</div>
+                <div class="tempo-control">
+                    <input type="range" class="tempo-slider" min="60" max="180" value="120" id="tempo">
+                    <span class="tempo-value">120 BPM</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-stage">
+            <div class="visualization">
+                <div class="wave-form" id="waveform">
+                    <div class="wave-bar" style="height: 20px;"></div>
+                    <div class="wave-bar" style="height: 35px;"></div>
+                    <div class="wave-bar" style="height: 15px;"></div>
+                    <div class="wave-bar" style="height: 45px;"></div>
+                    <div class="wave-bar" style="height: 25px;"></div>
+                    <div class="wave-bar" style="height: 55px;"></div>
+                    <div class="wave-bar" style="height: 30px;"></div>
+                    <div class="wave-bar" style="height: 40px;"></div>
+                    <div class="wave-bar" style="height: 20px;"></div>
+                    <div class="wave-bar" style="height: 35px;"></div>
+                </div>
+            </div>
+
+            <div class="keyboard-container">
+                <div class="keyboard" id="keyboard">
+                    <div class="key" data-note="C"><span class="key-label">C</span></div>
+                    <div class="key" data-note="C#"><span class="key-label">C#</span></div>
+                    <div class="key" data-note="D"><span class="key-label">D</span></div>
+                    <div class="key" data-note="D#"><span class="key-label">D#</span></div>
+                    <div class="key" data-note="E"><span class="key-label">E</span></div>
+                    <div class="key" data-note="F"><span class="key-label">F</span></div>
+                    <div class="key" data-note="F#"><span class="key-label">F#</span></div>
+                    <div class="key" data-note="G"><span class="key-label">G</span></div>
+                    <div class="key" data-note="G#"><span class="key-label">G#</span></div>
+                    <div class="key" data-note="A"><span class="key-label">A</span></div>
+                    <div class="key" data-note="A#"><span class="key-label">A#</span></div>
+                    <div class="key" data-note="B"><span class="key-label">B</span></div>
+                </div>
+
+                <div class="chord-display">
+                    <div class="chord-name" id="chordName">C Major</div>
+                    <div class="chord-notes" id="chordNotes">C - E - G</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="palette-export">
+                <div class="section-title">Color Palette</div>
+                <div class="color-swatches" id="colorSwatches">
+                    <div class="swatch" style="background: #ff6b6b;">
+                        <span>Primary</span>
+                        <span class="hex-code">#FF6B6B</span>
+                    </div>
+                    <div class="swatch" style="background: #4ecdc4;">
+                        <span>Secondary</span>
+                        <span class="hex-code">#4ECDC4</span>
+                    </div>
+                    <div class="swatch" style="background: #45b7d1;">
+                        <span>Accent</span>
+                        <span class="hex-code">#45B7D1</span>
+                    </div>
+                    <div class="swatch" style="background: #96ceb4;">
+                        <span>Highlight</span>
+                        <span class="hex-code">#96CEB4</span>
+                    </div>
+                    <div class="swatch" style="background: #feca57;">
+                        <span>Warning</span>
+                        <span class="hex-code">#FECA57</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="export-actions">
+                <div class="section-title">Export Options</div>
+                <button class="export-btn primary">Copy CSS Variables</button>
+                <button class="export-btn">Export as JSON</button>
+                <button class="export-btn">Save as Adobe Swatch</button>
+                <button class="export-btn">Generate SCSS</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chordDefinitions = {
+            major: { intervals: [0, 4, 7], name: 'Major' },
+            minor: { intervals: [0, 3, 7], name: 'Minor' },
+            diminished: { intervals: [0, 3, 6], name: 'Diminished' },
+            augmented: { intervals: [0, 4, 8], name: 'Augmented' },
+            major7: { intervals: [0, 4, 7, 11], name: 'Major 7th' },
+            minor7: { intervals: [0, 3, 7, 10], name: 'Minor 7th' },
+            dominant7: { intervals: [0, 4, 7, 10], name: 'Dominant 7th' },
+            suspended: { intervals: [0, 5, 7], name: 'Suspended' }
+        };
+
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const noteColors = {
+            'C': '#ff6b6b', 'C#': '#4ecdc4', 'D': '#45b7d1', 'D#': '#96ceb4',
+            'E': '#feca57', 'F': '#ff9ff3', 'F#': '#54a0ff', 'G': '#5f27cd',
+            'G#': '#00d2d3', 'A': '#ff6348', 'A#': '#a55eea', 'B': '#26de81'
+        };
+
+        let currentHarmony = 'major';
+        let currentRoot = 0; // C
+        let pressedKeys = new Set();
+
+        const keys = document.querySelectorAll('.key');
+        const harmonyBtns = document.querySelectorAll('.harmony-btn');
+        const chordName = document.getElementById('chordName');
+        const chordNotes = document.getElementById('chordNotes');
+        const colorSwatches = document.getElementById('colorSwatches');
+        const tempoSlider = document.getElementById('tempo');
+        const tempoValue = document.querySelector('.tempo-value');
+
+        function updateChord(rootNote, harmony) {
+            const chord = chordDefinitions[harmony];
+            const chordNotes = chord.intervals.map(interval => 
+                noteNames[(rootNote + interval) % 12]
+            );
+            
+            document.getElementById('chordName').textContent = 
+                `${noteNames[rootNote]} ${chord.name}`;
+            document.getElementById('chordNotes').textContent = 
+                chordNotes.join(' - ');
+
+            updatePalette(chordNotes);
+            animateWaveform();
+        }
+
+        function updatePalette(notes) {
+            const colors = notes.map(note => noteColors[note]);
+            const labels = ['Primary', 'Secondary', 'Accent', 'Highlight', 'Warning'];
+            
+            colorSwatches.innerHTML = '';
+            colors.forEach((color, index) => {
+                const swatch = document.createElement('div');
+                swatch.className = 'swatch';
+                swatch.style.background = color;
+                swatch.innerHTML = `
+                    <span>${labels[index] || `Color ${index + 1}`}</span>
+                    <span class="hex-code">${color.toUpperCase()}</span>
+                `;
+                colorSwatches.appendChild(swatch);
+            });
+        }
+
+        function animateWaveform() {
+            const bars = document.querySelectorAll('.wave-bar');
+            bars.forEach((bar, index) => {
+                setTimeout(() => {
+                    bar.style.height = Math.random() * 60 + 20 + 'px';
+                }, index * 50);
+            });
+        }
+
+        function playKey(keyElement, noteIndex) {
+            keyElement.classList.add('pressed', 'playing');
+            pressedKeys.add(noteIndex);
+            
+            setTimeout(() => {
+                keyElement.classList.remove('pressed', 'playing');
+                pressedKeys.delete(noteIndex);
+            }, 200);
+
+            if (pressedKeys.size === 1) {
+                currentRoot = noteIndex;
+                updateChord(currentRoot, currentHarmony);
+            }
+        }
+
+        keys.forEach((key, index) => {
+            key.addEventListener('click', () => playKey(key, index));
+        });
+
+        harmonyBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                harmonyBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentHarmony = btn.dataset.harmony;
+                updateChord(currentRoot, currentHarmony);
+            });
+        });
+
+        tempoSlider.addEventListener('input', (e) => {
+            tempoValue.textContent = e.target.value + ' BPM';
+        });
+
+        document.querySelectorAll('.export-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    btn.style.transform = '';
+                }, 100);
+            });
+        });
+
+        // Initialize
+        updateChord(currentRoot, currentHarmony);
+    </script>
+</body>
+</html>

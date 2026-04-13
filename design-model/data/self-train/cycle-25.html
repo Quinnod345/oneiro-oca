@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garden Habit Tracker</title>
+    <style>
+        :root {
+            --earth-brown: #3d2f1f;
+            --rich-soil: #4a3728;
+            --sage-green: #8fbc8f;
+            --forest-green: #228b22;
+            --bloom-pink: #ffb6c1;
+            --bloom-yellow: #ffd700;
+            --bloom-purple: #dda0dd;
+            --sky-blue: #87ceeb;
+            --sun-orange: #ffa500;
+            --water-blue: #4682b4;
+            --wilt-brown: #8b4513;
+            --text-dark: #2f2f2f;
+            --text-light: #f5f5dc;
+            --shadow: rgba(0, 0, 0, 0.15);
+            --glow: rgba(255, 255, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(to bottom, var(--sky-blue), var(--earth-brown));
+            overflow: hidden;
+            position: relative;
+        }
+
+        .garden-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            padding: 40px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            z-index: 10;
+            position: relative;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-light);
+            text-shadow: 2px 2px 4px var(--shadow);
+        }
+
+        .weather-widget {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .sun-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--sun-orange);
+            position: relative;
+            box-shadow: 0 0 20px rgba(255, 165, 0, 0.5);
+        }
+
+        .sun-icon::before {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            top: -5px;
+            left: -5px;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 15px, var(--sun-orange) 15px, transparent 16px);
+            transform: rotate(45deg);
+        }
+
+        .weather-text {
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        .garden-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .plant-plot {
+            background: radial-gradient(ellipse at bottom, var(--rich-soil), var(--earth-brown));
+            border-radius: 20px 20px 60px 60px;
+            padding: 25px;
+            min-height: 280px;
+            position: relative;
+            border: 3px solid var(--earth-brown);
+            box-shadow: inset 0 -10px 20px var(--shadow), 0 10px 30px var(--shadow);
+        }
+
+        .habit-name {
+            background: rgba(245, 245, 220, 0.9);
+            color: var(--text-dark);
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 4px 8px var(--shadow);
+        }
+
+        .plant {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 0.3s ease;
+        }
+
+        .stem {
+            width: 6px;
+            background: var(--forest-green);
+            border-radius: 3px;
+            margin: 0 auto;
+            transition: height 0.3s ease;
+        }
+
+        .leaves {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: -5px;
+        }
+
+        .leaf {
+            width: 20px;
+            height: 30px;
+            background: var(--sage-green);
+            border-radius: 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 2px 2px 4px var(--shadow);
+        }
+
+        .leaf:nth-child(2) {
+            transform: rotate(45deg) scaleX(-1);
+        }
+
+        .flower {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px var(--shadow);
+        }
+
+        .flower::before {
+            content: '';
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            position: absolute;
+            background: inherit;
+            opacity: 0.7;
+        }
+
+        .flower::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--sun-orange);
+            z-index: 2;
+        }
+
+        .streak-counter {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text-dark);
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 6px var(--shadow);
+        }
+
+        .water-button {
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--water-blue);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px var(--shadow);
+            transition: all 0.2s ease;
+            z-index: 5;
+        }
+
+        .water-button:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 6px 16px var(--shadow);
+        }
+
+        .water-button:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        .water-drop {
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 12px solid var(--text-light);
+            position: relative;
+        }
+
+        .water-drop::after {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--text-light);
+            position: absolute;
+            top: -18px;
+            left: -6px;
+        }
+
+        /* Plant states */
+        .plant-seedling .stem { height: 30px; }
+        .plant-seedling .leaves { opacity: 0.7; }
+
+        .plant-growing .stem { height: 60px; }
+        .plant-growing .leaves { opacity: 1; transform: scale(1.2); }
+
+        .plant-blooming .stem { height: 80px; }
+        .plant-blooming .leaves { opacity: 1; transform: scale(1.3); }
+        .plant-blooming .flower { opacity: 1; }
+
+        .plant-wilting .stem { height: 20px; background: var(--wilt-brown); }
+        .plant-wilting .leaves { opacity: 0.3; transform: scale(0.8); filter: sepia(1); }
+        .plant-wilting .flower { opacity: 0; }
+
+        /* Specific flower colors */
+        .flower-pink { background: var(--bloom-pink); }
+        .flower-yellow { background: var(--bloom-yellow); }
+        .flower-purple { background: var(--bloom-purple); }
+
+        /* Water animation */
+        @keyframes water-splash {
+            0% { opacity: 0; transform: translateY(0) scale(0); }
+            50% { opacity: 1; transform: translateY(-20px) scale(1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(0.5); }
+        }
+
+        .watering .water-effect {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(70, 130, 180, 0.7);
+            animation: water-splash 0.6s ease-out;
+        }
+
+        /* Background decorations */
+        .cloud {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50px;
+            opacity: 0.6;
+        }
+
+        .cloud-1 {
+            width: 100px;
+            height: 40px;
+            top: 10%;
+            left: 20%;
+            animation: float 20s infinite linear;
+        }
+
+        .cloud-2 {
+            width: 80px;
+            height: 35px;
+            top: 15%;
+            right: 25%;
+            animation: float 25s infinite linear reverse;
+        }
+
+        .cloud::before,
+        .cloud::after {
+            content: '';
+            position: absolute;
+            background: inherit;
+            border-radius: 50px;
+        }
+
+        .cloud::before {
+            width: 50px;
+            height: 50px;
+            top: -25px;
+            left: 10px;
+        }
+
+        .cloud::after {
+            width: 60px;
+            height: 60px;
+            top: -30px;
+            right: 15px;
+        }
+
+        @keyframes float {
+            from { transform: translateX(-100px); }
+            to { transform: translateX(1540px); }
+        }
+
+        .progress-garden {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            right: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .progress-title {
+            color: var(--text-light);
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+
+        .stat {
+            color: var(--text-light);
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="garden-container">
+        <div class="cloud cloud-1"></div>
+        <div class="cloud cloud-2"></div>
+        
+        <header class="header">
+            <h1 class="title">🌱 My Habit Garden</h1>
+            <div class="weather-widget">
+                <div class="sun-icon"></div>
+                <span class="weather-text">Perfect Growing Weather</span>
+            </div>
+        </header>
+
+        <main class="garden-grid">
+            <div class="plant-plot">
+                <div class="habit-name">Morning Exercise</div>
+                <div class="streak-counter">7 days</div>
+                <div class="plant plant-blooming">
+                    <div class="flower flower-pink"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Read 30 Minutes</div>
+                <div class="streak-counter">12 days</div>
+                <div class="plant plant-blooming">
+                    <div class="flower flower-yellow"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Meditation</div>
+                <div class="streak-counter">3 days</div>
+                <div class="plant plant-growing">
+                    <div class="flower flower-purple"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Drink Water</div>
+                <div class="streak-counter">0 days</div>
+                <div class="plant plant-wilting">
+                    <div class="flower flower-pink"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Journal Writing</div>
+                <div class="streak-counter">5 days</div>
+                <div class="plant plant-growing">
+                    <div class="flower flower-purple"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Learn Spanish</div>
+                <div class="streak-counter">1 day</div>
+                <div class="plant plant-seedling">
+                    <div class="flower flower-yellow"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Healthy Eating</div>
+                <div class="streak-counter">9 days</div>
+                <div class="plant plant-blooming">
+                    <div class="flower flower-pink"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+
+            <div class="plant-plot">
+                <div class="habit-name">Early Sleep</div>
+                <div class="streak-counter">2 days</div>
+                <div class="plant plant-growing">
+                    <div class="flower flower-yellow"></div>
+                    <div class="leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="stem"></div>
+                </div>
+                <button class="water-button" onclick="waterPlant(this)">
+                    <div class="water-drop"></div>
+                </button>
+            </div>
+        </main>
+
+        <div class="progress-garden">
+            <div class="progress-title">Garden Statistics</div>
+            <div class="progress-stats">
+                <div class="stat">
+                    <span class="stat-number">39</span>
+                    <span class="stat-label">Total Days</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">3</span>
+                    <span class="stat-label">Blooming</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">4</span>
+                    <span class="stat-label">Growing</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">1</span>
+                    <span class="stat-label">Needs Care</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function waterPlant(button) {
+            const plot = button.closest('.plant-plot');
+            const plant = plot.querySelector('.plant');
+            const streakElement = plot.querySelector('.streak-counter');
+            
+            // Add watering animation
+            plot.classList.add('watering');
+            const waterEffect = document.createElement('div');
+            waterEffect.className = 'water-effect';
+            button.appendChild(waterEffect);
+            
+            // Remove animation after completion
+            setTimeout(() => {
+                plot.classList.remove('watering');
+                waterEffect.remove();
+            }, 600);
+            
+            // Update streak and plant state
+            let currentStreak = parseInt(streakElement.textContent);
+            currentStreak++;
+            streakElement.textContent = `${currentStreak} day${currentStreak !== 1 ? 's' : ''}`;
+            
+            // Update plant growth state
+            plant.classList.remove('plant-wilting', 'plant-seedling', 'plant-growing', 'plant-blooming');
+            if (currentStreak === 1) {
+                plant.classList.add('plant-seedling');
+            } else if (currentStreak < 5) {
+                plant.classList.add('plant-growing');
+            } else {
+                plant.classList.add('plant-blooming');
+            }
+            
+            // Button feedback
+            button.style.transform = 'translateX(-50%) scale(0.8)';
+            setTimeout(() => {
+                button.style.transform = 'translateX(-50%) scale(1)';
+            }, 150);
+        }
+
+        // Add some dynamic behavior
+        document.addEventListener('DOMContentLoaded', function() {
+            // Subtle plant animation
+            const plants = document.querySelectorAll('.plant');
+            plants.forEach(plant => {
+                setInterval(() => {
+                    if (Math.random() > 0.8) {
+                        plant.style.transform = 'translateX(-50%) translateX(2px)';
+                        setTimeout(() => {
+                            plant.style.transform = 'translateX(-50%)';
+                        }, 200);
+                    }
+                }, 3000);
+            });
+        });
+    </script>
+</body>
+</html>

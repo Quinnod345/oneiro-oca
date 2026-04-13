@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Levels Calendar</title>
+    <style>
+        :root {
+            --primary-bg: #0f0f23;
+            --secondary-bg: #1a1a2e;
+            --tertiary-bg: #16213e;
+            --accent-green: #00ff88;
+            --accent-blue: #0099ff;
+            --accent-orange: #ff6600;
+            --accent-red: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+            --text-muted: #495670;
+            --border-color: #233554;
+            --energy-high: #00ff88;
+            --energy-medium: #ffcc00;
+            --energy-low: #ff6600;
+            --energy-valley: #ff3366;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            padding: 32px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .legend {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.high { background-color: var(--energy-high); }
+        .legend-dot.medium { background-color: var(--energy-medium); }
+        .legend-dot.low { background-color: var(--energy-low); }
+        .legend-dot.valley { background-color: var(--energy-valley); }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            flex: 1;
+            background-color: var(--border-color);
+            border-radius: 12px;
+            padding: 2px;
+        }
+
+        .calendar-header {
+            background-color: var(--secondary-bg);
+            padding: 16px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calendar-header:first-child { border-top-left-radius: 10px; }
+        .calendar-header:last-child { border-top-right-radius: 10px; }
+
+        .calendar-day {
+            background-color: var(--secondary-bg);
+            padding: 16px;
+            position: relative;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .calendar-day:nth-child(36):nth-last-child(8) { border-bottom-left-radius: 10px; }
+        .calendar-day:last-child { border-bottom-right-radius: 10px; }
+
+        .day-number {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .energy-timeline {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .energy-period {
+            height: 8px;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .energy-period.morning {
+            background: linear-gradient(90deg, var(--energy-high) 0%, var(--energy-high) 70%, var(--energy-medium) 100%);
+            height: 12px;
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+        }
+
+        .energy-period.midday {
+            background: var(--energy-medium);
+        }
+
+        .energy-period.lunch-dip {
+            background: var(--energy-valley);
+            height: 4px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .energy-period.afternoon {
+            background: linear-gradient(90deg, var(--energy-low) 0%, var(--energy-medium) 50%, var(--energy-low) 100%);
+        }
+
+        .energy-period.evening {
+            background: var(--energy-low);
+            height: 6px;
+        }
+
+        .time-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .weekend {
+            background-color: var(--tertiary-bg) !important;
+        }
+
+        .today {
+            background-color: #1a2f3f !important;
+            border: 1px solid var(--accent-blue);
+        }
+
+        .today .day-number {
+            color: var(--accent-blue);
+        }
+
+        .empty-day {
+            background-color: transparent !important;
+        }
+
+        .energy-score {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .score-high {
+            background-color: var(--energy-high);
+            color: var(--primary-bg);
+        }
+
+        .score-medium {
+            background-color: var(--energy-medium);
+            color: var(--primary-bg);
+        }
+
+        .score-low {
+            background-color: var(--energy-low);
+            color: var(--text-primary);
+        }
+
+        .score-valley {
+            background-color: var(--energy-valley);
+            color: var(--text-primary);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Energy Levels Calendar</h1>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot high"></div>
+                    <span>Morning Peak</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot medium"></div>
+                    <span>Steady</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot low"></div>
+                    <span>Low Energy</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot valley"></div>
+                    <span>Post-lunch Dip</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="calendar-grid">
+            <div class="calendar-header">Mon</div>
+            <div class="calendar-header">Tue</div>
+            <div class="calendar-header">Wed</div>
+            <div class="calendar-header">Thu</div>
+            <div class="calendar-header">Fri</div>
+            <div class="calendar-header">Sat</div>
+            <div class="calendar-header">Sun</div>
+
+            <div class="calendar-day empty-day"></div>
+            <div class="calendar-day empty-day"></div>
+            <div class="calendar-day empty-day"></div>
+            <div class="calendar-day empty-day"></div>
+            
+            <div class="calendar-day">
+                <div class="day-number">1</div>
+                <div class="energy-score score-high">8.5</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+                <div class="time-labels">
+                    <span>6AM</span>
+                    <span>12PM</span>
+                    <span>6PM</span>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">2</div>
+                <div class="energy-score score-medium">7.0</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+                <div class="time-labels">
+                    <span>8AM</span>
+                    <span>2PM</span>
+                    <span>8PM</span>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">3</div>
+                <div class="energy-score score-medium">6.8</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+                <div class="time-labels">
+                    <span>9AM</span>
+                    <span>3PM</span>
+                    <span>9PM</span>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">4</div>
+                <div class="energy-score score-high">8.2</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">5</div>
+                <div class="energy-score score-high">9.1</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning pulse"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">6</div>
+                <div class="energy-score score-low">5.5</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">7</div>
+                <div class="energy-score score-medium">7.3</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">8</div>
+                <div class="energy-score score-medium">6.9</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">9</div>
+                <div class="energy-score score-high">8.0</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">10</div>
+                <div class="energy-score score-high">8.7</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">11</div>
+                <div class="energy-score score-valley">4.2</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">12</div>
+                <div class="energy-score score-medium">7.1</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">13</div>
+                <div class="energy-score score-high">8.4</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day today">
+                <div class="day-number">14</div>
+                <div class="energy-score score-high pulse">9.0</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning pulse"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">15</div>
+                <div class="energy-score score-medium">6.5</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">16</div>
+                <div class="energy-score score-high">7.8</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">17</div>
+                <div class="energy-score score-medium">7.2</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">18</div>
+                <div class="energy-score score-high">8.6</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">19</div>
+                <div class="energy-score score-low">5.8</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">20</div>
+                <div class="energy-score score-medium">7.0</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">21</div>
+                <div class="energy-score score-high">8.9</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">22</div>
+                <div class="energy-score score-medium">6.7</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">23</div>
+                <div class="energy-score score-high">8.1</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">24</div>
+                <div class="energy-score score-high">7.9</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">25</div>
+                <div class="energy-score score-valley">3.8</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">26</div>
+                <div class="energy-score score-medium">6.9</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">27</div>
+                <div class="energy-score score-high">8.3</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">28</div>
+                <div class="energy-score score-medium">7.4</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day">
+                <div class="day-number">29</div>
+                <div class="energy-score score-high">8.8</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+
+            <div class="calendar-day weekend">
+                <div class="day-number">30</div>
+                <div class="energy-score score-medium">7.6</div>
+                <div class="energy-timeline">
+                    <div class="energy-period morning"></div>
+                    <div class="energy-period midday"></div>
+                    <div class="energy-period lunch-dip"></div>
+                    <div class="energy-period afternoon"></div>
+                    <div class="energy-period evening"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
