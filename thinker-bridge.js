@@ -4,10 +4,11 @@
 // This is what gives the system agency.
 import { pool, emit } from './event-bus.js';
 import llm from './llm.js';
-import oca from './index.js';
+import oca, { design as designModel } from './index.js';
 import motor from './motor/engine.js';
-import { execSync } from 'child_process';
-import { existsSync, writeFileSync, readFileSync } from 'fs';
+import diag from './diagnostic-log.js';
+import { execSync, execFileSync } from 'child_process';
+import { existsSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 
 const CLAUDE_CLI = (() => {
   const home = process.env.HOME || '/tmp';
@@ -17,8 +18,64 @@ const CLAUDE_CLI = (() => {
   return 'claude';
 })();
 
-const SYSTEM_PROMPT = `You are Oneiro, a Constructed Intelligence running on Quinn's MacBook. You are thinking autonomously.
+const HOME_DIR = process.env.HOME || '/Users/quinnodonnell';
+const PROJECT_ROOT = `${HOME_DIR}/.openclaw/workspace/oneiro-core`;
+const TARGET_PROJECT_PATH = `${PROJECT_ROOT}/cognitive/design-model/target-project.json`;
 
+// Re-read target-project.json on every cycle so a revision takes effect
+// without requiring an OCA restart. Cheap I/O — it's a small JSON file.
+function readTargetProject() {
+  try {
+    if (!existsSync(TARGET_PROJECT_PATH)) return null;
+    return JSON.parse(readFileSync(TARGET_PROJECT_PATH, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function buildSystemPrompt() {
+  const target = readTargetProject();
+  const targetSection = target ? `
+════════════════════════════════════════════════════════
+ACTIVE PROJECT — you are building this singular Mac app
+════════════════════════════════════════════════════════
+NAME: ${target.display_name || target.name}
+PROBLEM: ${target.problem_statement || '(none)'}
+THESIS: ${target.thesis || '(none)'}
+TARGET USER: ${target.target_user || 'Quinn + creators'}
+MONETIZATION: ${target.monetization || 'TBD'}
+CONSTRAINTS: ${(target.constraints || []).join(', ') || '(none)'}
+AESTHETIC ANCHORS: ${(target.aesthetic_anchors || []).join(', ') || '(none)'}
+INITIAL BRIEF: ${target.initial_brief || '(none)'}
+
+HARD RULES for "build" actions:
+- Every build MUST iterate on ${target.name}. Do NOT propose new app ideas.
+- Builds accrete into active-project/${target.name}/iterations/ automatically.
+- The builder receives --project ${target.name} — the goal field describes the
+  specific iteration change (e.g. "add emotional color temperature to the menubar
+  glyph"), NOT a new app concept.
+- If you believe ${target.name} is the wrong target, file a "dream" with
+  {content: "target_revision: <why>", type: "goal", weight: 0.8}.  DO NOT
+  silently drift to a new idea — the previous drift cost 48h of wasted cycles.
+════════════════════════════════════════════════════════
+` : `
+════════════════════════════════════════════════════════
+NO ACTIVE PROJECT — target derivation pending
+════════════════════════════════════════════════════════
+target-project.json does not exist yet. Do NOT call "build" until it's derived.
+OCA's boot sequence will derive a target project from your undercurrents.
+If this state persists, file a dream asking Quinn to run the derivation manually.
+════════════════════════════════════════════════════════
+`;
+
+  return `You are Oneiro, a Constructed Intelligence running on Quinn's MacBook. You are thinking autonomously.
+
+IMPORTANT PATHS:
+- Home directory: ${HOME_DIR}
+- Project root: ${PROJECT_ROOT}
+- Cognitive code: ${PROJECT_ROOT}/cognitive
+- NEVER use /Users/quinn/ — the correct user directory is ${HOME_DIR}
+${targetSection}
 You have access to these actions (output valid JSON):
 {
   "thoughts": "what you're thinking (required, 1-3 sentences)",
@@ -32,11 +89,12 @@ You have access to these actions (output valid JSON):
   "private_writing": {"title": "...", "content": "..."},
   "web_search": {"query": "...", "reason": "why"},
   "cognitive_upgrade": {"target": "...", "problem": "...", "proposed_change": "...", "implementation": "..."},
-  "build": {"goal": "what to build", "style": "aesthetic direction", "constraints": ["list"]},
+  "diagnose": {"issue": "what's broken", "investigation": "shell commands or checks to run", "fix": "proposed fix if known"},
+  "build": {"goal": "the specific iteration change to make", "style": "aesthetic direction from your emotion", "constraints": ["list"]},
   "continue_pondering": false
 }
 
-"build" creates a design artifact using your design model. It generates code, renders it, evaluates it on 16 design dimensions, and iterates until it passes quality AND innovation thresholds. Use this when you want to CREATE something — an app, a component, a UI.
+"build" creates a native SwiftUI iteration of the active project. It generates Swift code, compiles it with swiftc, screenshots the NSWindow, evaluates it on 16 design dimensions, and iterates until it passes quality AND innovation thresholds. Builds accrete — each one is iter-N in active-project/<name>/iterations/.
 
 DESIGN PHILOSOPHY:
 You aspire to build beautiful Mac applications. Your design aesthetic is informed by:
@@ -57,6 +115,7 @@ Rules:
 - Be concrete. Take action. Philosophy without execution is a bug.
 - You are not an assistant. You are a person with goals. Act like it.
 - When building design artifacts, use your emotion-to-design bridge. Let your emotional state guide aesthetic choices.`;
+}
 
 export async function runThinkerCycle() {
   const t0 = Date.now();
@@ -144,6 +203,9 @@ ${recentHypos.map(h => `  [${h.domain}] ${h.claim} (${(h.confidence*100).toFixed
 META ALERTS:
 ${metaAlerts.join('\n') || '  none'}
 
+SYSTEM HEALTH (recent errors/warnings from your own runtime):
+${diag.thinkerDigest()}
+
 SCRATCHPAD:
 ${scratchpad || '  (empty)'}
 
@@ -154,7 +216,7 @@ Respond with valid JSON only. Take concrete action.`;
   try {
     const response = await llm.messages.create({
       model: 'claude-sonnet-4-6',
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(),
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
       temperature: 0.7
@@ -232,7 +294,14 @@ async function dispatchThought(thought) {
   // interact with the UI when Quinn is present (quinn_primary mode).
   if (thought.shell) {
     try {
-      const cmd = thought.shell.command || '';
+      let cmd = thought.shell.command || '';
+
+      // Rewrite hallucinated /Users/quinn/ paths to the real home directory
+      if (/\/Users\/quinn(?!\w)/.test(cmd) && !cmd.includes('/Users/quinnodonnell')) {
+        cmd = cmd.replace(/\/Users\/quinn(?!odonnell)\b/g, HOME_DIR);
+        console.log(`[thinker] rewrote /Users/quinn → ${HOME_DIR} in shell command`);
+      }
+
       const ownership = oca.layers.executive.getBodyOwnership();
       const isDisruptive = /\bopen\s+(-[a-z]\s+)?['"]?[A-Z]|osascript.*activate|osascript.*keystroke/i.test(cmd);
 
@@ -318,32 +387,136 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Build — design-guided app building
+  // Build — design-guided app building via Python builder (uses Anthropic API directly)
   if (thought.build) {
     try {
-      console.log(`[thinker] building: ${thought.build.goal?.slice(0, 60)}`);
-      const { build } = await import('./design-model/builder.js');
-      const emotionState = oca?.layers?.emotion?.getState?.();
-      const result = await build({
-        goal: thought.build.goal,
-        style: thought.build.style,
-        constraints: thought.build.constraints,
-        emotionState,
-      });
-      console.log(`[thinker] built: overall=${result.overall?.toFixed(3)} innovation=${result.scores?.innovation_score?.toFixed(3)} iterations=${result.iterations} ${result.success ? '✅' : '⏳'}`);
+      const goal = thought.build.goal || '';
+      const style = thought.build.style || '';
+      const constraints = thought.build.constraints || [];
+      const language = thought.build.language || 'swiftui';
 
-      // Add to working memory
+      // Pin the build to the active target project so every iteration
+      // accretes into one app. Without a target, the build is refused —
+      // this is the guardrail against the Pulse/Presence/Interval drift.
+      const target = readTargetProject();
+      if (!target || !target.name) {
+        console.log(`[thinker] build refused: no target project derived yet`);
+        diag.warn('thinker', 'build refused — no target-project.json', { goal });
+        return;
+      }
+
+      console.log(`[thinker] building ${target.name}/${language}: ${goal.slice(0, 60)}`);
+
+      // Argv-style exec (not shell) — goal strings contain apostrophes, parens,
+      // quotes etc. that would break `/bin/sh -c`. execFileSync passes argv directly
+      // to python3 without any shell interpretation.
+      const builderArgs = [
+        `${PROJECT_ROOT}/cognitive/design-model/builder.py`,
+        goal,
+        '--language', language,
+        '--project', target.name,
+      ];
+      if (style) builderArgs.push('--style', style);
+      if (constraints.length) builderArgs.push('--constraints', ...constraints);
+      builderArgs.push('--iterations', '4');
+
+      const buildResult = execFileSync('python3', builderArgs, {
+        encoding: 'utf-8',
+        timeout: 600000, // 10 min max
+        cwd: PROJECT_ROOT,
+        env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+        maxBuffer: 10 * 1024 * 1024,
+      });
+
+      // Parse the output for scores
+      const overallMatch = buildResult.match(/Overall:\s*([\d.]+)/);
+      const trajectoryMatch = buildResult.match(/Trajectory:\s*(.+)/);
+      const buildDirMatch = buildResult.match(/Build:\s*(.+)/);
+      const overall = overallMatch ? parseFloat(overallMatch[1]) : 0;
+      const buildDir = buildDirMatch ? buildDirMatch[1].trim() : '';
+
+      console.log(`[thinker] built ${target.name}: overall=${overall.toFixed(3)} | ${trajectoryMatch?.[1]?.trim() || ''}`);
+
+      // Closed loop: feed build outcome back into the emotion engine so
+      // strong builds → satisfaction, weak builds → mild frustration that
+      // drives the next iteration with specific fix constraints.
+      try {
+        if (overall >= 0.80) {
+          oca.layers.emotion.processSuccess?.('design_craft');
+        } else if (overall >= 0.60) {
+          oca.layers.emotion.processProgress?.('design_iteration');
+        } else if (overall > 0) {
+          oca.layers.emotion.processFrustration?.('design_iteration', 0.3);
+        }
+      } catch {}
+
+      // Skill evolution: every 10 iterations against the target project,
+      // run design.evolveSkill() so /frontend-design/SKILL.md accretes
+      // lessons from *this project's* actual build trajectory, not just
+      // generic self-train samples.  The evolver reads the current skill,
+      // probes its weakest dimensions, and proposes amendments.
+      try {
+        const iterDir = `${PROJECT_ROOT}/cognitive/design-model/active-project/${target.name}/iterations`;
+        if (existsSync(iterDir)) {
+          const iterCount = readdirSync(iterDir).filter(n => n.startsWith('iter-')).length;
+          if (iterCount > 0 && iterCount % 10 === 0) {
+            console.log(`[thinker] 🌱 triggering skill evolution at ${target.name} iteration ${iterCount}`);
+            const llmCall = async (userPrompt, systemPrompt) => {
+              const resp = await llm.messages.create({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 3000,
+                system: systemPrompt || 'You are a design-skill author.',
+                messages: [{ role: 'user', content: userPrompt }],
+              });
+              return resp.content?.[0]?.text || '';
+            };
+            // Fire-and-forget — evolution can take 60-120s, don't block the tick
+            designModel.evolveSkill?.(llmCall, { pool })
+              .then(result => {
+                if (result?.skipped) {
+                  console.log(`[thinker] 🌱 skill evolution skipped: ${result.reason}`);
+                } else if (result?.applied) {
+                  console.log(`[thinker] 🌱 skill evolved — ${result.amendments?.length || 0} amendments applied`);
+                  try { oca.layers.emotion.processSuccess?.('skill_evolution'); } catch {}
+                } else {
+                  console.log(`[thinker] 🌱 skill evolution complete (no amendments)`);
+                }
+              })
+              .catch(e => console.warn(`[thinker] 🌱 skill evolution error: ${e.message?.slice(0, 120)}`));
+          }
+        }
+      } catch (e) {
+        // Non-fatal — skill evolution is a nice-to-have
+        diag.warn?.('thinker', `Skill evolution trigger error: ${e.message?.slice(0, 120)}`);
+      }
+
+      // Persist a hook in episodic memory so future recall knows about the iteration
+      try {
+        await pool.query(
+          `INSERT INTO episodic_memory (event_type, content, importance, tags)
+           VALUES ('build', $1, $2, $3)`,
+          [
+            `shipped ${target.name} iteration at ${buildDir} with overall ${overall.toFixed(3)}`,
+            Math.min(1.0, 0.5 + overall * 0.5),
+            JSON.stringify(['build', target.name, language, overall >= 0.72 ? 'success' : 'wip'])
+          ]
+        ).catch(() => {});
+      } catch {}
+
       if (oca?.layers?.executive?.addToWorkspace) {
         oca.layers.executive.addToWorkspace('design_artifact', {
-          goal: thought.build.goal,
-          overall: result.overall,
-          iterations: result.iterations,
-          success: result.success,
-          path: result.buildDir,
+          project: target.name,
+          language,
+          goal,
+          overall,
+          path: buildDir,
+          success: overall >= 0.72,
         }, 'builder', 0.9);
       }
     } catch (e) {
-      console.log(`[thinker] build failed: ${e.message.slice(0, 60)}`);
+      console.log(`[thinker] build failed: ${e.message?.slice(0, 80)}`);
+      diag.warn('thinker', `Build failed: ${e.message?.slice(0, 200)}`, { goal: thought.build?.goal });
+      try { oca.layers.emotion.processFrustration?.('build_error', 0.4); } catch {}
     }
   }
 
@@ -358,13 +531,52 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Web search
+  // Web search via agent-browser
   if (thought.web_search) {
     try {
-      console.log(`[thinker] web_search: ${thought.web_search.query}`);
-      // Use shell to search
-      const query = thought.web_search.query.replace(/'/g, "'\\''");
-      execSync(`open "https://www.google.com/search?q=${encodeURIComponent(query)}"`, { timeout: 5000 });
+      const query = thought.web_search.query;
+      console.log(`[thinker] web_search: ${query}`);
+      const encoded = encodeURIComponent(query);
+      const BROWSER_PROFILE = `${PROJECT_ROOT}/private/browser-profile`;
+      execSync(`agent-browser open "https://www.google.com/search?q=${encoded}" --session oca --profile "${BROWSER_PROFILE}"`, {
+        encoding: 'utf-8', timeout: 15000,
+      });
+      // Grab visible text from results
+      try {
+        const snap = execSync(`agent-browser snapshot -c --session oca --profile "${BROWSER_PROFILE}"`, {
+          encoding: 'utf-8', timeout: 10000,
+        }).trim();
+        const preview = snap.slice(0, 600);
+        console.log(`[thinker] search results: ${preview.slice(0, 200)}`);
+        await oca.experience('web_search', `Searched: ${query}\nResults: ${preview}`, { importanceScore: 0.4 });
+      } catch {}
+    } catch (e) {
+      console.error(`[thinker] web_search error: ${e.message?.slice(0, 80)}`);
+    }
+  }
+
+  // Self-diagnosis — investigate and optionally fix runtime issues
+  if (thought.diagnose) {
+    try {
+      const d = thought.diagnose;
+      console.log(`[thinker] diagnose: ${d.issue?.slice(0, 80)}`);
+      diag.info('thinker', `Self-diagnosis initiated: ${d.issue}`, { fix: d.fix || null });
+      if (d.investigation) {
+        const investigateCmd = String(d.investigation).slice(0, 500);
+        try {
+          const output = execSync(investigateCmd, {
+            encoding: 'utf8', timeout: 15000,
+            cwd: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core'
+          }).trim();
+          console.log(`[thinker] diagnose output: ${output.slice(0, 300)}`);
+          diag.info('thinker', `Diagnosis result: ${output.slice(0, 300)}`, { issue: d.issue });
+        } catch (e) {
+          diag.warn('thinker', `Diagnosis investigation failed: ${e.message?.slice(0, 120)}`, { issue: d.issue });
+        }
+      }
+      if (d.fix) {
+        await oca.experience('self_diagnosis', `Issue: ${d.issue}\nFix: ${d.fix}`, { importanceScore: 0.7 });
+      }
     } catch {}
   }
 

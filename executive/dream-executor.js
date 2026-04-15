@@ -8,6 +8,7 @@ import { setDreamLifecycle } from '../../psyche.js';
 import { execSync, spawnSync } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { dirname, join, basename } from 'path';
+import { loadTargetProject } from '../design-model/target-derivation.js';
 
 // OCA_ROOT is the cognitive/ directory (where all OCA code lives)
 const OCA_ROOT = new URL('..', import.meta.url).pathname;
@@ -390,6 +391,61 @@ async function selfBuild(buildSpec, dreamId) {
     console.log(`[dream-executor] ⚠️ already built '${skill_name}' this session, skipping`);
     return { success: false, error: 'Already attempted this build' };
   }
+
+  // Target-project gate — if a singular Mac app project is active, refuse
+  // self_builds that scaffold standalone apps (*.swift, apps/<name>/,
+  // *.xcodeproj, Package.swift).  Those must flow through the target-project
+  // builder.py path so every SwiftUI iteration accretes into ONE product.
+  // Motor skills, DB migrations, JS integrations — still allowed.  This
+  // closes the "different menubar app every cycle" drift at the executor
+  // level too, not just the thinker level.
+  try {
+    const target = loadTargetProject();
+    if (target?.name) {
+      const filesCreated = [...files_to_create, ...files_to_modify];
+      const looksLikeAppScaffold = filesCreated.some(f => {
+        const p = String(f.path || '').toLowerCase();
+        return (
+          p.endsWith('.swift') ||
+          p.endsWith('.xcodeproj') ||
+          p.includes('.xcodeproj/') ||
+          p.endsWith('/package.swift') ||
+          p.match(/^apps\//) ||
+          p.includes('/apps/') ||
+          p.includes('contentview')
+        );
+      });
+      const skillNameLooksAppy = /\b(app|menubar|menu-bar|scaffold|swiftui|macos-app|mac-app)\b/i.test(skill_name || '');
+
+      if (looksLikeAppScaffold || skillNameLooksAppy) {
+        console.log(
+          `[dream-executor] 🚫 self_build '${skill_name}' REFUSED — target project '${target.name}' is active. ` +
+          `SwiftUI scaffolds must flow through builder.py (thinker "build" action), not dream-executor self_build.`
+        );
+        builtThisSession.add(skill_name); // prevent retry this session
+        try {
+          await pool.query(
+            `INSERT INTO dreams (content, type, weight, lifecycle_state, lifecycle_updated_at, dispatched_at, lifecycle_context)
+             VALUES ($1, 'goal', 0.75, 'dispatched', NOW(), NOW(), $2)`,
+            [
+              `target_reroute: self_build tried to scaffold '${skill_name}' but target project '${target.name}' is active. Iterate on ${target.display_name} via the "build" action in thinker-bridge (which runs builder.py --project ${target.name}) instead of scaffolding new apps.`,
+              JSON.stringify({ source: 'target_reroute', blocked_build: skill_name, target: target.name })
+            ]
+          );
+        } catch {}
+        return {
+          success: false,
+          error: `Refused: target project '${target.name}' is active. Scaffold SwiftUI via builder.py --project ${target.name} instead.`,
+          skill_name,
+        };
+      }
+    }
+  } catch (e) {
+    // Target check is a soft gate — if it fails, let the build proceed rather
+    // than blocking legitimate capability work.
+    console.warn(`[dream-executor] target gate check failed: ${e.message}`);
+  }
+
   builtThisSession.add(skill_name);
 
   console.log(`[dream-executor] 🔨 SELF-BUILDING: ${skill_name}`);
@@ -808,7 +864,7 @@ export async function executeDreams() {
          AND NOT resolved
          AND COALESCE(lifecycle_context->>'channel', 'builder') = 'builder'
        ORDER BY weight DESC, created_at DESC
-       LIMIT 3
+       LIMIT 1
        FOR UPDATE SKIP LOCKED
      )
      UPDATE dreams d
