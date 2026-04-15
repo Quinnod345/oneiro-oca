@@ -257,17 +257,46 @@ def try_retrain_lock():
 
 def retrain():
     mlx_dir = Path(__file__).parent / "mlx"
+    design_dir = Path(__file__).parent
+
+    # ── 1. Embed any newly-captured critiques into critique_embeddings.npz ──
+    # Idempotent and cheap when there's nothing new. This is the Phase 5
+    # pipeline — critique text → OpenAI embeddings → training signal.
+    embed_script = design_dir / "embed_critiques.py"
+    if embed_script.exists():
+        print("[retrain] embedding new critiques...")
+        try:
+            embed_result = subprocess.run(
+                ["python3", str(embed_script), "--max-new", "200"],
+                cwd=design_dir, capture_output=True, text=True,
+            )
+            # Surface the summary lines if any
+            for line in (embed_result.stdout or "").split("\n"):
+                if any(k in line for k in ("Embedded:", "Nothing to embed", "Unembedded:", "ERROR")):
+                    print(f"[retrain] {line.strip()}")
+            if embed_result.returncode != 0 and embed_result.stderr:
+                print(f"[retrain] embed stderr: {embed_result.stderr[:200]}")
+        except Exception as e:
+            print(f"[retrain] embed error (non-fatal): {str(e)[:120]}")
+
+    # ── 2. Extract visual features from recent manifest additions ──
     print("[retrain] extracting features...")
-    subprocess.run(["python3", "extract_features.py"], cwd=mlx_dir, capture_output=True, timeout=180)
-    print("[retrain] training...")
+    subprocess.run(["python3", "extract_features.py"], cwd=mlx_dir, capture_output=True)
+
+    # ── 3. Train the Phase 5 design head (aux head auto-disables if
+    #       critique dataset is too small — behaves like train_v2 in
+    #       that case but still saves design-head-v5.safetensors). ──
+    print("[retrain] training v5...")
     result = subprocess.run(
-        ["python3", "train_v2.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
-        cwd=mlx_dir, capture_output=True, text=True, timeout=120,
+        ["python3", "train_v5.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
+        cwd=mlx_dir, capture_output=True, text=True,
     )
-    for line in result.stdout.split("\n"):
-        if "best val loss" in line:
+    # Surface the aux-head status + best val loss
+    for line in (result.stdout or "").split("\n"):
+        if any(k in line for k in ("aux head ENABLED", "aux head DISABLED", "best val loss", "matched:")):
             print(f"[retrain] {line.strip()}")
-            break
+    if result.returncode != 0 and result.stderr:
+        print(f"[retrain] train_v5 stderr: {result.stderr[:300]}")
 
 
 CRITIQUES_DIR = DATA_DIR / "critiques"

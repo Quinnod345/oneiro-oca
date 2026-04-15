@@ -631,6 +631,40 @@ def build(
         except Exception:
             pass
 
+    # ── Score trajectory — append to active-project/<name>/history.jsonl ──
+    # One JSON line per completed build so the dashboard can chart overall
+    # scores climbing over time. Append-only, no locking needed — the
+    # thinker serializes builds (Part A2 gate).  iter_num was set above
+    # when a project was passed.
+    if project:
+        try:
+            project_dir = ACTIVE_PROJECT_DIR / project
+            history_path = project_dir / "history.jsonl"
+            # Best-effort iter number from build_dir name (iter-NNNN)
+            try:
+                iter_id = int(build_dir.name.replace("iter-", ""))
+            except Exception:
+                iter_id = None
+            record = {
+                "iter": iter_id,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "overall": round(float(best_score or 0), 4),
+                "innovation": round(
+                    float((best_scores or {}).get("innovation_score", 0) if best_scores else 0),
+                    4,
+                ),
+                "compiled": bool(best_png),
+                "language": language,
+                "iterations": len(history),
+                "goal": goal[:200],
+                "success": best_score >= quality_threshold if best_score is not None else False,
+                "trajectory": [round(float(h["overall"]), 3) for h in history],
+            }
+            with open(history_path, "a") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            print(f"  [history] write failed: {e}")
+
     return {
         "code": best_code,
         "screenshot": best_png,
