@@ -2031,10 +2031,32 @@ async function spawnSelfTrainWorker(worker) {
 function startSelfTrainSchedule() {
   selfTrainDesired = true;
 
-  // Monitor alert mode and pause/resume ALL workers together so they don't
-  // contend for the Anthropic gateway while Quinn is actively working.
+  // Alert-mode pausing is now OPT-IN via OCA_SELF_TRAIN_PAUSE_ON_ALERT=1.
+  // The original intent was to prevent gateway contention with the
+  // thinker while Quinn was at the keyboard, but in practice the user
+  // wants to see the flywheel running when they're watching the
+  // dashboard, and rate-limiting/backoff inside llm.js + Anthropic's
+  // own rate limits are the real backstop against contention.  Default
+  // is "workers run always", pause only if explicitly opted in.
+  const PAUSE_ON_ALERT = process.env.OCA_SELF_TRAIN_PAUSE_ON_ALERT === '1';
+
   const modeMonitor = () => {
     if (!selfTrainDesired) return;
+    if (!PAUSE_ON_ALERT) {
+      // Just ensure any paused workers get resumed (e.g. after a manual
+      // SIGSTOP or a leftover state from an earlier process).
+      for (const worker of selfTrainWorkers) {
+        if (worker.process && worker.paused) {
+          try {
+            process.kill(worker.process.pid, 'SIGCONT');
+            worker.paused = false;
+          } catch {}
+        }
+      }
+      setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
+      return;
+    }
+
     const mode = oca.layers.executive.determineMode?.(
       previousPresence,
       oca.layers.emotion.getState(),
@@ -2059,11 +2081,6 @@ function startSelfTrainSchedule() {
           console.warn(`[oca] 🎨 self-train W${worker.id} SIGCONT failed:`, e.message);
         }
       }
-    }
-    // Single log line summarizing pool pause state
-    const pausedCount = selfTrainWorkers.filter(w => w.paused).length;
-    if (shouldPause && pausedCount > 0 && pausedCount === selfTrainWorkers.filter(w => w.process).length) {
-      // (no-op — avoid spam; one-shot log would be nicer but this function is polled)
     }
 
     setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
