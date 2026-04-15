@@ -53,6 +53,15 @@ ACTIVE_PROJECT_DIR = Path(__file__).parent / "active-project"
 MANIFEST_PATH = Path(__file__).parent / "data" / "manifest.json"
 SKILL_PATH = Path.home() / ".claude" / "skills" / "frontend-design" / "SKILL.md"
 
+# Per-reference truncation cap — each reference is trimmed to this many chars
+# before being injected into the generate prompt so two refs + skill + goal
+# stay well under Sonnet's context comfortable-zone. 3200 chars ≈ 100 lines
+# of Swift, enough to show structural patterns without dominating context.
+REFERENCE_CHAR_CAP = 3200
+# Maximum total reference injection (across all refs combined). 8000 chars
+# is ~2000 tokens — leaves plenty of room for the skill + goal + rules.
+MAX_REFS_TOTAL_CHARS = 8000
+
 
 def sonnet(prompt: str) -> str:
     msg = client.messages.create(
@@ -210,6 +219,188 @@ def _next_iter_num(project_dir: Path) -> int:
     return (max(nums) + 1) if nums else 1
 
 
+def load_references(project: str, language: str, goal: str) -> list[dict]:
+    """Load reference pool for the active project and pick 1-2 per build.
+
+    Strategy:
+      • Read active-project/<project>/references/manifest.json
+      • Filter to entries matching the target language (Swift refs only
+        apply to swiftui builds)
+      • Score each by tag overlap with the goal text
+      • Pick the top `compile-correctness` entry (must compile standalone)
+        and the top `style` entry (can be incomplete as long as it's
+        aesthetic guidance)
+      • Read each file from disk, truncate, return as dicts
+
+    Returns a list of {name, kind, source_type, content, truncated, path_ok}
+    dicts in the order they should appear in the prompt. An empty list
+    means references are unavailable or the project has no manifest —
+    in that case builder.py falls through to the legacy skill-only path.
+    """
+    if not project:
+        return []
+    manifest_path = ACTIVE_PROJECT_DIR / project / "references" / "manifest.json"
+    if not manifest_path.exists():
+        return []
+
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except Exception as e:
+        print(f"  [refs] manifest parse failed: {e}")
+        return []
+
+    entries = manifest.get("references", [])
+    if not entries:
+        return []
+
+    # Only SwiftUI refs apply to SwiftUI builds and so on — skip mismatches.
+    # All seeded refs are currently .swift so they're language-tagged via path.
+    def lang_match(entry):
+        path = entry.get("path", "")
+        if language == "swiftui":
+            return path.endswith(".swift")
+        if language == "html":
+            return path.endswith((".html", ".htm"))
+        if language == "react":
+            return path.endswith((".jsx", ".tsx", ".js"))
+        return True
+
+    applicable = [e for e in entries if lang_match(e)]
+
+    # Score by tag overlap with the goal text (simple substring match).
+    goal_lower = (goal or "").lower()
+    def score(entry):
+        tags = [t.lower() for t in entry.get("tags", [])]
+        return sum(1 for t in tags if t in goal_lower) + \
+               sum(1 for word in entry.get("best_for", []) if str(word).lower() in goal_lower) * 2
+
+    applicable.sort(key=score, reverse=True)
+
+    # Pick one per kind — 1 compile-correctness + 1 style if both available.
+    picked = []
+    seen_kinds = set()
+    for entry in applicable:
+        kind = entry.get("kind", "style")
+        if kind in seen_kinds:
+            continue
+        picked.append(entry)
+        seen_kinds.add(kind)
+        if len(picked) >= 2:
+            break
+
+    # Fallback picks — ensure we have at least one of each kind when
+    # available, even if tag scoring didn't surface it.  Sill benefits
+    # from BOTH a compile-correctness anchor AND a style anchor on
+    # every build; tag-only matching is too stingy in the early days
+    # when the goal text doesn't happen to mention "frosted-glass" or
+    # "rounded-rectangle".
+    for kind in ("compile-correctness", "style"):
+        if kind in seen_kinds:
+            continue
+        for entry in applicable:
+            if entry.get("kind") == kind:
+                picked.append(entry)
+                seen_kinds.add(kind)
+                break
+
+    # Deduplicate (can happen if we re-added an entry above)
+    seen_paths = set()
+    deduped = []
+    for p in picked:
+        if p.get("path") in seen_paths:
+            continue
+        seen_paths.add(p.get("path"))
+        deduped.append(p)
+
+    # Load each file, respect per-ref + total char caps.
+    result = []
+    total = 0
+    for entry in deduped[:3]:  # hard cap at 3 refs for prompt budget safety
+        raw_path = entry.get("path", "")
+        if not raw_path:
+            continue
+        # Absolute paths (MindGarden) used as-is; relative paths join against
+        # the project's references/ dir.
+        if raw_path.startswith("/"):
+            full_path = Path(raw_path)
+        else:
+            full_path = ACTIVE_PROJECT_DIR / project / "references" / raw_path
+
+        if not full_path.exists():
+            print(f"  [refs] missing: {entry.get('name')} → {full_path}")
+            continue
+
+        try:
+            content = full_path.read_text()
+        except Exception as e:
+            print(f"  [refs] read failed: {entry.get('name')} → {e}")
+            continue
+
+        truncated = False
+        if len(content) > REFERENCE_CHAR_CAP:
+            content = content[:REFERENCE_CHAR_CAP] + "\n// … [truncated for prompt budget]"
+            truncated = True
+
+        # Total budget check — drop this ref if it would blow the cap
+        if total + len(content) > MAX_REFS_TOTAL_CHARS and result:
+            break
+
+        total += len(content)
+        result.append({
+            "name": entry.get("name"),
+            "kind": entry.get("kind", "style"),
+            "source_type": entry.get("source_type", "unknown"),
+            "description": entry.get("description", ""),
+            "content": content,
+            "truncated": truncated,
+            "path_ok": True,
+        })
+
+    if result:
+        kinds = ",".join(r["kind"] for r in result)
+        print(f"  [refs] injected {len(result)} references: {kinds}")
+    return result
+
+
+def format_references_for_prompt(refs: list[dict]) -> str:
+    """Format loaded references as a prompt-ready block. Each reference
+    is clearly labeled with its role so the LLM knows how to use it."""
+    if not refs:
+        return ""
+
+    parts = [
+        "REFERENCE EXAMPLES — study these before generating.",
+        "",
+        "Two kinds of references:",
+        "  • `compile-correctness` — these compile cleanly under Swift 6.2 / macOS 26. "
+        "Study their patterns (Identifiable conformance, Color literal style, state "
+        "management, ForEach index patterns) and MATCH them. Your output should be "
+        "structurally similar to these.",
+        "  • `style` — these show Quinn's preferred aesthetic (color palette choices, "
+        "material layering, spacing rhythm, button treatment). They may reference "
+        "external assets or EnvironmentObjects that won't be in your output — use "
+        "them for LOOK AND FEEL only, not for structure.",
+        "",
+    ]
+    for i, ref in enumerate(refs, 1):
+        role_note = (
+            "copy its structural patterns"
+            if ref["kind"] == "compile-correctness"
+            else "match its aesthetic choices"
+        )
+        parts.append(
+            f"--- Reference {i}: {ref['name']} "
+            f"[{ref['kind']}] ({ref['source_type']}) — {role_note} ---"
+        )
+        if ref.get("description"):
+            parts.append(f"// {ref['description']}")
+        parts.append(ref["content"])
+        parts.append("")
+
+    parts.append("--- END REFERENCES ---")
+    return "\n".join(parts)
+
+
 def build(
     goal: str,
     style: str = "",
@@ -248,8 +439,17 @@ def build(
     # Load skill
     skill = SKILL_PATH.read_text()[:1500] if SKILL_PATH.exists() else ""
 
+    # Load reference pool — 1-2 examples matched by tag against the goal.
+    # These become few-shot anchors in the first-iteration prompt so the LLM
+    # starts from known-good patterns instead of rolling fresh every build.
+    refs = load_references(project or "", language, goal) if project else []
+    refs_block = format_references_for_prompt(refs)
+
     print(f"[builder] goal: {goal}")
     print(f"[builder] language: {language} | thresholds: quality={quality_threshold} innovation={innovation_threshold}")
+    if refs:
+        ref_names = ", ".join(r["name"] for r in refs)
+        print(f"[builder] references: {ref_names}")
 
     history = []
     best_code = None
@@ -265,6 +465,8 @@ def build(
             parts = []
             if skill:
                 parts.append(f"DESIGN SKILL:\n{skill}\n")
+            if refs_block:
+                parts.append(refs_block)
             parts.append(f"{lang_cfg['framing']}\n\nGoal: {goal}")
             if style:
                 parts.append(f"Style: {style}")
@@ -273,7 +475,9 @@ def build(
             parts.append(f"Rules:\n{lang_cfg['rules']}")
             parts.append(
                 "Aim for Level 5+ thinking (problem redefinition, not just execution). "
-                "Cohesive design — every part must serve the whole."
+                "Cohesive design — every part must serve the whole. If references were "
+                "provided above, your output should feel structurally adjacent to them "
+                "while solving the specific goal."
             )
             parts.append(lang_cfg["format"])
             prompt = "\n\n".join(parts)

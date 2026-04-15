@@ -216,6 +216,118 @@ def retrain():
             break
 
 
+def maybe_inject_target_reference(
+    language: str,
+    code: str,
+    cycle_num: int,
+    overall: float,
+    innovation: float,
+    critique: str,
+    has_screenshot: bool,
+) -> None:
+    """Copy high-scoring compiled swiftui samples into the active target
+    project's reference pool.
+
+    Gates:
+      • language == 'swiftui' — Sill is SwiftUI-only for now
+      • has_screenshot — proves the Swift actually compiled
+      • overall >= 0.80 — Opus rated it high
+      • target-project.json exists — there's a pinned project to inject into
+
+    The pool is capped at 5 auto-injected entries; we keep the top 5 by
+    `overall_score` and delete the rest from disk + manifest to prevent
+    unbounded growth. Seeded (non-auto) references are never touched.
+    """
+    if language != "swiftui":
+        return
+    if not has_screenshot:
+        return
+    if overall < 0.80:
+        return
+
+    target_path = Path(__file__).parent / "target-project.json"
+    if not target_path.exists():
+        return
+
+    try:
+        target = json.loads(target_path.read_text())
+    except Exception:
+        return
+    project_name = target.get("name")
+    if not project_name:
+        return
+
+    refs_dir = Path(__file__).parent / "active-project" / project_name / "references"
+    refs_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = refs_dir / "manifest.json"
+
+    if manifest_path.exists():
+        try:
+            ref_manifest = json.loads(manifest_path.read_text())
+        except Exception:
+            ref_manifest = {"version": 1, "references": []}
+    else:
+        ref_manifest = {"version": 1, "references": []}
+
+    # Copy the swift source to the references dir
+    ref_filename = f"auto-cycle-{cycle_num}.swift"
+    ref_path = refs_dir / ref_filename
+    ref_path.write_text(code)
+
+    critique_snippet = (critique or "").strip().replace("\n", " ")[:140]
+    new_entry = {
+        "name": f"auto-cycle-{cycle_num}",
+        "kind": "compile-correctness",
+        "source_type": "self_train_auto",
+        "source_origin": f"self_train cycle {cycle_num}",
+        "path": ref_filename,
+        "compile_verified": True,
+        "overall_score": round(float(overall), 3),
+        "innovation_score": round(float(innovation), 3),
+        "tags": [],
+        "description": (
+            f"Auto-injected from self_train cycle {cycle_num} "
+            f"(overall={overall:.2f}, innovation={innovation:.2f}). "
+            f"{critique_snippet}"
+        ),
+        "best_for": [],
+        "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+    # De-dupe by path (in case this cycle number already has an entry)
+    ref_manifest["references"] = [
+        e for e in ref_manifest["references"] if e.get("path") != ref_filename
+    ]
+    ref_manifest["references"].append(new_entry)
+
+    # Cap auto entries at top 5 by overall_score; prune the rest from
+    # both manifest and disk. Seeded (non-auto) refs are preserved.
+    MAX_AUTO_REFS = 5
+    auto_entries = [
+        e for e in ref_manifest["references"]
+        if e.get("source_type") == "self_train_auto"
+    ]
+    if len(auto_entries) > MAX_AUTO_REFS:
+        auto_entries.sort(key=lambda e: e.get("overall_score", 0), reverse=True)
+        keep_paths = {e["path"] for e in auto_entries[:MAX_AUTO_REFS]}
+        pruned_paths = {e["path"] for e in auto_entries[MAX_AUTO_REFS:]}
+        ref_manifest["references"] = [
+            e for e in ref_manifest["references"]
+            if e.get("source_type") != "self_train_auto" or e["path"] in keep_paths
+        ]
+        for old_path in pruned_paths:
+            try:
+                (refs_dir / old_path).unlink()
+            except Exception:
+                pass
+
+    manifest_path.write_text(json.dumps(ref_manifest, indent=2))
+    print(
+        f"  [refs] ✨ auto-injected cycle-{cycle_num} → "
+        f"{project_name}/references/ (score={overall:.2f}, kept {min(len([e for e in ref_manifest['references'] if e.get('source_type') == 'self_train_auto']), MAX_AUTO_REFS)} auto refs)"
+    )
+
+
 def run_cycle(cycle_num: int, state: dict, language: str | None = None) -> dict | None:
     # Pick language (rotate through LANGUAGES if not specified)
     if language is None:
@@ -404,6 +516,27 @@ def run_cycle(cycle_num: int, state: dict, language: str | None = None) -> dict 
         },
     })
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2))
+
+    # ── 6b. TARGET-PROJECT REFERENCE POOL INJECTION ──
+    # When a swiftui cycle produces a high-scoring sample that actually
+    # compiled (has_screenshot == True), also copy it into the active
+    # target project's reference pool so builder.py can draw on it as a
+    # few-shot example on future iterations. This closes the feedback
+    # loop: self_train discovers good patterns → target project uses
+    # them as anchors → Sill iterations climb → better self_train data →
+    # flywheel.
+    try:
+        maybe_inject_target_reference(
+            language=language,
+            code=code,
+            cycle_num=cycle_num,
+            overall=overall,
+            innovation=innovation,
+            critique=critique,
+            has_screenshot=has_screenshot,
+        )
+    except Exception as e:
+        print(f"  [refs] auto-inject failed: {str(e)[:120]}")
 
     # ── 7. UPDATE STATE ──
     if critique and overall < 0.5:
