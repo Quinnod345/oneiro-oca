@@ -1389,6 +1389,94 @@ ocaRouter.get('/oca/design/target-project', async (req, res) => {
   }
 });
 
+// Active project iteration stats — filesystem-scanned summary of what
+// the builder has accreted into active-project/<name>/iterations/.
+// Used by web/sill.html to show compile success rate and latest iters.
+ocaRouter.get('/oca/design/active-project/iterations', async (req, res) => {
+  try {
+    const { readFileSync, existsSync, readdirSync, statSync } = await import('fs');
+    const { dirname, join } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const here = dirname(fileURLToPath(import.meta.url));
+
+    const targetPath = join(here, 'design-model', 'target-project.json');
+    if (!existsSync(targetPath)) {
+      return res.json({ present: false, reason: 'no_target' });
+    }
+    const target = JSON.parse(readFileSync(targetPath, 'utf-8'));
+    const name = target?.name;
+    if (!name) return res.json({ present: false, reason: 'no_target_name' });
+
+    const itersDir = join(here, 'design-model', 'active-project', name, 'iterations');
+    if (!existsSync(itersDir)) {
+      return res.json({
+        present: true,
+        project: name,
+        display_name: target.display_name || name,
+        total_iterations: 0,
+        iterations: [],
+      });
+    }
+
+    const entries = readdirSync(itersDir)
+      .filter(n => n.startsWith('iter-'))
+      .sort();
+
+    const iterations = entries.map(iterName => {
+      const iterDir = join(itersDir, iterName);
+      let files = [];
+      try { files = readdirSync(iterDir); } catch { files = []; }
+      const swifts = files.filter(f => f.endsWith('.swift'));
+      const pngs = files.filter(f => f.endsWith('.png'));
+      const lastModified = (() => {
+        try { return statSync(iterDir).mtime.toISOString(); } catch { return null; }
+      })();
+      return {
+        name: iterName,
+        swift_count: swifts.length,
+        png_count: pngs.length,
+        compiled: pngs.length > 0,
+        last_modified: lastModified,
+      };
+    });
+
+    // Tail the most recent 20 for the dashboard's list view — client can
+    // chart the full set for rate calculations but only needs headers.
+    const recent = iterations.slice(-20).reverse();
+    const compiledCount = iterations.filter(i => i.compiled).length;
+
+    // Count references in the pool (both seeded and auto-injected)
+    const refsDir = join(here, 'design-model', 'active-project', name, 'references');
+    let refs_seeded = 0;
+    let refs_auto = 0;
+    const refsManifestPath = join(refsDir, 'manifest.json');
+    if (existsSync(refsManifestPath)) {
+      try {
+        const refsManifest = JSON.parse(readFileSync(refsManifestPath, 'utf-8'));
+        for (const e of refsManifest.references || []) {
+          if (e.source_type === 'self_train_auto') refs_auto++;
+          else refs_seeded++;
+        }
+      } catch {}
+    }
+
+    res.json({
+      present: true,
+      project: name,
+      display_name: target.display_name || name,
+      total_iterations: iterations.length,
+      compiled_iterations: compiledCount,
+      compile_success_rate: iterations.length > 0
+        ? compiledCount / iterations.length
+        : 0,
+      references: { seeded: refs_seeded, auto: refs_auto, total: refs_seeded + refs_auto },
+      recent,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============================================================
 // MIRROR — client-side animated ASCII, server just feeds data
 // The neural.js client polls /oca/emotion, /oca/crm, etc directly

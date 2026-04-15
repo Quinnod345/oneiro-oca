@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sill · OCA design dashboard</title>
+<style>
+:root {
+  --bg: #0a0a0c;
+  --surface: #14141a;
+  --surface-2: #1c1c24;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #e8e6e1;
+  --text-dim: #8a8680;
+  --text-faint: #555048;
+  --accent: #c8955a;
+  --accent-dim: #8f6a3f;
+  --good: #7ab47a;
+  --ok: #c8a45a;
+  --warn: #c86a5a;
+  --font-display: -apple-system, "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --font-serif: "SF Pro", "Iowan Old Style", Georgia, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+body {
+  padding: 48px 56px 120px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 40px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+header h1 {
+  font-size: 42px;
+  font-weight: 200;
+  letter-spacing: -0.01em;
+}
+header h1 .dot {
+  color: var(--accent);
+}
+header .status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+header .status.live::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--good);
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+.grid.wide {
+  grid-template-columns: 1fr;
+}
+
+section.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 28px;
+}
+section.panel h2 {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+}
+
+.target-display h3 {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.target-display .kicker {
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  margin-bottom: 14px;
+}
+.target-display p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  font-family: var(--font-serif);
+}
+.target-display .thesis {
+  color: var(--text);
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  margin: 16px 0;
+  font-style: italic;
+}
+.target-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.target-meta .cell label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+.target-meta .cell value {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 400;
+}
+
+/* Stats row */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.stat {
+  background: var(--surface-2);
+  padding: 16px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.stat .label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+.stat .value {
+  font-size: 28px;
+  font-weight: 200;
+  color: var(--text);
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+.stat .value.small {
+  font-size: 18px;
+}
+.stat .value .unit {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  margin-left: 4px;
+  font-weight: 400;
+}
+.stat .value.good { color: var(--good); }
+.stat .value.warn { color: var(--warn); }
+
+/* Sparkline */
+.sparkline {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.sparkline .axis-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+.sparkline svg {
+  width: 100%;
+  height: 48px;
+  display: block;
+}
+
+/* Iteration list */
+.iteration-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+.iteration-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.iteration-row:nth-child(even) {
+  background: var(--surface-2);
+}
+.iteration-row .name {
+  color: var(--text);
+  font-weight: 500;
+}
+.iteration-row .files {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.iteration-row .indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.iteration-row.compiled .indicator {
+  background: var(--good);
+}
+.iteration-row .indicator::before {
+  content: "";
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.15;
+  margin: -3px;
+}
+
+.empty {
+  color: var(--text-faint);
+  font-style: italic;
+  padding: 32px 0;
+  text-align: center;
+  font-family: var(--font-serif);
+}
+
+.footer-note {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sill<span class="dot">.</span></h1>
+  <div class="status" id="status">connecting…</div>
+</header>
+
+<section class="panel" id="target-panel" style="margin-bottom: 32px;">
+  <h2>active target</h2>
+  <div class="target-display" id="target-display">
+    <div class="empty">loading target-project.json…</div>
+  </div>
+</section>
+
+<div class="grid">
+
+  <section class="panel">
+    <h2>iteration flywheel</h2>
+    <div class="stats" style="grid-template-columns: 1fr 1fr;">
+      <div class="stat">
+        <div class="label">total iterations</div>
+        <div class="value" id="iter-total">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">compile success</div>
+        <div class="value small" id="iter-compile-rate">—</div>
+      </div>
+    </div>
+    <div class="sparkline">
+      <div class="axis-label">
+        <span>compile rate by iter</span>
+        <span id="iter-range"></span>
+      </div>
+      <svg id="iter-sparkline" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>reference pool</h2>
+    <div class="stats" style="grid-template-columns: 1fr 1fr;">
+      <div class="stat">
+        <div class="label">seeded</div>
+        <div class="value" id="refs-seeded">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">auto-injected</div>
+        <div class="value" id="refs-auto">—</div>
+      </div>
+    </div>
+    <div class="sparkline">
+      <div class="axis-label">
+        <span>grows when self_train hits overall ≥ 0.80 on swiftui</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>self_train engine</h2>
+    <div class="stats" style="grid-template-columns: 1fr 1fr;">
+      <div class="stat">
+        <div class="label">total cycles</div>
+        <div class="value" id="st-cycles">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">retrains</div>
+        <div class="value" id="st-retrains">—</div>
+      </div>
+    </div>
+    <div class="stats" style="grid-template-columns: 1fr; margin-top: 12px;">
+      <div class="stat">
+        <div class="label">samples collected</div>
+        <div class="value small" id="st-samples">—</div>
+      </div>
+    </div>
+    <div class="sparkline">
+      <div class="axis-label">
+        <span>recent sample scores</span>
+        <span id="st-range"></span>
+      </div>
+      <svg id="st-sparkline" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>recent iterations</h2>
+    <div class="iteration-list" id="iter-list">
+      <div class="empty">no iterations yet</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="footer-note">
+  polls <span style="color:var(--accent);">/oca/design/target-project</span>,
+  <span style="color:var(--accent);">/oca/design/self-train/state</span>,
+  <span style="color:var(--accent);">/oca/design/active-project/iterations</span> · refreshes every 5s
+</div>
+
+<script>
+const API_BASE = '';
+const REFRESH_MS = 5000;
+let lastFetch = 0;
+
+async function fetchJSON(path) {
+  const r = await fetch(API_BASE + path, { cache: 'no-store' });
+  if (!r.ok) throw new Error(path + ' → ' + r.status);
+  return r.json();
+}
+
+function renderTarget(data) {
+  const el = document.getElementById('target-display');
+  if (!data?.present || !data.target) {
+    el.innerHTML = '<div class="empty">no target project derived yet</div>';
+    return;
+  }
+  const t = data.target;
+  const fmt = (arr) => (arr || []).join(' · ') || '—';
+  el.innerHTML = `
+    <div class="kicker">${t.name || 'unnamed'}</div>
+    <h3>${t.display_name || t.name}</h3>
+    <p>${t.problem_statement || ''}</p>
+    <div class="thesis">${t.thesis || ''}</div>
+    ${t.differentiation ? `<p><strong style="color:var(--text);font-weight:500;">differentiation:</strong> ${t.differentiation}</p>` : ''}
+    <div class="target-meta">
+      <div class="cell"><label>monetization</label><value>${t.monetization || '—'}</value></div>
+      <div class="cell"><label>ship target</label><value>${t.ship_target_days || '—'} days</value></div>
+      <div class="cell"><label>constraints</label><value style="font-size:11px;">${fmt(t.constraints)}</value></div>
+    </div>
+  `;
+}
+
+function renderStats(selfTrain, iters) {
+  // iteration stats
+  if (iters?.present) {
+    document.getElementById('iter-total').textContent = iters.total_iterations ?? 0;
+    const rate = iters.compile_success_rate ?? 0;
+    const rateEl = document.getElementById('iter-compile-rate');
+    rateEl.textContent = `${(rate * 100).toFixed(0)}%`;
+    rateEl.className = 'value small ' + (rate >= 0.7 ? 'good' : rate >= 0.4 ? '' : 'warn');
+
+    // references stats
+    const refs = iters.references || { seeded: 0, auto: 0, total: 0 };
+    document.getElementById('refs-seeded').textContent = refs.seeded ?? 0;
+    document.getElementById('refs-auto').textContent = refs.auto ?? 0;
+
+    // recent iters list
+    const listEl = document.getElementById('iter-list');
+    if (!iters.recent || iters.recent.length === 0) {
+      listEl.innerHTML = '<div class="empty">no iterations yet</div>';
+    } else {
+      listEl.innerHTML = iters.recent.map(i => `
+        <div class="iteration-row ${i.compiled ? 'compiled' : ''}">
+          <span class="name">${i.name}</span>
+          <span class="files">${i.swift_count} swift · ${i.png_count} png</span>
+          <span class="indicator"></span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // self-train stats
+  if (selfTrain?.present) {
+    document.getElementById('st-cycles').textContent = selfTrain.total_cycles ?? 0;
+    document.getElementById('st-samples').textContent = selfTrain.total_samples ?? 0;
+    document.getElementById('st-retrains').textContent = selfTrain.retrains ?? 0;
+
+    const scores = selfTrain.recent_scores || [];
+    document.getElementById('st-range').textContent = scores.length > 0
+      ? `min ${Math.min(...scores).toFixed(2)} · max ${Math.max(...scores).toFixed(2)}`
+      : '';
+    drawSparkline('st-sparkline', scores, 0, 1);
+  }
+
+  // iteration sparkline — plot compiled(1)/failed(0) across ALL iterations
+  // so you see the compile rate trending over time
+  if (iters?.present && iters.recent) {
+    // recent is newest first; reverse so time flows left→right on the chart
+    const series = iters.recent.slice().reverse().map(i => i.compiled ? 1 : 0);
+    drawSparkline('iter-sparkline', series, 0, 1);
+    document.getElementById('iter-range').textContent = `${iters.recent.length} recent`;
+  }
+}
+
+function drawSparkline(svgId, data, minVal, maxVal) {
+  const svg = document.getElementById(svgId);
+  if (!svg || !data || data.length === 0) {
+    if (svg) svg.innerHTML = '';
+    return;
+  }
+  const W = 200, H = 40, PAD = 2;
+  const range = (maxVal ?? Math.max(...data)) - (minVal ?? Math.min(...data)) || 1;
+  const step = (W - PAD * 2) / Math.max(1, data.length - 1);
+  const points = data.map((v, i) => {
+    const x = PAD + i * step;
+    const y = H - PAD - ((v - minVal) / range) * (H - PAD * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const pathD = `M ${points.join(' L ')}`;
+  // Area fill below the line
+  const areaD = `${pathD} L ${W - PAD},${H - PAD} L ${PAD},${H - PAD} Z`;
+  svg.innerHTML = `
+    <path d="${areaD}" fill="rgba(200, 149, 90, 0.15)" />
+    <path d="${pathD}" stroke="var(--accent)" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+    ${data.map((v, i) => {
+      const x = PAD + i * step;
+      const y = H - PAD - ((v - minVal) / range) * (H - PAD * 2);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" fill="var(--accent)"/>`;
+    }).join('')}
+  `;
+}
+
+async function refresh() {
+  const statusEl = document.getElementById('status');
+  try {
+    const [target, selfTrain, iters] = await Promise.all([
+      fetchJSON('/oca/design/target-project').catch(e => ({ error: e.message })),
+      fetchJSON('/oca/design/self-train/state').catch(e => ({ error: e.message })),
+      fetchJSON('/oca/design/active-project/iterations').catch(e => ({ error: e.message })),
+    ]);
+    renderTarget(target);
+    renderStats(selfTrain, iters);
+    lastFetch = Date.now();
+    statusEl.textContent = 'live · ' + new Date().toLocaleTimeString();
+    statusEl.classList.add('live');
+  } catch (e) {
+    statusEl.textContent = 'error: ' + e.message;
+    statusEl.classList.remove('live');
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
