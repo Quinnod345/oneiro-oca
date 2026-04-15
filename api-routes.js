@@ -1314,6 +1314,82 @@ ocaRouter.post('/oca/llm-reset', async (req, res) => {
 });
 
 // ============================================================
+// DIAGNOSTIC LOGS — in-memory ring buffer exposed for self-repair
+// ============================================================
+
+ocaRouter.get('/oca/logs', async (req, res) => {
+  try {
+    const diag = (await import('./diagnostic-log.js')).default;
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 50));
+    const level = req.query.level || null;
+    const source = req.query.source || null;
+    const since = req.query.since || null;
+    res.json({
+      summary: diag.summary(),
+      entries: diag.recent(limit, { level, source, since }),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/logs/summary', async (req, res) => {
+  try {
+    const diag = (await import('./diagnostic-log.js')).default;
+    res.json(diag.summary());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// DESIGN MODEL — flywheel state + target project surface
+// ============================================================
+
+ocaRouter.get('/oca/design/self-train/state', async (req, res) => {
+  try {
+    const { readFileSync, existsSync } = await import('fs');
+    const { dirname, join } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const statePath = join(here, 'design-model', 'data', 'self-train-state.json');
+    if (!existsSync(statePath)) {
+      return res.json({ present: false });
+    }
+    const raw = readFileSync(statePath, 'utf-8');
+    const state = JSON.parse(raw);
+    res.json({
+      present: true,
+      total_cycles: state.totalCycles || 0,
+      total_samples: state.totalSamples || 0,
+      retrains: state.retrains || 0,
+      last_retrain: state.lastRetrain || null,
+      avg_overall: state.avgOverall || 0,
+      recent_scores: (state.scores || []).slice(-20),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+ocaRouter.get('/oca/design/target-project', async (req, res) => {
+  try {
+    const { readFileSync, existsSync } = await import('fs');
+    const { dirname, join } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const targetPath = join(here, 'design-model', 'target-project.json');
+    if (!existsSync(targetPath)) {
+      return res.json({ present: false });
+    }
+    const target = JSON.parse(readFileSync(targetPath, 'utf-8'));
+    res.json({ present: true, target });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
 // MIRROR — client-side animated ASCII, server just feeds data
 // The neural.js client polls /oca/emotion, /oca/crm, etc directly
 // No server-side rendering needed anymore.

@@ -3,7 +3,7 @@
 // Main OCA entry: grounded, hypothesis-driven cognition + HTTP API on :3333
 // Also bootstraps the HTTP API (port 3333) — this IS the sole primary process.
 import { pool, emit, on } from './event-bus.js';
-import oca from './index.js';
+import oca, { design as designModel } from './index.js';
 import prospective from './memory/prospective.js';
 import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
@@ -19,6 +19,18 @@ import { execSync } from 'child_process';
 import { acquireProcessLock, releaseProcessLock } from '../process-lock.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync, readFileSync } from 'fs';
+import diag from './diagnostic-log.js';
+
+// Intercept console.error so ALL errors flow into the diagnostic ring buffer
+const _origConsoleError = console.error.bind(console);
+console.error = (...args) => {
+  _origConsoleError(...args);
+  const msg = args.map(a => (a instanceof Error ? a.message : String(a))).join(' ');
+  const sourceMatch = msg.match(/\[([^\]]+)\]/);
+  diag.error(sourceMatch ? sourceMatch[1] : 'oca', msg);
+};
+
 const PORT = 3333;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -217,14 +229,27 @@ function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode, current
   };
 }
 
-// Interoceptive sensing
+// Interoceptive sensing (fallback — prefer Swift sensory / shared state)
+function parsePmsetInternalBatteryPercent(pmsetOut) {
+  const s = String(pmsetOut || '');
+  const internal = s.match(/InternalBattery[^;\n]*?(\d+)%/);
+  if (internal) return parseInt(internal[1], 10);
+  const m = s.match(/-InternalBattery-\d+[^\n]*?(\d+)%/);
+  if (m) return parseInt(m[1], 10);
+  const all = [...s.matchAll(/(\d+)%/g)].map((x) => parseInt(x[1], 10));
+  if (all.length === 0) return null;
+  return Math.max(...all);
+}
+
 function getInteroception() {
   try {
-    const battery = execSync("pmset -g batt 2>/dev/null | grep -o '[0-9]*%' | tr -d '%'", { encoding: 'utf8' }).trim();
+    const pmsetOut = execSync('pmset -g batt 2>/dev/null', { encoding: 'utf8' });
+    const pct = parsePmsetInternalBatteryPercent(pmsetOut);
+    const battery = pct != null && !Number.isNaN(pct) ? pct : 100;
     const cpuRaw = execSync("ps -A -o %cpu | awk '{s+=$1} END {print s/100}'", { encoding: 'utf8', timeout: 3000 }).trim();
     const memRaw = execSync("memory_pressure 2>/dev/null | grep 'System-wide' | grep -o '[0-9]*%' | tr -d '%'", { encoding: 'utf8', timeout: 3000 }).trim();
     return {
-      battery: parseInt(battery || '100') / 100,
+      battery: battery / 100,
       cpu: Math.min(1, parseFloat(cpuRaw || '0')),
       memory: parseInt(memRaw || '0') / 100,
       thermal: 0
@@ -1165,7 +1190,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       }
     } catch (e) {
       console.error('[oca] dream execution error:', e.message);
-      dreamExecutionCooldown = 60; // Back off on error
+      dreamExecutionCooldown = 20; // Shorter backoff so dreams recover faster
     }
   }
   
@@ -1697,8 +1722,30 @@ const CORE_DRIVES = [
   }
 ];
 
+function getActiveDrives() {
+  // Start with the baked-in CORE_DRIVES, then append a target-project-specific
+  // drive if one has been derived.  This keeps the singular-project focus
+  // weighted above the generic "build beautiful Mac apps" drive.
+  const drives = [...CORE_DRIVES];
+  try {
+    const targetPath = join(__dirname, 'design-model', 'target-project.json');
+    if (existsSync(targetPath)) {
+      const target = JSON.parse(readFileSync(targetPath, 'utf-8'));
+      if (target?.name && target?.display_name) {
+        drives.push({
+          content: `Ship ${target.display_name} — the singular Mac app I am building. Every build accretes into active-project/${target.name}/iterations/. No new app ideas until this one is shipped or I file a target_revision dream with clear justification.`,
+          type: 'goal',
+          weight: 0.95,
+          lifecycle_state: 'dispatched',
+        });
+      }
+    }
+  } catch {}
+  return drives;
+}
+
 async function ensureCoreDrives() {
-  for (const drive of CORE_DRIVES) {
+  for (const drive of getActiveDrives()) {
     try {
       // Check if this core drive exists (fuzzy match on key phrases)
       const keywords = drive.content.slice(0, 40);
@@ -1815,6 +1862,174 @@ function startConsolidationSchedule() {
   // First consolidation after a short initial delay (60s) to let the system warm up
   setTimeout(run, 60 * 1000);
   console.log('[oca] 📚 consolidation schedule started (every 10m, independent of tick)');
+}
+
+// ═══════════════════════════════════════════════════
+// SELF-TRAIN DAEMON
+// Runs `self_train.py --forever` as a supervised subprocess. Sonnet/Opus
+// generate → render (html/swiftui/react) → Opus grades → MLX retrains the
+// design head every 10 cycles. This is the REAL engine per VISION.md;
+// `flywheel.js` is superseded. We spawn once at boot, capture stdout,
+// auto-restart on crash (exp-backoff capped at 10 min), and pause with
+// SIGSTOP / resume with SIGCONT during alert mode so the gateway isn't
+// contended while Quinn is actively at the keyboard.
+// ═══════════════════════════════════════════════════
+
+const SELF_TRAIN_RESTART_BASE_MS = 10_000;   // 10s base delay on crash
+const SELF_TRAIN_RESTART_MAX_MS = 10 * 60_000; // cap at 10 min
+const SELF_TRAIN_ALERT_POLL_MS = 30_000;     // re-check mode every 30s while paused
+
+let selfTrainProcess = null;
+let selfTrainPaused = false;
+let selfTrainRestartAttempt = 0;
+let selfTrainLastStart = 0;
+let selfTrainDesired = false;             // user/startup intent — should it be running?
+let selfTrainMilestoneCycle = 0;          // log every 50 cycles
+
+function parseSelfTrainLine(line) {
+  // Expected structured line: "[self-train] cycle N: <lang> <type> score=X.XX ..."
+  // Self_train.py emits other lines too; we pass them through verbatim.
+  const m = line.match(/^\[self-train\]\s+cycle\s+(\d+):\s+(\w+)\s+(\S+)\s+score=([\d.]+)/);
+  if (!m) return null;
+  return {
+    cycle: parseInt(m[1], 10),
+    language: m[2],
+    kind: m[3],
+    score: parseFloat(m[4]),
+  };
+}
+
+async function spawnSelfTrain() {
+  const { spawn } = await import('child_process');
+  const selfTrainScript = join(__dirname, 'design-model', 'self_train.py');
+  const child = spawn('python3', [selfTrainScript, '--forever'], {
+    cwd: join(__dirname, 'design-model'),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONDONTWRITEBYTECODE: '1' },
+    detached: false, // stay in our process group so SIGTERM propagates
+  });
+
+  selfTrainProcess = child;
+  selfTrainLastStart = Date.now();
+  console.log(`[oca] 🎨 self-train daemon started pid=${child.pid}`);
+
+  const handleLine = (stream) => (buf) => {
+    const text = buf.toString();
+    for (const raw of text.split('\n')) {
+      const line = raw.trimEnd();
+      if (!line) continue;
+      // Structured emission → rich log + emotion feedback
+      const parsed = parseSelfTrainLine(line);
+      if (parsed) {
+        console.log(
+          `[oca] 🎨 self-train #${parsed.cycle} ${parsed.language}/${parsed.kind} → ${parsed.score.toFixed(3)}`
+        );
+        // Emotion feedback on strong samples
+        if (parsed.score >= 0.8) {
+          try { oca.layers.emotion.processSuccess?.('self_train_strong'); } catch {}
+        }
+        // Milestone log every 50 cycles
+        if (parsed.cycle >= selfTrainMilestoneCycle + 50) {
+          selfTrainMilestoneCycle = parsed.cycle;
+          console.log(`[oca] 🎨 self-train milestone: ${parsed.cycle} cycles`);
+        }
+      } else if (line.startsWith('[retrain]') || /val_loss/.test(line)) {
+        console.log(`[oca] 🎨 self-train ${line}`);
+      } else if (stream === 'stderr' && line.length > 0) {
+        // Suppress noisy warnings but keep real errors
+        if (!/DeprecationWarning|FutureWarning|UserWarning/.test(line)) {
+          console.log(`[oca] 🎨 self-train stderr: ${line.slice(0, 200)}`);
+        }
+      }
+      // Silently drop other stdout (tqdm bars, progress lines, etc.)
+    }
+  };
+
+  child.stdout.on('data', handleLine('stdout'));
+  child.stderr.on('data', handleLine('stderr'));
+
+  child.on('exit', (code, signal) => {
+    const ageMs = Date.now() - selfTrainLastStart;
+    console.log(
+      `[oca] 🎨 self-train exited code=${code} signal=${signal} after ${Math.round(ageMs / 1000)}s`
+    );
+    selfTrainProcess = null;
+    selfTrainPaused = false;
+
+    // Reset backoff if it ran successfully for > 2 min (healthy exit)
+    if (ageMs > 120_000) selfTrainRestartAttempt = 0;
+
+    if (!selfTrainDesired) return; // intentional shutdown
+
+    // Exponential backoff on repeated failures
+    const delay = Math.min(
+      SELF_TRAIN_RESTART_BASE_MS * Math.pow(2, selfTrainRestartAttempt),
+      SELF_TRAIN_RESTART_MAX_MS
+    );
+    selfTrainRestartAttempt++;
+    console.log(`[oca] 🎨 self-train restart scheduled in ${Math.round(delay / 1000)}s (attempt ${selfTrainRestartAttempt})`);
+    setTimeout(() => { if (selfTrainDesired) spawnSelfTrain().catch(e => console.error('[oca] 🎨 self-train respawn error:', e.message)); }, delay);
+  });
+
+  child.on('error', (err) => {
+    console.error('[oca] 🎨 self-train spawn error:', err.message);
+  });
+}
+
+function startSelfTrainSchedule() {
+  selfTrainDesired = true;
+
+  // Monitor alert mode and pause/resume the daemon so it doesn't contend for
+  // the Anthropic gateway while Quinn is actively working.
+  const modeMonitor = () => {
+    if (!selfTrainDesired) return;
+    const mode = oca.layers.executive.determineMode?.(
+      previousPresence,
+      oca.layers.emotion.getState(),
+      0
+    );
+    const shouldPause = mode === 'alert';
+
+    if (selfTrainProcess && shouldPause && !selfTrainPaused) {
+      try {
+        process.kill(selfTrainProcess.pid, 'SIGSTOP');
+        selfTrainPaused = true;
+        console.log('[oca] 🎨 self-train paused (alert mode)');
+      } catch (e) {
+        console.warn('[oca] 🎨 self-train SIGSTOP failed:', e.message);
+      }
+    } else if (selfTrainProcess && !shouldPause && selfTrainPaused) {
+      try {
+        process.kill(selfTrainProcess.pid, 'SIGCONT');
+        selfTrainPaused = false;
+        console.log('[oca] 🎨 self-train resumed (idle)');
+      } catch (e) {
+        console.warn('[oca] 🎨 self-train SIGCONT failed:', e.message);
+      }
+    }
+
+    setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
+  };
+
+  // First spawn after a short delay so consolidation and init settle
+  setTimeout(() => {
+    spawnSelfTrain().catch(e => console.error('[oca] 🎨 self-train initial spawn error:', e.message));
+    setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
+  }, 60_000);
+
+  console.log('[oca] 🎨 self-train schedule armed (daemon boots in 60s)');
+}
+
+// Called from gracefulShutdown so the Python subprocess dies cleanly with us.
+function stopSelfTrain() {
+  selfTrainDesired = false;
+  if (!selfTrainProcess) return;
+  try {
+    if (selfTrainPaused) {
+      try { process.kill(selfTrainProcess.pid, 'SIGCONT'); } catch {}
+    }
+    process.kill(selfTrainProcess.pid, 'SIGTERM');
+  } catch {}
 }
 
 // ═══════════════════════════════════════════════════
@@ -1955,6 +2170,47 @@ async function start() {
   // Start consolidation on its own independent timer
   startConsolidationSchedule();
 
+  // Bring up the Phase 2b design inference server (MobileNet + design-head-v2).
+  // Non-fatal — if the Python deps are missing, evaluate.js falls back to the
+  // JS MLP and the flywheel still runs, just with the weaker scorer.
+  try {
+    const serverResult = await designModel.initServer();
+    if (serverResult?.status === 'started') {
+      console.log('[oca] 🎨 design inference server started (Phase 2b / design-head-v2)');
+    } else if (serverResult?.status === 'already_running') {
+      console.log('[oca] 🎨 design inference server already running');
+    } else if (serverResult?.status === 'failed') {
+      console.warn(`[oca] 🎨 design server failed to start: ${serverResult.error?.slice(0, 120)} — flywheel will use JS MLP fallback`);
+    }
+  } catch (e) {
+    console.warn('[oca] 🎨 design server init error:', e.message);
+  }
+
+  // Derive the singular target project if we don't already have one.
+  // This closes the "emotion → design direction → specific app" loop at
+  // boot: instead of a hardcoded target, OCA picks based on its own
+  // undercurrents.  Subsequent boots load the existing target (no redo).
+  try {
+    const targetPath = join(__dirname, 'design-model', 'target-project.json');
+    if (!existsSync(targetPath)) {
+      console.log('[oca] 🎯 no target project — deriving from undercurrents...');
+      const { deriveTargetProject } = await import('./design-model/target-derivation.js');
+      const { default: llmMod } = await import('./llm.js');
+      const target = await deriveTargetProject({ oca, llm: llmMod, pool });
+      console.log(`[oca] 🎯 target project derived: ${target.display_name} (${target.name}) — ${target.thesis?.slice(0, 80) || ''}`);
+    } else {
+      try {
+        const existing = JSON.parse(readFileSync(targetPath, 'utf-8'));
+        console.log(`[oca] 🎯 target project loaded: ${existing.display_name} (${existing.name})`);
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('[oca] 🎯 target project derivation failed:', e.message);
+  }
+
+  // Start self_train.py daemon — VISION.md's real engine
+  startSelfTrainSchedule();
+
   console.log('[oca] cognitive loop starting...');
 
   const loop = async () => {
@@ -2007,6 +2263,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 async function gracefulShutdown(signal) {
+  try { stopSelfTrain(); } catch {}
   try { neuralMLP.save(); } catch {}
   try {
     await pool.query(
