@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --bedrock: #2c1810;
+            --sedimentary: #4a3728;
+            --metamorphic: #6b4e3d;
+            --igneous: #8b6447;
+            --subsoil: #a67c52;
+            --topsoil: #c19a6b;
+            --surface: #ddbf94;
+            --air: #f5f0e8;
+            
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --text-light: #ffffff;
+            --accent: #d4af37;
+            --warning: #c44536;
+            --success: #2d5016;
+            
+            --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --border-radius: 8px;
+            --border-radius-lg: 16px;
+            
+            --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: var(--font-system);
+            background: linear-gradient(135deg, var(--air) 0%, #e8dcc0 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            position: relative;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            padding: 32px 24px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .layers {
+            flex: 1;
+            padding: 24px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer {
+            height: 80px;
+            margin: 2px 0;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .layer:hover {
+            border-left-color: var(--accent);
+        }
+
+        .layer.active {
+            border-left-color: var(--accent);
+            background: rgba(212, 175, 55, 0.1);
+        }
+
+        .layer-content {
+            padding: 16px 24px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .layer-name {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .layer-amount {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .layer-percentage {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 2px;
+        }
+
+        /* Layer colors */
+        .layer:nth-child(1) { background-color: var(--surface); color: var(--text-primary); }
+        .layer:nth-child(2) { background-color: var(--topsoil); color: var(--text-primary); }
+        .layer:nth-child(3) { background-color: var(--subsoil); color: var(--text-primary); }
+        .layer:nth-child(4) { background-color: var(--igneous); color: var(--text-light); }
+        .layer:nth-child(5) { background-color: var(--metamorphic); color: var(--text-light); }
+        .layer:nth-child(6) { background-color: var(--sedimentary); color: var(--text-light); }
+        .layer:nth-child(7) { background-color: var(--bedrock); color: var(--text-light); }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .top-bar {
+            height: 80px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+        }
+
+        .top-bar h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .total-budget {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .budget-amount {
+            font-family: var(--font-mono);
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .budget-status {
+            padding: 8px 16px;
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            font-weight: 500;
+            background: var(--success);
+            color: white;
+        }
+
+        .visualization {
+            flex: 1;
+            padding: 32px;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 32px;
+        }
+
+        .geological-view {
+            background: white;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-elevated);
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cross-section {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+        }
+
+        .geological-layer {
+            width: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            transition: all 0.3s ease;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .geological-layer:hover {
+            transform: scale(1.02);
+            z-index: 10;
+            box-shadow: var(--shadow-elevated);
+        }
+
+        .layer-label {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .layer-title {
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .layer-spend {
+            font-family: var(--font-mono);
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .stats-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .breakdown-list {
+            list-style: none;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .breakdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .breakdown-category {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .breakdown-amount {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>Geological Spending</h1>
+                <p>Track expenses by necessity depth — surface luxuries to bedrock essentials</p>
+            </div>
+            
+            <div class="layers">
+                <div class="layer active">
+                    <div class="layer-content">
+                        <div class="layer-name">Surface • Luxuries</div>
+                        <div class="layer-amount">$324</div>
+                        <div class="layer-percentage">8.1% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Topsoil • Entertainment</div>
+                        <div class="layer-amount">$456</div>
+                        <div class="layer-percentage">11.4% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Subsoil • Dining Out</div>
+                        <div class="layer-amount">$678</div>
+                        <div class="layer-percentage">16.9% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Igneous • Transportation</div>
+                        <div class="layer-amount">$892</div>
+                        <div class="layer-percentage">22.3% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Metamorphic • Groceries</div>
+                        <div class="layer-amount">$567</div>
+                        <div class="layer-percentage">14.2% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Sedimentary • Utilities</div>
+                        <div class="layer-amount">$445</div>
+                        <div class="layer-percentage">11.1% of budget</div>
+                    </div>
+                </div>
+                
+                <div class="layer">
+                    <div class="layer-content">
+                        <div class="layer-name">Bedrock • Housing</div>
+                        <div class="layer-amount">$1,638</div>
+                        <div class="layer-percentage">40.9% of budget</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="top-bar">
+                <h2>Monthly Cross-Section</h2>
+                <div class="total-budget">
+                    <div class="budget-amount">$4,000</div>
+                    <div class="budget-status">Within Budget</div>
+                </div>
+            </div>
+            
+            <div class="visualization">
+                <div class="geological-view">
+                    <div class="cross-section">
+                        <div class="geological-layer" style="height: 8.1%; background-color: var(--surface); color: var(--text-primary);">
+                            <div class="layer-label">
+                                <div class="layer-title">Surface Luxuries</div>
+                                <div class="layer-spend">$324</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 11.4%; background-color: var(--topsoil); color: var(--text-primary);">
+                            <div class="layer-label">
+                                <div class="layer-title">Entertainment</div>
+                                <div class="layer-spend">$456</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 16.9%; background-color: var(--subsoil); color: var(--text-primary);">
+                            <div class="layer-label">
+                                <div class="layer-title">Dining Out</div>
+                                <div class="layer-spend">$678</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 22.3%; background-color: var(--igneous); color: var(--text-light);">
+                            <div class="layer-label">
+                                <div class="layer-title">Transportation</div>
+                                <div class="layer-spend">$892</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 14.2%; background-color: var(--metamorphic); color: var(--text-light);">
+                            <div class="layer-label">
+                                <div class="layer-title">Groceries</div>
+                                <div class="layer-spend">$567</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 11.1%; background-color: var(--sedimentary); color: var(--text-light);">
+                            <div class="layer-label">
+                                <div class="layer-title">Utilities</div>
+                                <div class="layer-spend">$445</div>
+                            </div>
+                        </div>
+                        
+                        <div class="geological-layer" style="height: 16%; background-color: var(--bedrock); color: var(--text-light);">
+                            <div class="layer-label">
+                                <div class="layer-title">Housing (Bedrock)</div>
+                                <div class="layer-spend">$1,638</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-panel">
+                    <div class="stat-card">
+                        <div class="stat-title">Discretionary</div>
+                        <div class="stat-value">$1,458</div>
+                        <ul class="breakdown-list">
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Luxuries</span>
+                                <span class="breakdown-amount">$324</span>
+                            </li>
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Entertainment</span>
+                                <span class="breakdown-amount">$456</span>
+                            </li>
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Dining Out</span>
+                                <span class="breakdown-amount">$678</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-title">Essential</div>
+                        <div class="stat-value">$2,542</div>
+                        <ul class="breakdown-list">
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Housing</span>
+                                <span class="breakdown-amount">$1,638</span>
+                            </li>
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Utilities</span>
+                                <span class="breakdown-amount">$445</span>
+                            </li>
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Groceries</span>
+                                <span class="breakdown-amount">$567</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-title">Depth Ratio</div>
+                        <div class="stat-value">36:64</div>
+                        <ul class="breakdown-list">
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Surface to Subsoil</span>
+                                <span class="breakdown-amount">36%</span>
+                            </li>
+                            <li class="breakdown-item">
+                                <span class="breakdown-category">Igneous to Bedrock</span>
+                                <span class="breakdown-amount">64%</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

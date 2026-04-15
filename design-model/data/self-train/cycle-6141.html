@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --text-tertiary: #999999;
+            --border-light: #e8e8e8;
+            --border-medium: #d4d4d4;
+            --accent-blue: #2563eb;
+            --accent-green: #059669;
+            --accent-purple: #7c3aed;
+            --accent-orange: #ea580c;
+            --accent-red: #dc2626;
+            --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.04);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --shadow-heavy: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            height: 56px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-medium);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .toolbar-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .view-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .control-button {
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .control-button:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .search-input {
+            width: 240px;
+            height: 36px;
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-md);
+            padding: 0 12px;
+            font-size: 14px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 90%, rgba(5, 150, 105, 0.03) 0%, transparent 50%);
+        }
+
+        .topic-cluster {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .cluster-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-light);
+        }
+
+        .file-item {
+            position: absolute;
+            width: 140px;
+            height: 100px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            transform-origin: center center;
+        }
+
+        .file-item:hover {
+            transform: scale(1.05);
+            box-shadow: var(--shadow-heavy);
+            border-color: var(--border-medium);
+            z-index: 10;
+        }
+
+        .file-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .file-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.3;
+            margin-bottom: 4px;
+        }
+
+        .file-meta {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-top: auto;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border-light), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Topic clusters positioning */
+        .cluster-design {
+            top: 140px;
+            left: 200px;
+        }
+
+        .cluster-development {
+            top: 300px;
+            left: 500px;
+        }
+
+        .cluster-research {
+            top: 200px;
+            left: 900px;
+        }
+
+        .cluster-planning {
+            top: 500px;
+            left: 300px;
+        }
+
+        .cluster-documentation {
+            top: 450px;
+            left: 750px;
+        }
+
+        .cluster-resources {
+            top: 650px;
+            left: 600px;
+        }
+
+        /* File positioning within clusters */
+        .file-design-1 { top: 170px; left: 120px; }
+        .file-design-2 { top: 160px; left: 280px; }
+        .file-design-3 { top: 240px; left: 150px; }
+        
+        .file-dev-1 { top: 330px; left: 420px; }
+        .file-dev-2 { top: 320px; left: 580px; }
+        .file-dev-3 { top: 400px; left: 480px; }
+        
+        .file-research-1 { top: 230px; left: 820px; }
+        .file-research-2 { top: 220px; left: 980px; }
+        .file-research-3 { top: 300px; left: 880px; }
+        
+        .file-planning-1 { top: 530px; left: 220px; }
+        .file-planning-2 { top: 520px; left: 380px; }
+        
+        .file-docs-1 { top: 480px; left: 670px; }
+        .file-docs-2 { top: 470px; left: 830px; }
+        
+        .file-resources-1 { top: 680px; left: 520px; }
+        .file-resources-2 { top: 670px; left: 680px; }
+
+        /* File type colors */
+        .type-figma { background: var(--accent-purple); }
+        .type-sketch { background: var(--accent-orange); }
+        .type-pdf { background: var(--accent-red); }
+        .type-code { background: var(--accent-blue); }
+        .type-doc { background: var(--accent-green); }
+        .type-sheet { background: var(--accent-green); }
+
+        .minimap {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 120px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-medium);
+            overflow: hidden;
+        }
+
+        .minimap-content {
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                var(--border-light) 10px,
+                var(--border-light) 11px
+            );
+            opacity: 0.3;
+        }
+
+        .zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .zoom-button {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-light);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .zoom-button:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <div class="toolbar-title">Spatial Organizer</div>
+            <input type="text" class="search-input" placeholder="Search files...">
+        </div>
+        <div class="view-controls">
+            <div class="control-button">⊞</div>
+            <div class="control-button">⊡</div>
+            <div class="control-button">⊟</div>
+        </div>
+    </div>
+
+    <div class="canvas">
+        <!-- Topic Cluster Labels -->
+        <div class="topic-cluster cluster-design">
+            <div class="cluster-label">Design</div>
+        </div>
+        
+        <div class="topic-cluster cluster-development">
+            <div class="cluster-label">Development</div>
+        </div>
+        
+        <div class="topic-cluster cluster-research">
+            <div class="cluster-label">Research</div>
+        </div>
+        
+        <div class="topic-cluster cluster-planning">
+            <div class="cluster-label">Planning</div>
+        </div>
+        
+        <div class="topic-cluster cluster-documentation">
+            <div class="cluster-label">Documentation</div>
+        </div>
+        
+        <div class="topic-cluster cluster-resources">
+            <div class="cluster-label">Resources</div>
+        </div>
+
+        <!-- Design Files -->
+        <div class="file-item file-design-1">
+            <div class="file-icon type-figma">F</div>
+            <div class="file-name">Mobile App Wireframes</div>
+            <div class="file-meta">2.4 MB • 3 days ago</div>
+        </div>
+        
+        <div class="file-item file-design-2">
+            <div class="file-icon type-sketch">S</div>
+            <div class="file-name">Brand Guidelines</div>
+            <div class="file-meta">15.2 MB • 1 week ago</div>
+        </div>
+        
+        <div class="file-item file-design-3">
+            <div class="file-icon type-figma">F</div>
+            <div class="file-name">UI Components</div>
+            <div class="file-meta">8.7 MB • 2 days ago</div>
+        </div>
+
+        <!-- Development Files -->
+        <div class="file-item file-dev-1">
+            <div class="file-icon type-code">JS</div>
+            <div class="file-name">React Components</div>
+            <div class="file-meta">456 KB • 1 day ago</div>
+        </div>
+        
+        <div class="file-item file-dev-2">
+            <div class="file-icon type-code">CSS</div>
+            <div class="file-name">Style System</div>
+            <div class="file-meta">89 KB • 4 hours ago</div>
+        </div>
+        
+        <div class="file-item file-dev-3">
+            <div class="file-icon type-code">JSON</div>
+            <div class="file-name">API Schema</div>
+            <div class="file-meta">23 KB • 6 hours ago</div>
+        </div>
+
+        <!-- Research Files -->
+        <div class="file-item file-research-1">
+            <div class="file-icon type-pdf">PDF</div>
+            <div class="file-name">User Research Report</div>
+            <div class="file-meta">3.2 MB • 1 week ago</div>
+        </div>
+        
+        <div class="file-item file-research-2">
+            <div class="file-icon type-sheet">XLS</div>
+            <div class="file-name">Analytics Data</div>
+            <div class="file-meta">1.8 MB • 3 days ago</div>
+        </div>
+        
+        <div class="file-item file-research-3">
+            <div class="file-icon type-pdf">PDF</div>
+            <div class="file-name">Market Analysis</div>
+            <div class="file-meta">5.1 MB • 5 days ago</div>
+        </div>
+
+        <!-- Planning Files -->
+        <div class="file-item file-planning-1">
+            <div class="file-icon type-doc">DOC</div>
+            <div class="file-name">Project Timeline</div>
+            <div class="file-meta">245 KB • 2 days ago</div>
+        </div>
+        
+        <div class="file-item file-planning-2">
+            <div class="file-icon type-sheet">XLS</div>
+            <div class="file-name">Resource Planning</div>
+            <div class="file-meta">789 KB • 1 week ago</div>
+        </div>
+
+        <!-- Documentation Files -->
+        <div class="file-item file-docs-1">
+            <div class="file-icon type-doc">MD</div>
+            <div class="file-name">Technical Specs</div>
+            <div class="file-meta">156 KB • 2 days ago</div>
+        </div>
+        
+        <div class="file-item file-docs-2">
+            <div class="file-icon type-pdf">PDF</div>
+            <div class="file-name">Style Guide</div>
+            <div class="file-meta">2.3 MB • 1 week ago</div>
+        </div>
+
+        <!-- Resource Files -->
+        <div class="file-item file-resources-1">
+            <div class="file-icon type-pdf">PDF</div>
+            <div class="file-name">Asset Library</div>
+            <div class="file-meta">12.4 MB • 3 days ago</div>
+        </div>
+        
+        <div class="file-item file-resources-2">
+            <div class="file-icon type-doc">TXT</div>
+            <div class="file-name">Reference Links</div>
+            <div class="file-meta">18 KB • 5 hours ago</div>
+        </div>
+
+        <!-- Connection Lines -->
+        <div class="connection-line" style="top: 220px; left: 260px; width: 160px; transform: rotate(-15deg);"></div>
+        <div class="connection-line" style="top: 380px; left: 560px; width: 120px; transform: rotate(25deg);"></div>
+        <div class="connection-line" style="top: 500px; left: 420px; width: 200px; transform: rotate(-8deg);"></div>
+    </div>
+
+    <div class="minimap">
+        <div class="minimap-content"></div>
+    </div>
+
+    <div class="zoom-controls">
+        <div class="zoom-button">+</div>
+        <div class="zoom-button">−</div>
+        <div class="zoom-button">⌂</div>
+    </div>
+</body>
+</html>

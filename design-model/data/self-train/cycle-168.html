@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --bedrock: #2c1810;
+            --sediment: #3d2b1f;
+            --limestone: #5d4e42;
+            --sandstone: #8b7355;
+            --clay: #a67c52;
+            --topsoil: #b8956a;
+            --surface: #d4c4a8;
+            --fossil: #f4e6d1;
+            --mineral-blue: #4a6fa5;
+            --mineral-green: #5a7c5a;
+            --mineral-amber: #d4a574;
+            --text-primary: #1a1611;
+            --text-secondary: #4a453d;
+            --text-light: #6b635a;
+            --accent: #8b4513;
+            --shadow-deep: rgba(44, 24, 16, 0.4);
+            --shadow-light: rgba(44, 24, 16, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--fossil) 0%, var(--surface) 100%);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 360px 1fr 320px;
+            grid-template-rows: 80px 1fr;
+            grid-template-areas: 
+                "header header header"
+                "layers tracker controls";
+            height: 100vh;
+            gap: 0;
+        }
+
+        .header {
+            grid-area: header;
+            background: var(--fossil);
+            border-bottom: 3px solid var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            box-shadow: 0 4px 12px var(--shadow-light);
+            z-index: 100;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .total-budget {
+            background: var(--mineral-blue);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 18px;
+            box-shadow: 0 2px 8px var(--shadow-deep);
+        }
+
+        .geological-layers {
+            grid-area: layers;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(to bottom,
+                var(--surface) 0%,
+                var(--topsoil) 14.28%,
+                var(--clay) 28.56%,
+                var(--sandstone) 42.84%,
+                var(--limestone) 57.12%,
+                var(--sediment) 71.4%,
+                var(--bedrock) 100%
+            );
+            position: relative;
+        }
+
+        .layer {
+            flex: 1;
+            padding: 20px 24px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--mineral-amber);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .layer.active::before {
+            transform: scaleY(1);
+        }
+
+        .layer:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+
+        .layer-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: white;
+            text-shadow: 1px 1px 2px var(--shadow-deep);
+        }
+
+        .layer-necessity {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .layer-amount {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 1px 1px 2px var(--shadow-deep);
+        }
+
+        .spending-tracker {
+            grid-area: tracker;
+            background: var(--fossil);
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        .category-section {
+            margin-bottom: 32px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px var(--shadow-light);
+            overflow: hidden;
+            border: 1px solid var(--surface);
+        }
+
+        .category-header {
+            padding: 20px 24px;
+            background: var(--surface);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .category-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .category-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--mineral-blue);
+            border-radius: 4px;
+            transition: width 0.6s ease;
+        }
+
+        .progress-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .expense-list {
+            padding: 0;
+        }
+
+        .expense-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s ease;
+        }
+
+        .expense-item:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+
+        .expense-details h4 {
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .expense-date {
+            font-size: 13px;
+            color: var(--text-light);
+        }
+
+        .expense-amount {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .controls-panel {
+            grid-area: controls;
+            background: var(--fossil);
+            padding: 32px 24px;
+            border-left: 2px solid var(--surface);
+        }
+
+        .add-expense {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 16px var(--shadow-light);
+        }
+
+        .add-expense h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--surface);
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--mineral-blue);
+        }
+
+        .add-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--mineral-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px var(--shadow-light);
+        }
+
+        .add-btn:hover {
+            background: #3d5a8a;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow-light);
+        }
+
+        .insights {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 16px var(--shadow-light);
+        }
+
+        .insights h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .insight-item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            font-size: 14px;
+        }
+
+        .insight-item:last-child {
+            border-bottom: none;
+        }
+
+        .insight-label {
+            color: var(--text-light);
+            margin-bottom: 4px;
+        }
+
+        .insight-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <header class="header">
+            <h1>Geological Spending Tracker</h1>
+            <div class="total-budget">$4,200 Total Budget</div>
+        </header>
+
+        <div class="geological-layers">
+            <div class="layer active" data-layer="discretionary">
+                <div class="layer-info">
+                    <h3>Entertainment & Leisure</h3>
+                    <div class="layer-necessity">Surface Layer</div>
+                </div>
+                <div class="layer-amount">$420</div>
+                <div class="depth-indicator">0m</div>
+            </div>
+            
+            <div class="layer" data-layer="lifestyle">
+                <div class="layer-info">
+                    <h3>Lifestyle & Hobbies</h3>
+                    <div class="layer-necessity">Topsoil</div>
+                </div>
+                <div class="layer-amount">$350</div>
+                <div class="depth-indicator">5m</div>
+            </div>
+            
+            <div class="layer" data-layer="dining">
+                <div class="layer-info">
+                    <h3>Dining Out</h3>
+                    <div class="layer-necessity">Clay Layer</div>
+                </div>
+                <div class="layer-amount">$280</div>
+                <div class="depth-indicator">15m</div>
+            </div>
+            
+            <div class="layer" data-layer="transport">
+                <div class="layer-info">
+                    <h3>Transportation</h3>
+                    <div class="layer-necessity">Sandstone</div>
+                </div>
+                <div class="layer-amount">$450</div>
+                <div class="depth-indicator">30m</div>
+            </div>
+            
+            <div class="layer" data-layer="groceries">
+                <div class="layer-info">
+                    <h3>Groceries & Food</h3>
+                    <div class="layer-necessity">Limestone</div>
+                </div>
+                <div class="layer-amount">$600</div>
+                <div class="depth-indicator">50m</div>
+            </div>
+            
+            <div class="layer" data-layer="utilities">
+                <div class="layer-info">
+                    <h3>Utilities & Bills</h3>
+                    <div class="layer-necessity">Sediment</div>
+                </div>
+                <div class="layer-amount">$320</div>
+                <div class="depth-indicator">80m</div>
+            </div>
+            
+            <div class="layer" data-layer="housing">
+                <div class="layer-info">
+                    <h3>Housing & Rent</h3>
+                    <div class="layer-necessity">Bedrock</div>
+                </div>
+                <div class="layer-amount">$1,780</div>
+                <div class="depth-indicator">150m</div>
+            </div>
+        </div>
+
+        <main class="spending-tracker">
+            <div class="category-section">
+                <div class="category-header">
+                    <div class="category-title">Entertainment & Leisure</div>
+                    <div class="category-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 68%;"></div>
+                        </div>
+                        <span class="progress-text">$285 / $420</span>
+                    </div>
+                </div>
+                <div class="expense-list">
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Netflix Subscription</h4>
+                            <div class="expense-date">Today, 2:30 PM</div>
+                        </div>
+                        <div class="expense-amount">$15.99</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Movie Tickets</h4>
+                            <div class="expense-date">Yesterday, 7:45 PM</div>
+                        </div>
+                        <div class="expense-amount">$28.50</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Concert Tickets</h4>
+                            <div class="expense-date">Nov 15, 6:15 PM</div>
+                        </div>
+                        <div class="expense-amount">$125.00</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Video Games</h4>
+                            <div class="expense-date">Nov 12, 3:20 PM</div>
+                        </div>
+                        <div class="expense-amount">$59.99</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Bowling Night</h4>
+                            <div class="expense-date">Nov 8, 8:30 PM</div>
+                        </div>
+                        <div class="expense-amount">$45.50</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="category-section">
+                <div class="category-header">
+                    <div class="category-title">Transportation</div>
+                    <div class="category-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 42%;"></div>
+                        </div>
+                        <span class="progress-text">$189 / $450</span>
+                    </div>
+                </div>
+                <div class="expense-list">
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Gas Station</h4>
+                            <div class="expense-date">Today, 8:15 AM</div>
+                        </div>
+                        <div class="expense-amount">$52.30</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Uber Rides</h4>
+                            <div class="expense-date">Nov 14, 11:20 PM</div>
+                        </div>
+                        <div class="expense-amount">$23.85</div>
+                    </div>
+                    <div class="expense-item">
+                        <div class="expense-details">
+                            <h4>Parking Downtown</h4>
+                            <div class="expense-date">Nov 10, 2:00 PM</div>
+                        </div>
+                        <div class="expense-amount">$18.00</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <aside class="controls-panel">
+            <div class="add-expense">
+                <h3>Add Expense</h3>
+                <form>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" placeholder="Enter expense description">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Geological Layer</label>
+                        <select>
+                            <option>Entertainment & Leisure</option>
+                            <option>Lifestyle & Hobbies</option>
+                            <option>Dining Out</option>
+                            <option>Transportation</option>
+                            <option>Groceries & Food</option>
+                            <option>Utilities & Bills</option>
+                            <option>Housing & Rent</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="add-btn">Add to Layer</button>
+                </form>
+            </div>
+
+            <div class="insights">
+                <h3>Depth Analysis</h3>
+                <div class="insight-item">
+                    <div class="insight-label">Deepest Spending</div>
+                    <div class="insight-value">Housing (Bedrock)</div>
+                </div>
+                <div class="insight-item">
+                    <div class="insight-label">Surface Activity</div>
+                    <div class="insight-value">68% of Entertainment</div>
+                </div>
+                <div class="insight-item">
+                    <div class="insight-label">Core Stability</div>
+                    <div class="insight-value">Essential layers: 64%</div>
+                </div>
+                <div class="insight-item">
+                    <div class="insight-label">Erosion Risk</div>
+                    <div class="insight-value">Low - within limits</div>
+                </div>
+                <div class="insight-item">
+                    <div class="insight-label">Budget Depth</div>
+                    <div class="insight-value">$815 remaining</div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        document.querySelectorAll('.layer').forEach(layer => {
+            layer.addEventListener('click', () => {
+                document.querySelectorAll('.layer').forEach(l => l.classList.remove('active'));
+                layer.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Presence</title>
+    <style>
+        :root {
+            --focus-deep: #1a365d;
+            --focus-medium: #2c5282;
+            --focus-light: #4299e1;
+            --focus-glow: rgba(66, 153, 225, 0.3);
+            --neutral-bg: #f7fafc;
+            --neutral-surface: #ffffff;
+            --neutral-border: #e2e8f0;
+            --neutral-text: #2d3748;
+            --neutral-text-soft: #718096;
+            --shadow-subtle: rgba(0, 0, 0, 0.04);
+            --shadow-medium: rgba(0, 0, 0, 0.1);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--neutral-bg);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .menubar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--neutral-border);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+        }
+
+        .menubar-item {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--neutral-text);
+            margin-right: 16px;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .menubar-item:hover {
+            color: var(--focus-medium);
+        }
+
+        .focus-indicator {
+            margin-left: auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--focus-light);
+            box-shadow: 0 0 8px var(--focus-glow);
+            animation: breathe 3s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            50% { 
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        .main-container {
+            margin-top: 24px;
+            height: calc(100vh - 24px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .focus-orb {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--focus-light), var(--focus-medium), var(--focus-deep));
+            box-shadow: 
+                0 20px 60px rgba(26, 54, 93, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            animation: float 6s ease-in-out infinite;
+            position: relative;
+            margin-bottom: 48px;
+        }
+
+        .focus-orb::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent, var(--focus-glow), transparent);
+            animation: rotate 8s linear infinite;
+            z-index: -1;
+        }
+
+        .focus-orb::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 40px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            filter: blur(10px);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            33% { transform: translateY(-8px) scale(1.02); }
+            66% { transform: translateY(4px) scale(0.98); }
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .focus-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--neutral-text);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .focus-subtitle {
+            font-size: 15px;
+            font-weight: 400;
+            color: var(--neutral-text-soft);
+            margin-bottom: 32px;
+        }
+
+        .focus-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .control-button {
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--neutral-border);
+            background: var(--neutral-surface);
+            color: var(--neutral-text);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px var(--shadow-subtle);
+        }
+
+        .control-button:hover {
+            background: var(--focus-light);
+            color: white;
+            border-color: var(--focus-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow-medium);
+        }
+
+        .control-button.active {
+            background: var(--focus-medium);
+            color: white;
+            border-color: var(--focus-medium);
+        }
+
+        .ambient-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--focus-light);
+            border-radius: 50%;
+            opacity: 0;
+            animation: drift 15s linear infinite;
+        }
+
+        .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 20%; animation-delay: 2s; }
+        .particle:nth-child(3) { left: 30%; animation-delay: 4s; }
+        .particle:nth-child(4) { left: 40%; animation-delay: 6s; }
+        .particle:nth-child(5) { left: 50%; animation-delay: 8s; }
+        .particle:nth-child(6) { left: 60%; animation-delay: 10s; }
+        .particle:nth-child(7) { left: 70%; animation-delay: 12s; }
+        .particle:nth-child(8) { left: 80%; animation-delay: 14s; }
+        .particle:nth-child(9) { left: 90%; animation-delay: 1s; }
+
+        @keyframes drift {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-100px) translateX(20px);
+                opacity: 0;
+            }
+        }
+
+        .status-panel {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            width: 240px;
+            background: var(--neutral-surface);
+            border: 1px solid var(--neutral-border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: 0 10px 30px var(--shadow-medium);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--neutral-text);
+            margin-bottom: 12px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--neutral-border);
+        }
+
+        .status-row:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-size: 13px;
+            color: var(--neutral-text-soft);
+        }
+
+        .status-value {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--focus-medium);
+        }
+
+        .wave-background {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: linear-gradient(180deg, transparent 0%, rgba(66, 153, 225, 0.05) 100%);
+            overflow: hidden;
+        }
+
+        .wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 200%;
+            height: 100px;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 1200 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1200 120L0 16.48V120z' fill='%234299e1' fill-opacity='0.1'/%3E%3C/svg%3E") repeat-x;
+            animation: wave 10s linear infinite;
+        }
+
+        @keyframes wave {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+    </style>
+</head>
+<body>
+    <div class="menubar">
+        <div class="menubar-item">Focus</div>
+        <div class="menubar-item">File</div>
+        <div class="menubar-item">Edit</div>
+        <div class="menubar-item">View</div>
+        <div class="focus-indicator"></div>
+    </div>
+
+    <div class="main-container">
+        <div class="focus-orb"></div>
+        
+        <h1 class="focus-title">Deep Focus</h1>
+        <p class="focus-subtitle">Present and engaged</p>
+        
+        <div class="focus-controls">
+            <button class="control-button active">Focused</button>
+            <button class="control-button">Available</button>
+            <button class="control-button">Away</button>
+        </div>
+    </div>
+
+    <div class="status-panel">
+        <div class="status-header">Focus Metrics</div>
+        <div class="status-row">
+            <span class="status-label">Current State</span>
+            <span class="status-value">Deep Focus</span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Flow Score</span>
+            <span class="status-value">87%</span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Interruptions</span>
+            <span class="status-value">2 today</span>
+        </div>
+        <div class="status-row">
+            <span class="status-label">Quality</span>
+            <span class="status-value">Excellent</span>
+        </div>
+    </div>
+
+    <div class="ambient-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <div class="wave-background">
+        <div class="wave"></div>
+    </div>
+</body>
+</html>

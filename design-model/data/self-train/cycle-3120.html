@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State</title>
+    <style>
+        :root {
+            --focus-deep: #1a0f2e;
+            --focus-medium: #2d1b4e;
+            --focus-light: #3d2a5f;
+            --focus-accent: #5a4fcf;
+            --focus-glow: #8b7cf6;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-tertiary: #64748b;
+            --glass-bg: rgba(26, 15, 46, 0.95);
+            --glass-border: rgba(139, 124, 246, 0.2);
+            --glass-shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, var(--focus-deep) 0%, var(--focus-medium) 50%, var(--focus-light) 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .ambient-orbs {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--focus-glow), transparent 70%);
+            opacity: 0.1;
+            filter: blur(2px);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb:nth-child(1) {
+            width: 400px;
+            height: 400px;
+            top: 10%;
+            left: 15%;
+            animation-delay: 0s;
+        }
+
+        .orb:nth-child(2) {
+            width: 300px;
+            height: 300px;
+            top: 60%;
+            right: 10%;
+            animation-delay: -7s;
+        }
+
+        .orb:nth-child(3) {
+            width: 250px;
+            height: 250px;
+            top: 30%;
+            right: 40%;
+            animation-delay: -14s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -20px) scale(1.1); }
+            50% { transform: translate(-20px, 15px) scale(0.9); }
+            75% { transform: translate(15px, 25px) scale(1.05); }
+        }
+
+        .menu-bar-container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .menu-bar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 8px 16px;
+            box-shadow: 
+                0 8px 32px var(--glass-shadow),
+                0 0 0 0.5px rgba(255, 255, 255, 0.05) inset;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            min-width: 320px;
+            animation: menuAppear 0.8s ease-out;
+        }
+
+        @keyframes menuAppear {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .focus-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--focus-accent);
+            box-shadow: 
+                0 0 20px var(--focus-glow),
+                0 0 40px rgba(139, 124, 246, 0.3);
+            animation: pulse 3s ease-in-out infinite;
+            position: relative;
+        }
+
+        .focus-indicator::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid var(--focus-glow);
+            opacity: 0.4;
+            animation: ripple 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px var(--focus-glow), 0 0 40px rgba(139, 124, 246, 0.3);
+            }
+            50% { 
+                transform: scale(1.2);
+                box-shadow: 0 0 30px var(--focus-glow), 0 0 60px rgba(139, 124, 246, 0.5);
+            }
+        }
+
+        @keyframes ripple {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.4;
+            }
+            50% { 
+                transform: scale(1.5);
+                opacity: 0.1;
+            }
+        }
+
+        .app-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .focus-state {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .state-text {
+            animation: textGlow 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes textGlow {
+            from { color: var(--text-secondary); }
+            to { color: var(--focus-glow); }
+        }
+
+        .ambient-description {
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .ambient-description h2 {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            line-height: 1.3;
+        }
+
+        .ambient-description p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        .breathing-indicator {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, var(--focus-accent) 0%, transparent 70%);
+            opacity: 0.3;
+            animation: breathe 6s ease-in-out infinite;
+            margin: 0 auto 32px;
+            position: relative;
+        }
+
+        .breathing-indicator::before {
+            content: '';
+            position: absolute;
+            top: 20%;
+            left: 20%;
+            width: 60%;
+            height: 60%;
+            border-radius: 50%;
+            background: var(--focus-glow);
+            opacity: 0.6;
+            animation: innerBreathe 6s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.3;
+            }
+            50% { 
+                transform: scale(1.3);
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes innerBreathe {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.6;
+            }
+            50% { 
+                transform: scale(0.7);
+                opacity: 0.9;
+            }
+        }
+
+        .subtle-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(139, 124, 246, 0.05) 1px, transparent 0);
+            background-size: 40px 40px;
+            z-index: 2;
+            animation: gridShift 30s linear infinite;
+        }
+
+        @keyframes gridShift {
+            from { transform: translate(0, 0); }
+            to { transform: translate(40px, 40px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-orbs">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    
+    <div class="subtle-grid"></div>
+    
+    <div class="menu-bar-container">
+        <div class="breathing-indicator"></div>
+        
+        <div class="ambient-description">
+            <h2>Focused Presence</h2>
+            <p>An ambient companion that reflects your mental state through gentle visual cues, creating a calming environment for deep work.</p>
+        </div>
+        
+        <div class="menu-bar">
+            <div class="focus-indicator"></div>
+            <span class="app-title">Focus</span>
+            <div class="focus-state">
+                <span class="state-text">Deep Focus</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

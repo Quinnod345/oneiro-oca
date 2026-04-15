@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus</title>
+    <style>
+        :root {
+            --terracotta: #C7735B;
+            --terracotta-dark: #A85D48;
+            --terracotta-light: #E6947A;
+            --sage: #87A08A;
+            --sage-light: #9BB39E;
+            --sage-dark: #6B8A6F;
+            --cream: #F4F1EB;
+            --warm-white: #FEFCF8;
+            --charcoal: #2B2B2B;
+            --charcoal-soft: #3D3D3D;
+            --gradient-bg: linear-gradient(145deg, #4A4A4A 0%, #2B2B2B 35%, #1E1E1E 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--gradient-bg);
+            color: var(--warm-white);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            position: relative;
+        }
+
+        /* Ambient particle background */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--sage);
+            border-radius: 50%;
+            opacity: 0;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .particle.focus-active {
+            background: var(--terracotta);
+            animation-duration: 8s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(100vh) scale(0); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.3; }
+            50% { transform: translateY(-20vh) translateX(100px) scale(1); opacity: 0.8; }
+        }
+
+        .main-container {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .timer-section {
+            position: relative;
+        }
+
+        .timer-container {
+            background: rgba(67, 67, 67, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 40px;
+            padding: 60px;
+            text-align: center;
+            box-shadow: 
+                0 40px 80px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .timer-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(199, 115, 91, 0.1), transparent);
+            animation: rotate 20s linear infinite;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .timer-container.active::before {
+            opacity: 1;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .session-type {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--sage);
+            margin-bottom: 40px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            position: relative;
+            z-index: 2;
+        }
+
+        .timer-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 50px;
+            z-index: 2;
+        }
+
+        .progress-circle {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .progress-circle svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+            filter: drop-shadow(0 0 30px rgba(199, 115, 91, 0.3));
+        }
+
+        .progress-circle .progress-bg {
+            fill: none;
+            stroke: rgba(135, 160, 138, 0.2);
+            stroke-width: 4;
+        }
+
+        .progress-circle .progress-fill {
+            fill: none;
+            stroke: var(--terracotta);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 0 1000;
+            transition: stroke-dasharray 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: pulse-glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { filter: drop-shadow(0 0 20px rgba(199, 115, 91, 0.5)); }
+            100% { filter: drop-shadow(0 0 40px rgba(199, 115, 91, 0.8)); }
+        }
+
+        .time-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 52px;
+            font-weight: 200;
+            letter-spacing: -0.02em;
+            color: var(--warm-white);
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+
+        .digit {
+            display: inline-block;
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transform-origin: center bottom;
+        }
+
+        .digit.cascading {
+            animation: cascade 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes cascade {
+            0% { transform: translateY(-30px) rotateX(90deg) scale(0.8); opacity: 0; }
+            50% { transform: translateY(-10px) rotateX(45deg) scale(1.1); opacity: 0.7; }
+            100% { transform: translateY(0) rotateX(0deg) scale(1); opacity: 1; }
+        }
+
+        .timer-container.active .time-display {
+            color: var(--terracotta-light);
+        }
+
+        .controls-section {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            align-items: flex-start;
+        }
+
+        .main-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .btn {
+            background: transparent;
+            border: 2px solid var(--sage-dark);
+            color: var(--sage);
+            border-radius: 16px;
+            padding: 20px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            width: 100%;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(199, 115, 91, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            border-color: var(--sage);
+            color: var(--sage-light);
+            transform: translateX(4px);
+            box-shadow: 0 8px 25px rgba(135, 160, 138, 0.2);
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, var(--terracotta) 0%, var(--terracotta-dark) 100%);
+            border-color: var(--terracotta);
+            color: var(--warm-white);
+            box-shadow: 0 12px 40px rgba(199, 115, 91, 0.3);
+            font-weight: 700;
+        }
+
+        .btn.primary:hover {
+            background: linear-gradient(135deg, var(--terracotta-light) 0%, var(--terracotta) 100%);
+            transform: translateX(4px) translateY(-2px);
+            box-shadow: 0 16px 50px rgba(199, 115, 91, 0.4);
+        }
+
+        .btn.primary.running {
+            background: rgba(199, 115, 91, 0.1);
+            border-color: var(--terracotta);
+            color: var(--terracotta);
+            box-shadow: inset 0 0 20px rgba(199, 115, 91, 0.2);
+            animation: breathe 4s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { box-shadow: inset 0 0 20px rgba(199, 115, 91, 0.2); }
+            50% { box-shadow: inset 0 0 30px rgba(199, 115, 91, 0.4); }
+        }
+
+        .session-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .selector-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--sage-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        .session-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .session-btn {
+            background: rgba(135, 160, 138, 0.1);
+            border: 1px solid rgba(135, 160, 138, 0.2);
+            color: var(--sage-dark);
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            width: 100%;
+            text-align: left;
+            position: relative;
+        }
+
+        .session-btn.active {
+            background: rgba(199, 115, 91, 0.15);
+            border-color: var(--terracotta);
+            color: var(--terracotta);
+            box-shadow: 0 4px 20px rgba(199, 115, 91, 0.2);
+            transform: translateX(4px);
+        }
+
+        .session-btn:hover:not(.active) {
+            border-color: var(--sage);
+            color: var(--sage);
+            background: rgba(135, 160, 138, 0.15);
+            transform: translateX(2px);
+        }
+
+        /* Breath sync animation for timer ring */
+        .timer-container.breathing .progress-fill {
+            animation: pulse-glow 4s ease-in-out infinite, breathe-ring 4s ease-in-out infinite;
+        }
+
+        @keyframes breathe-ring {
+            0%, 100% { stroke-width: 4; }
+            50% { stroke-width: 6; }
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                gap: 40px;
+                text-align: center;
+            }
+            
+            .controls-section {
+                align-items: center;
+                max-width: 400px;
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .timer-container {
+                padding: 40px 30px;
+            }
+            
+            .progress-circle {
+                width: 240px;
+                height: 240px;
+            }
+            
+            .time-display {
+                font-size: 42px;
+            }
+            
+            .main-container {
+                gap: 30px;
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Ambient particles -->
+    <div class="particles" id="particles"></div>
+
+    <div class="main-container">
+        <div class="timer-section">
+            <div class="timer-container" id="timerContainer">
+                <div class="session-type" id="sessionType">FOCUS SESSION</div>
+                
+                <div class="timer-wrapper">
+                    <div class="progress-circle">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="progress-bg" cx="50" cy="50" r="47"></circle>
+                            <circle class="progress-fill" cx="50" cy="50" r="47" id="progressFill"></circle>
+                        </svg>
+                        <div class="time-display" id="timeDisplay">
+                            <span class="digit">2</span><span class="digit">5</span><span class="colon">:</span><span class="digit">0</span><span class="digit">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-section">
+            <div class="main-controls">
+                <button class="btn primary" id="startBtn">▶ Start Focus</button>
+                <button class="btn" id="resetBtn">↻ Reset Timer</button>
+                <button class="btn" id="skipBtn">⏭ Skip Session</button>
+            </div>
+
+            <div class="session-selector">
+                <div class="selector-label">Session Types</div>
+                <div class="session-options">
+                    <button class="session-btn active" data-type="pomodoro" data-minutes="25">🍅 Pomodoro (25 min)</button>
+                    <button class="session-btn" data-type="shortbreak" data-minutes="5">☕ Short Break (5 min)</button>
+                    <button class="session-btn" data-type="longbreak" data-minutes="15">🌿 Long Break (15 min)</button>
+                    <button class="session-btn" data-type="custom" data-minutes="45">⚡ Deep Work (45 min)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PomodoroTimer {
+            constructor() {
+                this.timeLeft = 25 * 60; // 25 minutes in seconds
+                this.totalTime = 25 * 60;
+                this.isRunning = false;
+                this.currentSession = 'pomodoro';
+                this.interval = null;
+                
+                this.initElements();
+                this.initEventListeners();
+                this.initParticles();
+                this.updateDisplay();
+            }
+
+            initElements() {
+                this.timerContainer = document.getElementById('timerContainer');
+                this.sessionType = document.getElementById('sessionType');
+                this.timeDisplay = document.getElementById('timeDisplay');
+                this.progressFill = document.getElementById('progressFill');
+                this.startBtn = document.getElementById('startBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.skipBtn = document.getElementById('skipBtn');
+                this.sessionBtns = document.querySelectorAll('.session-btn');
+            }
+
+            initEventListeners() {
+                this.startBtn.addEventListener('click', () => this.toggleTimer());
+                this.resetBtn.addEventListener('click', () => this.resetTimer());
+                this.skipBtn.addEventListener('click', () => this.skipSession());
+                
+                this.sessionBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => this.changeSession(e.target));
+                });
+            }
+
+            initParticles() {
+                const particlesContainer = document.getElementById('particles');
+                
+                // Create ambient particles
+                for (let i = 0; i < 20; i++) {
+                    setTimeout(() => this.createParticle(particlesContainer), i * 1000);
+                }
+                
+                // Continuously spawn particles
+                setInterval(() => {
+                    this.createParticle(particlesContainer);
+                }, 2000);
+            }
+
+            createParticle(container) {
+                const particle = document.createElement('div');
+                particle.className = this.isRunning ? 'particle focus-active' : 'particle';
+                
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                
+                container.appendChild(particle);
+                
+                setTimeout(() => particle.remove(), 25000);
+            }
+
+            toggleTimer() {
+                if (this.isRunning) {
+                    this.pauseTimer();
+                } else {
+                    this.startTimer();
+                }
+            }
+
+            startTimer() {
+                this.isRunning = true;
+                this.timerContainer.classList.add('active', 'breathing');
+                this.startBtn.textContent = '⏸ Pause';
+                this.startBtn.classList.add('running');
+                
+                this.interval = setInterval(() => {
+                    this.timeLeft--;
+                    this.updateDisplay();
+                    
+                    if (this.timeLeft <= 0) {
+                        this.completeSession();
+                    }
+                }, 1000);
+            }
+
+            pauseTimer() {
+                this.isRunning = false;
+                this.timerContainer.classList.remove('active', 'breathing');
+                this.startBtn.textContent = '▶ Resume';
+                this.startBtn.classList.remove('running');
+                clearInterval(this.interval);
+            }
+
+            resetTimer() {
+                this.isRunning = false;
+                this.timerContainer.classList.remove('active', 'breathing');
+                this.startBtn.textContent = '▶ Start Focus';
+                this.startBtn.classList.remove('running');
+                clearInterval(this.interval);
+                
+                // Reset to current session duration
+                const activeBtn = document.querySelector('.session-btn.active');
+                this.timeLeft = parseInt(activeBtn.dataset.minutes) * 60;
+                this.totalTime = this.timeLeft;
+                this.updateDisplay();
+            }
+
+            skipSession() {
+                this.completeSession();
+            }
+
+            completeSession() {
+                this.isRunning = false;
+                this.timerContainer.classList.remove('active', 'breathing');
+                this.startBtn.textContent = '▶ Start Focus';
+                this.startBtn.classList.remove('running');
+                clearInterval(this.interval);
+                
+                // Auto-switch to next session type
+                this.autoSwitchSession();
+            }
+
+            autoSwitchSession() {
+                const current = document.querySelector('.session-btn.active');
+                let nextBtn;
+                
+                if (current.dataset.type === 'pomodoro') {
+                    nextBtn = document.querySelector('[data-type="shortbreak"]');
+                } else {
+                    nextBtn = document.querySelector('[data-type="pomodoro"]');
+                }
+                
+                this.changeSession(nextBtn);
+            }
+
+            changeSession(btn) {
+                document.querySelector('.session-btn.active').classList.remove('active');
+                btn.classList.add('active');
+                
+                this.currentSession = btn.dataset.type;
+                this.timeLeft = parseInt(btn.dataset.minutes) * 60;
+                this.totalTime = this.timeLeft;
+                
+                // Update session type display
+                const sessionNames = {
+                    'pomodoro': 'FOCUS SESSION',
+                    'shortbreak': 'SHORT BREAK',
+                    'longbreak': 'LONG BREAK',
+                    'custom': 'DEEP WORK'
+                };
+                
+                this.sessionType.textContent = sessionNames[this.currentSession];
+                this.updateDisplay();
+                
+                if (this.isRunning) {
+                    this.resetTimer();
+                }
+            }
+
+            updateDisplay() {
+                const minutes = Math.floor(this.timeLeft / 60);
+                const seconds = this.timeLeft % 60;
+                const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Cascading digit animation
+                const digits = this.timeDisplay.querySelectorAll('.digit');
+                const newDigits = timeString.replace(':', '');
+                
+                digits.forEach((digit, index) => {
+                    if (digit.textContent !== newDigits[index]) {
+                        digit.classList.add('cascading');
+                        setTimeout(() => {
+                            digit.textContent = newDigits[index];
+                            digit.classList.remove('cascading');
+                        }, 200);
+                    }
+                });
+                
+                // Update progress ring
+                const progress = (this.totalTime - this.timeLeft) / this.totalTime;
+                const circumference = 2 * Math.PI * 47;
+                const strokeDasharray = `${progress * circumference} ${circumference}`;
+                this.progressFill.style.strokeDasharray = strokeDasharray;
+                
+                // Update document title
+                document.title = `${timeString} - Focus`;
+            }
+        }
+
+        // Initialize the timer when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new PomodoroTimer();
+        });
+    </script>
+</body>
+</html>

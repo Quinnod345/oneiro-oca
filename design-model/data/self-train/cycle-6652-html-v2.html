@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --mahogany: #3a1f1f;
+            --dust: #d4c4b0;
+            --brass: #b08d57;
+            --velvet: #5a2e2e;
+            --parchment: #f4e8d0;
+            --tarnish: #7a6a5a;
+            --shadow: rgba(26, 13, 13, 0.4);
+            --glow: #ffd4a3;
+            --decay: #8a6a4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(ellipse at top right, #2a1a1a 0%, #1a0f0f 100%);
+            font-family: 'Inter', sans-serif;
+            color: var(--dust);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .shop-interior {
+            width: 100%;
+            min-height: 100vh;
+            position: relative;
+            perspective: 1200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .dust-particles {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .particle {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--dust);
+            opacity: 0.2;
+            animation: float 25s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+            33% { transform: translateY(-40px) translateX(30px) scale(1.5); }
+            66% { transform: translateY(30px) translateX(-25px) scale(0.8); }
+        }
+
+        .auction-header {
+            text-align: center;
+            margin-bottom: 4rem;
+            z-index: 10;
+            position: relative;
+        }
+
+        .auction-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 700;
+            color: var(--brass);
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            letter-spacing: 0.02em;
+            margin-bottom: 0.5rem;
+        }
+
+        .auction-subtitle {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            font-weight: 300;
+            opacity: 0.8;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .shelving-system {
+            width: 100%;
+            max-width: 1200px;
+            position: relative;
+            transform-style: preserve-3d;
+            margin: 0 auto;
+        }
+
+        .shelf {
+            position: relative;
+            width: 100%;
+            margin-bottom: 3rem;
+            background: linear-gradient(to bottom, var(--mahogany) 0%, #2a1515 100%);
+            border-bottom: 3px solid var(--brass);
+            transform-style: preserve-3d;
+            padding: 2rem;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 10px 30px var(--shadow);
+        }
+
+        .shelf::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 20px;
+            bottom: -20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
+            filter: blur(4px);
+        }
+
+        .shelf-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .memory-box {
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .memory-box:hover {
+            transform: translateY(-12px) scale(1.05);
+            z-index: 10;
+        }
+
+        .box-body {
+            position: relative;
+            transform-style: preserve-3d;
+            background: linear-gradient(135deg, var(--velvet) 0%, #4a2020 100%);
+            border: 2px solid var(--brass);
+            border-radius: 12px;
+            box-shadow: 0 8px 25px var(--shadow);
+            padding: 1.5rem;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .decay-overlay {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            background: 
+                radial-gradient(circle at 30% 40%, transparent 30%, rgba(138, 106, 74, 0.1) 50%),
+                radial-gradient(circle at 70% 60%, transparent 40%, rgba(138, 106, 74, 0.15) 60%);
+            mix-blend-mode: multiply;
+            border-radius: 12px;
+            transition: opacity 1.2s ease;
+            pointer-events: none;
+        }
+
+        .memory-box.decaying .decay-overlay {
+            opacity: 0.7;
+            animation: subtle-decay 4s ease-in-out infinite;
+        }
+
+        @keyframes subtle-decay {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 0.5; }
+        }
+
+        .music-mechanism {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .cylinder {
+            width: 50px;
+            height: 30px;
+            background: linear-gradient(90deg, var(--brass) 0%, #d4a76a 50%, var(--brass) 100%);
+            border-radius: 15px;
+            position: relative;
+            box-shadow: 
+                inset 0 2px 4px rgba(0,0,0,0.3),
+                0 2px 8px rgba(176, 141, 87, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .memory-box:hover .cylinder {
+            animation: gentle-rotate 3s linear infinite;
+        }
+
+        @keyframes gentle-rotate {
+            to { transform: rotateZ(360deg); }
+        }
+
+        .memory-label {
+            text-align: center;
+        }
+
+        .memory-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.25rem;
+            color: var(--parchment);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
+        }
+
+        .memory-meta {
+            font-size: 0.875rem;
+            opacity: 0.7;
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+
+        .bid-section {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-top: auto;
+        }
+
+        .current-bid {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.6;
+            margin-bottom: 0.25rem;
+        }
+
+        .bid-amount {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            color: var(--glow);
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(255, 212, 163, 0.5);
+        }
+
+        .bid-button {
+            width: 100%;
+            background: var(--brass);
+            border: none;
+            color: var(--mahogany);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .bid-button:hover {
+            background: var(--glow);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 212, 163, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .shelf-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .shop-interior {
+                padding: 1rem;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .shelf-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shop-interior">
+        <div class="dust-particles" id="dustContainer"></div>
+        
+        <header class="auction-header">
+            <h1 class="auction-title">The Memory Auction House</h1>
+            <p class="auction-subtitle">Where forgotten moments find new homes</p>
+        </header>
+
+        <div class="shelving-system">
+            <div class="shelf">
+                <div class="shelf-grid">
+                    <div class="memory-box" data-memory-id="001">
+                        <div class="box-body">
+                            <div class="decay-overlay"></div>
+                            <div class="music-mechanism">
+                                <div class="cylinder"></div>
+                            </div>
+                            <div class="memory-label">
+                                <h3 class="memory-title">First Day of School</h3>
+                                <p class="memory-meta">September morning, 1987<br>Slightly faded at edges</p>
+                            </div>
+                            <div class="bid-section">
+                                <p class="current-bid">Current Bid</p>
+                                <p class="bid-amount">$2,450</p>
+                                <button class="bid-button">Place Bid</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="memory-box decaying" data-memory-id="002">
+                        <div class="box-body">
+                            <div class="decay-overlay"></div>
+                            <div class="music-mechanism">
+                                <div class="cylinder"></div>
+                            </div>
+                            <div class="memory-label">
+                                <h3 class="memory-title">Summer Rain Dance</h3>
+                                <p class="memory-meta">July twilight, 1972<br>Some water damage</p>
+                            </div>
+                            <div class="bid-section">
+                                <p class="current-bid">Current Bid</p>
+                                <p class="bid-amount">$890</p>
+                                <button class="bid-button">Place Bid</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="memory-box" data-memory-id="003">
+                        <div class="box-body">
+                            <div class="decay-overlay"></div>
+                            <div class="music-mechanism">
+                                <div class="cylinder"></div>
+                            </div>
+                            <div class="memory-label">
+                                <h3 class="memory-title">Grandmother's Kitchen</h3>
+                                <p class="memory-meta">Sunday afternoon, 1965<br>Well-preserved aromas</p>
+                            </div>
+                            <div class="bid-section">
+                                <p class="current-bid">Current Bid</p>
+                                <p class="bid-amount">$3,200</p>
+                                <button class="bid-button">Place Bid</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shelf">
+                <div class="shelf-grid">
+                    <div class="memory-box" data-memory-id="004">
+                        <div class="box-body">
+                            <div class="decay-overlay"></div>
+                            <div class="music-mechanism">
+                                <div class="cylinder"></div>
+                            </div>
+                            <div class="memory-label">
+                                <h3 class="memory-title">Lost Love Letter</h3>
+                                <p class="memory-meta">Never sent, 1943<br>Yellowed but intact</p>
+                            </div>
+                            <div class="bid-section">
+                                <p class="current-bid">Current Bid</p>
+                                <p class="bid-amount">$1,750</p>
+                                <button class="bid-button">Place Bid</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="memory-box decaying" data-memory-id="005">
+                        <div class="box-body">
+                            <div class="decay-overlay"></div>
+                            <div class="music-mechanism">
+                                <div class="cylinder"></div>
+                            </div>
+                            <div class="memory-label">
+                                <h3 class="memory-title">Birthday Wish</h3>
+                                <p class="memory-meta">Age 7, candles blown<br>Slightly melted edges</p>
+                            </div>
+                            <div class="bid-section">
+                                <p class="current-bid">Current Bid</p>
+                                <p class="bid-amount">$425</p>
+                                <button class="bid-button">Place Bid</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate dust particles
+        const dustContainer = document.getElementById('dustContainer');
+        for (let i = 0; i < 30; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 20 + 's';
+            particle.style.animationDuration = (20 + Math.random() * 10) + 's';
+            dustContainer.appendChild(particle);
+        }
+
+        // Add decay effect on click
+        document.querySelectorAll('.memory-box').forEach(box => {
+            box.addEventListener('click', function() {
+                if (!this.classList.contains('decaying')) {
+                    this.classList.add('decaying');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

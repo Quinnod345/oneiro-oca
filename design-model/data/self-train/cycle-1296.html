@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic Harmonizer</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #141417;
+            --bg-tertiary: #1e1e23;
+            --surface-primary: #262630;
+            --surface-secondary: #30303d;
+            --surface-active: #3a3a4a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #b8b8c8;
+            --text-muted: #8888a0;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --border-primary: #333340;
+            --border-secondary: #404050;
+            --glow-primary: rgba(99, 102, 241, 0.3);
+            --glow-secondary: rgba(139, 92, 246, 0.3);
+            --shadow-key: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6);
+            --shadow-surface: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-rows: 80px 1fr 280px;
+            height: 100vh;
+            gap: 2px;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .mode-selector {
+            display: flex;
+            background: var(--surface-primary);
+            border-radius: 12px;
+            padding: 6px;
+            gap: 4px;
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Palette Display */
+        .palette-display {
+            background: var(--bg-secondary);
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .harmony-container {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .color-swatch {
+            width: 120px;
+            height: 160px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-surface);
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            background: #404040;
+            border: 2px solid transparent;
+        }
+
+        .color-swatch:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        .color-swatch.active {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px var(--glow-primary), var(--shadow-surface);
+        }
+
+        .color-info {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(12px);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .color-code {
+            font-family: "SF Mono", Monaco, "Cascadia Code", "Consolas", monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .color-name {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 2px;
+        }
+
+        .harmony-label {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        /* Piano Interface */
+        .piano-container {
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border-primary);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .piano-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .piano-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .harmony-controls {
+            display: flex;
+            gap: 12px;
+        }
+
+        .harmony-btn {
+            padding: 8px 16px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-secondary);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .harmony-btn:hover {
+            background: var(--surface-secondary);
+            border-color: var(--accent-primary);
+        }
+
+        .harmony-btn.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }
+
+        .keyboard {
+            display: flex;
+            justify-content: center;
+            height: 160px;
+            gap: 2px;
+            position: relative;
+        }
+
+        .piano-key {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            user-select: none;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .white-key {
+            width: 60px;
+            height: 160px;
+            background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #ced4da;
+            border-top: none;
+            box-shadow: var(--shadow-key);
+            z-index: 1;
+        }
+
+        .white-key:active,
+        .white-key.pressed {
+            background: linear-gradient(180deg, #e9ecef 0%, #dee2e6 100%);
+            transform: translateY(2px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+
+        .black-key {
+            width: 36px;
+            height: 100px;
+            background: linear-gradient(180deg, #2d3748 0%, #1a202c 100%);
+            border: 1px solid #171923;
+            border-top: none;
+            position: absolute;
+            z-index: 2;
+            box-shadow: var(--shadow-key);
+        }
+
+        .black-key:active,
+        .black-key.pressed {
+            background: linear-gradient(180deg, #1a202c 0%, #0d1117 100%);
+            transform: translateY(2px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            color: #6c757d;
+        }
+
+        .black-key .key-label {
+            color: #a0aec0;
+        }
+
+        /* Key positioning */
+        .black-key:nth-of-type(1) { left: 42px; }
+        .black-key:nth-of-type(2) { left: 104px; }
+        .black-key:nth-of-type(3) { left: 228px; }
+        .black-key:nth-of-type(4) { left: 290px; }
+        .black-key:nth-of-type(5) { left: 352px; }
+        .black-key:nth-of-type(6) { left: 476px; }
+        .black-key:nth-of-type(7) { left: 538px; }
+        .black-key:nth-of-type(8) { left: 662px; }
+        .black-key:nth-of-type(9) { left: 724px; }
+        .black-key:nth-of-type(10) { left: 786px; }
+
+        .color-preview {
+            position: absolute;
+            top: -8px;
+            left: 4px;
+            right: 4px;
+            height: 6px;
+            border-radius: 3px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .piano-key:hover .color-preview,
+        .piano-key.pressed .color-preview {
+            opacity: 1;
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0%, transparent 70%);
+            transform: scale(0);
+            animation: ripple-animation 0.6s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-animation {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .harmony-indicator {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .piano-key.in-harmony .harmony-indicator {
+            opacity: 1;
+            box-shadow: 0 0 12px var(--glow-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <header class="header">
+            <div class="logo">Chromatic Harmonizer</div>
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="complementary">Complementary</button>
+                <button class="mode-btn" data-mode="triadic">Triadic</button>
+                <button class="mode-btn" data-mode="analogous">Analogous</button>
+                <button class="mode-btn" data-mode="tetradic">Tetradic</button>
+            </div>
+        </header>
+
+        <main class="palette-display">
+            <div class="harmony-container">
+                <div class="harmony-label">Current Harmony</div>
+                <div class="color-swatch active" data-index="0">
+                    <div class="color-info">
+                        <div class="color-code">#6366F1</div>
+                        <div class="color-name">Primary</div>
+                    </div>
+                </div>
+                <div class="color-swatch" data-index="1">
+                    <div class="color-info">
+                        <div class="color-code">#F16363</div>
+                        <div class="color-name">Complement</div>
+                    </div>
+                </div>
+                <div class="color-swatch" data-index="2">
+                    <div class="color-info">
+                        <div class="color-code">#63F163</div>
+                        <div class="color-name">Accent</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <section class="piano-container">
+            <div class="piano-header">
+                <h2 class="piano-title">Color Keyboard</h2>
+                <div class="harmony-controls">
+                    <button class="harmony-btn active" data-harmony="major">Major</button>
+                    <button class="harmony-btn" data-harmony="minor">Minor</button>
+                    <button class="harmony-btn" data-harmony="diminished">Diminished</button>
+                    <button class="harmony-btn" data-harmony="augmented">Augmented</button>
+                </div>
+            </div>
+            
+            <div class="keyboard">
+                <!-- White Keys -->
+                <div class="piano-key white-key" data-note="C" data-hue="0">
+                    <div class="color-preview" style="background: hsl(0, 70%, 50%);"></div>
+                    <div class="key-label">C</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="D" data-hue="30">
+                    <div class="color-preview" style="background: hsl(30, 70%, 50%);"></div>
+                    <div class="key-label">D</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="E" data-hue="60">
+                    <div class="color-preview" style="background: hsl(60, 70%, 50%);"></div>
+                    <div class="key-label">E</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="F" data-hue="90">
+                    <div class="color-preview" style="background: hsl(90, 70%, 50%);"></div>
+                    <div class="key-label">F</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="G" data-hue="120">
+                    <div class="color-preview" style="background: hsl(120, 70%, 50%);"></div>
+                    <div class="key-label">G</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="A" data-hue="150">
+                    <div class="color-preview" style="background: hsl(150, 70%, 50%);"></div>
+                    <div class="key-label">A</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="B" data-hue="180">
+                    <div class="color-preview" style="background: hsl(180, 70%, 50%);"></div>
+                    <div class="key-label">B</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="C2" data-hue="210">
+                    <div class="color-preview" style="background: hsl(210, 70%, 50%);"></div>
+                    <div class="key-label">C</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="D2" data-hue="240">
+                    <div class="color-preview" style="background: hsl(240, 70%, 50%);"></div>
+                    <div class="key-label">D</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="E2" data-hue="270">
+                    <div class="color-preview" style="background: hsl(270, 70%, 50%);"></div>
+                    <div class="key-label">E</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="F2" data-hue="300">
+                    <div class="color-preview" style="background: hsl(300, 70%, 50%);"></div>
+                    <div class="key-label">F</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key white-key" data-note="G2" data-hue="330">
+                    <div class="color-preview" style="background: hsl(330, 70%, 50%);"></div>
+                    <div class="key-label">G</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+
+                <!-- Black Keys -->
+                <div class="piano-key black-key" data-note="C#" data-hue="15">
+                    <div class="color-preview" style="background: hsl(15, 70%, 50%);"></div>
+                    <div class="key-label">C#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="D#" data-hue="45">
+                    <div class="color-preview" style="background: hsl(45, 70%, 50%);"></div>
+                    <div class="key-label">D#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="F#" data-hue="105">
+                    <div class="color-preview" style="background: hsl(105, 70%, 50%);"></div>
+                    <div class="key-label">F#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="G#" data-hue="135">
+                    <div class="color-preview" style="background: hsl(135, 70%, 50%);"></div>
+                    <div class="key-label">G#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="A#" data-hue="165">
+                    <div class="color-preview" style="background: hsl(165, 70%, 50%);"></div>
+                    <div class="key-label">A#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="C#2" data-hue="225">
+                    <div class="color-preview" style="background: hsl(225, 70%, 50%);"></div>
+                    <div class="key-label">C#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="D#2" data-hue="255">
+                    <div class="color-preview" style="background: hsl(255, 70%, 50%);"></div>
+                    <div class="key-label">D#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="F#2" data-hue="285">
+                    <div class="color-preview" style="background: hsl(285, 70%, 50%);"></div>
+                    <div class="key-label">F#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="G#2" data-hue="315">
+                    <div class="color-preview" style="background: hsl(315, 70%, 50%);"></div>
+                    <div class="key-label">G#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+                <div class="piano-key black-key" data-note="A#2" data-hue="345">
+                    <div class="color-preview" style="background: hsl(345, 70%, 50%);"></div>
+                    <div class="key-label">A#</div>
+                    <div class="harmony-indicator"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        class ChromaticHarmonizer {
+            constructor() {
+                this.currentMode = 'complementary';
+                this.currentHarmony = 'major';
+                this.activeKeys = new Set();
+                this.currentPalette = [
+                    { hue: 240, sat: 70, light: 60, hex: '#6366F1' },
+                    { hue: 0, sat: 70, light: 60, hex: '#F16363' },
+                    { hue: 120, sat: 70, light: 60, hex: '#63F163' }
+                ];
+                
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.updatePaletteDisplay();
+                this.updateHarmonyIndicators();
+            }
+
+            bindEvents() {
+                // Mode selector
+                document.querySelectorAll('.mode-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelector('.mode-btn.active').classList.remove('active');
+                        e.target.classList.add('active');
+                        this.currentMode = e.target.dataset.mode;
+                        this.generateHarmony();
+                    });
+                });
+
+                // Harmony controls
+                document.querySelectorAll('.harmony-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelector('.harmony-btn.active').classList.remove('active');
+                        e.target.classList.add('active');
+                        this.currentHarmony = e.target.dataset.harmony;
+                        this.updateHarmonyIndicators();
+                    });
+                });
+
+                // Piano keys
+                document.querySelectorAll('.piano-key').forEach(key => {
+                    key.addEventListener('mousedown', (e) => this.playKey(e.target));
+                    key.addEventListener('mouseup', (e) => this.releaseKey(e.target));
+                    key.addEventListener('mouseleave', (e) => this.releaseKey(e.target));
+                });
+
+                // Color swatches
+                document.querySelectorAll('.color-swatch').forEach(swatch => {
+                    swatch.addEventListener('click', (e) => {
+                        const index = parseInt(e.currentTarget.dataset.index);
+                        this.selectColor(index);
+                    });
+                });
+            }
+
+            playKey(keyElement) {
+                if (keyElement.classList.contains('pressed')) return;
+                
+                keyElement.classList.add('pressed');
+                const hue = parseInt(keyElement.dataset.hue);
+                
+                // Create ripple effect
+                this.createRipple(keyElement);
+                
+                // Generate new palette based on pressed key
+                this.generatePaletteFromHue(hue);
+                
+                this.activeKeys.add(keyElement.dataset.note);
+                this.updateHarmonyIndicators();
+            }
+
+            releaseKey(keyElement) {
+                keyElement.classList.remove('pressed');
+                this.activeKeys.delete(keyElement.dataset.note);
+            }
+
+            createRipple(keyElement) {
+                const ripple = document.createElement('div');
+                ripple.classList.add('ripple');
+                
+                const rect = keyElement.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = '50%';
+                ripple.style.top = '50%';
+                ripple.style.marginLeft = -size/2 + 'px';
+                ripple.style.marginTop = -size/2 + 'px';
+                
+                keyElement.appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 600);
+            }
+
+            generatePaletteFromHue(baseHue) {
+                const sat = 70;
+                const light = 60;
+                
+                let palette = [{ hue: baseHue, sat, light }];
+                
+                switch (this.currentMode) {
+                    case 'complementary':
+                        palette.push({ hue: (baseHue + 180) % 360, sat, light });
+                        palette.push({ hue: (baseHue + 30) % 360, sat: 50, light: 70 });
+                        break;
+                    case 'triadic':
+                        palette.push({ hue: (baseHue + 120) % 360, sat, light });
+                        palette.push({ hue: (baseHue + 240) % 360, sat, light });
+                        break;
+                    case 'analogous':
+                        palette.push({ hue: (baseHue + 30) % 360, sat, light });
+                        palette.push({ hue: (baseHue + 60) % 360, sat, light });
+                        break;
+                    case 'tetradic':
+                        palette.push({ hue: (baseHue + 90) % 360, sat, light });
+                        palette.push({ hue: (baseHue + 180) % 360, sat, light });
+                        palette.push({ hue: (baseHue + 270) % 360, sat, light });
+                        break;
+                }
+                
+                this.currentPalette = palette.map(color => ({
+                    ...color,
+                    hex: this.hslToHex(color.hue, color.sat, color.light)
+                }));
+                
+                this.updatePaletteDisplay();
+            }
+
+            generateHarmony() {
+                const baseHue = this.currentPalette[0].hue;
+                this.generatePaletteFromHue(baseHue);
+            }
+
+            updatePaletteDisplay() {
+                const swatches = document.querySelectorAll('.color-swatch');
+                
+                this.currentPalette.forEach((color, index) => {
+                    if (swatches[index]) {
+                        const swatch = swatches[index];
+                        swatch.style.background = color.hex;
+                        
+                        const codeElement = swatch.querySelector('.color-code');
+                        const nameElement = swatch.querySelector('.color-name');
+                        
+                        if (codeElement) codeElement.textContent = color.hex.toUpperCase();
+                        if (nameElement) {
+                            const names = ['Primary', 'Secondary', 'Accent', 'Tertiary'];
+                            nameElement.textContent = names[index] || `Color ${index + 1}`;
+                        }
+                    }
+                });
+            }
+
+            updateHarmonyIndicators() {
+                document.querySelectorAll('.piano-key').forEach(key => {
+                    key.classList.remove('in-harmony');
+                });
+                
+                // Mark keys that are in harmony based on current harmony type
+                const baseNote = this.activeKeys.values().next().value;
+                if (baseNote) {
+                    const harmonyKeys = this.getHarmonyKeys(baseNote);
+                    harmonyKeys.forEach(note => {
+                        const key = document.querySelector(`[data-note="${note}"]`);
+                        if (key) key.classList.add('in-harmony');
+                    });
+                }
+            }
+
+            getHarmonyKeys(baseNote) {
+                const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                const baseIndex = notes.indexOf(baseNote.replace('2', ''));
+                
+                if (baseIndex === -1) return [];
+                
+                let intervals = [];
+                switch (this.currentHarmony) {
+                    case 'major':
+                        intervals = [0, 4, 7];
+                        break;
+                    case 'minor':
+                        intervals = [0, 3, 7];
+                        break;
+                    case 'diminished':
+                        intervals = [0, 3, 6];
+                        break;
+                    case 'augmented':
+                        intervals = [0, 4, 8];
+                        break;
+                }
+                
+                return intervals.map(interval => {
+                    const noteIndex = (baseIndex + interval) % 12;
+                    return notes[noteIndex];
+                });
+            }
+
+            selectColor(index) {
+                document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                document.querySelectorAll('.color-swatch')[index].classList.add('active');
+            }
+
+            hslToHex(h, s, l) {
+                s /= 100;
+                l /= 100;
+                
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                const m = l - c/2;
+                let r = 0, g = 0, b = 0;
+                
+                if (0 <= h && h < 60) {
+                    r = c; g = x; b = 0;
+                } else if (60 <= h && h < 120) {
+                    r = x; g = c; b = 0;
+                } else if (120 <= h && h < 180) {
+                    r = 0; g = c; b = x;
+                } else if (180 <= h && h < 240) {
+                    r = 0; g = x; b = c;
+                } else if (240 <= h && h < 300) {
+                    r = x; g = 0; b = c;
+                } else if (300 <= h && h < 360) {
+                    r = c; g = 0; b = x;
+                }
+                
+                r = Math.round((r + m) * 255);
+                g = Math.round((g + m) * 255);
+                b = Math.round((b + m) * 255);
+                
+                return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+            }
+        }
+
+        // Initialize the harmonizer when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChromaticHarmonizer();
+        });
+    </script>
+</body>
+</html>

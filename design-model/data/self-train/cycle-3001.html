@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b7280;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --border-light: #e5e7eb;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 1440px;
+        }
+
+        .canvas {
+            position: relative;
+            width: 100%;
+            height: 900px;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .canvas:active {
+            cursor: grabbing;
+        }
+
+        .document {
+            position: absolute;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 16px;
+            min-width: 180px;
+            max-width: 240px;
+            box-shadow: var(--shadow-sm);
+            cursor: move;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            user-select: none;
+        }
+
+        .document:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .document.selected {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .doc-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .doc-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .doc-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .tag {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .topic-cluster {
+            position: absolute;
+            border: 2px dashed var(--border-light);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .cluster-label {
+            position: absolute;
+            top: -12px;
+            left: 16px;
+            background: var(--bg-primary);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-light);
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background: var(--border-light);
+            border-radius: 1px;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        .minimap {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 200px;
+            height: 125px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+        }
+
+        .minimap-doc {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .tool-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-btn:hover {
+            background: var(--bg-primary);
+            border-color: var(--accent-blue);
+        }
+
+        .tool-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .search-box {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+            width: 200px;
+            z-index: 100;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Document type variations */
+        .doc-pdf { border-left: 4px solid var(--accent-red); }
+        .doc-doc { border-left: 4px solid var(--accent-blue); }
+        .doc-img { border-left: 4px solid var(--accent-purple); }
+        .doc-sheet { border-left: 4px solid var(--accent-green); }
+        .doc-txt { border-left: 4px solid var(--accent-orange); }
+    </style>
+</head>
+<body>
+    <div class="canvas" id="canvas">
+        <!-- Topic clusters -->
+        <div class="topic-cluster" style="left: 100px; top: 150px; width: 350px; height: 280px;">
+            <div class="cluster-label">Research & Documentation</div>
+        </div>
+        
+        <div class="topic-cluster" style="left: 520px; top: 80px; width: 320px; height: 200px;">
+            <div class="cluster-label">Design Assets</div>
+        </div>
+        
+        <div class="topic-cluster" style="left: 900px; top: 300px; width: 400px; height: 350px;">
+            <div class="cluster-label">Project Files</div>
+        </div>
+        
+        <div class="topic-cluster" style="left: 200px; top: 500px; width: 280px; height: 200px;">
+            <div class="cluster-label">References</div>
+        </div>
+
+        <!-- Connection lines -->
+        <div class="connection-line" style="left: 380px; top: 220px; width: 180px; transform: rotate(-15deg);"></div>
+        <div class="connection-line" style="left: 450px; top: 380px; width: 120px; transform: rotate(45deg);"></div>
+        <div class="connection-line" style="left: 680px; top: 280px; width: 250px; transform: rotate(25deg);"></div>
+
+        <!-- Documents -->
+        <div class="document doc-pdf" style="left: 120px; top: 180px;">
+            <div class="doc-title">User Research Report Q3</div>
+            <div class="doc-meta">PDF • 2.3 MB • Oct 15</div>
+            <div class="doc-tags">
+                <span class="tag">research</span>
+                <span class="tag">UX</span>
+            </div>
+        </div>
+
+        <div class="document doc-doc" style="left: 280px; top: 220px;">
+            <div class="doc-title">Product Requirements Document</div>
+            <div class="doc-meta">DOCX • 1.1 MB • Oct 12</div>
+            <div class="doc-tags">
+                <span class="tag">specs</span>
+                <span class="tag">product</span>
+            </div>
+        </div>
+
+        <div class="document doc-txt" style="left: 160px; top: 340px;">
+            <div class="doc-title">Meeting Notes - Design Review</div>
+            <div class="doc-meta">TXT • 12 KB • Oct 18</div>
+            <div class="doc-tags">
+                <span class="tag">notes</span>
+                <span class="tag">meeting</span>
+            </div>
+        </div>
+
+        <div class="document doc-img" style="left: 540px; top: 110px;">
+            <div class="doc-title">UI Mockups v3.2</div>
+            <div class="doc-meta">PNG • 4.7 MB • Oct 16</div>
+            <div class="doc-tags">
+                <span class="tag">mockup</span>
+                <span class="tag">UI</span>
+            </div>
+        </div>
+
+        <div class="document doc-img" style="left: 720px; top: 140px;">
+            <div class="doc-title">Brand Guidelines</div>
+            <div class="doc-meta">PDF • 8.2 MB • Sep 28</div>
+            <div class="doc-tags">
+                <span class="tag">brand</span>
+                <span class="tag">guide</span>
+            </div>
+        </div>
+
+        <div class="document doc-img" style="left: 600px; top: 220px;">
+            <div class="doc-title">Icon Set - Dashboard</div>
+            <div class="doc-meta">SVG • 156 KB • Oct 14</div>
+            <div class="doc-tags">
+                <span class="tag">icons</span>
+                <span class="tag">assets</span>
+            </div>
+        </div>
+
+        <div class="document doc-sheet" style="left: 950px; top: 340px;">
+            <div class="doc-title">Project Timeline</div>
+            <div class="doc-meta">XLSX • 445 KB • Oct 10</div>
+            <div class="doc-tags">
+                <span class="tag">timeline</span>
+                <span class="tag">project</span>
+            </div>
+        </div>
+
+        <div class="document doc-pdf" style="left: 1120px; top: 380px;">
+            <div class="doc-title">Technical Architecture</div>
+            <div class="doc-meta">PDF • 1.8 MB • Oct 8</div>
+            <div class="doc-tags">
+                <span class="tag">tech</span>
+                <span class="tag">architecture</span>
+            </div>
+        </div>
+
+        <div class="document doc-doc" style="left: 980px; top: 500px;">
+            <div class="doc-title">API Documentation</div>
+            <div class="doc-meta">DOCX • 892 KB • Oct 11</div>
+            <div class="doc-tags">
+                <span class="tag">API</span>
+                <span class="tag">docs</span>
+            </div>
+        </div>
+
+        <div class="document doc-txt" style="left: 1180px; top: 480px;">
+            <div class="doc-title">Code Review Feedback</div>
+            <div class="doc-meta">TXT • 8 KB • Oct 17</div>
+            <div class="doc-tags">
+                <span class="tag">code</span>
+                <span class="tag">review</span>
+            </div>
+        </div>
+
+        <div class="document doc-pdf" style="left: 220px; top: 530px;">
+            <div class="doc-title">Design System Guidelines</div>
+            <div class="doc-meta">PDF • 3.1 MB • Sep 25</div>
+            <div class="doc-tags">
+                <span class="tag">design</span>
+                <span class="tag">system</span>
+            </div>
+        </div>
+
+        <div class="document doc-img" style="left: 380px; top: 580px;">
+            <div class="doc-title">Component Library</div>
+            <div class="doc-meta">FIGMA • 2.8 MB • Oct 13</div>
+            <div class="doc-tags">
+                <span class="tag">components</span>
+                <span class="tag">UI</span>
+            </div>
+        </div>
+
+        <div class="document doc-sheet" style="left: 1080px; top: 580px;">
+            <div class="doc-title">Budget Allocation Q4</div>
+            <div class="doc-meta">XLSX • 234 KB • Oct 9</div>
+            <div class="doc-tags">
+                <span class="tag">budget</span>
+                <span class="tag">planning</span>
+            </div>
+        </div>
+
+        <div class="document doc-pdf" style="left: 680px; top: 420px;">
+            <div class="doc-title">Competitor Analysis</div>
+            <div class="doc-meta">PDF • 2.7 MB • Oct 6</div>
+            <div class="doc-tags">
+                <span class="tag">analysis</span>
+                <span class="tag">competitive</span>
+            </div>
+        </div>
+
+        <div class="document doc-txt" style="left: 520px; top: 480px;">
+            <div class="doc-title">User Feedback Collection</div>
+            <div class="doc-meta">TXT • 24 KB • Oct 19</div>
+            <div class="doc-tags">
+                <span class="tag">feedback</span>
+                <span class="tag">users</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="tool-btn active">Select</button>
+        <button class="tool-btn">Connect</button>
+        <button class="tool-btn">Group</button>
+        <button class="tool-btn">Filter</button>
+    </div>
+
+    <input type="text" class="search-box" placeholder="Search documents...">
+
+    <div class="minimap">
+        <div class="minimap-viewport" style="left: 20px; top: 15px; width: 80px; height: 50px;"></div>
+        <div class="minimap-doc" style="left: 25px; top: 28px;"></div>
+        <div class="minimap-doc" style="left: 45px; top: 35px;"></div>
+        <div class="minimap-doc" style="left: 35px; top: 50px;"></div>
+        <div class="minimap-doc" style="left: 85px; top: 25px;"></div>
+        <div class="minimap-doc" style="left: 105px; top: 30px;"></div>
+        <div class="minimap-doc" style="left: 95px; top: 45px;"></div>
+        <div class="minimap-doc" style="left: 140px; top: 50px;"></div>
+        <div class="minimap-doc" style="left: 160px; top: 55px;"></div>
+        <div class="minimap-doc" style="left: 145px; top: 70px;"></div>
+        <div class="minimap-doc" style="left: 50px; top: 75px;"></div>
+        <div class="minimap-doc" style="left: 70px; top: 85px;"></div>
+        <div class="minimap-doc" style="left: 120px; top: 85px;"></div>
+        <div class="minimap-doc" style="left: 110px; top: 95px;"></div>
+        <div class="minimap-doc" style="left: 85px; top: 65px;"></div>
+    </div>
+
+    <script>
+        // Basic interactivity for document selection
+        document.querySelectorAll('.document').forEach(doc => {
+            doc.addEventListener('click', () => {
+                document.querySelectorAll('.document').forEach(d => d.classList.remove('selected'));
+                doc.classList.add('selected');
+            });
+        });
+
+        // Tool button interactions
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

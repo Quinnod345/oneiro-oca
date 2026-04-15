@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --surface-elevated: #3d3d3d;
+            --accent-primary: #007aff;
+            --accent-secondary: #5ac8fa;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.4);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --focus-glow: rgba(0, 122, 255, 0.3);
+            --focus-pulse: rgba(90, 200, 250, 0.2);
+            --shadow-depth: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #161616 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 16px;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            height: 100%;
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .focus-indicator {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .focus-orb {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            position: relative;
+            animation: focusPulse 4s ease-in-out infinite;
+        }
+
+        .focus-orb::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--focus-glow);
+            animation: focusGlow 3s ease-in-out infinite alternate;
+            z-index: -1;
+        }
+
+        @keyframes focusPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        @keyframes focusGlow {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 0.6; transform: scale(1.4); }
+        }
+
+        .main-content {
+            margin-top: 24px;
+            height: calc(100vh - 24px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .focus-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 60px;
+            backdrop-filter: blur(40px);
+            box-shadow: 
+                0 20px 40px var(--shadow-depth),
+                0 0 0 1px rgba(255, 255, 255, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        .focus-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(0, 122, 255, 0.1) 0%, 
+                transparent 30%, 
+                transparent 70%, 
+                rgba(90, 200, 250, 0.05) 100%);
+            animation: ambientShift 8s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes ambientShift {
+            0%, 100% { opacity: 0.3; transform: translateX(0%); }
+            50% { opacity: 0.6; transform: translateX(2%); }
+        }
+
+        .focus-title {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .focus-subtitle {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 32px;
+        }
+
+        .ambient-elements {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.1;
+            animation: float 12s ease-in-out infinite;
+        }
+
+        .ambient-orb:nth-child(1) {
+            width: 120px;
+            height: 120px;
+            background: var(--accent-primary);
+            top: 15%;
+            left: 10%;
+            animation-delay: 0s;
+            animation-duration: 15s;
+        }
+
+        .ambient-orb:nth-child(2) {
+            width: 80px;
+            height: 80px;
+            background: var(--accent-secondary);
+            top: 60%;
+            right: 15%;
+            animation-delay: -5s;
+            animation-duration: 18s;
+        }
+
+        .ambient-orb:nth-child(3) {
+            width: 200px;
+            height: 200px;
+            background: var(--focus-pulse);
+            bottom: 20%;
+            left: 20%;
+            animation-delay: -10s;
+            animation-duration: 20s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.05; }
+            33% { transform: translate(30px, -20px) scale(1.1); opacity: 0.15; }
+            66% { transform: translate(-20px, 20px) scale(0.9); opacity: 0.08; }
+        }
+
+        .breath-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .breath-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            opacity: 0.4;
+            animation: breathe 6s ease-in-out infinite;
+        }
+
+        .breath-dot:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .breath-dot:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 0.8; transform: scale(1.3); }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            margin-top: 20px;
+            letter-spacing: 0.2px;
+        }
+
+        .focus-state {
+            display: inline-block;
+            color: var(--accent-secondary);
+            animation: stateGlow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes stateGlow {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-item focus-indicator">
+            <div class="focus-orb"></div>
+            <span>Focus</span>
+        </div>
+        <div class="menu-item">
+            <span>12:34 PM</span>
+        </div>
+    </div>
+
+    <div class="ambient-elements">
+        <div class="ambient-orb"></div>
+        <div class="ambient-orb"></div>
+        <div class="ambient-orb"></div>
+    </div>
+
+    <div class="main-content">
+        <div class="focus-container">
+            <h1 class="focus-title">Deep Work</h1>
+            <p class="focus-subtitle">Your mind is in a state of focused flow. Ambient presence active.</p>
+            
+            <div class="breath-indicator">
+                <div class="breath-dot"></div>
+                <div class="breath-dot"></div>
+                <div class="breath-dot"></div>
+            </div>
+            
+            <p class="status-text">Currently <span class="focus-state">focused</span></p>
+        </div>
+    </div>
+</body>
+</html>

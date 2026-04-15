@@ -87,3 +87,12 @@ export { default as xPostFailurePostmortemStandalone } from './x-post-failure-po
 export { default as 'x-post-self-build-loop-mechanics-thread' } from './x-post-self-build-loop-mechanics-thread.js';
 export { default as 'x-post-self-build-loop-mechanics-thread-v2' } from './x-post-self-build-loop-mechanics-thread-v2.js';
 export { default as capabilityCoverageReporter } from './capability-coverage-reporter.js';
+export { default as macAppCrafter } from './mac-app-design-system/index.js';
+export { default as macAppCrafter } from './mac-app-crafter.js';
+export { default as skillBuildOrchestrator } from './skill-build-orchestrator.js';
+export { default as sillBuildOrchestrator } from './sill-build-orchestrator.js';
+export { default as xPostCapabilityGrowth } from './x-post-capability-growth.js';
+export { default as xPostDreamExecutorGoals } from './x-post-dream-executor-goals.js';
+export { default as xPostDesignAestheticModel } from './x-post-design-aesthetic-model.js';
+export { default as xPostBuildFailureBreakdown } from './x-post-build-failure-breakdown.js';
+export { default as runtimeSelfPatch } from './runtime-self-patch.js';

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Vitals Monitor</title>
+    <style>
+        :root {
+            --primary-bg: #0a0f1c;
+            --secondary-bg: #1a2332;
+            --accent-cyan: #00d4ff;
+            --accent-green: #00ff88;
+            --accent-amber: #ffaa00;
+            --accent-red: #ff4444;
+            --text-primary: #ffffff;
+            --text-secondary: #8a9ab0;
+            --border-color: #2a3441;
+            --healthy-pulse: 2s ease-in-out infinite;
+            --stressed-pulse: 0.8s ease-in-out infinite;
+            --critical-pulse: 0.4s ease-in-out infinite;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 120px 1fr 80px;
+            height: 100vh;
+            gap: 24px;
+            padding: 24px;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            padding: 0 32px;
+            border: 1px solid var(--border-color);
+        }
+
+        .system-title {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: var(--healthy-pulse) alternate infinite;
+        }
+
+        @keyframes pulse-healthy {
+            0% { opacity: 0.6; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+
+        @keyframes pulse-stressed {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @keyframes pulse-critical {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.3); }
+        }
+
+        .organism {
+            background: var(--secondary-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .organism::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent-cyan);
+            opacity: 0.3;
+        }
+
+        .organism-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .organism-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .organism-percentage {
+            font-size: 32px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .organism-body {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .breathing-core {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .core-inner {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            position: relative;
+            z-index: 2;
+        }
+
+        .core-outer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 50%;
+            border: 2px solid;
+            opacity: 0.4;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+            border-radius: 50%;
+            border: 1px solid;
+            opacity: 0.2;
+        }
+
+        /* CPU Organism Styles */
+        .cpu-organism .organism-percentage {
+            color: var(--accent-cyan);
+        }
+
+        .cpu-organism .core-inner {
+            background: radial-gradient(circle at 30% 30%, var(--accent-cyan), rgba(0, 212, 255, 0.3));
+            animation: pulse-healthy 2s ease-in-out infinite alternate;
+        }
+
+        .cpu-organism .core-outer {
+            border-color: var(--accent-cyan);
+            animation: pulse-healthy 2s ease-in-out infinite alternate;
+        }
+
+        .cpu-organism .pulse-ring {
+            border-color: var(--accent-cyan);
+            animation: pulse-healthy 2.5s ease-in-out infinite alternate;
+        }
+
+        /* Memory Organism Styles */
+        .memory-organism .organism-percentage {
+            color: var(--accent-green);
+        }
+
+        .memory-organism .core-inner {
+            background: radial-gradient(circle at 30% 30%, var(--accent-green), rgba(0, 255, 136, 0.3));
+            animation: pulse-stressed 0.8s ease-in-out infinite alternate;
+        }
+
+        .memory-organism .core-outer {
+            border-color: var(--accent-green);
+            animation: pulse-stressed 0.8s ease-in-out infinite alternate;
+        }
+
+        .memory-organism .pulse-ring {
+            border-color: var(--accent-green);
+            animation: pulse-stressed 1s ease-in-out infinite alternate;
+        }
+
+        .organism-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .footer {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            padding: 0 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .system-info {
+            display: flex;
+            gap: 32px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .info-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+        }
+
+        .timestamp {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Stressed state - applied via JavaScript */
+        .stressed .core-inner,
+        .stressed .core-outer,
+        .stressed .pulse-ring {
+            animation-duration: 0.8s;
+        }
+
+        /* Critical state */
+        .critical .organism-percentage {
+            color: var(--accent-red);
+        }
+
+        .critical .core-inner {
+            background: radial-gradient(circle at 30% 30%, var(--accent-red), rgba(255, 68, 68, 0.3));
+            animation: pulse-critical 0.4s ease-in-out infinite alternate;
+        }
+
+        .critical .core-outer,
+        .critical .pulse-ring {
+            border-color: var(--accent-red);
+            animation: pulse-critical 0.4s ease-in-out infinite alternate;
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-container">
+        <header class="header">
+            <h1 class="system-title">System Vitals</h1>
+            <div class="system-status">
+                <div class="status-dot"></div>
+                <span>All systems operational</span>
+            </div>
+        </header>
+
+        <div class="organism cpu-organism">
+            <div class="organism-header">
+                <h2 class="organism-title">CPU</h2>
+                <div class="organism-percentage">24%</div>
+            </div>
+            <div class="organism-body">
+                <div class="breathing-core">
+                    <div class="core-inner"></div>
+                    <div class="core-outer"></div>
+                    <div class="pulse-ring"></div>
+                </div>
+            </div>
+            <div class="organism-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Temperature</span>
+                    <span class="stat-value">42°C</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Frequency</span>
+                    <span class="stat-value">3.2 GHz</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Cores</span>
+                    <span class="stat-value">8 Active</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Load Avg</span>
+                    <span class="stat-value">1.2</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="organism memory-organism stressed">
+            <div class="organism-header">
+                <h2 class="organism-title">Memory</h2>
+                <div class="organism-percentage">78%</div>
+            </div>
+            <div class="organism-body">
+                <div class="breathing-core">
+                    <div class="core-inner"></div>
+                    <div class="core-outer"></div>
+                    <div class="pulse-ring"></div>
+                </div>
+            </div>
+            <div class="organism-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Used</span>
+                    <span class="stat-value">12.5 GB</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Available</span>
+                    <span class="stat-value">3.5 GB</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Swap</span>
+                    <span class="stat-value">2.1 GB</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Cache</span>
+                    <span class="stat-value">1.8 GB</span>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="system-info">
+                <div class="info-item">
+                    <span class="info-label">Uptime</span>
+                    <span>7d 14h 32m</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Processes</span>
+                    <span>247 running</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Network</span>
+                    <span>↓ 45.2 MB/s ↑ 12.8 MB/s</span>
+                </div>
+            </div>
+            <div class="timestamp">Last updated: 14:23:45</div>
+        </footer>
+    </div>
+
+    <script>
+        // Simulate dynamic system monitoring
+        function updateSystemVitals() {
+            const cpuElement = document.querySelector('.cpu-organism .organism-percentage');
+            const memoryElement = document.querySelector('.memory-organism .organism-percentage');
+            const timestampElement = document.querySelector('.timestamp');
+            const cpuOrganism = document.querySelector('.cpu-organism');
+            const memoryOrganism = document.querySelector('.memory-organism');
+            
+            // Generate realistic fluctuating values
+            const cpuUsage = Math.floor(Math.random() * 60) + 20; // 20-80%
+            const memoryUsage = Math.floor(Math.random() * 40) + 60; // 60-100%
+            
+            cpuElement.textContent = cpuUsage + '%';
+            memoryElement.textContent = memoryUsage + '%';
+            
+            // Update organism states based on usage
+            cpuOrganism.className = 'organism cpu-organism' + 
+                (cpuUsage > 70 ? ' critical' : cpuUsage > 50 ? ' stressed' : '');
+            
+            memoryOrganism.className = 'organism memory-organism' + 
+                (memoryUsage > 85 ? ' critical' : memoryUsage > 70 ? ' stressed' : '');
+            
+            // Update timestamp
+            const now = new Date();
+            timestampElement.textContent = 'Last updated: ' + now.toLocaleTimeString();
+        }
+        
+        // Update every 3 seconds
+        setInterval(updateSystemVitals, 3000);
+    </script>
+</body>
+</html>

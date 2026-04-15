@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Culinary Timeline</title>
+    <style>
+        :root {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent-low: #4a90e2;
+            --accent-medium: #f39c12;
+            --accent-high: #e74c3c;
+            --border: #333333;
+            --grid: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            overflow: hidden;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        #header {
+            padding: calc(var(--grid) * 4) calc(var(--grid) * 5);
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        #time-ruler {
+            position: relative;
+            margin: 0 calc(var(--grid) * 5);
+            padding: calc(var(--grid) * 3) 0 calc(var(--grid) * 2);
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .time-mark {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        #timeline-container {
+            padding: calc(var(--grid) * 3) calc(var(--grid) * 5);
+            height: calc(100vh - 140px);
+            overflow-y: auto;
+        }
+
+        .track {
+            display: grid;
+            grid-template-columns: 160px 1fr;
+            gap: calc(var(--grid) * 3);
+            align-items: center;
+            height: calc(var(--grid) * 7);
+            margin-bottom: calc(var(--grid) * 2);
+        }
+
+        .track-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            text-align: right;
+        }
+
+        .track-timeline {
+            position: relative;
+            height: calc(var(--grid) * 5);
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .cooking-segment {
+            position: absolute;
+            height: calc(var(--grid) * 4);
+            border-radius: 3px;
+            cursor: move;
+            transition: transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            padding: 0 calc(var(--grid) * 2);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .cooking-segment:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+
+        .cooking-segment.low {
+            background: var(--accent-low);
+        }
+
+        .cooking-segment.medium {
+            background: var(--accent-medium);
+        }
+
+        .cooking-segment.high {
+            background: var(--accent-high);
+        }
+
+        .segment-duration {
+            font-size: 11px;
+            color: rgba(255,255,255,0.8);
+            margin-left: var(--grid);
+        }
+
+        #legend {
+            position: absolute;
+            bottom: calc(var(--grid) * 4);
+            left: calc(var(--grid) * 5);
+            display: flex;
+            gap: calc(var(--grid) * 4);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--grid);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: calc(var(--grid) * 2);
+            height: calc(var(--grid) * 2);
+            border-radius: 2px;
+        }
+
+        /* Scrollbar styling */
+        #timeline-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #timeline-container::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        #timeline-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <header id="header">
+        <h1>Culinary Timeline</h1>
+    </header>
+    
+    <div id="time-ruler">
+        <span class="time-mark">0 min</span>
+        <span class="time-mark">15 min</span>
+        <span class="time-mark">30 min</span>
+        <span class="time-mark">45 min</span>
+        <span class="time-mark">60 min</span>
+        <span class="time-mark">75 min</span>
+        <span class="time-mark">90 min</span>
+    </div>
+    
+    <div id="timeline-container">
+        <div class="track">
+            <div class="track-label">Onions</div>
+            <div class="track-timeline">
+                <div class="cooking-segment low" style="left: 10%; width: 20%">
+                    Sauté<span class="segment-duration">15m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Garlic</div>
+            <div class="track-timeline">
+                <div class="cooking-segment low" style="left: 25%; width: 10%">
+                    Sauté<span class="segment-duration">8m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Beef</div>
+            <div class="track-timeline">
+                <div class="cooking-segment high" style="left: 35%; width: 15%">
+                    Sear<span class="segment-duration">10m</span>
+                </div>
+                <div class="cooking-segment medium" style="left: 50%; width: 35%">
+                    Braise<span class="segment-duration">45m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Tomatoes</div>
+            <div class="track-timeline">
+                <div class="cooking-segment medium" style="left: 35%; width: 50%">
+                    Simmer<span class="segment-duration">55m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Carrots</div>
+            <div class="track-timeline">
+                <div class="cooking-segment medium" style="left: 40%; width: 35%">
+                    Simmer<span class="segment-duration">35m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Potatoes</div>
+            <div class="track-timeline">
+                <div class="cooking-segment medium" style="left: 55%; width: 25%">
+                    Simmer<span class="segment-duration">25m</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="track">
+            <div class="track-label">Herbs</div>
+            <div class="track-timeline">
+                <div class="cooking-segment low" style="left: 80%; width: 8%">
+                    Add<span class="segment-duration">5m</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--accent-low)"></div>
+            <span>Low Heat</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--accent-medium)"></div>
+            <span>Medium Heat</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: var(--accent-high)"></div>
+            <span>High Heat</span>
+        </div>
+    </div>
+</body>
+</html>

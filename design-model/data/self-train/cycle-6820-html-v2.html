@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Converter</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --accent-glow: #6366f1;
+            --panel-bg: #242424;
+            --border-subtle: #3a3a3a;
+            --highlight: #818cf8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .converter-container {
+            width: 90%;
+            max-width: 800px;
+            height: 80%;
+            background: var(--panel-bg);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 100px rgba(99, 102, 241, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .temporal-header {
+            padding: 40px;
+            text-align: center;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--panel-bg) 100%);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .converter-title {
+            font-size: 28px;
+            font-weight: 200;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, var(--text-primary), var(--highlight));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .era-display {
+            font-size: 16px;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .recipe-panel {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .recipe-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .recipe-name {
+            font-size: 24px;
+            margin-bottom: 30px;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            margin: 16px 0;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ingredient-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .ingredient-item.transitioning::before {
+            left: 100%;
+        }
+
+        .measurement-icon {
+            width: 48px;
+            height: 48px;
+            margin-right: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            font-size: 24px;
+            transition: transform 0.3s ease;
+        }
+
+        .ingredient-text {
+            flex: 1;
+        }
+
+        .ingredient-name {
+            font-weight: 400;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .ingredient-amount {
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .timeline-controller {
+            padding: 30px 40px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .timeline-wrapper {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding: 0 10px;
+        }
+
+        .timeline-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.3s ease;
+        }
+
+        .timeline-label.active {
+            color: var(--highlight);
+        }
+
+        .timeline-track {
+            position: relative;
+            height: 6px;
+            background: var(--border-subtle);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .timeline-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-glow), var(--highlight));
+            border-radius: 3px;
+            width: 75%;
+            transition: width 0.3s ease;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            top: 50%;
+            left: 75%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            background: var(--highlight);
+            border: 3px solid var(--bg-secondary);
+            border-radius: 50%;
+            cursor: grab;
+            transition: transform 0.2s ease;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .timeline-handle:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .timeline-handle:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .recipe-panel.historical-mode .recipe-name {
+            font-family: 'Georgia', serif;
+            font-weight: normal;
+        }
+
+        .recipe-panel.modern-mode .recipe-name {
+            font-family: inherit;
+            font-weight: 300;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="converter-container">
+        <header class="temporal-header">
+            <h1 class="converter-title">TEMPORAL RECIPE CONVERTER</h1>
+            <p class="era-display" id="eraDisplay">Modern Era</p>
+        </header>
+
+        <div class="recipe-panel modern-mode" id="recipePanel">
+            <div class="recipe-content">
+                <h2 class="recipe-name" id="recipeName">Artisan Bread</h2>
+                
+                <div class="ingredient-item" data-ingredient="flour">
+                    <div class="measurement-icon">🌾</div>
+                    <div class="ingredient-text">
+                        <div class="ingredient-name">Flour</div>
+                        <div class="ingredient-amount" id="flour-amount">500g</div>
+                    </div>
+                </div>
+
+                <div class="ingredient-item" data-ingredient="water">
+                    <div class="measurement-icon">💧</div>
+                    <div class="ingredient-text">
+                        <div class="ingredient-name">Water</div>
+                        <div class="ingredient-amount" id="water-amount">350ml</div>
+                    </div>
+                </div>
+
+                <div class="ingredient-item" data-ingredient="salt">
+                    <div class="measurement-icon">🧂</div>
+                    <div class="ingredient-text">
+                        <div class="ingredient-name">Salt</div>
+                        <div class="ingredient-amount" id="salt-amount">10g</div>
+                    </div>
+                </div>
+
+                <div class="ingredient-item" data-ingredient="yeast">
+                    <div class="measurement-icon">🦠</div>
+                    <div class="ingredient-text">
+                        <div class="ingredient-name">Yeast</div>
+                        <div class="ingredient-amount" id="yeast-amount">7g</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="timeline-controller">
+            <div class="timeline-wrapper">
+                <div class="timeline-labels">
+                    <span class="timeline-label" data-era="ancient">Ancient</span>
+                    <span class="timeline-label" data-era="medieval">Medieval</span>
+                    <span class="timeline-label" data-era="renaissance">Renaissance</span>
+                    <span class="timeline-label active" data-era="modern">Modern</span>
+                </div>
+                <div class="timeline-track" id="timelineTrack">
+                    <div class="timeline-progress" id="timelineProgress"></div>
+                    <div class="timeline-handle" id="timelineHandle"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const timelineHandle = document.getElementById('timelineHandle');
+        const timelineTrack = document.getElementById('timelineTrack');
+        const timelineProgress = document.getElementById('timelineProgress');
+        const eraDisplay = document.getElementById('eraDisplay');
+        const recipePanel = document.getElementById('recipePanel');
+        const recipeName = document.getElementById('recipeName');
+        const labels = document.querySelectorAll('.timeline-label');
+        
+        const measurements = {
+            ancient: {
+                flour: "4 handfuls",
+                water: "2 cups",
+                salt: "1 pinch",
+                yeast: "wild starter",
+                recipeName: "Daily Bread"
+            },
+            medieval: {
+                flour: "1 pound",
+                water: "3 gills",
+                salt: "½ spoon",
+                yeast: "ale barm",
+                recipeName: "Manchet Loaf"
+            },
+            renaissance: {
+                flour: "2 libbre",
+                water: "1½ pints",
+                salt: "2 drams",
+                yeast: "brewer's foam",
+                recipeName: "Fine White Bread"
+            },
+            modern: {
+                flour: "500g",
+                water: "350ml",
+                salt: "10g",
+                yeast: "7g",
+                recipeName: "Artisan Bread"
+            }
+        };
+
+        const eras = ['ancient', 'medieval', 'renaissance', 'modern'];
+        let isDragging = false;
+        let currentEra = 'modern';
+
+        function updateTimeline(position) {
+            const rect = timelineTrack.getBoundingClientRect();
+            const percentage = Math.max(0, Math.min(100, position));
+            
+            timelineHandle.style.left = percentage + '%';
+            timelineProgress.style.width = percentage + '%';
+            
+            const eraIndex = Math.floor((percentage / 100) * eras.length);
+            const newEra = eras[Math.min(eraIndex, eras.length - 1)];
+            
+            if (newEra !== currentEra) {
+                currentEra = newEra;
+                updateEra(newEra);
+            }
+        }
+
+        function updateEra(era) {
+            const data = measurements[era];
+            eraDisplay.textContent = era.charAt(0).toUpperCase() + era.slice(1) + ' Era';
+            recipeName.textContent = data.recipeName;
+            
+            labels.forEach(label => {
+                label.classList.toggle('active', label.dataset.era === era);
+            });
+            
+            recipePanel.className = 'recipe-panel ' + (era === 'modern' ? 'modern-mode' : 'historical-mode');
+            
+            document.querySelectorAll('.ingredient-item').forEach(item => {
+                const ingredient = item.dataset.ingredient;
+                const amountElement = document.getElementById(ingredient + '-amount');
+                
+                item.classList.add('transitioning');
+                setTimeout(() => {
+                    amountElement.textContent = data[ingredient];
+                    item.classList.remove('transitioning');
+                }, 300);
+            });
+        }
+
+        timelineHandle.addEventListener('mousedown', () => {
+            isDragging = true;
+            timelineHandle.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = timelineTrack.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = (x / rect.width) * 100;
+            
+            updateTimeline(percentage);
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            timelineHandle.style.cursor = 'grab';
+        });
+
+        timelineTrack.addEventListener('click', (e) => {
+            if (isDragging) return;
+            
+            const rect = timelineTrack.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = (x / rect.width) * 100;
+            
+            updateTimeline(percentage);
+        });
+    </script>
+</body>
+</html>

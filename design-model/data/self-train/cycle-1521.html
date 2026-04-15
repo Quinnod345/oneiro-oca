@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --canvas-bg: #fafbfc;
+            --document-bg: #ffffff;
+            --document-border: #e1e4e8;
+            --document-shadow: rgba(27, 31, 36, 0.04);
+            --document-hover-shadow: rgba(27, 31, 36, 0.08);
+            --text-primary: #24292f;
+            --text-secondary: #656d76;
+            --text-tertiary: #8c959f;
+            --cluster-bg: rgba(139, 148, 158, 0.06);
+            --cluster-border: rgba(139, 148, 158, 0.15);
+            --connection-line: rgba(139, 148, 158, 0.2);
+            --accent-blue: #0969da;
+            --accent-green: #1a7f37;
+            --accent-purple: #8250df;
+            --accent-orange: #d1242f;
+            --accent-yellow: #bf8700;
+            --toolbar-bg: rgba(255, 255, 255, 0.9);
+            --toolbar-border: rgba(209, 213, 218, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--canvas-bg);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .canvas {
+            position: relative;
+            width: 2880px;
+            height: 1800px;
+            transform-origin: 0 0;
+            transition: transform 0.15s ease-out;
+        }
+
+        .viewport {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .cluster {
+            position: absolute;
+            border-radius: 24px;
+            background: var(--cluster-bg);
+            border: 1px solid var(--cluster-border);
+            backdrop-filter: blur(8px);
+            z-index: 1;
+        }
+
+        .cluster-label {
+            position: absolute;
+            top: -8px;
+            left: 20px;
+            background: var(--canvas-bg);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border: 1px solid var(--cluster-border);
+        }
+
+        .connection {
+            position: absolute;
+            height: 1px;
+            background: var(--connection-line);
+            z-index: 0;
+            transform-origin: left center;
+        }
+
+        .document {
+            position: absolute;
+            width: 160px;
+            height: 200px;
+            background: var(--document-bg);
+            border: 1px solid var(--document-border);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px var(--document-shadow);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 12px;
+        }
+
+        .document:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 24px var(--document-hover-shadow);
+            border-color: var(--accent-blue);
+            z-index: 10;
+        }
+
+        .document-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: white;
+        }
+
+        .document-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+            margin-bottom: 6px;
+            word-break: break-word;
+        }
+
+        .document-meta {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .document-tags {
+            margin-top: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .document-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(139, 148, 158, 0.1);
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            background: var(--toolbar-bg);
+            border: 1px solid var(--toolbar-border);
+            border-radius: 12px;
+            padding: 8px;
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            display: flex;
+            gap: 4px;
+        }
+
+        .toolbar-button {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .toolbar-button:hover {
+            background: rgba(139, 148, 158, 0.1);
+            color: var(--text-primary);
+        }
+
+        .minimap {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 160px;
+            height: 100px;
+            background: var(--toolbar-bg);
+            border: 1px solid var(--toolbar-border);
+            border-radius: 8px;
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--accent-blue);
+            border-radius: 2px;
+            background: rgba(9, 105, 218, 0.1);
+        }
+
+        .search-box {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            width: 280px;
+            height: 40px;
+            background: var(--toolbar-bg);
+            border: 1px solid var(--toolbar-border);
+            border-radius: 20px;
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 8px;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            background: none;
+            outline: none;
+            font-size: 14px;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Document type variations */
+        .doc-pdf { background: var(--accent-orange); }
+        .doc-text { background: var(--accent-blue); }
+        .doc-image { background: var(--accent-purple); }
+        .doc-code { background: var(--accent-green); }
+        .doc-data { background: var(--accent-yellow); }
+    </style>
+</head>
+<body>
+    <div class="viewport">
+        <div class="canvas" id="canvas">
+            <!-- Research Cluster -->
+            <div class="cluster" style="left: 200px; top: 150px; width: 420px; height: 300px;">
+                <div class="cluster-label">Research</div>
+            </div>
+
+            <!-- Design Cluster -->
+            <div class="cluster" style="left: 700px; top: 100px; width: 380px; height: 280px;">
+                <div class="cluster-label">Design</div>
+            </div>
+
+            <!-- Development Cluster -->
+            <div class="cluster" style="left: 1200px; top: 200px; width: 450px; height: 320px;">
+                <div class="cluster-label">Development</div>
+            </div>
+
+            <!-- Business Cluster -->
+            <div class="cluster" style="left: 150px; top: 550px; width: 400px; height: 250px;">
+                <div class="cluster-label">Business</div>
+            </div>
+
+            <!-- Personal Cluster -->
+            <div class="cluster" style="left: 650px; top: 500px; width: 350px; height: 280px;">
+                <div class="cluster-label">Personal</div>
+            </div>
+
+            <!-- Connection lines -->
+            <div class="connection" style="left: 420px; top: 280px; width: 120px; transform: rotate(-15deg);"></div>
+            <div class="connection" style="left: 580px; top: 320px; width: 140px; transform: rotate(25deg);"></div>
+            <div class="connection" style="left: 950px; top: 240px; width: 180px; transform: rotate(8deg);"></div>
+            <div class="connection" style="left: 380px; top: 450px; width: 100px; transform: rotate(45deg);"></div>
+            <div class="connection" style="left: 820px; top: 380px; width: 160px; transform: rotate(-12deg);"></div>
+
+            <!-- Research Documents -->
+            <div class="document" style="left: 220px; top: 180px;">
+                <div class="document-icon doc-pdf">PDF</div>
+                <div class="document-title">AI Ethics Framework</div>
+                <div class="document-meta">Stanford Research • 2024</div>
+                <div class="document-tags">
+                    <span class="document-tag">ethics</span>
+                    <span class="document-tag">ai</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 400px; top: 200px;">
+                <div class="document-icon doc-text">TXT</div>
+                <div class="document-title">Machine Learning Notes</div>
+                <div class="document-meta">Personal notes • Today</div>
+                <div class="document-tags">
+                    <span class="document-tag">ml</span>
+                    <span class="document-tag">notes</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 300px; top: 320px;">
+                <div class="document-icon doc-data">CSV</div>
+                <div class="document-title">User Research Data</div>
+                <div class="document-meta">Analysis results • Mar 15</div>
+                <div class="document-tags">
+                    <span class="document-tag">data</span>
+                    <span class="document-tag">users</span>
+                </div>
+            </div>
+
+            <!-- Design Documents -->
+            <div class="document" style="left: 720px; top: 130px;">
+                <div class="document-icon doc-image">PNG</div>
+                <div class="document-title">Mobile App Wireframes</div>
+                <div class="document-meta">Figma export • Yesterday</div>
+                <div class="document-tags">
+                    <span class="document-tag">mobile</span>
+                    <span class="document-tag">wireframes</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 900px; top: 180px;">
+                <div class="document-icon doc-image">SVG</div>
+                <div class="document-title">Brand Guidelines</div>
+                <div class="document-meta">Brand team • Mar 10</div>
+                <div class="document-tags">
+                    <span class="document-tag">brand</span>
+                    <span class="document-tag">style</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 810px; top: 280px;">
+                <div class="document-icon doc-pdf">PDF</div>
+                <div class="document-title">User Journey Map</div>
+                <div class="document-meta">UX Research • Mar 8</div>
+                <div class="document-tags">
+                    <span class="document-tag">ux</span>
+                    <span class="document-tag">journey</span>
+                </div>
+            </div>
+
+            <!-- Development Documents -->
+            <div class="document" style="left: 1220px; top: 230px;">
+                <div class="document-icon doc-code">JS</div>
+                <div class="document-title">API Documentation</div>
+                <div class="document-meta">Backend team • Mar 12</div>
+                <div class="document-tags">
+                    <span class="document-tag">api</span>
+                    <span class="document-tag">docs</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 1400px; top: 280px;">
+                <div class="document-icon doc-code">PY</div>
+                <div class="document-title">Data Pipeline Script</div>
+                <div class="document-meta">Data team • Today</div>
+                <div class="document-tags">
+                    <span class="document-tag">python</span>
+                    <span class="document-tag">data</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 1300px; top: 400px;">
+                <div class="document-icon doc-text">MD</div>
+                <div class="document-title">Technical Specification</div>
+                <div class="document-meta">Architecture • Mar 5</div>
+                <div class="document-tags">
+                    <span class="document-tag">spec</span>
+                    <span class="document-tag">tech</span>
+                </div>
+            </div>
+
+            <!-- Business Documents -->
+            <div class="document" style="left: 170px; top: 580px;">
+                <div class="document-icon doc-pdf">PDF</div>
+                <div class="document-title">Q1 Business Review</div>
+                <div class="document-meta">Finance • Mar 1</div>
+                <div class="document-tags">
+                    <span class="document-tag">finance</span>
+                    <span class="document-tag">q1</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 350px; top: 620px;">
+                <div class="document-icon doc-text">DOC</div>
+                <div class="document-title">Marketing Strategy</div>
+                <div class="document-meta">Marketing • Feb 28</div>
+                <div class="document-tags">
+                    <span class="document-tag">strategy</span>
+                    <span class="document-tag">marketing</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 260px; top: 720px;">
+                <div class="document-icon doc-data">XLS</div>
+                <div class="document-title">Budget Forecast</div>
+                <div class="document-meta">Finance • Mar 14</div>
+                <div class="document-tags">
+                    <span class="document-tag">budget</span>
+                    <span class="document-tag">forecast</span>
+                </div>
+            </div>
+
+            <!-- Personal Documents -->
+            <div class="document" style="left: 670px; top: 530px;">
+                <div class="document-icon doc-text">TXT</div>
+                <div class="document-title">Reading List 2024</div>
+                <div class="document-meta">Personal • Mar 16</div>
+                <div class="document-tags">
+                    <span class="document-tag">books</span>
+                    <span class="document-tag">reading</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 850px; top: 580px;">
+                <div class="document-icon doc-image">JPG</div>
+                <div class="document-title">Conference Photos</div>
+                <div class="document-meta">Travel • Mar 3</div>
+                <div class="document-tags">
+                    <span class="document-tag">photos</span>
+                    <span class="document-tag">conference</span>
+                </div>
+            </div>
+
+            <div class="document" style="left: 760px; top: 680px;">
+                <div class="document-icon doc-pdf">PDF</div>
+                <div class="document-title">Learning Goals</div>
+                <div class="document-meta">Personal • Jan 1</div>
+                <div class="document-tags">
+                    <span class="document-tag">goals</span>
+                    <span class="document-tag">learning</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="toolbar-button">⚡</button>
+        <button class="toolbar-button">🔍</button>
+        <button class="toolbar-button">📁</button>
+        <button class="toolbar-button">⚙️</button>
+    </div>
+
+    <div class="search-box">
+        <span style="color: var(--text-tertiary);">🔍</span>
+        <input type="text" class="search-input" placeholder="Search documents...">
+    </div>
+
+    <div class="minimap">
+        <div class="minimap-viewport" style="left: 10px; top: 8px; width: 50px; height: 28px;"></div>
+    </div>
+
+    <script>
+        let isDragging = false;
+        let startX, startY, initialX = 0, initialY = 0;
+        const canvas = document.getElementById('canvas');
+        
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.document, .toolbar, .search-box, .minimap')) return;
+            isDragging = true;
+            startX = e.clientX - initialX;
+            startY = e.clientY - initialY;
+            document.body.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            initialX = e.clientX - startX;
+            initialY = e.clientY - startY;
+            canvas.style.transform = `translate(${initialX}px, ${initialY}px) scale(1)`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.style.cursor = 'grab';
+        });
+
+        // Document hover effects
+        document.querySelectorAll('.document').forEach(doc => {
+            doc.addEventListener('mouseenter', () => {
+                doc.style.zIndex = '10';
+            });
+            doc.addEventListener('mouseleave', () => {
+                doc.style.zIndex = '2';
+            });
+        });
+    </script>
+</body>
+</html>

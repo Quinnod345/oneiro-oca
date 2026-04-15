@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromaKeys - Musical Color Palette Generator</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0f;
+            --secondary-bg: #1a1a25;
+            --tertiary-bg: #2a2a3a;
+            --accent: #4f46e5;
+            --accent-hover: #5b52f0;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border: #334155;
+            --key-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --glow-effect: 0 0 20px rgba(79, 70, 229, 0.3);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-container {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        .header {
+            padding: 24px 32px;
+            background: rgba(26, 26, 37, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            background: var(--tertiary-bg);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .piano-section {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--secondary-bg);
+            position: relative;
+        }
+
+        .color-canvas {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, rgba(79, 70, 229, 0.05), transparent 70%);
+        }
+
+        .harmony-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 24px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .color-swatch {
+            aspect-ratio: 16/10;
+            border-radius: 16px;
+            background: var(--tertiary-bg);
+            border: 2px solid var(--border);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-end;
+            padding: 16px;
+        }
+
+        .color-swatch.active {
+            border-color: var(--accent);
+            box-shadow: var(--glow-effect);
+            transform: translateY(-4px);
+        }
+
+        .swatch-info {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+        }
+
+        .piano-keyboard {
+            height: 200px;
+            background: var(--primary-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            padding: 20px;
+            gap: 2px;
+            align-items: stretch;
+            position: relative;
+        }
+
+        .octave {
+            display: flex;
+            position: relative;
+        }
+
+        .piano-key {
+            background: #f8fafc;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            border-radius: 0 0 8px 8px;
+            box-shadow: var(--key-shadow);
+            outline: none;
+        }
+
+        .piano-key.white {
+            width: 60px;
+            height: 160px;
+            background: linear-gradient(180deg, #ffffff, #f1f5f9);
+            border: 1px solid #e2e8f0;
+            margin-right: 2px;
+        }
+
+        .piano-key.black {
+            width: 40px;
+            height: 100px;
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            position: absolute;
+            z-index: 2;
+            border-radius: 0 0 6px 6px;
+        }
+
+        .piano-key.black.c-sharp { left: 42px; }
+        .piano-key.black.d-sharp { left: 106px; }
+        .piano-key.black.f-sharp { left: 232px; }
+        .piano-key.black.g-sharp { left: 296px; }
+        .piano-key.black.a-sharp { left: 360px; }
+
+        .piano-key:hover {
+            transform: translateY(2px);
+        }
+
+        .piano-key.active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .piano-key.white.active {
+            background: linear-gradient(180deg, #f1f5f9, #e2e8f0);
+        }
+
+        .piano-key.black.active {
+            background: linear-gradient(180deg, #0f172a, #020617);
+        }
+
+        .sidebar {
+            background: var(--tertiary-bg);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-section {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .harmony-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .harmony-btn {
+            padding: 12px 16px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            text-align: left;
+        }
+
+        .harmony-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .harmony-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            box-shadow: var(--glow-effect);
+        }
+
+        .palette-export {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .color-values {
+            flex: 1;
+            padding: 16px 0;
+        }
+
+        .color-value {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(100, 116, 139, 0.1);
+        }
+
+        .export-btn {
+            padding: 12px 16px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .export-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .visual-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: 500;
+            color: #64748b;
+            pointer-events: none;
+        }
+
+        .piano-key.white .key-label {
+            color: #64748b;
+        }
+
+        .piano-key.black .key-label {
+            color: #94a3b8;
+        }
+
+        @keyframes colorPulse {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+        }
+
+        .visual-feedback.pulse {
+            animation: colorPulse 0.6s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">CK</div>
+                <div class="logo-text">ChromaKeys</div>
+            </div>
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="harmony">Harmony Mode</button>
+                <button class="mode-btn" data-mode="melody">Melody Mode</button>
+                <button class="mode-btn" data-mode="chord">Chord Mode</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="piano-section">
+                <div class="color-canvas">
+                    <div class="harmony-display">
+                        <div class="color-swatch" data-note="root">
+                            <div class="swatch-info">Root Note</div>
+                        </div>
+                        <div class="color-swatch" data-note="third">
+                            <div class="swatch-info">Third</div>
+                        </div>
+                        <div class="color-swatch" data-note="fifth">
+                            <div class="swatch-info">Fifth</div>
+                        </div>
+                        <div class="color-swatch" data-note="seventh">
+                            <div class="swatch-info">Seventh</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="piano-keyboard">
+                    <div class="octave">
+                        <button class="piano-key white" data-note="C">
+                            <span class="key-label">C</span>
+                        </button>
+                        <button class="piano-key black c-sharp" data-note="C#">
+                            <span class="key-label">C#</span>
+                        </button>
+                        <button class="piano-key white" data-note="D">
+                            <span class="key-label">D</span>
+                        </button>
+                        <button class="piano-key black d-sharp" data-note="D#">
+                            <span class="key-label">D#</span>
+                        </button>
+                        <button class="piano-key white" data-note="E">
+                            <span class="key-label">E</span>
+                        </button>
+                        <button class="piano-key white" data-note="F">
+                            <span class="key-label">F</span>
+                        </button>
+                        <button class="piano-key black f-sharp" data-note="F#">
+                            <span class="key-label">F#</span>
+                        </button>
+                        <button class="piano-key white" data-note="G">
+                            <span class="key-label">G</span>
+                        </button>
+                        <button class="piano-key black g-sharp" data-note="G#">
+                            <span class="key-label">G#</span>
+                        </button>
+                        <button class="piano-key white" data-note="A">
+                            <span class="key-label">A</span>
+                        </button>
+                        <button class="piano-key black a-sharp" data-note="A#">
+                            <span class="key-label">A#</span>
+                        </button>
+                        <button class="piano-key white" data-note="B">
+                            <span class="key-label">B</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <h3 class="section-title">Harmony Type</h3>
+                    <div class="harmony-controls">
+                        <button class="harmony-btn active" data-harmony="major">Major Triad</button>
+                        <button class="harmony-btn" data-harmony="minor">Minor Triad</button>
+                        <button class="harmony-btn" data-harmony="diminished">Diminished</button>
+                        <button class="harmony-btn" data-harmony="augmented">Augmented</button>
+                        <button class="harmony-btn" data-harmony="major7">Major 7th</button>
+                        <button class="harmony-btn" data-harmony="minor7">Minor 7th</button>
+                        <button class="harmony-btn" data-harmony="dominant7">Dominant 7th</button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section palette-export">
+                    <h3 class="section-title">Color Palette</h3>
+                    <div class="color-values">
+                        <div class="color-value">
+                            <span>Primary</span>
+                            <span>#4f46e5</span>
+                        </div>
+                        <div class="color-value">
+                            <span>Secondary</span>
+                            <span>#7c3aed</span>
+                        </div>
+                        <div class="color-value">
+                            <span>Accent</span>
+                            <span>#06b6d4</span>
+                        </div>
+                        <div class="color-value">
+                            <span>Neutral</span>
+                            <span>#64748b</span>
+                        </div>
+                    </div>
+                    <button class="export-btn">Export Palette</button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <div class="visual-feedback"></div>
+
+    <script>
+        const noteToHue = {
+            'C': 0, 'C#': 30, 'D': 60, 'D#': 90, 'E': 120, 'F': 150,
+            'F#': 180, 'G': 210, 'G#': 240, 'A': 270, 'A#': 300, 'B': 330
+        };
+
+        const harmonies = {
+            major: [0, 4, 7],
+            minor: [0, 3, 7],
+            diminished: [0, 3, 6],
+            augmented: [0, 4, 8],
+            major7: [0, 4, 7, 11],
+            minor7: [0, 3, 7, 10],
+            dominant7: [0, 4, 7, 10]
+        };
+
+        let currentRoot = 'C';
+        let currentHarmony = 'major';
+        let activeKeys = new Set();
+
+        function noteToColor(note, index = 0, total = 1) {
+            const hue = noteToHue[note];
+            const saturation = 75 + (index * 10);
+            const lightness = 55 + (index * 5);
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        function updateHarmonyDisplay() {
+            const swatches = document.querySelectorAll('.color-swatch');
+            const intervals = harmonies[currentHarmony];
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const rootIndex = notes.indexOf(currentRoot);
+
+            intervals.forEach((interval, i) => {
+                if (swatches[i]) {
+                    const noteIndex = (rootIndex + interval) % 12;
+                    const note = notes[noteIndex];
+                    const color = noteToColor(note, i, intervals.length);
+                    swatches[i].style.background = color;
+                    swatches[i].querySelector('.swatch-info').textContent = note;
+                }
+            });
+
+            updateColorValues(intervals.map((interval, i) => {
+                const noteIndex = (rootIndex + interval) % 12;
+                return noteToColor(notes[noteIndex], i, intervals.length);
+            }));
+        }
+
+        function updateColorValues(colors) {
+            const colorValueElements = document.querySelectorAll('.color-value span:last-child');
+            colors.forEach((color, i) => {
+                if (colorValueElements[i]) {
+                    const hex = hslToHex(color);
+                    colorValueElements[i].textContent = hex;
+                }
+            });
+        }
+
+        function hslToHex(hsl) {
+            const match = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
+            if (!match) return '#000000';
+            
+            const h = parseInt(match[1]) / 360;
+            const s = parseInt(match[2]) / 100;
+            const l = parseInt(match[3]) / 100;
+
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            const r = hue2rgb(p, q, h + 1/3);
+            const g = hue2rgb(p, q, h);
+            const b = hue2rgb(p, q, h - 1/3);
+
+            const toHex = (c) => {
+                const hex = Math.round(c * 255).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            };
+
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+
+        function playNote(note) {
+            currentRoot = note;
+            const key = document.querySelector(`[data-note="${note}"]`);
+            const feedback = document.querySelector('.visual-feedback');
+            
+            // Visual feedback
+            key.classList.add('active');
+            activeKeys.add(note);
+            
+            const color = noteToColor(note);
+            feedback.style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+            feedback.classList.add('pulse');
+            
+            setTimeout(() => {
+                key.classList.remove('active');
+                activeKeys.delete(note);
+                feedback.classList.remove('pulse');
+            }, 300);
+
+            updateHarmonyDisplay();
+        }
+
+        // Event listeners
+        document.querySelectorAll('.piano-key').forEach(key => {
+            key.addEventListener('click', () => {
+                const note = key.dataset.note;
+                playNote(note);
+            });
+        });
+
+        document.querySelectorAll('.harmony-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.harmony-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentHarmony = btn.dataset.harmony;
+                updateHarmonyDisplay();
+            });
+        });
+
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            const keyMap = {
+                'a': 'C', 'w': 'C#', 's': 'D', 'e': 'D#', 'd': 'E', 'f': 'F',
+                't': 'F#', 'g': 'G', 'y': 'G#', 'h': 'A', 'u': 'A#', 'j': 'B'
+            };
+            
+            const note = keyMap[e.key.toLowerCase()];
+            if (note && !activeKeys.has(note)) {
+                playNote(note);
+            }
+        });
+
+        // Initialize
+        updateHarmonyDisplay();
+    </script>
+</body>
+</html>

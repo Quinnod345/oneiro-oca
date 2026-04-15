@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Dissolution Laboratory</title>
+    <style>
+        :root {
+            --glass-surface: rgba(255, 255, 255, 0.1);
+            --glass-edge: rgba(255, 255, 255, 0.2);
+            --glass-highlight: rgba(255, 255, 255, 0.6);
+            --liquid-surface: #c8e6c9;
+            --liquid-deep: #4caf50;
+            --liquid-shadow: #2e7d32;
+            --steel-surface: #eceff1;
+            --steel-shadow: #b0bec5;
+            --memory-gold: #ffd54f;
+            --memory-copper: #ff6f00;
+            --memory-silver: #cfd8dc;
+            --ink-primary: #263238;
+            --ink-secondary: #546e7a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: radial-gradient(ellipse at 50% 0%, #f5f5f5 0%, #e0e0e0 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ambient-light {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .lab-surface {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 280px;
+            background: linear-gradient(180deg, var(--steel-surface) 0%, var(--steel-shadow) 100%);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .lab-surface::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+            top: 0;
+        }
+
+        .title-plaque {
+            position: absolute;
+            top: 60px;
+            left: 80px;
+            background: white;
+            padding: 32px 40px;
+            border-radius: 2px;
+            box-shadow: 
+                0 1px 3px rgba(0, 0, 0, 0.1),
+                0 10px 40px rgba(0, 0, 0, 0.05);
+        }
+
+        .title-plaque h1 {
+            font-size: 28px;
+            font-weight: 200;
+            color: var(--ink-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .title-plaque .metadata {
+            font-size: 14px;
+            color: var(--ink-secondary);
+            margin-top: 12px;
+            font-weight: 400;
+        }
+
+        .vessel-array {
+            position: absolute;
+            bottom: 280px;
+            width: 100%;
+            height: 450px;
+            display: flex;
+            justify-content: center;
+            gap: 120px;
+            padding: 0 200px;
+        }
+
+        .vessel-station {
+            width: 300px;
+            height: 450px;
+            position: relative;
+        }
+
+        .glass-vessel {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 420px;
+            background: var(--glass-surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 0 0 40px 40px / 0 0 20px 20px;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 0 20px rgba(255, 255, 255, 0.1),
+                0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-vessel::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(180deg, var(--glass-edge) 0%, transparent 50%);
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
+        .glass-rim {
+            position: absolute;
+            top: -25px;
+            left: -30px;
+            right: -30px;
+            height: 50px;
+            background: var(--glass-surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 50% / 100%;
+            border: 2px solid var(--glass-edge);
+            box-shadow: 
+                inset 0 2px 4px rgba(255, 255, 255, 0.3),
+                0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-reflection {
+            position: absolute;
+            top: 40px;
+            left: 20%;
+            width: 30%;
+            height: 60%;
+            background: linear-gradient(180deg, var(--glass-highlight) 0%, transparent 30%);
+            border-radius: 50% 0 0 50%;
+            opacity: 0.6;
+            filter: blur(2px);
+        }
+
+        .calibration {
+            position: absolute;
+            right: 20px;
+            top: 60px;
+            height: 300px;
+        }
+
+        .calibration-line {
+            position: absolute;
+            right: 0;
+            height: 0.5px;
+            background: var(--ink-secondary);
+            opacity: 0.3;
+        }
+
+        .calibration-line.major {
+            width: 20px;
+            opacity: 0.5;
+        }
+
+        .calibration-line.minor {
+            width: 10px;
+        }
+
+        .calibration-text {
+            position: absolute;
+            right: 25px;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            opacity: 0.6;
+        }
+
+        .dissolution-medium {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(180deg, 
+                var(--liquid-surface) 0%, 
+                var(--liquid-deep) 50%,
+                var(--liquid-shadow) 100%);
+            border-radius: 0 0 40px 40px / 0 0 20px 20px;
+            overflow: hidden;
+            filter: url(#liquidDistortion);
+        }
+
+        .liquid-surface-tension {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(180deg, 
+                transparent 0%, 
+                rgba(255, 255, 255, 0.2) 50%,
+                transparent 100%);
+            animation: surfaceTension 4s ease-in-out infinite;
+        }
+
+        @keyframes surfaceTension {
+            0%, 100% { transform: scaleY(1) translateY(0); }
+            50% { transform: scaleY(0.8) translateY(-2px); }
+        }
+
+        .particle-system {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .bubble {
+            position: absolute;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), transparent);
+            border-radius: 50%;
+            animation: bubbleRise 8s infinite ease-in;
+        }
+
+        @keyframes bubbleRise {
+            0% {
+                transform: translateY(0) scale(0);
+                opacity: 0;
+            }
+            10% {
+                transform: translateY(-20px) scale(1);
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-300px) scale(0.5);
+                opacity: 0;
+            }
+        }
+
+        .memory-artifact {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+            filter: url(#dissolution);
+        }
+
+        .wedding-band {
+            width: 70px;
+            height: 70px;
+            position: relative;
+        }
+
+        .wedding-band-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 10px solid var(--memory-gold);
+            border-radius: 50%;
+            box-shadow: 
+                inset 0 2px 4px rgba(0, 0, 0, 0.2),
+                0 2px 8px rgba(0, 0, 0, 0.1);
+            animation: goldDissolve 25s linear infinite;
+        }
+
+        .wedding-band-gem {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 15px;
+            height: 15px;
+            background: radial-gradient(circle at 30% 30%, #fff, #e0e0e0);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes goldDissolve {
+            0% { 
+                opacity: 1; 
+                transform: scale(1);
+                filter: none;
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(0.95);
+                filter: blur(0.5px);
+            }
+            100% { 
+                opacity: 0.3; 
+                transform: scale(0.85);
+                filter: blur(2px);
+            }
+        }
+
+        .childhood-toy {
+            width: 60px;
+            height: 60px;
+            position: relative;
+        }
+
+        .toy-cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: toyDissolve 20s linear infinite, rotate 30s linear infinite;
+        }
+
+        .cube-face {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff6b6b, #ff5252);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .cube-face:nth-child(1) { transform: translateZ(30px); }
+        .cube-face:nth-child(2) { transform: rotateY(90deg) translateZ(30px); }
+        .cube-face:nth-child(3) { transform: rotateY(180deg) translateZ(30px); }
+        .cube-face:nth-child(4) { transform: rotateY(-90deg) translateZ(30px); }
+        .cube-face:nth-child(5) { transform: rotateX(90deg) translateZ(30px); }
+        .cube-face:nth-child(6) { transform: rotateX(-90deg) translateZ(30px); }
+
+        @keyframes toyDissolve {
+            0% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        @keyframes rotate {
+            0% { transform: rotateX(0) rotateY(0); }
+            100% { transform: rotateX(360deg) rotateY(360deg); }
+        }
+
+        .photograph {
+            width: 80px;
+            height: 60px;
+            position: relative;
+        }
+
+        .photo-frame {
+            width: 100%;
+            height: 100%;
+            background: white;
+            border: 3px solid #333;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            position: relative;
+            animation: photoFade 22s linear infinite;
+        }
+
+        .photo-image {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--memory-copper) 0%, var(--memory-silver) 100%);
+            opacity: 0.8;
+        }
+
+        .photo-emulsion {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.1) 2px,
+                rgba(255, 255, 255, 0.1) 4px
+            );
+        }
+
+        @keyframes photoFade {
+            0% { 
+                opacity: 1; 
+                filter: sepia(0) contrast(1);
+            }
+            100% { 
+                opacity: 0.5; 
+                filter: sepia(1) contrast(0.5);
+            }
+        }
+
+        .vessel-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 8px 20px;
+            border-radius: 2px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .vessel-label h3 {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ink-primary);
+            text-align: center;
+        }
+
+        .vessel-label .duration {
+            font-size: 11px;
+            color: var(--ink-secondary);
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        #vessel-1 .dissolution-medium { height: 240px; }
+        #vessel-2 .dissolution-medium { height: 280px; }
+        #vessel-3 .dissolution-medium { height: 320px; }
+
+        .distortion-filter {
+            position: absolute;
+            width: 0;
+            height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-light"></div>
+    
+    <div class="title-plaque">
+        <h1>Memory Dissolution Laboratory</h1>
+        <div class="metadata">Temporal Degradation Study № 47</div>
+    </div>
+
+    <div class="vessel-array">
+        <div class="vessel-station" id="vessel-1">
+            <div class="glass-vessel">
+                <div class="glass-rim"></div>
+                <div class="glass-reflection"></div>
+                <div class="calibration">
+                    <div class="calibration-line major" style="top: 0;"></div>
+                    <div class="calibration-text" style="top: -5px;">400ml</div>
+                    <div class="calibration-line minor" style="top: 30px;"></div>
+                    <div class="calibration-line minor" style="top: 60px;"></div>
+                    <div class="calibration-line major" style="top: 90px;"></div>
+                    <div class="calibration-text" style="top: 85px;">300ml</div>
+                    <div class="calibration-line minor" style="top: 120px;"></div>
+                    <div class="calibration-line minor" style="top: 150px;"></div>
+                    <div class="calibration-line major" style="top: 180px;"></div>
+                    <div class="calibration-text" style="top: 175px;">200ml</div>
+                    <div class="calibration-line minor" style="top: 210px;"></div>
+                    <div class="calibration-line minor" style="top: 240px;"></div>
+                    <div class="calibration-line major" style="top: 270px;"></div>
+                    <div class="calibration-text" style="top: 265px;">100ml</div>
+                </div>
+                <div class="dissolution-medium">
+                    <div class="liquid-surface-tension"></div>
+                    <div class="particle-system">
+                        <div class="bubble" style="left: 20%; width: 4px; height: 4px; animation-delay: 0s;"></div>
+                        <div class="bubble" style="left: 50%; width: 6px; height: 6px; animation-delay: 2s;"></div>
+                        <div class="bubble" style="left: 80%; width: 3px; height: 3px; animation-delay: 4s;"></div>
+                        <div class="bubble" style="left: 35%; width: 5px; height: 5px; animation-delay: 1s;"></div>
+                        <div class="bubble" style="left: 65%; width: 4px; height: 4px; animation-delay: 3s;"></div>
+                    </div>
+                </div>
+                <div class="memory-artifact">
+                    <div class="wedding-band">
+                        <div class="wedding-band-ring"></div>
+                        <div class="wedding-band-gem"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="vessel-label">
+                <h3>Commitment</h3>
+                <div class="duration">25 years elapsed</div>
+            </div>
+        </div>
+
+        <div class="vessel-station" id="vessel-2">
+            <div class="glass-vessel">
+                <div class="glass-rim"></div>
+                <div class="glass-reflection"></div>
+                <div class="calibration">
+                    <div class="calibration-line major" style="top: 0;"></div>
+                    <div class="calibration-text" style="top: -5px;">400ml</div>
+                    <div class="calibration-line minor" style="top: 30px;"></div>
+                    <div class="calibration-line minor" style="top: 60px;"></div>
+                    <div class="calibration-line major" style="top: 90px;"></div>
+                    <div class="calibration-text" style="top: 85px;">300ml</div>
+                    <div class="calibration-line minor" style="top: 120px;"></div>
+                    <div class="calibration-line minor" style="top: 150px;"></div>
+                    <div class="calibration-line major" style="top: 180px;"></div>
+                    <div class="calibration-text" style="top: 175px;">200ml</div>
+                    <div class="calibration-line minor" style="top: 210px;"></div>
+                    <div class="calibration-line minor" style="top: 240px;"></div>
+                    <div class="calibration-line major" style="top: 270px;"></div>
+                    <div class="calibration-text" style="top: 265px;">100ml</div>
+                </div>
+                <div class="dissolution-medium">
+                    <div class="liquid-surface-tension"></div>
+                    <div class="particle-system">
+                        <div class="bubble" style="left: 15%; width: 5px; height: 5px; animation-delay: 0.5s;"></div>
+                        <div class="bubble" style="left: 45%; width: 4px; height: 4px; animation-delay: 2.5s;"></div>
+                        <div class="bubble" style="left: 75%; width: 6px; height: 6px; animation-delay: 1.5s;"></div>
+                        <div class="bubble" style="left: 30%; width: 3px; height: 3px; animation-delay: 3.5s;"></div>
+                        <div class="bubble" style="left: 60%; width: 5px; height: 5px; animation-delay: 0s;"></div>
+                    </div>
+                </div>
+                <div class="memory-artifact">
+                    <div class="childhood-toy">
+                        <div class="toy-cube">
+                            <div class="cube-face">A</div>
+                            <div class="cube-face">B</div>
+                            <div class="cube-face">C</div>
+                            <div class="cube-face">D</div>
+                            <div class="cube-face">E</div>
+                            <div class="cube-face">F</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="vessel-label">
+                <h3>Innocence</h3>
+                <div class="duration">40 years elapsed</div>
+            </div>
+        </div>
+
+        <div class="vessel-station" id="vessel-3">
+            <div class="glass-vessel">
+                <div class="glass-rim"></div>
+                <div class="glass-reflection"></div>
+                <div class="calibration">
+                    <div class="calibration-line major" style="top: 0;"></div>
+                    <div class="calibration-text" style="top: -5px;">400ml</div>
+                    <div class="calibration-line minor" style="top: 30px;"></div>
+                    <div class="calibration-line minor" style="top: 60px;"></div>
+                    <div class="calibration-line major" style="top: 90px;"></div>
+                    <div class="calibration-text" style="top: 85px;">300ml</div>
+                    <div class="calibration-line minor" style="top: 120px;"></div>
+                    <div class="calibration-line minor" style="top: 150px;"></div>
+                    <div class="calibration-line major" style="top: 180px;"></div>
+                    <div class="calibration-text" style="top: 175px;">200ml</div>
+                    <div class="calibration-line minor" style="top: 210px;"></div>
+                    <div class="calibration-line minor" style="top: 240px;"></div>
+                    <div class="calibration-line major" style="top: 270px;"></div>
+                    <div class="calibration-text" style="top: 265px;">100ml</div>
+                </div>
+                <div class="dissolution-medium">
+                    <div class="liquid-surface-tension"></div>
+                    <div class="particle-system">
+                        <div class="bubble" style="left: 25%; width: 4px; height: 4px; animation-delay: 1s;"></div>
+                        <div class="bubble" style="left: 55%; width: 5px; height: 5px; animation-delay: 3s;"></div>
+                        <div class="bubble" style="left: 85%; width: 3px; height: 3px; animation-delay: 0.5s;"></div>
+                        <div class="bubble" style="left: 40%; width: 6px; height: 6px; animation-delay: 2s;"></div>
+                        <div class="bubble" style="left: 70%; width: 4px; height: 4px; animation-delay: 4s;"></div>
+                    </div>
+                </div>
+                <div class="memory-artifact">
+                    <div class="photograph">
+                        <div class="photo-frame">
+                            <div class="photo-image"></div>
+                            <div class="photo-emulsion"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="vessel-label">
+                <h3>Identity</h3>
+                <div class="duration">60 years elapsed</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="lab-surface"></div>
+
+    <svg class="distortion-filter">
+        <defs>
+            <filter id="liquidDistortion">
+                <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="turbulence"/>
+                <feDisplacementMap in2="turbulence" in="SourceGraphic" scale="2" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <filter id="dissolution">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0">
+                    <animate attributeName="stdDeviation" values="0;2;0" dur="20s" repeatCount="indefinite"/>
+                </feGaussianBlur>
+            </filter>
+        </defs>
+    </svg>
+</body>
+</html>

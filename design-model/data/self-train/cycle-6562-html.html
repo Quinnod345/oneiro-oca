@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Decay Archive</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --glass-edge: #f8f9fa;
+            --fracture: #e3e7eb;
+            --dust: #9ca3af;
+            --ember: #fbbf24;
+            --ice: #60a5fa;
+            --moss: #34d399;
+            --wine: #f472b6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void);
+            font-family: Georgia, serif;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        #particle-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .memory-shard {
+            position: absolute;
+            transform-origin: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.1));
+        }
+
+        .memory-shard svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .memory-shard.decaying {
+            animation: decay 20s ease-in-out forwards;
+        }
+
+        @keyframes decay {
+            0% {
+                opacity: 1;
+                filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.1));
+            }
+            50% {
+                opacity: 0.7;
+                filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.05)) blur(0.5px);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(100px) scale(0.8) rotate(15deg);
+                filter: blur(3px);
+            }
+        }
+
+        .memory-shard:hover {
+            transform: scale(1.05);
+            filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.3));
+        }
+
+        .crack-pattern {
+            stroke: var(--fracture);
+            stroke-width: 0.5;
+            fill: none;
+            opacity: 0;
+            animation: crack-appear 3s ease-in forwards;
+            animation-delay: 5s;
+        }
+
+        @keyframes crack-appear {
+            to {
+                opacity: 0.4;
+                stroke-width: 1;
+            }
+        }
+
+        .thought-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            color: var(--glass-edge);
+            opacity: 0.8;
+            max-width: 150px;
+            text-align: center;
+            pointer-events: none;
+            font-style: italic;
+            letter-spacing: 0.02em;
+        }
+
+        .dust-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--dust);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .dissolve {
+            animation: particle-float 3s ease-out forwards;
+        }
+
+        @keyframes particle-float {
+            0% {
+                opacity: 0.6;
+                transform: translate(0, 0);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--float-x), var(--float-y));
+            }
+        }
+
+        #archive-title {
+            position: fixed;
+            bottom: 40px;
+            right: 60px;
+            font-size: 11px;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--dust);
+            opacity: 0.3;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        #input-portal {
+            position: fixed;
+            top: 60px;
+            left: 60px;
+            width: 300px;
+            background: rgba(248, 249, 250, 0.02);
+            border: 1px solid rgba(248, 249, 250, 0.1);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        #thought-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(248, 249, 250, 0.2);
+            color: var(--glass-edge);
+            font-family: Georgia, serif;
+            font-size: 16px;
+            padding: 10px 0;
+            outline: none;
+            margin-bottom: 20px;
+        }
+
+        #thought-input::placeholder {
+            color: rgba(248, 249, 250, 0.3);
+            font-style: italic;
+        }
+
+        #crystallize-btn {
+            background: transparent;
+            border: 1px solid rgba(248, 249, 250, 0.2);
+            color: var(--glass-edge);
+            padding: 8px 20px;
+            font-family: Georgia, serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.05em;
+        }
+
+        #crystallize-btn:hover {
+            background: rgba(248, 249, 250, 0.05);
+            border-color: rgba(248, 249, 250, 0.4);
+        }
+
+        .decay-indicator {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 30px;
+            height: 2px;
+            background: linear-gradient(to right, var(--glass-edge), transparent);
+            opacity: 0.6;
+            transform-origin: right;
+        }
+
+        .emotion-weight {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 10px;
+            color: var(--glass-edge);
+            opacity: 0.4;
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particle-field"></canvas>
+    
+    <div id="input-portal">
+        <input type="text" id="thought-input" placeholder="a fleeting thought..." maxlength="50">
+        <button id="crystallize-btn">CRYSTALLIZE</button>
+    </div>
+    
+    <div id="memory-container"></div>
+    
+    <div id="archive-title">MEMORY DECAY ARCHIVE</div>
+
+    <script>
+        const memories = [];
+        const colors = ['#fbbf24', '#60a5fa', '#34d399', '#f472b6'];
+        let memoryId = 0;
+
+        function generateShardPath(width, height) {
+            const points = [];
+            const vertices = 5 + Math.floor(Math.random() * 3);
+            
+            for (let i = 0; i < vertices; i++) {
+                const angle = (i / vertices) * Math.PI * 2;
+                const radius = (width / 2) * (0.7 + Math.random() * 0.3);
+                const x = width / 2 + Math.cos(angle) * radius;
+                const y = height / 2 + Math.sin(angle) * radius;
+                points.push(`${x},${y}`);
+            }
+            
+            return points.join(' ');
+        }
+
+        function generateCracks(width, height) {
+            const cracks = [];
+            const numCracks = 3 + Math.floor(Math.random() * 4);
+            
+            for (let i = 0; i < numCracks; i++) {
+                const startX = Math.random() * width;
+                const startY = Math.random() * height;
+                let path = `M${startX},${startY}`;
+                
+                const segments = 2 + Math.floor(Math.random() * 3);
+                for (let j = 0; j < segments; j++) {
+                    const endX = Math.random() * width;
+                    const endY = Math.random() * height;
+                    path += ` L${endX},${endY}`;
+                }
+                
+                cracks.push(path);
+            }
+            
+            return cracks;
+        }
+
+        function createMemoryShard(text) {
+            const shard = document.createElement('div');
+            shard.className = 'memory-shard';
+            shard.id = `memory-${memoryId++}`;
+            
+            const width = 150 + Math.random() * 100;
+            const height = 150 + Math.random() * 100;
+            const x = 100 + Math.random() * (window.innerWidth - 300 - width);
+            const y = 100 + Math.random() * (window.innerHeight - 200 - height);
+            
+            shard.style.width = `${width}px`;
+            shard.style.height = `${height}px`;
+            shard.style.left = `${x}px`;
+            shard.style.top = `${y}px`;
+            
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const opacity = 0.15 + Math.random() * 0.15;
+            
+            const shardPath = generateShardPath(width, height);
+            const cracks = generateCracks(width, height);
+            
+            shard.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="glass-gradient-${memoryId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:${color};stop-opacity:${opacity}" />
+                            <stop offset="100%" style="stop-color:${color};stop-opacity:${opacity * 0.5}" />
+                        </linearGradient>
+                        <filter id="glass-blur-${memoryId}">
+                            <feGaussianBlur in="SourceGraphic" stdDeviation="0.5" />
+                        </filter>
+                    </defs>
+                    <polygon points="${shardPath}" 
+                             fill="url(#glass-gradient-${memoryId})" 
+                             stroke="${color}" 
+                             stroke-width="0.5" 
+                             stroke-opacity="0.3"
+                             filter="url(#glass-blur-${memoryId})" />
+                    ${cracks.map(crack => `<path class="crack-pattern" d="${crack}" />`).join('')}
+                </svg>
+                <div class="thought-text">${text}</div>
+                <div class="emotion-weight">${(opacity * 100).toFixed(0)}%</div>
+                <div class="decay-indicator" style="animation: shrink ${20 + Math.random() * 20}s linear forwards;"></div>
+            `;
+            
+            shard.addEventListener('click', function() {
+                recrystallizeMemory(this);
+            });
+            
+            setTimeout(() => {
+                shard.classList.add('decaying');
+                shard.addEventListener('animationend', () => dissolveShard(shard));
+            }, 2000);
+            
+            return shard;
+        }
+
+        function recrystallizeMemory(shard) {
+            shard.classList.remove('decaying');
+            shard.style.opacity = '1';
+            shard.style.filter = 'drop-shadow(0 0 40px rgba(255, 255, 255, 0.4))';
+            
+            setTimeout(() => {
+                shard.style.filter = 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.1))';
+                setTimeout(() => {
+                    shard.classList.add('decaying');
+                }, 3000);
+            }, 500);
+        }
+
+        function dissolveShard(shard) {
+            const rect = shard.getBoundingClientRect();
+            const particles = 20 + Math.floor(Math.random() * 30);
+            
+            for (let i = 0; i < particles; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'dust-particle dissolve';
+                particle.style.left = `${rect.left + Math.random() * rect.width}px`;
+                particle.style.top = `${rect.top + Math.random() * rect.height}px`;
+                particle.style.setProperty('--float-x', `${(Math.random() - 0.5) * 100}px`);
+                particle.style.setProperty('--float-y', `${-50 - Math.random() * 100}px`);
+                
+                document.body.appendChild(particle);
+                
+                setTimeout(() => particle.remove(), 3000);
+            }
+            
+            shard.remove();
+        }
+
+        document.getElementById('crystallize-btn').addEventListener('click', function() {
+            const input = document.getElementById('thought-input');
+            const text = input.value.trim();
+            
+            if (text) {
+                const shard = createMemoryShard(text);
+                document.getElementById('memory-container').appendChild(shard);
+                input.value = '';
+            }
+        });
+
+        document.getElementById('thought-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('crystallize-btn').click();
+            }
+        });
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shrink {
+                from { transform: scaleX(1); }
+                to { transform: scaleX(0); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Create initial memories
+        const initialThoughts = [
+            "summer rain on skin",
+            "her laugh in the corridor",
+            "old book smell",
+            "father's hands",
+            "first snow silence"
+        ];
+
+        setTimeout(() => {
+            initialThoughts.forEach((thought, index) => {
+                setTimeout(() => {
+                    const shard = createMemoryShard(thought);
+                    document.getElementById('memory-container').appendChild(shard);
+                }, index * 800);
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

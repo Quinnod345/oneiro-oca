@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --primary-bg: #0a0b0f;
+            --secondary-bg: #151820;
+            --tertiary-bg: #1e2128;
+            --accent-blue: #4a9eff;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border-subtle: rgba(148, 163, 184, 0.1);
+            --glow-blue: rgba(74, 158, 255, 0.3);
+            --glow-purple: rgba(139, 92, 246, 0.3);
+            --thread-color: rgba(74, 158, 255, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            perspective: 2000px;
+            position: relative;
+        }
+
+        .app-container {
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            transform-style: preserve-3d;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--secondary-bg) 0%, var(--tertiary-bg) 100%);
+            border-right: 1px solid var(--border-subtle);
+            z-index: 100;
+            padding: 24px;
+            backdrop-filter: blur(20px);
+        }
+
+        .sidebar-header {
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .new-note-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border: none;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 24px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .new-note-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--glow-blue);
+        }
+
+        .recent-notes {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .note-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .note-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(4px);
+        }
+
+        .note-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .note-preview {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .spatial-view {
+            position: absolute;
+            left: 280px;
+            top: 0;
+            width: calc(100% - 280px);
+            height: 100vh;
+            transform-style: preserve-3d;
+            overflow: hidden;
+        }
+
+        .note-card {
+            position: absolute;
+            width: 240px;
+            min-height: 180px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 20px;
+            transform-style: preserve-3d;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .note-card.recent {
+            transform: translateZ(100px) scale(1);
+            opacity: 1;
+        }
+
+        .note-card.medium {
+            transform: translateZ(-50px) scale(0.9);
+            opacity: 0.8;
+        }
+
+        .note-card.old {
+            transform: translateZ(-200px) scale(0.7);
+            opacity: 0.4;
+        }
+
+        .note-card.ancient {
+            transform: translateZ(-400px) scale(0.5);
+            opacity: 0.2;
+        }
+
+        .note-card:hover {
+            transform: translateZ(120px) scale(1.05) !important;
+            opacity: 1 !important;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        }
+
+        .note-card.blue { border-left: 4px solid var(--accent-blue); }
+        .note-card.purple { border-left: 4px solid var(--accent-purple); }
+        .note-card.green { border-left: 4px solid var(--accent-green); }
+        .note-card.orange { border-left: 4px solid var(--accent-orange); }
+
+        .note-card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+
+        .note-card p {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .note-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: auto;
+        }
+
+        .note-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 4px 8px;
+            background: rgba(74, 158, 255, 0.2);
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                var(--thread-color), 
+                transparent 50%, 
+                var(--thread-color));
+            transform-origin: left center;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .connection-thread::before {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            top: -2px;
+            right: -3px;
+            box-shadow: 0 0 8px var(--glow-blue);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(20px);
+        }
+
+        .control-btn:hover {
+            background: var(--tertiary-bg);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+
+        .floating-ui {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            z-index: 100;
+            min-width: 200px;
+        }
+
+        .search-box {
+            width: 100%;
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .search-box::placeholder {
+            color: var(--text-muted);
+        }
+
+        .view-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotateY(0deg); }
+            50% { transform: translateY(-10px) rotateY(5deg); }
+        }
+
+        .note-card:nth-child(odd) {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .note-card:nth-child(even) {
+            animation: float 8s ease-in-out infinite reverse;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">Spatial Notes</div>
+                <div class="subtitle">3D Knowledge Space</div>
+            </div>
+            
+            <button class="new-note-btn">+ Create Note</button>
+            
+            <div class="recent-notes">
+                <div class="section-title">Recent</div>
+                <div class="note-item">
+                    <div class="note-title">Product Strategy 2024</div>
+                    <div class="note-preview">Key insights from user research and market analysis...</div>
+                </div>
+                <div class="note-item">
+                    <div class="note-title">Design System Updates</div>
+                    <div class="note-preview">Component library improvements and new patterns...</div>
+                </div>
+                <div class="note-item">
+                    <div class="note-title">Meeting Notes - Q1 Planning</div>
+                    <div class="note-preview">Roadmap priorities and resource allocation...</div>
+                </div>
+                <div class="note-item">
+                    <div class="note-title">Tech Architecture Review</div>
+                    <div class="note-preview">Performance optimizations and scalability concerns...</div>
+                </div>
+            </div>
+            
+            <div class="connections">
+                <div class="section-title">Connections</div>
+                <div class="note-item">
+                    <div class="note-title">Strategy ↔ Design</div>
+                    <div class="note-preview">3 linked concepts</div>
+                </div>
+                <div class="note-item">
+                    <div class="note-title">Research ↔ Planning</div>
+                    <div class="note-preview">5 linked concepts</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="spatial-view">
+            <div class="note-card recent blue" style="left: 200px; top: 150px;">
+                <h3>Product Strategy 2024</h3>
+                <p>Comprehensive analysis of market opportunities and user needs. Focus on AI integration and mobile-first approach.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">strategy</span>
+                        <span class="tag">product</span>
+                    </div>
+                    <span>2 min ago</span>
+                </div>
+            </div>
+
+            <div class="note-card recent purple" style="left: 500px; top: 200px;">
+                <h3>Design System Evolution</h3>
+                <p>Updated component library with new accessibility standards and dark mode support. Enhanced typography scale.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">design</span>
+                        <span class="tag">system</span>
+                    </div>
+                    <span>15 min ago</span>
+                </div>
+            </div>
+
+            <div class="note-card medium green" style="left: 300px; top: 380px;">
+                <h3>User Research Insights</h3>
+                <p>Key findings from 50+ user interviews. Pain points in onboarding flow and feature discovery patterns.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">research</span>
+                        <span class="tag">ux</span>
+                    </div>
+                    <span>2 hours ago</span>
+                </div>
+            </div>
+
+            <div class="note-card medium orange" style="left: 650px; top: 100px;">
+                <h3>Technical Architecture</h3>
+                <p>Microservices migration plan and database optimization strategies. Performance benchmarks and scaling considerations.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">tech</span>
+                        <span class="tag">architecture</span>
+                    </div>
+                    <span>4 hours ago</span>
+                </div>
+            </div>
+
+            <div class="note-card old blue" style="left: 100px; top: 500px;">
+                <h3>Q1 Planning Session</h3>
+                <p>Quarterly goals and milestone definitions. Resource allocation and timeline estimates for major initiatives.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">planning</span>
+                    </div>
+                    <span>1 day ago</span>
+                </div>
+            </div>
+
+            <div class="note-card old purple" style="left: 750px; top: 400px;">
+                <h3>Competitive Analysis</h3>
+                <p>Market positioning study and feature comparison matrix. Opportunities for differentiation identified.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">analysis</span>
+                        <span class="tag">market</span>
+                    </div>
+                    <span>2 days ago</span>
+                </div>
+            </div>
+
+            <div class="note-card ancient green" style="left: 400px; top: 600px;">
+                <h3>Brand Guidelines Update</h3>
+                <p>Refreshed visual identity and messaging framework. New logo variations and color palette expansion.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">brand</span>
+                    </div>
+                    <span>1 week ago</span>
+                </div>
+            </div>
+
+            <div class="note-card ancient orange" style="left: 850px; top: 250px;">
+                <h3>Customer Journey Mapping</h3>
+                <p>End-to-end user experience documentation with touchpoints and emotion mapping across all channels.</p>
+                <div class="note-meta">
+                    <div class="note-tags">
+                        <span class="tag">journey</span>
+                        <span class="tag">cx</span>
+                    </div>
+                    <span>2 weeks ago</span>
+                </div>
+            </div>
+
+            <!-- Connection threads -->
+            <div class="connection-thread" style="left: 440px; top: 230px; width: 180px; transform: rotate(25deg);"></div>
+            <div class="connection-thread" style="left: 350px; top: 350px; width: 120px; transform: rotate(-15deg);"></div>
+            <div class="connection-thread" style="left: 200px; top: 400px; width: 200px; transform: rotate(35deg);"></div>
+            <div class="connection-thread" style="left: 650px; top: 180px; width: 140px; transform: rotate(45deg);"></div>
+        </div>
+
+        <div class="floating-ui">
+            <input type="text" class="search-box" placeholder="Search notes...">
+            <div class="view-stats">
+                <div class="stat-item">
+                    <div class="stat-value">47</div>
+                    <div class="stat-label">Notes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">12</div>
+                    <div class="stat-label">Threads</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">3D</div>
+                    <div class="stat-label">View</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">Live</div>
+                    <div class="stat-label">Sync</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-btn">⟲</div>
+            <div class="control-btn">⊞</div>
+            <div class="control-btn">◐</div>
+            <div class="control-btn">⚡</div>
+        </div>
+    </div>
+</body>
+</html>

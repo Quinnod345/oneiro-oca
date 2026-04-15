@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silent Auction of Unspoken Words</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --ash: #1a1a1a;
+            --smoke: #2a2a2a;
+            --paper: #fafafa;
+            --whisper: #f0f0f0;
+            --ember: #ff4444;
+            --pulse: #ff6666;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --ghost: rgba(255, 255, 255, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--paper);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .auction-hall {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            position: relative;
+        }
+
+        .composition-chamber {
+            background: var(--whisper);
+            border-right: 1px solid var(--smoke);
+            display: flex;
+            flex-direction: column;
+            padding: 60px 40px;
+        }
+
+        .chamber-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--smoke);
+            margin-bottom: 40px;
+        }
+
+        .unsent-input {
+            width: 100%;
+            height: 200px;
+            background: var(--paper);
+            border: none;
+            padding: 24px;
+            font-size: 1.125rem;
+            line-height: 1.6;
+            color: var(--void);
+            resize: none;
+            box-shadow: 0 2px 20px var(--shadow);
+            font-family: inherit;
+            margin-bottom: 30px;
+        }
+
+        .unsent-input::placeholder {
+            color: #999;
+        }
+
+        .release-button {
+            align-self: flex-start;
+            padding: 14px 32px;
+            background: var(--void);
+            color: var(--paper);
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .release-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .auction-floor {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, var(--paper) 0%, #f5f5f5 100%);
+        }
+
+        .bid-marker {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            color: var(--smoke);
+            text-transform: uppercase;
+        }
+
+        .word-entity {
+            position: absolute;
+            font-size: 1.5rem;
+            color: var(--void);
+            white-space: nowrap;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: default;
+            user-select: none;
+        }
+
+        .word-entity.high-bid {
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--ember);
+        }
+
+        .word-entity.dissolving {
+            animation: dissolve 3s ease-out forwards;
+        }
+
+        @keyframes dissolve {
+            0% {
+                opacity: 1;
+                filter: blur(0);
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                filter: blur(2px);
+                transform: scale(1.1);
+            }
+            100% {
+                opacity: 0;
+                filter: blur(20px);
+                transform: scale(0.8) translateY(-20px);
+                pointer-events: none;
+            }
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--ember);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particle-drift 4s ease-out forwards;
+        }
+
+        @keyframes particle-drift {
+            0% {
+                opacity: 0.8;
+                transform: translate(0, 0);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--drift-x), var(--drift-y));
+            }
+        }
+
+        .bid-value {
+            position: absolute;
+            font-size: 0.75rem;
+            color: var(--smoke);
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.4s ease-out;
+        }
+
+        .bid-value.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .emotional-weight-meter {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 300px;
+            height: 4px;
+            background: var(--whisper);
+            overflow: hidden;
+        }
+
+        .weight-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--ember);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .archive-trace {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            font-size: 0.625rem;
+            color: #999;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .void-counter {
+            font-weight: 600;
+            color: var(--smoke);
+        }
+    </style>
+</head>
+<body>
+    <div class="auction-hall">
+        <div class="composition-chamber">
+            <h2 class="chamber-title">Compose the Unspoken</h2>
+            <textarea class="unsent-input" placeholder="Write what you'll never send..."></textarea>
+            <button class="release-button">Release to Auction</button>
+        </div>
+        
+        <div class="auction-floor" id="auctionFloor">
+            <div class="bid-marker">Live Bidding</div>
+            <div class="emotional-weight-meter">
+                <div class="weight-fill" id="weightFill"></div>
+            </div>
+            <div class="archive-trace">
+                <span class="void-counter" id="voidCounter">0</span> words dissolved into void
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let voidCount = 0;
+        let activeWords = [];
+        
+        document.querySelector('.release-button').addEventListener('click', function() {
+            const input = document.querySelector('.unsent-input');
+            const text = input.value.trim();
+            
+            if (text) {
+                const words = text.split(/\s+/);
+                words.forEach((word, index) => {
+                    setTimeout(() => {
+                        createWordEntity(word);
+                    }, index * 100);
+                });
+                input.value = '';
+            }
+        });
+        
+        function createWordEntity(word) {
+            const floor = document.getElementById('auctionFloor');
+            const wordEl = document.createElement('div');
+            wordEl.className = 'word-entity';
+            wordEl.textContent = word;
+            
+            const emotionalWeight = calculateEmotionalWeight(word);
+            const x = Math.random() * (floor.offsetWidth - 200) + 50;
+            const y = Math.random() * (floor.offsetHeight - 200) + 100;
+            
+            wordEl.style.left = x + 'px';
+            wordEl.style.top = y + 'px';
+            
+            floor.appendChild(wordEl);
+            
+            // Create bid value indicator
+            const bidEl = document.createElement('div');
+            bidEl.className = 'bid-value';
+            bidEl.textContent = emotionalWeight;
+            bidEl.style.left = (x - 10) + 'px';
+            bidEl.style.top = (y - 25) + 'px';
+            floor.appendChild(bidEl);
+            
+            setTimeout(() => bidEl.classList.add('active'), 100);
+            
+            if (emotionalWeight > 85) {
+                wordEl.classList.add('high-bid');
+            }
+            
+            // Update weight meter
+            document.getElementById('weightFill').style.width = emotionalWeight + '%';
+            
+            // Start dissolution based on emotional weight
+            const dissolutionDelay = (100 - emotionalWeight) * 30 + 1000;
+            
+            setTimeout(() => {
+                wordEl.classList.add('dissolving');
+                bidEl.style.opacity = '0';
+                createParticles(x, y, emotionalWeight);
+                
+                setTimeout(() => {
+                    wordEl.remove();
+                    bidEl.remove();
+                    voidCount++;
+                    document.getElementById('voidCounter').textContent = voidCount;
+                }, 3000);
+            }, dissolutionDelay);
+        }
+        
+        function calculateEmotionalWeight(word) {
+            const emotionalWords = {
+                love: 95, hate: 92, sorry: 88, miss: 85, wish: 82, 
+                need: 80, want: 78, hope: 76, fear: 90, alone: 87,
+                lost: 84, pain: 89, joy: 75, dream: 73, never: 86,
+                always: 81, goodbye: 93, hello: 70, please: 77, why: 83
+            };
+            
+            const baseWeight = emotionalWords[word.toLowerCase()] || 50;
+            return Math.min(baseWeight + Math.random() * 10, 100);
+        }
+        
+        function createParticles(x, y, intensity) {
+            const particleCount = Math.floor(intensity / 10);
+            const floor = document.getElementById('auctionFloor');
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                
+                const angle = (Math.PI * 2 / particleCount) * i;
+                const distance = 50 + Math.random() * 100;
+                
+                particle.style.setProperty('--drift-x', Math.cos(angle) * distance + 'px');
+                particle.style.setProperty('--drift-y', Math.sin(angle) * distance + 'px');
+                
+                floor.appendChild(particle);
+                
+                setTimeout(() => particle.remove(), 4000);
+            }
+        }
+    </script>
+</body>
+</html>

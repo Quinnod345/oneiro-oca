@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organism Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f1c;
+            --bg-secondary: #1a2332;
+            --accent-healthy: #2dd4bf;
+            --accent-warning: #fbbf24;
+            --accent-critical: #f87171;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --pulse-shadow: rgba(45, 212, 191, 0.4);
+            --membrane: rgba(255, 255, 255, 0.08);
+            --core-healthy: #10b981;
+            --core-stressed: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: 100vh;
+            gap: 2px;
+            background: var(--bg-primary);
+        }
+
+        .organism {
+            position: relative;
+            background: var(--bg-secondary);
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .organism::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, transparent 40%, var(--bg-secondary) 80%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .organism-core {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 30% 30%, var(--core-healthy), var(--accent-healthy));
+            box-shadow: 
+                0 0 40px var(--pulse-shadow),
+                inset 0 0 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .cpu-organism .organism-core {
+            animation: cpu-breathe 2s ease-in-out infinite;
+        }
+
+        .memory-organism .organism-core {
+            animation: memory-breathe 1.8s ease-in-out infinite;
+        }
+
+        .organism-core.stressed {
+            --core-healthy: var(--core-stressed);
+            --accent-healthy: var(--accent-critical);
+            --pulse-shadow: rgba(248, 113, 113, 0.6);
+        }
+
+        .cpu-organism .organism-core.stressed {
+            animation: cpu-stress 0.6s ease-in-out infinite;
+        }
+
+        .memory-organism .organism-core.stressed {
+            animation: memory-stress 0.8s ease-in-out infinite;
+        }
+
+        @keyframes cpu-breathe {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 40px var(--pulse-shadow), inset 0 0 60px rgba(0, 0, 0, 0.3);
+            }
+            50% { 
+                transform: scale(1.08);
+                box-shadow: 0 0 80px var(--pulse-shadow), inset 0 0 80px rgba(0, 0, 0, 0.2);
+            }
+        }
+
+        @keyframes memory-breathe {
+            0%, 100% { 
+                transform: scale(1) rotate(0deg);
+                box-shadow: 0 0 40px var(--pulse-shadow), inset 0 0 60px rgba(0, 0, 0, 0.3);
+            }
+            50% { 
+                transform: scale(1.06) rotate(1deg);
+                box-shadow: 0 0 70px var(--pulse-shadow), inset 0 0 70px rgba(0, 0, 0, 0.25);
+            }
+        }
+
+        @keyframes cpu-stress {
+            0%, 100% { 
+                transform: scale(1) rotate(0deg);
+                box-shadow: 0 0 60px var(--pulse-shadow), inset 0 0 40px rgba(0, 0, 0, 0.4);
+            }
+            25% { 
+                transform: scale(1.12) rotate(-2deg);
+                box-shadow: 0 0 100px var(--pulse-shadow), inset 0 0 20px rgba(0, 0, 0, 0.5);
+            }
+            75% { 
+                transform: scale(1.1) rotate(1deg);
+                box-shadow: 0 0 90px var(--pulse-shadow), inset 0 0 30px rgba(0, 0, 0, 0.45);
+            }
+        }
+
+        @keyframes memory-stress {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 50px var(--pulse-shadow), inset 0 0 50px rgba(0, 0, 0, 0.35);
+            }
+            33% { 
+                transform: scale(1.15) skew(1deg);
+                box-shadow: 0 0 120px var(--pulse-shadow), inset 0 0 20px rgba(0, 0, 0, 0.6);
+            }
+            66% { 
+                transform: scale(1.05) skew(-0.5deg);
+                box-shadow: 0 0 80px var(--pulse-shadow), inset 0 0 40px rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        .organism-label {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            z-index: 3;
+        }
+
+        .organism-title {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .organism-status {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+        }
+
+        .metrics {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            z-index: 3;
+            text-align: right;
+        }
+
+        .metric-value {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-unit {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .membrane {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid var(--membrane);
+            z-index: 1;
+        }
+
+        .membrane-1 {
+            width: 400px;
+            height: 400px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: membrane-float-1 8s linear infinite;
+        }
+
+        .membrane-2 {
+            width: 320px;
+            height: 320px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: membrane-float-2 6s linear infinite reverse;
+        }
+
+        @keyframes membrane-float-1 {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        @keyframes membrane-float-2 {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .organism-inner {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            z-index: 3;
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .system-time {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            z-index: 10;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .neural-connection {
+            position: absolute;
+            width: 2px;
+            height: 200px;
+            background: linear-gradient(to bottom, var(--accent-healthy), transparent);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            z-index: 0;
+            opacity: 0.3;
+            animation: neural-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes neural-pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <div class="system-time" id="systemTime">00:00:00</div>
+    
+    <div class="monitor-grid">
+        <div class="organism cpu-organism">
+            <div class="membrane membrane-1"></div>
+            <div class="membrane membrane-2"></div>
+            <div class="neural-connection"></div>
+            
+            <div class="organism-label">
+                <div class="organism-title">CPU Core</div>
+                <div class="organism-status" id="cpuStatus">Healthy</div>
+            </div>
+            
+            <div class="organism-core" id="cpuCore">
+                <div class="organism-inner">Proc</div>
+            </div>
+            
+            <div class="metrics">
+                <div class="metric-value" id="cpuValue">23</div>
+                <div class="metric-unit">% utilization</div>
+            </div>
+        </div>
+        
+        <div class="organism memory-organism">
+            <div class="membrane membrane-1"></div>
+            <div class="membrane membrane-2"></div>
+            <div class="neural-connection" style="transform: translate(-50%, -50%) rotate(-45deg);"></div>
+            
+            <div class="organism-label">
+                <div class="organism-title">Memory Pool</div>
+                <div class="organism-status" id="memoryStatus">Healthy</div>
+            </div>
+            
+            <div class="organism-core" id="memoryCore">
+                <div class="organism-inner">Mem</div>
+            </div>
+            
+            <div class="metrics">
+                <div class="metric-value" id="memoryValue">8.2</div>
+                <div class="metric-unit">GB used</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('systemTime').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+
+        function simulateMetrics() {
+            const cpuCore = document.getElementById('cpuCore');
+            const cpuValue = document.getElementById('cpuValue');
+            const cpuStatus = document.getElementById('cpuStatus');
+            const memoryCore = document.getElementById('memoryCore');
+            const memoryValue = document.getElementById('memoryValue');
+            const memoryStatus = document.getElementById('memoryStatus');
+
+            // Simulate CPU
+            const cpu = Math.floor(Math.random() * 100);
+            cpuValue.textContent = cpu;
+            
+            if (cpu > 80) {
+                cpuCore.classList.add('stressed');
+                cpuStatus.textContent = 'Critical';
+            } else if (cpu > 60) {
+                cpuCore.classList.remove('stressed');
+                cpuStatus.textContent = 'Stressed';
+            } else {
+                cpuCore.classList.remove('stressed');
+                cpuStatus.textContent = 'Healthy';
+            }
+
+            // Simulate Memory
+            const memory = (Math.random() * 16).toFixed(1);
+            memoryValue.textContent = memory;
+            
+            if (memory > 12) {
+                memoryCore.classList.add('stressed');
+                memoryStatus.textContent = 'Critical';
+            } else if (memory > 8) {
+                memoryCore.classList.remove('stressed');
+                memoryStatus.textContent = 'Stressed';
+            } else {
+                memoryCore.classList.remove('stressed');
+                memoryStatus.textContent = 'Healthy';
+            }
+        }
+
+        updateTime();
+        setInterval(updateTime, 1000);
+        setInterval(simulateMetrics, 2000);
+        simulateMetrics();
+    </script>
+</body>
+</html>

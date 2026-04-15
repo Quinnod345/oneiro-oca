@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --canvas-bg: #0a0b0d;
+            --canvas-secondary: #12151a;
+            --topic-ai: #2d4eff;
+            --topic-design: #ff2d92;
+            --topic-research: #00d4aa;
+            --topic-business: #ffa500;
+            --topic-personal: #8b5cf6;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a8b5;
+            --text-muted: #6b7280;
+            --doc-bg: #1a1d23;
+            --doc-border: #2a2f38;
+            --doc-hover: #252b35;
+            --connection-line: #333842;
+            --selection-glow: rgba(45, 78, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--canvas-bg);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 900px;
+            width: 1440px;
+            position: relative;
+        }
+
+        .canvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(45, 78, 255, 0.08) 0%, transparent 35%),
+                radial-gradient(circle at 80% 70%, rgba(255, 45, 146, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 60% 20%, rgba(0, 212, 170, 0.05) 0%, transparent 30%);
+        }
+
+        .topic-cluster {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .topic-label {
+            position: absolute;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .ai-cluster { top: 50px; left: 200px; }
+        .ai-cluster .topic-label { color: var(--topic-ai); top: -25px; }
+
+        .design-cluster { top: 150px; right: 300px; }
+        .design-cluster .topic-label { color: var(--topic-design); top: -25px; }
+
+        .research-cluster { bottom: 200px; left: 150px; }
+        .research-cluster .topic-label { color: var(--topic-research); top: -25px; }
+
+        .business-cluster { top: 300px; left: 600px; }
+        .business-cluster .topic-label { color: var(--topic-business); top: -25px; }
+
+        .personal-cluster { bottom: 150px; right: 200px; }
+        .personal-cluster .topic-label { color: var(--topic-personal); top: -25px; }
+
+        .document {
+            position: absolute;
+            background: var(--doc-bg);
+            border: 1px solid var(--doc-border);
+            border-radius: 8px;
+            padding: 16px;
+            min-width: 180px;
+            max-width: 220px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: all;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .document:hover {
+            background: var(--doc-hover);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .document.selected {
+            border-color: var(--topic-ai);
+            box-shadow: 0 0 0 2px var(--selection-glow);
+        }
+
+        .document-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .document-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .document-preview {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        .document-type {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .type-ai { background: var(--topic-ai); }
+        .type-design { background: var(--topic-design); }
+        .type-research { background: var(--topic-research); }
+        .type-business { background: var(--topic-business); }
+        .type-personal { background: var(--topic-personal); }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: var(--connection-line);
+            opacity: 0.3;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .toolbar {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .tool-button {
+            background: var(--canvas-secondary);
+            border: 1px solid var(--doc-border);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-button:hover {
+            background: var(--doc-hover);
+            color: var(--text-primary);
+        }
+
+        .search-box {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            background: var(--canvas-secondary);
+            border: 1px solid var(--doc-border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            width: 280px;
+            color: var(--text-primary);
+            font-size: 14px;
+            z-index: 100;
+        }
+
+        .search-box::placeholder {
+            color: var(--text-muted);
+        }
+
+        .minimap {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            width: 200px;
+            height: 120px;
+            background: var(--canvas-secondary);
+            border: 1px solid var(--doc-border);
+            border-radius: 8px;
+            opacity: 0.8;
+            z-index: 100;
+        }
+
+        .viewport-indicator {
+            position: absolute;
+            border: 1px solid var(--topic-ai);
+            background: rgba(45, 78, 255, 0.1);
+            width: 100%;
+            height: 100%;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas">
+        <input type="text" class="search-box" placeholder="Search documents...">
+        
+        <div class="toolbar">
+            <button class="tool-button">View All</button>
+            <button class="tool-button">Focus Mode</button>
+            <button class="tool-button">+ New Doc</button>
+        </div>
+
+        <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;">
+            <line x1="320" y1="150" x2="480" y2="240" stroke="var(--connection-line)" stroke-width="1" opacity="0.2"/>
+            <line x1="650" y1="380" x2="420" y2="290" stroke="var(--connection-line)" stroke-width="1" opacity="0.2"/>
+            <line x1="900" y1="520" x2="750" y2="420" stroke="var(--connection-line)" stroke-width="1" opacity="0.2"/>
+            <line x1="280" y1="650" x2="380" y2="480" stroke="var(--connection-line)" stroke-width="1" opacity="0.2"/>
+        </svg>
+
+        <div class="topic-cluster ai-cluster">
+            <div class="topic-label">AI & Machine Learning</div>
+            
+            <div class="document" style="top: 20px; left: 30px;">
+                <div class="document-type type-ai"></div>
+                <div class="document-title">Neural Network Architecture</div>
+                <div class="document-meta">2 hours ago • 12 pages</div>
+                <div class="document-preview">Deep dive into transformer models and attention mechanisms for natural language processing tasks...</div>
+            </div>
+
+            <div class="document" style="top: 80px; left: -20px;">
+                <div class="document-type type-ai"></div>
+                <div class="document-title">GPT-4 Analysis</div>
+                <div class="document-meta">Yesterday • 8 pages</div>
+                <div class="document-preview">Comparative study of language model capabilities and emergent behaviors in large-scale training...</div>
+            </div>
+
+            <div class="document selected" style="top: 140px; left: 60px;">
+                <div class="document-type type-ai"></div>
+                <div class="document-title">Computer Vision Pipeline</div>
+                <div class="document-meta">3 days ago • 15 pages</div>
+                <div class="document-preview">End-to-end implementation guide for object detection using YOLO and custom dataset training...</div>
+            </div>
+        </div>
+
+        <div class="topic-cluster design-cluster">
+            <div class="topic-label">Design Systems</div>
+            
+            <div class="document" style="top: 40px; left: -40px;">
+                <div class="document-type type-design"></div>
+                <div class="document-title">Component Library</div>
+                <div class="document-meta">1 day ago • 25 pages</div>
+                <div class="document-preview">Comprehensive design system documentation with component specifications and usage guidelines...</div>
+            </div>
+
+            <div class="document" style="top: 120px; left: 20px;">
+                <div class="document-type type-design"></div>
+                <div class="document-title">User Flow Mapping</div>
+                <div class="document-meta">4 days ago • 6 pages</div>
+                <div class="document-preview">Interactive prototypes and user journey analysis for the new onboarding experience...</div>
+            </div>
+        </div>
+
+        <div class="topic-cluster research-cluster">
+            <div class="topic-label">Research</div>
+            
+            <div class="document" style="top: -60px; left: 40px;">
+                <div class="document-type type-research"></div>
+                <div class="document-title">Market Analysis Q4</div>
+                <div class="document-meta">1 week ago • 32 pages</div>
+                <div class="document-preview">Comprehensive market research including competitor analysis and industry trend forecasting...</div>
+            </div>
+
+            <div class="document" style="top: 20px; left: -10px;">
+                <div class="document-type type-research"></div>
+                <div class="document-title">User Interview Insights</div>
+                <div class="document-meta">5 days ago • 18 pages</div>
+                <div class="document-preview">Synthesized findings from 24 user interviews revealing key pain points and opportunities...</div>
+            </div>
+
+            <div class="document" style="top: 80px; left: 70px;">
+                <div class="document-type type-research"></div>
+                <div class="document-title">Technology Stack Evaluation</div>
+                <div class="document-meta">2 weeks ago • 14 pages</div>
+                <div class="document-preview">Technical assessment of various frameworks and tools for the next development cycle...</div>
+            </div>
+        </div>
+
+        <div class="topic-cluster business-cluster">
+            <div class="topic-label">Business Strategy</div>
+            
+            <div class="document" style="top: 40px; left: -30px;">
+                <div class="document-type type-business"></div>
+                <div class="document-title">Growth Strategy 2024</div>
+                <div class="document-meta">3 days ago • 28 pages</div>
+                <div class="document-preview">Strategic roadmap for scaling operations and expanding into new market segments...</div>
+            </div>
+
+            <div class="document" style="top: 120px; left: 30px;">
+                <div class="document-type type-business"></div>
+                <div class="document-title">Partnership Proposal</div>
+                <div class="document-meta">1 week ago • 11 pages</div>
+                <div class="document-preview">Collaboration framework with potential integration partners and revenue sharing models...</div>
+            </div>
+        </div>
+
+        <div class="topic-cluster personal-cluster">
+            <div class="topic-label">Personal Projects</div>
+            
+            <div class="document" style="top: -40px; left: -30px;">
+                <div class="document-type type-personal"></div>
+                <div class="document-title">Learning Journal</div>
+                <div class="document-meta">Today • 5 pages</div>
+                <div class="document-preview">Weekly reflection on new skills acquired and areas for improvement in professional development...</div>
+            </div>
+
+            <div class="document" style="top: 40px; left: 10px;">
+                <div class="document-type type-personal"></div>
+                <div class="document-title">Side Project Ideas</div>
+                <div class="document-meta">2 days ago • 9 pages</div>
+                <div class="document-preview">Collection of innovative project concepts with technical feasibility assessments...</div>
+            </div>
+        </div>
+
+        <div class="minimap">
+            <div class="viewport-indicator"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const documents = document.querySelectorAll('.document');
+            
+            documents.forEach(doc => {
+                doc.addEventListener('click', function() {
+                    documents.forEach(d => d.classList.remove('selected'));
+                    this.classList.add('selected');
+                });
+            });
+
+            // Simple drag functionality for documents
+            let isDragging = false;
+            let dragElement = null;
+            let startX, startY, startLeft, startTop;
+
+            documents.forEach(doc => {
+                doc.addEventListener('mousedown', function(e) {
+                    if (e.button === 0) {
+                        isDragging = true;
+                        dragElement = this;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        const rect = this.getBoundingClientRect();
+                        startLeft = rect.left;
+                        startTop = rect.top;
+                        this.style.zIndex = '1000';
+                    }
+                });
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (isDragging && dragElement) {
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+                    dragElement.style.left = (startLeft + deltaX - dragElement.offsetParent.offsetLeft) + 'px';
+                    dragElement.style.top = (startTop + deltaY - dragElement.offsetParent.offsetTop) + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    if (dragElement) {
+                        dragElement.style.zIndex = 'auto';
+                        dragElement = null;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

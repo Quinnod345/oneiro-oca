@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioSystem Monitor</title>
+    <style>
+        :root {
+            --bg-dark: #0a0c0f;
+            --bg-darker: #060709;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --accent-healthy: #34a853;
+            --accent-warning: #fbbc04;
+            --accent-critical: #ea4335;
+            --surface: #1a1d21;
+            --surface-lighter: #242831;
+            --pulse-shadow: rgba(52, 168, 83, 0.4);
+            --warning-shadow: rgba(251, 188, 4, 0.4);
+            --critical-shadow: rgba(234, 67, 53, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .background-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.1;
+            background-image: 
+                linear-gradient(rgba(232, 234, 237, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(232, 234, 237, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: grid-pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes grid-pulse {
+            0%, 100% { opacity: 0.05; }
+            50% { opacity: 0.15; }
+        }
+
+        .header {
+            padding: 32px 48px;
+            border-bottom: 1px solid var(--surface);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(120deg, var(--text-primary), var(--accent-healthy));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        .system-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            padding: 48px;
+            height: calc(900px - 120px);
+        }
+
+        .organism {
+            background: var(--surface);
+            border-radius: 24px;
+            padding: 40px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--surface-lighter);
+            transition: all 0.3s ease;
+        }
+
+        .organism::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, transparent 40%, var(--bg-darker) 70%);
+            animation: rotate 20s linear infinite;
+            opacity: 0.3;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .organism-content {
+            position: relative;
+            z-index: 2;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .organism-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .organism-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .cpu-organism .organism-icon {
+            background: linear-gradient(135deg, var(--accent-healthy), #2d9048);
+            animation: cpu-breathe 2s ease-in-out infinite;
+        }
+
+        .memory-organism .organism-icon {
+            background: linear-gradient(135deg, var(--accent-warning), #e0a503);
+            animation: memory-pulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes cpu-breathe {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px var(--pulse-shadow);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 40px var(--pulse-shadow);
+            }
+        }
+
+        @keyframes memory-pulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 15px var(--warning-shadow);
+            }
+            50% { 
+                transform: scale(1.08);
+                box-shadow: 0 0 50px var(--warning-shadow);
+            }
+        }
+
+        .organism-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .organism-status {
+            font-size: 14px;
+            opacity: 0.8;
+            font-weight: 500;
+        }
+
+        .vital-signs {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .heartbeat-container {
+            position: relative;
+            width: 200px;
+            height: 120px;
+            margin-bottom: 32px;
+        }
+
+        .heartbeat-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: currentColor;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .heartbeat-pulse {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: currentColor;
+            border-radius: 50%;
+            top: 50%;
+            animation: heartbeat-move 3s linear infinite;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .cpu-organism .heartbeat-pulse {
+            color: var(--accent-healthy);
+            animation: heartbeat-healthy 2s linear infinite;
+        }
+
+        .memory-organism .heartbeat-pulse {
+            color: var(--accent-warning);
+            animation: heartbeat-stressed 1.2s linear infinite;
+        }
+
+        @keyframes heartbeat-healthy {
+            0% { 
+                left: -4px; 
+                transform: translateY(-50%) scale(1);
+            }
+            10% { transform: translateY(-50%) scale(1) translateY(-20px); }
+            15% { transform: translateY(-50%) scale(1.5) translateY(-40px); }
+            20% { transform: translateY(-50%) scale(1) translateY(-20px); }
+            25% { transform: translateY(-50%) scale(1) translateY(0); }
+            100% { 
+                left: calc(100% + 4px); 
+                transform: translateY(-50%) scale(1);
+            }
+        }
+
+        @keyframes heartbeat-stressed {
+            0% { 
+                left: -4px; 
+                transform: translateY(-50%) scale(1);
+            }
+            8% { transform: translateY(-50%) scale(1) translateY(-15px); }
+            12% { transform: translateY(-50%) scale(2) translateY(-60px); }
+            16% { transform: translateY(-50%) scale(1) translateY(-30px); }
+            20% { transform: translateY(-50%) scale(1.2) translateY(-40px); }
+            24% { transform: translateY(-50%) scale(1) translateY(0); }
+            100% { 
+                left: calc(100% + 4px); 
+                transform: translateY(-50%) scale(1);
+            }
+        }
+
+        .usage-display {
+            text-align: center;
+        }
+
+        .usage-value {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cpu-organism .usage-value {
+            color: var(--accent-healthy);
+        }
+
+        .memory-organism .usage-value {
+            color: var(--accent-warning);
+        }
+
+        .usage-label {
+            font-size: 14px;
+            opacity: 0.7;
+            font-weight: 500;
+        }
+
+        .system-stats {
+            position: absolute;
+            bottom: 32px;
+            right: 48px;
+            display: flex;
+            gap: 24px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--surface-lighter);
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--accent-healthy);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.7;
+            font-weight: 500;
+        }
+
+        .breathing-aura {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 24px;
+            pointer-events: none;
+        }
+
+        .cpu-organism .breathing-aura {
+            animation: aura-healthy 2s ease-in-out infinite;
+        }
+
+        .memory-organism .breathing-aura {
+            animation: aura-stressed 1.2s ease-in-out infinite;
+        }
+
+        @keyframes aura-healthy {
+            0%, 100% { 
+                box-shadow: inset 0 0 20px rgba(52, 168, 83, 0.1);
+            }
+            50% { 
+                box-shadow: inset 0 0 40px rgba(52, 168, 83, 0.2);
+            }
+        }
+
+        @keyframes aura-stressed {
+            0%, 100% { 
+                box-shadow: inset 0 0 15px rgba(251, 188, 4, 0.15);
+            }
+            50% { 
+                box-shadow: inset 0 0 60px rgba(251, 188, 4, 0.3);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-grid"></div>
+    
+    <header class="header">
+        <h1>BioSystem Monitor</h1>
+        <p>Real-time organism vitals • System health visualization</p>
+    </header>
+
+    <div class="system-grid">
+        <div class="organism cpu-organism">
+            <div class="breathing-aura"></div>
+            <div class="organism-content">
+                <div class="organism-header">
+                    <div class="organism-icon">⚡</div>
+                    <div>
+                        <div class="organism-title">CPU Core</div>
+                        <div class="organism-status">Healthy • Steady breathing</div>
+                    </div>
+                </div>
+                
+                <div class="vital-signs">
+                    <div class="heartbeat-container">
+                        <div class="heartbeat-line"></div>
+                        <div class="heartbeat-pulse"></div>
+                    </div>
+                    
+                    <div class="usage-display">
+                        <div class="usage-value">23%</div>
+                        <div class="usage-label">Current Load</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="organism memory-organism">
+            <div class="breathing-aura"></div>
+            <div class="organism-content">
+                <div class="organism-header">
+                    <div class="organism-icon">🧠</div>
+                    <div>
+                        <div class="organism-title">Memory Pool</div>
+                        <div class="organism-status">Stressed • Rapid pulse</div>
+                    </div>
+                </div>
+                
+                <div class="vital-signs">
+                    <div class="heartbeat-container">
+                        <div class="heartbeat-line"></div>
+                        <div class="heartbeat-pulse"></div>
+                    </div>
+                    
+                    <div class="usage-display">
+                        <div class="usage-value">78%</div>
+                        <div class="usage-label">Memory Used</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="system-stats">
+        <div class="stat-item">
+            <div class="stat-value">16</div>
+            <div class="stat-label">Cores</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">32GB</div>
+            <div class="stat-label">Total RAM</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">98.2°F</div>
+            <div class="stat-label">Core Temp</div>
+        </div>
+    </div>
+</body>
+</html>

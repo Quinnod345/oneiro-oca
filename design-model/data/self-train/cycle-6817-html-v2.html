@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --memory-cream: #faf6f0;
+            --parchment: #f0e6d2;
+            --burnt-sugar: #d4a574;
+            --rosemary-shadow: #7a8471;
+            --paprika-dust: #c65d44;
+            --ink-blur: #3a3532;
+            --taste-violet: #9b7aa8;
+            --salt-white: #fdfbf7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--memory-cream);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--ink-blur);
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: var(--ink-blur);
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.125rem;
+            color: var(--rosemary-shadow);
+            font-style: italic;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 3rem;
+            flex: 1;
+        }
+
+        .memory-bank {
+            background: var(--salt-white);
+            border-radius: 1rem;
+            padding: 2rem;
+            height: fit-content;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+        }
+
+        .memory-section {
+            margin-bottom: 2rem;
+        }
+
+        .memory-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .memory-label {
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--burnt-sugar);
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .memory-tokens {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .memory-token {
+            background: var(--parchment);
+            border-radius: 2rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            color: var(--ink-blur);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            user-select: none;
+            border: 2px solid transparent;
+        }
+
+        .memory-token:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .memory-token.texture:hover { border-color: var(--rosemary-shadow); }
+        .memory-token.aroma:hover { border-color: var(--paprika-dust); }
+        .memory-token.emotion:hover { border-color: var(--taste-violet); }
+
+        .reconstruction-area {
+            background: var(--salt-white);
+            border-radius: 1rem;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 500px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--parchment);
+            border-radius: 1rem;
+            padding: 4rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .drop-zone.active {
+            border-color: var(--burnt-sugar);
+            background: rgba(212, 165, 116, 0.05);
+        }
+
+        .drop-zone-text {
+            color: var(--rosemary-shadow);
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+        }
+
+        .reconstructed-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            min-height: 60px;
+        }
+
+        .reconstructed-token {
+            background: var(--burnt-sugar);
+            color: var(--salt-white);
+            border-radius: 2rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            
+            .memory-bank,
+            .reconstruction-area {
+                padding: 1.5rem;
+            }
+            
+            .drop-zone {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Temporal Recipe Reconstructor</h1>
+            <p class="subtitle">Reassemble memories into forgotten flavors</p>
+        </header>
+        
+        <main class="main-content">
+            <aside class="memory-bank">
+                <div class="memory-section">
+                    <h2 class="memory-label">Textures</h2>
+                    <div class="memory-tokens">
+                        <div class="memory-token texture" draggable="true">Crispy edges</div>
+                        <div class="memory-token texture" draggable="true">Silken broth</div>
+                        <div class="memory-token texture" draggable="true">Crumbling crust</div>
+                        <div class="memory-token texture" draggable="true">Molten center</div>
+                    </div>
+                </div>
+                
+                <div class="memory-section">
+                    <h2 class="memory-label">Aromas</h2>
+                    <div class="memory-tokens">
+                        <div class="memory-token aroma" draggable="true">Wood smoke</div>
+                        <div class="memory-token aroma" draggable="true">Citrus zest</div>
+                        <div class="memory-token aroma" draggable="true">Warm spices</div>
+                        <div class="memory-token aroma" draggable="true">Fresh herbs</div>
+                    </div>
+                </div>
+                
+                <div class="memory-section">
+                    <h2 class="memory-label">Emotions</h2>
+                    <div class="memory-tokens">
+                        <div class="memory-token emotion" draggable="true">Sunday comfort</div>
+                        <div class="memory-token emotion" draggable="true">Midnight craving</div>
+                        <div class="memory-token emotion" draggable="true">First taste</div>
+                        <div class="memory-token emotion" draggable="true">Shared laughter</div>
+                    </div>
+                </div>
+            </aside>
+            
+            <section class="reconstruction-area">
+                <div class="drop-zone" ondrop="drop(event)" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)">
+                    <p class="drop-zone-text">Drag memories here to reconstruct</p>
+                    <div class="reconstructed-items" id="reconstructed"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script>
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+        
+        function dragEnter(ev) {
+            ev.currentTarget.classList.add('active');
+        }
+        
+        function dragLeave(ev) {
+            ev.currentTarget.classList.remove('active');
+        }
+        
+        function drop(ev) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('active');
+            
+            const data = ev.dataTransfer.getData("text");
+            const reconstructed = document.getElementById('reconstructed');
+            
+            const token = document.createElement('div');
+            token.className = 'reconstructed-token';
+            token.textContent = data;
+            reconstructed.appendChild(token);
+        }
+        
+        document.querySelectorAll('.memory-token').forEach(token => {
+            token.addEventListener('dragstart', function(ev) {
+                ev.dataTransfer.setData("text", ev.target.textContent);
+            });
+        });
+    </script>
+</body>
+</html>

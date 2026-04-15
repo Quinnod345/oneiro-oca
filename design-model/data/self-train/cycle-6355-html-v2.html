@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Temporal Meditation</title>
+    <style>
+        :root {
+            --void: #0a0b0f;
+            --mist: #1a1d24;
+            --pearl: #e8e2d5;
+            --sage: #7a8a7f;
+            --gold: #d4a574;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            position: relative;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #temporal-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, var(--mist) 0%, var(--void) 70%);
+            opacity: 0.8;
+        }
+
+        #central-focus {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        .time-ring {
+            position: absolute;
+            border: 1px solid rgba(232, 226, 213, 0.1);
+            border-radius: 50%;
+            transition: all 3s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        #ring-outer {
+            width: 100%;
+            height: 100%;
+            animation: rotate 60s linear infinite;
+        }
+
+        #ring-inner {
+            width: 60%;
+            height: 60%;
+            animation: rotate 45s linear infinite reverse;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        #time-display {
+            position: absolute;
+            font-size: 72px;
+            font-weight: 200;
+            color: var(--pearl);
+            letter-spacing: 8px;
+            transition: all 1.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+            cursor: pointer;
+            z-index: 3;
+        }
+
+        #time-display:hover {
+            letter-spacing: 16px;
+            color: var(--gold);
+            transform: scale(0.95);
+        }
+
+        .drift-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--pearl);
+            border-radius: 50%;
+            opacity: 0;
+        }
+
+        @keyframes drift {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0) scale(0);
+            }
+            20% {
+                opacity: 0.6;
+                transform: translate(var(--x), var(--y)) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(var(--x) * 3), calc(var(--y) * 3)) scale(0.5);
+            }
+        }
+
+        .sound-wave {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            z-index: 2;
+        }
+
+        .wave-bar {
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(to top, var(--sage), transparent);
+            transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+            opacity: 0.4;
+        }
+
+        .wave-bar:hover {
+            height: 60px;
+            opacity: 0.8;
+            background: linear-gradient(to top, var(--gold), transparent);
+        }
+
+        #breath-guide {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: 300;
+            color: var(--sage);
+            letter-spacing: 2px;
+            opacity: 0.6;
+            transition: all 2s ease;
+            z-index: 2;
+        }
+
+        #temporal-field::after {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 30%, var(--void) 100%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="temporal-field"></div>
+    
+    <div id="breath-guide">BREATHE</div>
+    
+    <div id="central-focus">
+        <div class="time-ring" id="ring-outer"></div>
+        <div class="time-ring" id="ring-inner"></div>
+        <div id="time-display">12:00</div>
+        <div class="drift-particles" id="particles"></div>
+    </div>
+    
+    <div class="sound-wave" id="wave"></div>
+
+    <script>
+        const timeDisplay = document.getElementById('time-display');
+        const particles = document.getElementById('particles');
+        const wave = document.getElementById('wave');
+        const breathGuide = document.getElementById('breath-guide');
+        
+        // Create wave bars
+        for (let i = 0; i < 80; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'wave-bar';
+            wave.appendChild(bar);
+        }
+        
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            timeDisplay.textContent = `${hours}:${minutes}`;
+        }
+        
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Animate waves
+        function animateWaves() {
+            const bars = wave.querySelectorAll('.wave-bar');
+            bars.forEach((bar, i) => {
+                const height = Math.sin(Date.now() * 0.001 + i * 0.1) * 20 + 25;
+                bar.style.height = `${height}px`;
+            });
+            requestAnimationFrame(animateWaves);
+        }
+        animateWaves();
+        
+        // Particle system
+        timeDisplay.addEventListener('click', () => {
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                const angle = (Math.PI * 2 * i) / 20;
+                const distance = 50 + Math.random() * 50;
+                particle.style.setProperty('--x', `${Math.cos(angle) * distance}px`);
+                particle.style.setProperty('--y', `${Math.sin(angle) * distance}px`);
+                particle.style.left = '50%';
+                particle.style.top = '50%';
+                particle.style.animation = 'drift 3s ease-out';
+                particles.appendChild(particle);
+                setTimeout(() => particle.remove(), 3000);
+            }
+        });
+        
+        // Breath cycle
+        const breathCycle = ['BREATHE IN', 'HOLD', 'BREATHE OUT', 'REST'];
+        let breathIndex = 0;
+        setInterval(() => {
+            breathGuide.style.opacity = '0';
+            setTimeout(() => {
+                breathGuide.textContent = breathCycle[breathIndex];
+                breathGuide.style.opacity = '0.6';
+                breathIndex = (breathIndex + 1) % breathCycle.length;
+            }, 1000);
+        }, 4000);
+    </script>
+</body>
+</html>

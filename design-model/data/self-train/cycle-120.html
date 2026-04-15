@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Presence</title>
+    <style>
+        :root {
+            --focus-hue: 220;
+            --focus-saturation: 85%;
+            --focus-lightness: 65%;
+            --focus-alpha: 0.12;
+            --surface-primary: rgba(255, 255, 255, 0.85);
+            --surface-secondary: rgba(255, 255, 255, 0.6);
+            --text-primary: rgba(0, 0, 0, 0.87);
+            --text-secondary: rgba(0, 0, 0, 0.6);
+            --text-tertiary: rgba(0, 0, 0, 0.38);
+            --border-subtle: rgba(0, 0, 0, 0.08);
+            --shadow-focus: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+            --animation-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+            --animation-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf0 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .desktop {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, hsla(calc(var(--focus-hue) + 40), 70%, 70%, 0.02) 0%, transparent 50%);
+        }
+
+        .menu-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: var(--surface-primary);
+            backdrop-filter: blur(20px) saturate(1.8);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 100;
+        }
+
+        .menu-items {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--text-primary);
+        }
+
+        .menu-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .focus-indicator {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            background: hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), var(--focus-alpha));
+            border: 1px solid hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 800ms var(--animation-ease);
+            cursor: pointer;
+        }
+
+        .focus-indicator::before {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            border-radius: 3px;
+            background: hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.6);
+            transform: scale(0.8);
+            opacity: 0.8;
+            transition: all 1200ms var(--animation-spring);
+            animation: focusPulse 3s ease-in-out infinite;
+        }
+
+        .focus-indicator:hover {
+            transform: scale(1.05);
+            background: hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.18);
+        }
+
+        .focus-indicator:hover::before {
+            transform: scale(0.9);
+            opacity: 0.9;
+        }
+
+        @keyframes focusPulse {
+            0%, 100% { 
+                transform: scale(0.8);
+                opacity: 0.8;
+            }
+            50% { 
+                transform: scale(0.85);
+                opacity: 0.9;
+            }
+        }
+
+        .status-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-left: 6px;
+            transition: color 600ms var(--animation-ease);
+        }
+
+        .ambient-orb {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: 
+                radial-gradient(circle at 30% 30%, 
+                    hsla(var(--focus-hue), var(--focus-saturation), 85%, 0.8) 0%,
+                    hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.4) 40%,
+                    hsla(var(--focus-hue), calc(var(--focus-saturation) - 20%), 50%, 0.1) 100%
+                );
+            box-shadow: var(--shadow-focus);
+            animation: ambientFloat 8s ease-in-out infinite, ambientGlow 6s ease-in-out infinite;
+            filter: blur(0.5px);
+        }
+
+        @keyframes ambientFloat {
+            0%, 100% { transform: translateX(-50%) translateY(0px) scale(1); }
+            50% { transform: translateX(-50%) translateY(-8px) scale(1.02); }
+        }
+
+        @keyframes ambientGlow {
+            0%, 100% { 
+                opacity: 0.6;
+                filter: blur(0.5px) brightness(1);
+            }
+            50% { 
+                opacity: 0.8;
+                filter: blur(1px) brightness(1.1);
+            }
+        }
+
+        .presence-field {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 300px;
+            border-radius: 24px;
+            background: var(--surface-primary);
+            backdrop-filter: blur(20px) saturate(1.8);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-focus);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+            transition: all 1000ms var(--animation-ease);
+        }
+
+        .presence-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .presence-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.5;
+            max-width: 320px;
+        }
+
+        .focus-waves {
+            position: relative;
+            width: 120px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .wave {
+            width: 3px;
+            background: hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.7);
+            border-radius: 2px;
+            animation: waveFlow 2s ease-in-out infinite;
+        }
+
+        .wave:nth-child(1) { height: 12px; animation-delay: 0ms; }
+        .wave:nth-child(2) { height: 20px; animation-delay: 100ms; }
+        .wave:nth-child(3) { height: 32px; animation-delay: 200ms; }
+        .wave:nth-child(4) { height: 24px; animation-delay: 300ms; }
+        .wave:nth-child(5) { height: 16px; animation-delay: 400ms; }
+        .wave:nth-child(6) { height: 28px; animation-delay: 500ms; }
+        .wave:nth-child(7) { height: 14px; animation-delay: 600ms; }
+
+        @keyframes waveFlow {
+            0%, 100% { 
+                transform: scaleY(1);
+                opacity: 0.7;
+            }
+            50% { 
+                transform: scaleY(1.4);
+                opacity: 1;
+            }
+        }
+
+        .ambient-particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: hsla(var(--focus-hue), var(--focus-saturation), var(--focus-lightness), 0.3);
+            border-radius: 50%;
+            animation: particleFloat 12s linear infinite;
+        }
+
+        .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 25%; animation-delay: -3s; }
+        .particle:nth-child(3) { left: 40%; animation-delay: -6s; }
+        .particle:nth-child(4) { left: 60%; animation-delay: -9s; }
+        .particle:nth-child(5) { left: 80%; animation-delay: -2s; }
+
+        @keyframes particleFloat {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) translateX(20px);
+                opacity: 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .focus-indicator::before,
+            .ambient-orb,
+            .wave,
+            .particle {
+                animation: none;
+            }
+            
+            .presence-field {
+                transition: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="desktop">
+        <div class="ambient-particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+        
+        <div class="menu-bar">
+            <div class="menu-items">
+                <span>Focus</span>
+                <span>View</span>
+                <span>Window</span>
+                <span>Help</span>
+            </div>
+            <div class="menu-right">
+                <div class="focus-indicator"></div>
+                <span class="status-text">Active</span>
+                <span style="font-size: 12px; color: var(--text-tertiary);">14:32</span>
+            </div>
+        </div>
+
+        <div class="ambient-orb"></div>
+        
+        <div class="presence-field">
+            <h1 class="presence-title">Deep Focus</h1>
+            <p class="presence-subtitle">Your attention is flowing. The space around you adapts to support sustained concentration and creative thinking.</p>
+            <div class="focus-waves">
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+                <div class="wave"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

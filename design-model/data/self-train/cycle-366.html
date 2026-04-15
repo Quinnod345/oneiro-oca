@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --bg-deep: #0a0a0b;
+            --bg-mid: #1a1a1c;
+            --note-fresh: #2d3436;
+            --note-aged: #636e72;
+            --note-old: #2f3640;
+            --text-primary: #e8e8e8;
+            --text-secondary: #b2bec3;
+            --text-faded: #74b9ff;
+            --thread-active: #fd79a8;
+            --thread-dormant: #a29bfe;
+            --accent-warm: #fdcb6e;
+            --accent-cool: #6c5ce7;
+            --shadow-near: rgba(253, 203, 110, 0.3);
+            --shadow-far: rgba(108, 92, 231, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: radial-gradient(ellipse at 30% 20%, var(--bg-mid) 0%, var(--bg-deep) 70%);
+            overflow: hidden;
+            perspective: 2000px;
+            position: relative;
+        }
+
+        .workspace {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: breathe 8s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: rotateX(2deg) rotateY(1deg); }
+            50% { transform: rotateX(-1deg) rotateY(-2deg); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--note-fresh);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 180px;
+            max-width: 280px;
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .note:hover {
+            transform: translateZ(20px) scale(1.05);
+        }
+
+        .note.recent {
+            background: var(--note-fresh);
+            color: var(--text-primary);
+            box-shadow: 0 20px 40px var(--shadow-near);
+            transform: translateZ(50px);
+        }
+
+        .note.aging {
+            background: var(--note-aged);
+            color: var(--text-secondary);
+            opacity: 0.8;
+            transform: translateZ(-100px) scale(0.9);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .note.old {
+            background: var(--note-old);
+            color: var(--text-faded);
+            opacity: 0.5;
+            transform: translateZ(-300px) scale(0.7) rotateX(15deg);
+            box-shadow: 0 5px 15px var(--shadow-far);
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .note-content {
+            font-size: 14px;
+            line-height: 1.4;
+            opacity: 0.9;
+        }
+
+        .note-meta {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, var(--thread-active), var(--thread-dormant));
+            transform-origin: left center;
+            opacity: 0.6;
+            transition: all 0.4s ease;
+            pointer-events: none;
+        }
+
+        .connection-thread::before {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--thread-active);
+            border-radius: 50%;
+            left: -3px;
+            top: -2px;
+        }
+
+        .connection-thread::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--thread-dormant);
+            border-radius: 50%;
+            right: -2px;
+            top: -1px;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .toolbar button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .toolbar button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: var(--text-primary);
+            backdrop-filter: blur(10px);
+            font-size: 14px;
+            width: 200px;
+        }
+
+        .search-box::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .depth-indicator {
+            position: fixed;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 200px;
+            background: linear-gradient(to bottom, var(--accent-warm), var(--accent-cool));
+            border-radius: 2px;
+            opacity: 0.6;
+        }
+
+        .depth-indicator::before {
+            content: 'Recent';
+            position: absolute;
+            top: -25px;
+            right: 15px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .depth-indicator::after {
+            content: 'Archive';
+            position: absolute;
+            bottom: -25px;
+            right: 15px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .floating-particles {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--accent-cool);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 12s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) translateX(0px); }
+            25% { transform: translateY(-20px) translateX(10px); }
+            50% { transform: translateY(-10px) translateX(-15px); }
+            75% { transform: translateY(-25px) translateX(5px); }
+        }
+
+        .note-1 { top: 150px; left: 300px; animation: drift-1 15s ease-in-out infinite; }
+        .note-2 { top: 200px; left: 800px; animation: drift-2 18s ease-in-out infinite; }
+        .note-3 { top: 400px; left: 200px; animation: drift-3 12s ease-in-out infinite; }
+        .note-4 { top: 350px; left: 1000px; animation: drift-4 20s ease-in-out infinite; }
+        .note-5 { top: 600px; left: 500px; animation: drift-5 16s ease-in-out infinite; }
+        .note-6 { top: 500px; left: 750px; animation: drift-6 14s ease-in-out infinite; }
+
+        @keyframes drift-1 {
+            0%, 100% { transform: translateZ(50px) translateY(0px); }
+            50% { transform: translateZ(30px) translateY(-30px); }
+        }
+
+        @keyframes drift-2 {
+            0%, 100% { transform: translateZ(-100px) scale(0.9) translateY(0px); }
+            50% { transform: translateZ(-80px) scale(0.9) translateY(20px); }
+        }
+
+        @keyframes drift-3 {
+            0%, 100% { transform: translateZ(50px) translateY(0px); }
+            50% { transform: translateZ(70px) translateY(-15px); }
+        }
+
+        @keyframes drift-4 {
+            0%, 100% { transform: translateZ(-300px) scale(0.7) rotateX(15deg) translateY(0px); }
+            50% { transform: translateZ(-280px) scale(0.7) rotateX(10deg) translateY(25px); }
+        }
+
+        @keyframes drift-5 {
+            0%, 100% { transform: translateZ(-100px) scale(0.9) translateY(0px); }
+            50% { transform: translateZ(-120px) scale(0.9) translateY(-20px); }
+        }
+
+        @keyframes drift-6 {
+            0%, 100% { transform: translateZ(-300px) scale(0.7) rotateX(15deg) translateY(0px); }
+            50% { transform: translateZ(-320px) scale(0.7) rotateX(20deg) translateY(15px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button>+ New Note</button>
+        <input type="text" class="search-box" placeholder="Search notes...">
+        <button>Focus</button>
+        <button>Timeline</button>
+    </div>
+
+    <div class="depth-indicator"></div>
+
+    <div class="workspace">
+        <div class="note note-1 recent">
+            <div class="note-title">Project Roadmap Q4</div>
+            <div class="note-content">Need to finalize the spatial interface design and implement the connection threading system. Focus on user experience.</div>
+            <div class="note-meta">
+                <span>2 hours ago</span>
+                <span>📋</span>
+            </div>
+        </div>
+
+        <div class="note note-2 aging">
+            <div class="note-title">Design Principles</div>
+            <div class="note-content">Spatial computing should feel natural. Distance equals relevance. Fresh content stays close, archives drift away.</div>
+            <div class="note-meta">
+                <span>3 days ago</span>
+                <span>💡</span>
+            </div>
+        </div>
+
+        <div class="note note-3 recent">
+            <div class="note-title">Meeting Notes</div>
+            <div class="note-content">Discussed the thread connection system. Users want to see relationships between notes visually. Consider color coding by topic.</div>
+            <div class="note-meta">
+                <span>1 hour ago</span>
+                <span>🤝</span>
+            </div>
+        </div>
+
+        <div class="note note-4 old">
+            <div class="note-title">Initial Concept</div>
+            <div class="note-content">What if notes existed in 3D space? Recent thoughts stay close, older ideas drift into the background but remain accessible.</div>
+            <div class="note-meta">
+                <span>2 weeks ago</span>
+                <span>🌱</span>
+            </div>
+        </div>
+
+        <div class="note note-5 aging">
+            <div class="note-title">Technical Research</div>
+            <div class="note-content">CSS 3D transforms can create compelling depth. Perspective and transform-style: preserve-3d are key properties.</div>
+            <div class="note-meta">
+                <span>1 week ago</span>
+                <span>⚙️</span>
+            </div>
+        </div>
+
+        <div class="note note-6 old">
+            <div class="note-title">Inspiration</div>
+            <div class="note-content">Memory palace techniques. Physical space aids recall. Digital notes should mirror how we think spatially.</div>
+            <div class="note-meta">
+                <span>3 weeks ago</span>
+                <span>🏛️</span>
+            </div>
+        </div>
+
+        <!-- Connection Threads -->
+        <div class="connection-thread" style="top: 180px; left: 480px; width: 300px; transform: rotateZ(5deg);"></div>
+        <div class="connection-thread" style="top: 420px; left: 380px; width: 200px; transform: rotateZ(-15deg);"></div>
+        <div class="connection-thread" style="top: 530px; left: 680px; width: 150px; transform: rotateZ(25deg); opacity: 0.3;"></div>
+        <div class="connection-thread" style="top: 380px; left: 1180px; width: 100px; transform: rotateZ(-45deg) rotateX(30deg); opacity: 0.2;"></div>
+    </div>
+
+    <!-- Floating Particles -->
+    <div class="floating-particles" style="top: 100px; left: 100px; animation-delay: 0s;"></div>
+    <div class="floating-particles" style="top: 300px; left: 600px; animation-delay: 3s;"></div>
+    <div class="floating-particles" style="top: 700px; left: 1200px; animation-delay: 6s;"></div>
+    <div class="floating-particles" style="top: 500px; left: 300px; animation-delay: 9s;"></div>
+</body>
+</html>

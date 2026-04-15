@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --space-dark: #0a0a0f;
+            --space-medium: #1a1a2e;
+            --note-bg: #f8f9fa;
+            --note-shadow: rgba(0, 0, 0, 0.3);
+            --thread-color: #4a9eff;
+            --thread-glow: rgba(74, 158, 255, 0.4);
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+            --accent-warm: #ff6b6b;
+            --accent-cool: #4ecdc4;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, var(--space-medium) 0%, var(--space-dark) 70%);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            perspective: 2000px;
+            position: relative;
+        }
+
+        .space-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: rotateY(0deg) rotateX(0deg); }
+            25% { transform: rotateY(5deg) rotateX(2deg); }
+            50% { transform: rotateY(0deg) rotateX(-1deg); }
+            75% { transform: rotateY(-3deg) rotateX(1deg); }
+        }
+
+        .note {
+            position: absolute;
+            width: 240px;
+            padding: 20px;
+            background: var(--note-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px var(--note-shadow);
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+        }
+
+        .note:hover {
+            transform: scale(1.05) translateZ(20px);
+            box-shadow: 0 12px 48px var(--note-shadow);
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .note-content {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .note-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-date {
+            opacity: 0.7;
+        }
+
+        .note-tags {
+            display: flex;
+            gap: 4px;
+        }
+
+        .tag {
+            background: var(--accent-cool);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        /* Recent notes - close and bright */
+        .note.recent {
+            transform: translateZ(100px) translateX(var(--x, 0)) translateY(var(--y, 0));
+            opacity: 1;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .note.recent:nth-child(1) {
+            --x: 100px; --y: 50px;
+            left: 200px; top: 150px;
+            border-left: 4px solid var(--accent-warm);
+        }
+
+        .note.recent:nth-child(2) {
+            --x: -80px; --y: 30px;
+            left: 600px; top: 200px;
+            border-left: 4px solid var(--accent-cool);
+        }
+
+        .note.recent:nth-child(3) {
+            --x: 50px; --y: -40px;
+            left: 950px; top: 300px;
+            border-left: 4px solid #ffa726;
+        }
+
+        /* Medium age notes */
+        .note.medium {
+            transform: translateZ(0px) translateX(var(--x, 0)) translateY(var(--y, 0)) rotateY(var(--ry, 0)) scale(0.9);
+            opacity: 0.8;
+        }
+
+        .note.medium:nth-child(4) {
+            --x: 150px; --y: 100px; --ry: 15deg;
+            left: 350px; top: 400px;
+        }
+
+        .note.medium:nth-child(5) {
+            --x: -100px; --y: 80px; --ry: -10deg;
+            left: 800px; top: 450px;
+        }
+
+        .note.medium:nth-child(6) {
+            --x: 200px; --y: -60px; --ry: 20deg;
+            left: 1100px; top: 150px;
+        }
+
+        /* Old notes - distant and faded */
+        .note.old {
+            transform: translateZ(-200px) translateX(var(--x, 0)) translateY(var(--y, 0)) rotateY(var(--ry, 0)) scale(0.7);
+            opacity: 0.4;
+        }
+
+        .note.old:nth-child(7) {
+            --x: 300px; --y: 150px; --ry: 30deg;
+            left: 150px; top: 600px;
+        }
+
+        .note.old:nth-child(8) {
+            --x: -200px; --y: 120px; --ry: -25deg;
+            left: 750px; top: 650px;
+        }
+
+        .note.old:nth-child(9) {
+            --x: 400px; --y: -100px; --ry: 45deg;
+            left: 1000px; top: 550px;
+        }
+
+        /* Connection threads */
+        .thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--thread-color), transparent);
+            box-shadow: 0 0 8px var(--thread-glow);
+            transform-origin: left center;
+            opacity: 0.6;
+            animation: threadPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes threadPulse {
+            0%, 100% { opacity: 0.3; transform: scaleY(1); }
+            50% { opacity: 0.8; transform: scaleY(1.5); }
+        }
+
+        .thread-1 {
+            left: 320px;
+            top: 220px;
+            width: 300px;
+            transform: rotate(12deg) translateZ(50px);
+        }
+
+        .thread-2 {
+            left: 720px;
+            top: 270px;
+            width: 250px;
+            transform: rotate(25deg) translateZ(30px);
+        }
+
+        .thread-3 {
+            left: 470px;
+            top: 470px;
+            width: 350px;
+            transform: rotate(-8deg) translateZ(10px);
+        }
+
+        .thread-4 {
+            left: 270px;
+            top: 550px;
+            width: 200px;
+            transform: rotate(35deg) translateZ(-50px);
+            opacity: 0.3;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translateZ(100px) translateX(var(--x, 0)) translateY(var(--y, 0)) scale(1); }
+            50% { transform: translateZ(120px) translateX(var(--x, 0)) translateY(var(--y, 0)) scale(1.02); }
+        }
+
+        /* Floating particles */
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--thread-color);
+            border-radius: 50%;
+            animation: floatParticle 15s linear infinite;
+        }
+
+        @keyframes floatParticle {
+            0% { transform: translateY(900px) translateX(0) scale(0); opacity: 0; }
+            10% { opacity: 1; transform: scale(1); }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100px) translateX(100px) scale(0); opacity: 0; }
+        }
+
+        .particle:nth-child(1) { left: 200px; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 400px; animation-delay: 3s; }
+        .particle:nth-child(3) { left: 600px; animation-delay: 6s; }
+        .particle:nth-child(4) { left: 800px; animation-delay: 9s; }
+        .particle:nth-child(5) { left: 1000px; animation-delay: 12s; }
+
+        /* UI Controls */
+        .controls {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+        }
+
+        .add-note-btn {
+            background: var(--accent-warm);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
+        }
+
+        .add-note-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
+        }
+
+        .spatial-info {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button class="add-note-btn">+ New Note</button>
+    </div>
+
+    <div class="space-container">
+        <!-- Recent notes -->
+        <div class="note recent">
+            <div class="note-title">Project Roadmap Q1</div>
+            <div class="note-content">Need to finalize the user research phase and begin prototyping. Focus on accessibility features.</div>
+            <div class="note-meta">
+                <div class="note-date">2 min ago</div>
+                <div class="note-tags">
+                    <span class="tag">urgent</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note recent">
+            <div class="note-title">Design System Ideas</div>
+            <div class="note-content">Color palette should reflect brand values. Consider using warmer tones for CTAs and cooler for backgrounds.</div>
+            <div class="note-meta">
+                <div class="note-date">15 min ago</div>
+                <div class="note-tags">
+                    <span class="tag">design</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note recent">
+            <div class="note-title">Meeting Notes</div>
+            <div class="note-content">Sarah mentioned the new API endpoints will be ready by Friday. Update documentation accordingly.</div>
+            <div class="note-meta">
+                <div class="note-date">1 hour ago</div>
+                <div class="note-tags">
+                    <span class="tag">meeting</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Medium age notes -->
+        <div class="note medium">
+            <div class="note-title">Book Recommendations</div>
+            <div class="note-content">Atomic Habits, The Design of Everyday Things, Don't Make Me Think. All highly relevant to current work.</div>
+            <div class="note-meta">
+                <div class="note-date">Yesterday</div>
+                <div class="note-tags">
+                    <span class="tag">books</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note medium">
+            <div class="note-title">Weekend Plans</div>
+            <div class="note-content">Visit the art museum downtown. They have a new interactive exhibit on digital art and technology.</div>
+            <div class="note-meta">
+                <div class="note-date">2 days ago</div>
+                <div class="note-tags">
+                    <span class="tag">personal</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note medium">
+            <div class="note-title">Code Review Notes</div>
+            <div class="note-content">Component architecture looks good. Suggest extracting the validation logic into separate hooks for reusability.</div>
+            <div class="note-meta">
+                <div class="note-date">3 days ago</div>
+                <div class="note-tags">
+                    <span class="tag">code</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Old notes -->
+        <div class="note old">
+            <div class="note-title">Travel Checklist</div>
+            <div class="note-content">Passport, chargers, camera, comfortable walking shoes. Check weather forecast before packing.</div>
+            <div class="note-meta">
+                <div class="note-date">2 weeks ago</div>
+                <div class="note-tags">
+                    <span class="tag">travel</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note old">
+            <div class="note-title">Recipe Ideas</div>
+            <div class="note-content">Try making homemade pasta this weekend. Found a great recipe for spinach and ricotta ravioli.</div>
+            <div class="note-meta">
+                <div class="note-date">3 weeks ago</div>
+                <div class="note-tags">
+                    <span class="tag">cooking</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note old">
+            <div class="note-title">Fitness Goals</div>
+            <div class="note-content">30 minutes of cardio daily, strength training 3x per week. Focus on consistency over intensity.</div>
+            <div class="note-meta">
+                <div class="note-date">1 month ago</div>
+                <div class="note-tags">
+                    <span class="tag">health</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection threads -->
+        <div class="thread thread-1"></div>
+        <div class="thread thread-2"></div>
+        <div class="thread thread-3"></div>
+        <div class="thread thread-4"></div>
+
+        <!-- Floating particles -->
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <div class="spatial-info">
+        Navigate through time and space • Recent notes float near • Old memories drift away
+    </div>
+</body>
+</html>

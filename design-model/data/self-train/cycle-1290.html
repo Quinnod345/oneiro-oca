@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Timeline</title>
+    <style>
+        :root {
+            --color-bg: #fdfcfa;
+            --color-surface: #ffffff;
+            --color-surface-elevated: #f8f6f3;
+            --color-border: #e8e5e0;
+            --color-border-strong: #d4cfca;
+            --color-text-primary: #1a1715;
+            --color-text-secondary: #6b645c;
+            --color-text-tertiary: #9b9289;
+            --color-accent-primary: #d97706;
+            --color-accent-secondary: #ea580c;
+            --color-accent-soft: #fed7aa;
+            --color-ingredient: #059669;
+            --color-ingredient-soft: #d1fae5;
+            --color-process: #7c3aed;
+            --color-process-soft: #ede9fe;
+            --color-combine: #dc2626;
+            --color-combine-soft: #fee2e2;
+            
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-2xl: 48px;
+            
+            --border-radius-sm: 6px;
+            --border-radius-md: 8px;
+            --border-radius-lg: 12px;
+            --border-radius-xl: 16px;
+            
+            --shadow-sm: 0 1px 2px rgba(26, 23, 21, 0.05);
+            --shadow-md: 0 4px 6px rgba(26, 23, 21, 0.07), 0 1px 3px rgba(26, 23, 21, 0.06);
+            --shadow-lg: 0 10px 15px rgba(26, 23, 21, 0.1), 0 4px 6px rgba(26, 23, 21, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text-primary);
+            line-height: 1.5;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: var(--spacing-lg) var(--spacing-2xl);
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-surface);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+        }
+
+        .recipe-meta {
+            display: flex;
+            gap: var(--spacing-lg);
+            color: var(--color-text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .timeline-container {
+            flex: 1;
+            padding: var(--spacing-2xl);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .timeline {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 120px;
+            right: 120px;
+            height: 2px;
+            background: var(--color-border-strong);
+            transform: translateY(-1px);
+            z-index: 1;
+        }
+
+        .timeline-step {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 200px;
+        }
+
+        .timeline-step:not(:last-child) {
+            margin-right: var(--spacing-2xl);
+        }
+
+        .step-content {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-md);
+            width: 200px;
+            margin-bottom: var(--spacing-md);
+            transition: all 0.3s ease;
+        }
+
+        .step-content:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .step-type {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .step-type.ingredient {
+            background: var(--color-ingredient-soft);
+            color: var(--color-ingredient);
+        }
+
+        .step-type.process {
+            background: var(--color-process-soft);
+            color: var(--color-process);
+        }
+
+        .step-type.combine {
+            background: var(--color-combine-soft);
+            color: var(--color-combine);
+        }
+
+        .step-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .step-description {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .step-items {
+            list-style: none;
+        }
+
+        .step-items li {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            padding: var(--spacing-xs) 0;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .step-items li:last-child {
+            border-bottom: none;
+        }
+
+        .step-indicator {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid var(--color-surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .step-indicator.ingredient {
+            background: var(--color-ingredient);
+        }
+
+        .step-indicator.process {
+            background: var(--color-process);
+        }
+
+        .step-indicator.combine {
+            background: var(--color-combine);
+        }
+
+        .step-indicator.result {
+            background: var(--color-accent-primary);
+        }
+
+        .flow-arrow {
+            position: absolute;
+            top: 50%;
+            right: -40px;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 24px;
+            opacity: 0.4;
+        }
+
+        .flow-arrow svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .ingredients-panel {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 180px;
+        }
+
+        .ingredients-panel h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .ingredient-item {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .ingredient-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-ingredient);
+        }
+
+        .result-panel {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 180px;
+        }
+
+        .result-dish {
+            background: linear-gradient(135deg, var(--color-accent-soft) 0%, var(--color-surface) 100%);
+            border: 2px solid var(--color-accent-primary);
+            border-radius: var(--border-radius-xl);
+            padding: var(--spacing-lg);
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .dish-icon {
+            font-size: 32px;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .dish-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .dish-description {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: var(--color-border-strong);
+            opacity: 0.6;
+        }
+
+        .connection-line.to-step1 {
+            top: 50%;
+            left: 180px;
+            width: 60px;
+        }
+
+        .connection-line.from-final {
+            top: 50%;
+            right: 180px;
+            width: 60px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Beef Bourguignon Timeline</h1>
+            <div class="recipe-meta">
+                <span>Total Time: 3.5 hours</span>
+                <span>Serves: 6</span>
+                <span>Difficulty: Intermediate</span>
+            </div>
+        </header>
+
+        <div class="timeline-container">
+            <div class="ingredients-panel">
+                <h3>Fresh Ingredients</h3>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    2 lbs beef chuck
+                </div>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    1 bottle red wine
+                </div>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    8 oz bacon
+                </div>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    1 lb carrots
+                </div>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    1 lb pearl onions
+                </div>
+                <div class="ingredient-item">
+                    <div class="ingredient-dot"></div>
+                    8 oz mushrooms
+                </div>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-track"></div>
+                <div class="connection-line to-step1"></div>
+
+                <div class="timeline-step">
+                    <div class="step-content">
+                        <span class="step-type ingredient">Prep</span>
+                        <h3 class="step-title">Initial Prep</h3>
+                        <p class="step-description">Cut and prepare all ingredients</p>
+                        <ul class="step-items">
+                            <li>Cube beef into 2" pieces</li>
+                            <li>Dice bacon into lardons</li>
+                            <li>Slice carrots diagonally</li>
+                            <li>Peel pearl onions</li>
+                        </ul>
+                    </div>
+                    <div class="step-indicator ingredient">1</div>
+                    <div class="flow-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-content">
+                        <span class="step-type process">Sear</span>
+                        <h3 class="step-title">Brown & Build</h3>
+                        <p class="step-description">Create deep flavors through browning</p>
+                        <ul class="step-items">
+                            <li>Render bacon until crispy</li>
+                            <li>Sear beef in batches</li>
+                            <li>Sauté aromatics</li>
+                            <li>Deglaze with wine</li>
+                        </ul>
+                    </div>
+                    <div class="step-indicator process">2</div>
+                    <div class="flow-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-content">
+                        <span class="step-type combine">Braise</span>
+                        <h3 class="step-title">Long Simmer</h3>
+                        <p class="step-description">Low and slow transformation</p>
+                        <ul class="step-items">
+                            <li>Combine all elements</li>
+                            <li>Add herbs & stock</li>
+                            <li>Simmer 2.5 hours</li>
+                            <li>Stir occasionally</li>
+                        </ul>
+                    </div>
+                    <div class="step-indicator combine">3</div>
+                    <div class="flow-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-content">
+                        <span class="step-type process">Finish</span>
+                        <h3 class="step-title">Final Touch</h3>
+                        <p class="step-description">Perfect the texture and flavor</p>
+                        <ul class="step-items">
+                            <li>Sauté mushrooms</li>
+                            <li>Adjust seasoning</li>
+                            <li>Thicken if needed</li>
+                            <li>Garnish with herbs</li>
+                        </ul>
+                    </div>
+                    <div class="step-indicator process">4</div>
+                </div>
+
+                <div class="connection-line from-final"></div>
+            </div>
+
+            <div class="result-panel">
+                <div class="result-dish">
+                    <div class="dish-icon">🍲</div>
+                    <h3 class="dish-name">Beef Bourguignon</h3>
+                    <p class="dish-description">Rich, tender beef in wine sauce with perfectly cooked vegetables</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

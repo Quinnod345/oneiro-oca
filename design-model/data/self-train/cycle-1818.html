@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Rhythm Calendar</title>
+    <style>
+        :root {
+            --primary-bg: #fafbfc;
+            --secondary-bg: #f5f7fa;
+            --surface-bg: #ffffff;
+            --border-color: #e4e7eb;
+            --text-primary: #1a1d21;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --energy-high: #10b981;
+            --energy-medium: #f59e0b;
+            --energy-low: #ef4444;
+            --energy-very-low: #dc2626;
+            --accent-blue: #3b82f6;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 1440px;
+            height: 900px;
+            margin: 0 auto;
+            padding: 40px;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            gap: 32px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 32px;
+            background: var(--surface-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .header-left h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .header-left p {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.high { background: var(--energy-high); }
+        .legend-dot.medium { background: var(--energy-medium); }
+        .legend-dot.low { background: var(--energy-low); }
+        .legend-dot.very-low { background: var(--energy-very-low); }
+
+        .calendar-wrapper {
+            background: var(--surface-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .calendar-header {
+            padding: 24px 32px;
+            background: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-button {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: var(--surface-bg);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .nav-button:hover {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .month-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 180px;
+            text-align: center;
+        }
+
+        .weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            background: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .weekday {
+            padding: 16px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+        }
+
+        .day-cell {
+            aspect-ratio: 1;
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .day-cell:nth-child(7n) {
+            border-right: none;
+        }
+
+        .day-cell:hover {
+            background-color: var(--secondary-bg);
+        }
+
+        .day-cell.other-month {
+            color: var(--text-muted);
+            background-color: var(--secondary-bg);
+        }
+
+        .day-cell.today {
+            background-color: #eff6ff;
+            border-color: var(--accent-blue);
+        }
+
+        .day-number {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .energy-chart {
+            display: flex;
+            align-items: end;
+            gap: 2px;
+            height: 40px;
+            margin-top: auto;
+        }
+
+        .energy-bar {
+            flex: 1;
+            border-radius: 2px;
+            min-height: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .day-cell:hover .energy-bar {
+            transform: scaleY(1.1);
+        }
+
+        .energy-morning { background: var(--energy-high); height: 85%; }
+        .energy-midday { background: var(--energy-medium); height: 60%; }
+        .energy-afternoon { background: var(--energy-low); height: 30%; }
+        .energy-evening { background: var(--energy-medium); height: 45%; }
+
+        .weekend .energy-morning { height: 40%; }
+        .weekend .energy-midday { height: 70%; }
+        .weekend .energy-afternoon { height: 80%; }
+        .weekend .energy-evening { height: 55%; }
+
+        .special-day .energy-afternoon { 
+            background: var(--energy-very-low); 
+            height: 15%; 
+        }
+
+        .energy-tooltip {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+        }
+
+        .day-cell:hover .energy-tooltip {
+            opacity: 1;
+        }
+
+        .energy-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid transparent;
+            border-bottom-color: var(--text-primary);
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--energy-high);
+        }
+
+        .weekend .status-indicator {
+            background: var(--energy-medium);
+        }
+
+        .special-day .status-indicator {
+            background: var(--energy-very-low);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-left">
+                <h1>Energy Rhythm Calendar</h1>
+                <p>Track your daily energy patterns and optimize your schedule</p>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot high"></div>
+                    <span>High Energy</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot medium"></div>
+                    <span>Medium Energy</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot low"></div>
+                    <span>Low Energy</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot very-low"></div>
+                    <span>Very Low</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="calendar-wrapper">
+            <div class="calendar-header">
+                <div class="month-nav">
+                    <button class="nav-button">‹</button>
+                    <h2 class="month-title">November 2024</h2>
+                    <button class="nav-button">›</button>
+                </div>
+            </div>
+
+            <div class="weekdays">
+                <div class="weekday">Sun</div>
+                <div class="weekday">Mon</div>
+                <div class="weekday">Tue</div>
+                <div class="weekday">Wed</div>
+                <div class="weekday">Thu</div>
+                <div class="weekday">Fri</div>
+                <div class="weekday">Sat</div>
+            </div>
+
+            <div class="calendar-grid">
+                <div class="day-cell other-month">
+                    <div class="day-number">27</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">28</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">29</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">30</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">31</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">1</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Morning peak, afternoon valley</div>
+                </div>
+                <div class="day-cell weekend">
+                    <div class="day-number">2</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Relaxed weekend rhythm</div>
+                </div>
+
+                <div class="day-cell weekend">
+                    <div class="day-number">3</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Sunday afternoon high</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">4</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Monday morning boost</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">5</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Classic workday pattern</div>
+                </div>
+                <div class="day-cell special-day">
+                    <div class="day-number">6</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Heavy lunch crash</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">7</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Thursday energy</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">8</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Friday finish strong</div>
+                </div>
+                <div class="day-cell weekend">
+                    <div class="day-number">9</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Weekend recovery</div>
+                </div>
+
+                <div class="day-cell weekend">
+                    <div class="day-number">10</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Active Sunday</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">11</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Week 2 start</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">12</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Steady Tuesday</div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">13</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Midweek momentum</div>
+                </div>
+                <div class="day-cell special-day">
+                    <div class="day-number">14</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Deep afternoon dip</div>
+                </div>
+                <div class="day-cell today">
+                    <div class="day-number">15</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Today - Strong morning</div>
+                </div>
+                <div class="day-cell weekend">
+                    <div class="day-number">16</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                    <div class="energy-tooltip">Weekend plans</div>
+                </div>
+
+                <div class="day-cell weekend">
+                    <div class="day-number">17</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">18</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">19</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">20</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">21</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">22</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell weekend">
+                    <div class="day-number">23</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell weekend">
+                    <div class="day-number">24</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">25</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">26</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">27</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell special-day">
+                    <div class="day-number">28</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">29</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell weekend">
+                    <div class="day-number">30</div>
+                    <div class="status-indicator"></div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell other-month weekend">
+                    <div class="day-number">1</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">2</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">3</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">4</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">5</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">6</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">7</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar energy-morning"></div>
+                        <div class="energy-bar energy-midday"></div>
+                        <div class="energy-bar energy-afternoon"></div>
+                        <div class="energy-bar energy-evening"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

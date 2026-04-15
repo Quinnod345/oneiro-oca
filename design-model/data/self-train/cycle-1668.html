@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --core-color: #8B0000;
+            --mantle-color: #CD853F;
+            --crust-color: #A0522D;
+            --sediment-color: #D2B48C;
+            --surface-color: #F5E6D3;
+            --text-dark: #2C1810;
+            --text-light: #F5F5DC;
+            --accent-gold: #DAA520;
+            --shadow-deep: rgba(44, 24, 16, 0.3);
+            --shadow-light: rgba(44, 24, 16, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(180deg, var(--surface-color) 0%, var(--sediment-color) 25%, var(--crust-color) 50%, var(--mantle-color) 75%, var(--core-color) 100%);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 380px 1fr 320px;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .geological-legend {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px var(--shadow-deep);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .legend-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .layer-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .layer-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px var(--shadow-light);
+        }
+        
+        .layer-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+        }
+        
+        .layer-surface .layer-indicator { background: var(--surface-color); }
+        .layer-sediment .layer-indicator { background: var(--sediment-color); }
+        .layer-crust .layer-indicator { background: var(--crust-color); }
+        .layer-mantle .layer-indicator { background: var(--mantle-color); }
+        .layer-core .layer-indicator { background: var(--core-color); }
+        
+        .layer-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 2px;
+        }
+        
+        .layer-info p {
+            font-size: 13px;
+            color: var(--text-dark);
+            opacity: 0.7;
+            line-height: 1.3;
+        }
+        
+        .geological-view {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        
+        .earth-cross-section {
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .geological-layer {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.4s ease;
+        }
+        
+        .geological-layer:hover {
+            padding-left: 40px;
+            backdrop-filter: blur(30px);
+        }
+        
+        .surface-layer {
+            height: 20%;
+            background: linear-gradient(135deg, var(--surface-color) 0%, rgba(245, 230, 211, 0.8) 100%);
+        }
+        
+        .sediment-layer {
+            height: 20%;
+            background: linear-gradient(135deg, var(--sediment-color) 0%, rgba(210, 180, 140, 0.8) 100%);
+        }
+        
+        .crust-layer {
+            height: 20%;
+            background: linear-gradient(135deg, var(--crust-color) 0%, rgba(160, 82, 45, 0.8) 100%);
+        }
+        
+        .mantle-layer {
+            height: 20%;
+            background: linear-gradient(135deg, var(--mantle-color) 0%, rgba(205, 133, 63, 0.8) 100%);
+        }
+        
+        .core-layer {
+            height: 20%;
+            background: linear-gradient(135deg, var(--core-color) 0%, rgba(139, 0, 0, 0.9) 100%);
+        }
+        
+        .layer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .layer-label {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-light);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .surface-layer .layer-label,
+        .sediment-layer .layer-label {
+            color: var(--text-dark);
+            text-shadow: none;
+        }
+        
+        .layer-amount {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text-light);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .surface-layer .layer-amount,
+        .sediment-layer .layer-amount {
+            color: var(--text-dark);
+            text-shadow: none;
+        }
+        
+        .spending-controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px var(--shadow-deep);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .controls-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(44, 24, 16, 0.1);
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 0 3px rgba(218, 165, 32, 0.1);
+        }
+        
+        .layer-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+        
+        .add-btn {
+            background: linear-gradient(135deg, var(--accent-gold) 0%, #B8860B 100%);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+        }
+        
+        .add-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(218, 165, 32, 0.3);
+        }
+        
+        .recent-transactions {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .transactions-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 16px;
+        }
+        
+        .transaction-list {
+            height: calc(100% - 40px);
+            overflow-y: auto;
+        }
+        
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(44, 24, 16, 0.1);
+        }
+        
+        .transaction-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 2px;
+        }
+        
+        .transaction-info p {
+            font-size: 12px;
+            color: var(--text-dark);
+            opacity: 0.6;
+        }
+        
+        .transaction-amount {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--core-color);
+        }
+        
+        .depth-indicator {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .surface-layer .depth-indicator,
+        .sediment-layer .depth-indicator {
+            background: rgba(44, 24, 16, 0.2);
+            color: var(--text-dark);
+        }
+        
+        .geological-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            animation: float 8s infinite ease-in-out;
+        }
+        
+        .particle:nth-child(1) {
+            width: 4px;
+            height: 4px;
+            background: var(--accent-gold);
+            top: 15%;
+            left: 20%;
+            animation-delay: 0s;
+        }
+        
+        .particle:nth-child(2) {
+            width: 6px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.6);
+            top: 45%;
+            left: 80%;
+            animation-delay: 2s;
+        }
+        
+        .particle:nth-child(3) {
+            width: 3px;
+            height: 3px;
+            background: var(--sediment-color);
+            top: 75%;
+            left: 30%;
+            animation-delay: 4s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        .total-summary {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--text-light);
+            padding: 16px 32px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .total-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        
+        .total-amount {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--accent-gold);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="geological-legend">
+            <h2 class="legend-title">Earth's Financial Layers</h2>
+            
+            <div class="layer-item layer-surface">
+                <div class="layer-indicator"></div>
+                <div class="layer-info">
+                    <h3>Surface (0-50m)</h3>
+                    <p>Luxury items, entertainment, discretionary shopping</p>
+                </div>
+            </div>
+            
+            <div class="layer-item layer-sediment">
+                <div class="layer-indicator"></div>
+                <div class="layer-info">
+                    <h3>Sediment (50-200m)</h3>
+                    <p>Hobbies, dining out, non-essential subscriptions</p>
+                </div>
+            </div>
+            
+            <div class="layer-item layer-crust">
+                <div class="layer-indicator"></div>
+                <div class="layer-info">
+                    <h3>Crust (200-2000m)</h3>
+                    <p>Transportation, clothing, home improvements</p>
+                </div>
+            </div>
+            
+            <div class="layer-item layer-mantle">
+                <div class="layer-indicator"></div>
+                <div class="layer-info">
+                    <h3>Mantle (2000-6000m)</h3>
+                    <p>Healthcare, insurance, education, savings</p>
+                </div>
+            </div>
+            
+            <div class="layer-item layer-core">
+                <div class="layer-indicator"></div>
+                <div class="layer-info">
+                    <h3>Core (6000m+)</h3>
+                    <p>Rent, utilities, groceries, essential bills</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="geological-view">
+            <div class="earth-cross-section">
+                <div class="geological-layer surface-layer">
+                    <div class="layer-content">
+                        <span class="layer-label">Surface Luxuries</span>
+                        <span class="layer-amount">$324</span>
+                    </div>
+                    <div class="depth-indicator">0-50m</div>
+                </div>
+                
+                <div class="geological-layer sediment-layer">
+                    <div class="layer-content">
+                        <span class="layer-label">Lifestyle Sediment</span>
+                        <span class="layer-amount">$567</span>
+                    </div>
+                    <div class="depth-indicator">50-200m</div>
+                </div>
+                
+                <div class="geological-layer crust-layer">
+                    <div class="layer-content">
+                        <span class="layer-label">Living Crust</span>
+                        <span class="layer-amount">$1,245</span>
+                    </div>
+                    <div class="depth-indicator">200-2000m</div>
+                </div>
+                
+                <div class="geological-layer mantle-layer">
+                    <div class="layer-content">
+                        <span class="layer-label">Security Mantle</span>
+                        <span class="layer-amount">$2,156</span>
+                    </div>
+                    <div class="depth-indicator">2000-6000m</div>
+                </div>
+                
+                <div class="geological-layer core-layer">
+                    <div class="layer-content">
+                        <span class="layer-label">Survival Core</span>
+                        <span class="layer-amount">$3,890</span>
+                    </div>
+                    <div class="depth-indicator">6000m+</div>
+                </div>
+            </div>
+            
+            <div class="geological-particles">
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+            </div>
+            
+            <div class="total-summary">
+                <div class="total-label">Total Monthly Spending</div>
+                <div class="total-amount">$8,182</div>
+            </div>
+        </div>
+        
+        <div class="spending-controls">
+            <h2 class="controls-title">Add Expense</h2>
+            
+            <div class="input-group">
+                <label class="input-label">Description</label>
+                <input type="text" class="input-field" placeholder="What did you spend on?">
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">Amount</label>
+                <input type="number" class="input-field" placeholder="0.00">
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">Geological Layer</label>
+                <select class="input-field layer-select">
+                    <option value="surface">Surface - Luxuries & Entertainment</option>
+                    <option value="sediment">Sediment - Lifestyle & Hobbies</option>
+                    <option value="crust">Crust - Transportation & Clothing</option>
+                    <option value="mantle">Mantle - Health & Security</option>
+                    <option value="core">Core - Essential Survival</option>
+                </select>
+            </div>
+            
+            <button class="add-btn">Add to Geological Record</button>
+            
+            <div class="recent-transactions">
+                <h3 class="transactions-title">Recent Excavations</h3>
+                <div class="transaction-list">
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>Grocery Shopping</h4>
+                            <p>Core Layer</p>
+                        </div>
+                        <div class="transaction-amount">$127.50</div>
+                    </div>
+                    
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>Netflix Subscription</h4>
+                            <p>Sediment Layer</p>
+                        </div>
+                        <div class="transaction-amount">$15.99</div>
+                    </div>
+                    
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>Concert Tickets</h4>
+                            <p>Surface Layer</p>
+                        </div>
+                        <div class="transaction-amount">$89.00</div>
+                    </div>
+                    
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>Car Insurance</h4>
+                            <p>Mantle Layer</p>
+                        </div>
+                        <div class="transaction-amount">$156.00</div>
+                    </div>
+                    
+                    <div class="transaction-item">
+                        <div class="transaction-info">
+                            <h4>Coffee Shop</h4>
+                            <p>Sediment Layer</p>
+                        </div>
+                        <div class="transaction-amount">$8.50</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

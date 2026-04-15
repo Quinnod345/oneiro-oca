@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stellar Cast - Constellation Podcast Player</title>
+    <style>
+        :root {
+            --cosmic-black: #0a0a0f;
+            --deep-space: #161622;
+            --nebula-purple: #2d1b69;
+            --star-blue: #4a90e2;
+            --star-gold: #f7d794;
+            --listened-glow: #66d9ef;
+            --unlistened: #8e8e93;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a6;
+            --constellation-line: rgba(138, 142, 147, 0.3);
+            --listened-line: rgba(102, 217, 239, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(ellipse at 30% 20%, var(--nebula-purple) 0%, var(--deep-space) 40%, var(--cosmic-black) 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .constellation-view {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-image: 
+                radial-gradient(1px 1px at 120px 80px, #fff, transparent),
+                radial-gradient(1px 1px at 300px 200px, #fff, transparent),
+                radial-gradient(1px 1px at 800px 150px, #fff, transparent),
+                radial-gradient(1px 1px at 1200px 300px, #fff, transparent),
+                radial-gradient(1px 1px at 450px 450px, #fff, transparent),
+                radial-gradient(1px 1px at 1000px 600px, #fff, transparent),
+                radial-gradient(1px 1px at 200px 700px, #fff, transparent);
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+        }
+
+        .series-constellation {
+            position: absolute;
+            z-index: 10;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 2px;
+            background: var(--constellation-line);
+            transform-origin: left center;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1;
+        }
+
+        .constellation-line.listened {
+            background: linear-gradient(90deg, var(--listened-line), var(--listened-glow));
+            box-shadow: 0 0 8px var(--listened-glow);
+        }
+
+        .episode-star {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid var(--unlistened);
+            background: var(--cosmic-black);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        .episode-star::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--unlistened);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .episode-star.listened {
+            border-color: var(--listened-glow);
+            background: radial-gradient(circle, var(--listened-glow) 0%, var(--star-blue) 70%);
+            box-shadow: 
+                0 0 20px var(--listened-glow),
+                0 0 40px rgba(102, 217, 239, 0.3);
+            transform: scale(1.2);
+        }
+
+        .episode-star.listened::before {
+            background: var(--text-primary);
+            box-shadow: 0 0 8px var(--text-primary);
+        }
+
+        .episode-star.currently-playing {
+            animation: pulse 2s infinite;
+            border-color: var(--star-gold);
+            background: radial-gradient(circle, var(--star-gold) 0%, #e67e22 70%);
+            box-shadow: 
+                0 0 25px var(--star-gold),
+                0 0 50px rgba(247, 215, 148, 0.4);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1.2); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.8; }
+        }
+
+        .episode-tooltip {
+            position: absolute;
+            background: rgba(22, 22, 34, 0.95);
+            border: 1px solid rgba(138, 142, 147, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            min-width: 200px;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .episode-star:hover .episode-tooltip {
+            opacity: 1;
+            transform: translateY(-45px);
+        }
+
+        .tooltip-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .tooltip-series {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .tooltip-duration {
+            font-size: 11px;
+            color: var(--unlistened);
+        }
+
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 320px;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(22, 22, 34, 0.9) 0%, rgba(10, 10, 15, 0.95) 100%);
+            border-left: 1px solid rgba(138, 142, 147, 0.2);
+            padding: 32px 24px;
+            backdrop-filter: blur(20px);
+            z-index: 50;
+        }
+
+        .sidebar-header {
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--listened-glow) 0%, var(--star-blue) 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .now-playing {
+            background: rgba(45, 27, 105, 0.4);
+            border: 1px solid rgba(102, 217, 239, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 32px;
+        }
+
+        .now-playing-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .now-playing-series {
+            font-size: 14px;
+            color: var(--listened-glow);
+            margin-bottom: 16px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(138, 142, 147, 0.3);
+            border-radius: 2px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--listened-glow) 0%, var(--star-gold) 100%);
+            width: 34%;
+            border-radius: 2px;
+            box-shadow: 0 0 8px rgba(102, 217, 239, 0.5);
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .series-list {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .series-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(138, 142, 147, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .series-item:hover {
+            background: rgba(102, 217, 239, 0.05);
+            margin: 0 -12px;
+            padding: 12px;
+            border-radius: 8px;
+            border-bottom: 1px solid transparent;
+        }
+
+        .series-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 12px;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .series-info {
+            flex: 1;
+        }
+
+        .series-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .series-progress {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            display: flex;
+            gap: 16px;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border: 2px solid rgba(102, 217, 239, 0.4);
+            background: rgba(22, 22, 34, 0.8);
+            border-radius: 50%;
+            color: var(--listened-glow);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            background: rgba(102, 217, 239, 0.1);
+            border-color: var(--listened-glow);
+            box-shadow: 0 0 20px rgba(102, 217, 239, 0.3);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="constellation-view">
+        <!-- Tech Talk Series -->
+        <div class="series-constellation">
+            <!-- Constellation lines for Tech Talk -->
+            <div class="constellation-line listened" style="left: 280px; top: 180px; width: 120px; transform: rotate(25deg);"></div>
+            <div class="constellation-line listened" style="left: 380px; top: 220px; width: 100px; transform: rotate(-15deg);"></div>
+            <div class="constellation-line" style="left: 460px; top: 200px; width: 90px; transform: rotate(45deg);"></div>
+            
+            <!-- Episodes as stars -->
+            <div class="episode-star listened" style="left: 280px; top: 172px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">The Future of AI</div>
+                    <div class="tooltip-series">Tech Talk Weekly</div>
+                    <div class="tooltip-duration">45 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star listened" style="left: 390px; top: 205px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Quantum Computing Basics</div>
+                    <div class="tooltip-series">Tech Talk Weekly</div>
+                    <div class="tooltip-duration">52 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star currently-playing" style="left: 470px; top: 192px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Web3 and Decentralization</div>
+                    <div class="tooltip-series">Tech Talk Weekly</div>
+                    <div class="tooltip-duration">38 min • Playing</div>
+                </div>
+            </div>
+            
+            <div class="episode-star" style="left: 540px; top: 245px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Neural Networks Deep Dive</div>
+                    <div class="tooltip-series">Tech Talk Weekly</div>
+                    <div class="tooltip-duration">61 min • Unplayed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Science Stories Series -->
+        <div class="series-constellation">
+            <!-- Constellation lines -->
+            <div class="constellation-line listened" style="left: 180px; top: 350px; width: 140px; transform: rotate(-30deg);"></div>
+            <div class="constellation-line listened" style="left: 280px; top: 300px; width: 80px; transform: rotate(60deg);"></div>
+            <div class="constellation-line listened" style="left: 340px; top: 360px; width: 100px; transform: rotate(10deg);"></div>
+            
+            <div class="episode-star listened" style="left: 180px; top: 342px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Mars Mission Updates</div>
+                    <div class="tooltip-series">Science Stories</div>
+                    <div class="tooltip-duration">34 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star listened" style="left: 300px; top: 295px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Ocean Exploration</div>
+                    <div class="tooltip-series">Science Stories</div>
+                    <div class="tooltip-duration">42 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star listened" style="left: 320px; top: 380px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Climate Change Solutions</div>
+                    <div class="tooltip-series">Science Stories</div>
+                    <div class="tooltip-duration">28 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star" style="left: 430px; top: 375px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Gene Editing Ethics</div>
+                    <div class="tooltip-series">Science Stories</div>
+                    <div class="tooltip-duration">55 min • Unplayed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Startup Chronicles Series -->
+        <div class="series-constellation">
+            <div class="constellation-line" style="left: 650px; top: 320px; width: 110px; transform: rotate(15deg);"></div>
+            <div class="constellation-line" style="left: 740px; top: 350px; width: 95px; transform: rotate(-40deg);"></div>
+            
+            <div class="episode-star" style="left: 650px; top: 312px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Funding Your First Round</div>
+                    <div class="tooltip-series">Startup Chronicles</div>
+                    <div class="tooltip-duration">47 min • Unplayed</div>
+                </div>
+            </div>
+            
+            <div class="episode-star" style="left: 750px; top: 342px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Building Your Team</div>
+                    <div class="tooltip-series">Startup Chronicles</div>
+                    <div class="tooltip-duration">39 min • Unplayed</div>
+                </div>
+            </div>
+            
+            <div class="episode-star" style="left: 820px; top: 305px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Product Market Fit</div>
+                    <div class="tooltip-series">Startup Chronicles</div>
+                    <div class="tooltip-duration">51 min • Unplayed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design Thinking Series -->
+        <div class="series-constellation">
+            <div class="constellation-line listened" style="left: 240px; top: 580px; width: 130px; transform: rotate(35deg);"></div>
+            <div class="constellation-line" style="left: 350px; top: 640px; width: 85px; transform: rotate(-25deg);"></div>
+            
+            <div class="episode-star listened" style="left: 240px; top: 572px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">User Research Methods</div>
+                    <div class="tooltip-series">Design Thinking</div>
+                    <div class="tooltip-duration">33 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star listened" style="left: 350px; top: 632px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Prototyping Best Practices</div>
+                    <div class="tooltip-series">Design Thinking</div>
+                    <div class="tooltip-duration">41 min • Listened</div>
+                </div>
+            </div>
+            
+            <div class="episode-star" style="left: 420px; top: 615px;">
+                <div class="episode-tooltip">
+                    <div class="tooltip-title">Design Systems at Scale</div>
+                    <div class="tooltip-series">Design Thinking</div>
+                    <div class="tooltip-duration">36 min • Unplayed</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">StellarCast</div>
+            <div class="subtitle">Navigate the podcast universe</div>
+        </div>
+
+        <div class="now-playing">
+            <div class="now-playing-title">Web3 and Decentralization</div>
+            <div class="now-playing-series">Tech Talk Weekly</div>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="time-display">
+                <span>13:24</span>
+                <span>38:16</span>
+            </div>
+        </div>
+
+        <div class="series-list">
+            <div class="section-title">Podcast Series</div>
+            
+            <div class="series-item">
+                <div class="series-color" style="background: var(--listened-glow);"></div>
+                <div class="series-info">
+                    <div class="series-name">Tech Talk Weekly</div>
+                    <div class="series-progress">3 of 4 episodes</div>
+                </div>
+            </div>
+            
+            <div class="series-item">
+                <div class="series-color" style="background: var(--star-blue);"></div>
+                <div class="series-info">
+                    <div class="series-name">Science Stories</div>
+                    <div class="series-progress">3 of 4 episodes</div>
+                </div>
+            </div>
+            
+            <div class="series-item">
+                <div class="series-color" style="background: var(--star-gold);"></div>
+                <div class="series-info">
+                    <div class="series-name">Startup Chronicles</div>
+                    <div class="series-progress">0 of 3 episodes</div>
+                </div>
+            </div>
+            
+            <div class="series-item">
+                <div class="series-color" style="background: #e67e22;"></div>
+                <div class="series-info">
+                    <div class="series-name">Design Thinking</div>
+                    <div class="series-progress">2 of 3 episodes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-btn">⏮</div>
+        <div class="control-btn">⏸</div>
+        <div class="control-btn">⏭</div>
+        <div class="control-btn">🔀</div>
+    </div>
+</body>
+</html>

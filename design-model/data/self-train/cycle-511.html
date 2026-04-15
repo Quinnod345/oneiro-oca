@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Player</title>
+    <style>
+        :root {
+            --space-black: #0a0a0e;
+            --space-deep: #1a1a24;
+            --nebula-purple: #2d1b3d;
+            --nebula-blue: #1e2a4a;
+            --star-white: #ffffff;
+            --star-blue: #a8c8ff;
+            --star-yellow: #fff3a8;
+            --star-orange: #ffb366;
+            --glow-listened: #4fd1c7;
+            --glow-current: #ff6b9d;
+            --constellation-line: rgba(255, 255, 255, 0.15);
+            --ui-overlay: rgba(26, 26, 36, 0.85);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: var(--space-black);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .cosmos {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, var(--nebula-purple) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 70%, var(--nebula-blue) 0%, transparent 50%),
+                var(--space-black);
+        }
+
+        .stars-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 234px 123px, rgba(255, 255, 255, 0.3), transparent),
+                radial-gradient(1px 1px at 456px 234px, rgba(255, 255, 255, 0.2), transparent),
+                radial-gradient(1px 1px at 789px 345px, rgba(255, 255, 255, 0.1), transparent),
+                radial-gradient(2px 2px at 1123px 456px, rgba(255, 255, 255, 0.25), transparent),
+                radial-gradient(1px 1px at 345px 567px, rgba(255, 255, 255, 0.15), transparent);
+        }
+
+        .constellation-map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .constellation {
+            position: absolute;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: var(--constellation-line);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .constellation:hover .constellation-line,
+        .constellation.active .constellation-line {
+            opacity: 1;
+        }
+
+        .episode {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--star-white);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+        }
+
+        .episode:hover {
+            transform: scale(1.3);
+        }
+
+        .episode.listened {
+            background: var(--glow-listened);
+            box-shadow: 
+                0 0 12px var(--glow-listened),
+                0 0 24px rgba(79, 209, 199, 0.4);
+            animation: pulseGlow 3s ease-in-out infinite alternate;
+        }
+
+        .episode.current {
+            background: var(--glow-current);
+            box-shadow: 
+                0 0 16px var(--glow-current),
+                0 0 32px rgba(255, 107, 157, 0.5);
+            animation: currentPulse 2s ease-in-out infinite;
+            transform: scale(1.2);
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 12px var(--glow-listened), 0 0 24px rgba(79, 209, 199, 0.4); }
+            100% { box-shadow: 0 0 18px var(--glow-listened), 0 0 36px rgba(79, 209, 199, 0.6); }
+        }
+
+        @keyframes currentPulse {
+            0%, 100% { transform: scale(1.2); }
+            50% { transform: scale(1.4); }
+        }
+
+        .player-ui {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: var(--ui-overlay);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            padding: 0 48px;
+            gap: 32px;
+        }
+
+        .album-art {
+            width: 72px;
+            height: 72px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--glow-current), var(--glow-listened));
+            flex-shrink: 0;
+        }
+
+        .track-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .track-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-series {
+            font-size: 14px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-shrink: 0;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            background: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.1);
+        }
+
+        .play-btn {
+            background: var(--glow-current);
+            width: 56px;
+            height: 56px;
+        }
+
+        .play-btn:hover {
+            background: var(--glow-current);
+            box-shadow: 0 0 20px rgba(255, 107, 157, 0.4);
+        }
+
+        .progress-area {
+            flex: 1;
+            margin: 0 24px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--glow-current);
+            width: 34%;
+            transition: width 0.3s ease;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 320px;
+            height: 100%;
+            background: var(--ui-overlay);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 48px 32px 140px 32px;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            top: 32px;
+            right: 32px;
+            width: 48px;
+            height: 48px;
+            border: none;
+            background: var(--ui-overlay);
+            backdrop-filter: blur(20px);
+            border-radius: 50%;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .series-list {
+            list-style: none;
+        }
+
+        .series-item {
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .series-item:hover {
+            opacity: 0.8;
+        }
+
+        .series-name {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .series-progress {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .series-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .series-tech { background: var(--star-blue); }
+        .series-science { background: var(--glow-listened); }
+        .series-business { background: var(--glow-current); }
+        .series-culture { background: var(--star-orange); }
+    </style>
+</head>
+<body>
+    <div class="cosmos"></div>
+    <div class="stars-bg"></div>
+    
+    <div class="constellation-map">
+        <!-- Tech Talks Constellation -->
+        <div class="constellation" style="left: 200px; top: 150px;" data-series="tech">
+            <div class="constellation-line" style="width: 80px; transform: rotate(25deg);"></div>
+            <div class="constellation-line" style="width: 60px; top: 40px; left: 60px; transform: rotate(-15deg);"></div>
+            <div class="constellation-line" style="width: 45px; top: 20px; left: 30px; transform: rotate(60deg);"></div>
+            
+            <div class="episode listened" style="left: 0px; top: 0px;" data-title="The Future of AI" data-series="Tech Talks"></div>
+            <div class="episode listened" style="left: 75px; top: 35px;" data-title="Quantum Computing Basics" data-series="Tech Talks"></div>
+            <div class="episode current" style="left: 45px; top: 55px;" data-title="Web3 and Blockchain" data-series="Tech Talks"></div>
+            <div class="episode" style="left: 100px; top: 15px;" data-title="Neural Networks Deep Dive" data-series="Tech Talks"></div>
+        </div>
+
+        <!-- Science Stories Constellation -->
+        <div class="constellation" style="left: 500px; top: 300px;" data-series="science">
+            <div class="constellation-line" style="width: 120px; transform: rotate(-30deg);"></div>
+            <div class="constellation-line" style="width: 90px; top: 60px; left: 80px; transform: rotate(45deg);"></div>
+            <div class="constellation-line" style="width: 70px; top: 30px; left: 40px; transform: rotate(90deg);"></div>
+            <div class="constellation-line" style="width: 55px; top: 90px; left: 120px; transform: rotate(-60deg);"></div>
+            
+            <div class="episode listened" style="left: 0px; top: 0px;" data-title="Mars Exploration Update" data-series="Science Stories"></div>
+            <div class="episode listened" style="left: 100px; top: -40px;" data-title="CRISPR Gene Editing" data-series="Science Stories"></div>
+            <div class="episode listened" style="left: 60px; top: 80px;" data-title="Climate Science Today" data-series="Science Stories"></div>
+            <div class="episode listened" style="left: 140px; top: 70px;" data-title="Ocean Deep Mysteries" data-series="Science Stories"></div>
+            <div class="episode" style="left: 170px; top: 20px;" data-title="Particle Physics News" data-series="Science Stories"></div>
+        </div>
+
+        <!-- Business Insights Constellation -->
+        <div class="constellation" style="left: 900px; top: 200px;" data-series="business">
+            <div class="constellation-line" style="width: 95px; transform: rotate(15deg);"></div>
+            <div class="constellation-line" style="width: 75px; top: 25px; left: 70px; transform: rotate(-45deg);"></div>
+            <div class="constellation-line" style="width: 85px; top: 50px; left: 30px; transform: rotate(75deg);"></div>
+            
+            <div class="episode listened" style="left: 0px; top: 0px;" data-title="Startup Funding Trends" data-series="Business Insights"></div>
+            <div class="episode" style="left: 85px; top: 25px;" data-title="Remote Work Revolution" data-series="Business Insights"></div>
+            <div class="episode" style="left: 50px; top: 80px;" data-title="Market Analysis 2024" data-series="Business Insights"></div>
+            <div class="episode" style="left: 120px; top: -15px;" data-title="Leadership in Crisis" data-series="Business Insights"></div>
+        </div>
+
+        <!-- Culture Cast Constellation -->
+        <div class="constellation" style="left: 300px; top: 500px;" data-series="culture">
+            <div class="constellation-line" style="width: 110px; transform: rotate(-20deg);"></div>
+            <div class="constellation-line" style="width: 65px; top: -20px; left: 80px; transform: rotate(70deg);"></div>
+            <div class="constellation-line" style="width: 90px; top: 40px; left: 60px; transform: rotate(-70deg);"></div>
+            <div class="constellation-line" style="width: 50px; top: 60px; left: 20px; transform: rotate(30deg);"></div>
+            
+            <div class="episode listened" style="left: 0px; top: 0px;" data-title="Digital Art Renaissance" data-series="Culture Cast"></div>
+            <div class="episode listened" style="left: 100px; top: -35px;" data-title="Music and Technology" data-series="Culture Cast"></div>
+            <div class="episode" style="left: 120px; top: 20px;" data-title="Film in the Streaming Era" data-series="Culture Cast"></div>
+            <div class="episode" style="left: 85px; top: 80px;" data-title="Social Media Impact" data-series="Culture Cast"></div>
+            <div class="episode" style="left: 40px; top: 100px;" data-title="Gaming Culture Evolution" data-series="Culture Cast"></div>
+        </div>
+
+        <!-- Scattered individual episodes -->
+        <div class="episode listened" style="left: 750px; top: 450px;" data-title="Solo: Meditation Techniques" data-series="Wellness Weekly"></div>
+        <div class="episode" style="left: 1100px; top: 500px;" data-title="Solo: Travel Stories" data-series="Adventure Talks"></div>
+        <div class="episode listened" style="left: 150px; top: 350px;" data-title="Solo: Cooking Basics" data-series="Food Focus"></div>
+    </div>
+
+    <button class="sidebar-toggle" onclick="toggleSidebar()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+    </button>
+
+    <div class="sidebar" id="sidebar">
+        <h2 style="margin-bottom: 32px; font-size: 24px; font-weight: 700;">Series</h2>
+        <ul class="series-list">
+            <li class="series-item" onclick="focusConstellation('tech')">
+                <div class="series-name">
+                    <span class="series-indicator series-tech"></span>
+                    Tech Talks
+                </div>
+                <div class="series-progress">3 of 4 episodes listened</div>
+            </li>
+            <li class="series-item" onclick="focusConstellation('science')">
+                <div class="series-name">
+                    <span class="series-indicator series-science"></span>
+                    Science Stories
+                </div>
+                <div class="series-progress">4 of 5 episodes listened</div>
+            </li>
+            <li class="series-item" onclick="focusConstellation('business')">
+                <div class="series-name">
+                    <span class="series-indicator series-business"></span>
+                    Business Insights
+                </div>
+                <div class="series-progress">1 of 4 episodes listened</div>
+            </li>
+            <li class="series-item" onclick="focusConstellation('culture')">
+                <div class="series-name">
+                    <span class="series-indicator series-culture"></span>
+                    Culture Cast
+                </div>
+                <div class="series-progress">2 of 5 episodes listened</div>
+            </li>
+        </ul>
+    </div>
+
+    <div class="player-ui">
+        <div class="album-art"></div>
+        <div class="track-info">
+            <div class="track-title">Web3 and Blockchain</div>
+            <div class="track-series">Tech Talks</div>
+        </div>
+        <div class="player-controls">
+            <button class="control-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="19,20 9,12 19,4"></polygon>
+                    <line x1="5" y1="19" x2="5" y2="5"></line>
+                </svg>
+            </button>
+            <button class="control-btn play-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+            </button>
+            <button class="control-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5,4 15,12 5,20"></polygon>
+                    <line x1="19" y1="5" x2="19" y2="19"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="progress-area">
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="time-display">
+                <span>12:34</span>
+                <span>36:42</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 16px;">
+            <button class="control-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+            </button>
+            <button class="control-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M12 1v6m0 6v6"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function focusConstellation(seriesType) {
+            // Remove active class from all constellations
+            document.querySelectorAll('.constellation').forEach(c => c.classList.remove('active'));
+            
+            // Add active class to selected constellation
+            const constellation = document.querySelector(`[data-series="${seriesType}"]`);
+            if (constellation) {
+                constellation.classList.add('active');
+                
+                // Remove active class after 5 seconds
+                setTimeout(() => {
+                    constellation.classList.remove('active');
+                }, 5000);
+            }
+            
+            // Close sidebar
+            document.getElementById('sidebar').classList.remove('open');
+        }
+
+        // Add click handlers to episodes
+        document.querySelectorAll('.episode').forEach(episode => {
+            episode.addEventListener('click', function() {
+                // Remove current class from all episodes
+                document.querySelectorAll('.episode.current').forEach(ep => {
+                    ep.classList.remove('current');
+                    ep.classList.add('listened');
+                });
+                
+                // Add current class to clicked episode
+                this.classList.add('current');
+                this.classList.remove('listened');
+                
+                // Update player UI
+                const title = this.getAttribute('data-title');
+                const series = this.getAttribute('data-series');
+                
+                document.querySelector('.track-title').textContent = title;
+                document.querySelector('.track-series').textContent = series;
+            });
+        });
+
+        // Close sidebar when clicking outside
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.querySelector('.sidebar-toggle');
+            
+            if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+</body>
+</html>

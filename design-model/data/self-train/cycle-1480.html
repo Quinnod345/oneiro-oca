@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State - Menu Bar App</title>
+    <style>
+        :root {
+            --focus-flow: hsl(207, 100%, 82%);
+            --focus-deep: hsl(207, 100%, 15%);
+            --focus-neutral: hsl(220, 5%, 45%);
+            --focus-surface: hsl(220, 5%, 98%);
+            --focus-border: hsl(220, 5%, 92%);
+            --motion-breathe: 4s ease-in-out infinite alternate;
+            --motion-drift: 8s linear infinite;
+            --motion-pulse: 2s ease-in-out infinite;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--focus-surface);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .menu-bar {
+            height: 24px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--focus-border);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            position: relative;
+            z-index: 100;
+        }
+
+        .menu-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--focus-flow) 50%, 
+                transparent 100%);
+            animation: var(--motion-drift);
+            opacity: 0.6;
+        }
+
+        .app-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--focus-deep);
+            position: relative;
+            margin-right: 8px;
+            overflow: hidden;
+        }
+
+        .app-icon::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: radial-gradient(circle at 30% 30%, 
+                var(--focus-flow), 
+                var(--focus-deep));
+            animation: var(--motion-pulse);
+            opacity: 0.8;
+        }
+
+        .app-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--focus-deep);
+            letter-spacing: -0.01em;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .focus-ambient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .ambient-layer {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.08;
+        }
+
+        .ambient-layer:nth-child(1) {
+            width: 800px;
+            height: 800px;
+            top: 10%;
+            left: 15%;
+            background: radial-gradient(circle, var(--focus-flow) 0%, transparent 70%);
+            animation: var(--motion-breathe);
+            animation-delay: 0s;
+        }
+
+        .ambient-layer:nth-child(2) {
+            width: 600px;
+            height: 600px;
+            top: 25%;
+            right: 20%;
+            background: radial-gradient(circle, var(--focus-deep) 0%, transparent 60%);
+            animation: var(--motion-breathe);
+            animation-delay: 1s;
+            animation-duration: 6s;
+        }
+
+        .ambient-layer:nth-child(3) {
+            width: 400px;
+            height: 400px;
+            bottom: 15%;
+            left: 25%;
+            background: radial-gradient(circle, var(--focus-flow) 0%, transparent 50%);
+            animation: var(--motion-breathe);
+            animation-delay: 2s;
+            animation-duration: 5s;
+        }
+
+        .focus-indicator {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: var(--focus-surface);
+            border: 2px solid var(--focus-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 
+                0 0 0 1px rgba(255, 255, 255, 0.5),
+                0 8px 32px rgba(0, 0, 0, 0.04),
+                0 2px 8px rgba(0, 0, 0, 0.02);
+            animation: var(--motion-breathe);
+            animation-duration: 6s;
+            z-index: 10;
+        }
+
+        .focus-indicator::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, 
+                transparent, 
+                var(--focus-flow), 
+                transparent, 
+                var(--focus-deep), 
+                transparent);
+            opacity: 0.3;
+            animation: var(--motion-drift);
+            z-index: -1;
+        }
+
+        .focus-indicator::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            background: var(--focus-surface);
+            z-index: -1;
+        }
+
+        .focus-core {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--focus-deep);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .focus-core::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, 
+                transparent 30%, 
+                var(--focus-flow) 50%, 
+                transparent 70%);
+            animation: var(--motion-drift);
+            animation-duration: 12s;
+        }
+
+        .status-text {
+            position: absolute;
+            bottom: 160px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--focus-neutral);
+            letter-spacing: 0.02em;
+            opacity: 0.7;
+            animation: var(--motion-pulse);
+            animation-duration: 3s;
+        }
+
+        .floating-elements {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .float-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--focus-flow);
+            opacity: 0.4;
+        }
+
+        .float-dot:nth-child(1) {
+            top: 20%;
+            left: 30%;
+            animation: var(--motion-breathe);
+            animation-delay: 0s;
+            animation-duration: 8s;
+        }
+
+        .float-dot:nth-child(2) {
+            top: 60%;
+            right: 25%;
+            animation: var(--motion-breathe);
+            animation-delay: 2s;
+            animation-duration: 6s;
+        }
+
+        .float-dot:nth-child(3) {
+            bottom: 30%;
+            left: 40%;
+            animation: var(--motion-breathe);
+            animation-delay: 4s;
+            animation-duration: 7s;
+        }
+
+        .float-dot:nth-child(4) {
+            top: 40%;
+            left: 70%;
+            animation: var(--motion-breathe);
+            animation-delay: 1s;
+            animation-duration: 9s;
+        }
+
+        @keyframes focus-drift {
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(90deg) scale(1.02); }
+            50% { transform: rotate(180deg) scale(1); }
+            75% { transform: rotate(270deg) scale(0.98); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="app-icon"></div>
+        <div class="app-title">Focus</div>
+    </div>
+
+    <div class="main-content">
+        <div class="focus-ambient">
+            <div class="ambient-layer"></div>
+            <div class="ambient-layer"></div>
+            <div class="ambient-layer"></div>
+        </div>
+
+        <div class="focus-indicator">
+            <div class="focus-core"></div>
+        </div>
+
+        <div class="status-text">Deep Work Mode</div>
+
+        <div class="floating-elements">
+            <div class="float-dot"></div>
+            <div class="float-dot"></div>
+            <div class="float-dot"></div>
+            <div class="float-dot"></div>
+        </div>
+    </div>
+</body>
+</html>

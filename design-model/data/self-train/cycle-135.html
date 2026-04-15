@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organism System Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f1c;
+            --bg-secondary: #1a2332;
+            --surface: #243447;
+            --accent-healthy: #4ecdc4;
+            --accent-warning: #ffa726;
+            --accent-critical: #ef5350;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --glow-healthy: rgba(78, 205, 196, 0.3);
+            --glow-warning: rgba(255, 167, 38, 0.3);
+            --glow-critical: rgba(239, 83, 80, 0.3);
+            --shadow-depth: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            padding: 60px;
+            background: radial-gradient(ellipse at center, #1a2332 0%, #0a0f1c 100%);
+        }
+
+        .organism-cell {
+            background: var(--surface);
+            border-radius: 24px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-depth);
+            padding: 40px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(20px);
+        }
+
+        .organism-title {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .organism-core {
+            width: 320px;
+            height: 320px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .organism-body {
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            position: relative;
+            background: radial-gradient(circle at 30% 30%, rgba(78, 205, 196, 0.15), rgba(78, 205, 196, 0.05));
+            border: 2px solid var(--accent-healthy);
+            box-shadow: 0 0 40px var(--glow-healthy);
+            animation: breathe-healthy 3s ease-in-out infinite;
+        }
+
+        .organism-body.stressed {
+            border-color: var(--accent-warning);
+            background: radial-gradient(circle at 30% 30%, rgba(255, 167, 38, 0.15), rgba(255, 167, 38, 0.05));
+            box-shadow: 0 0 40px var(--glow-warning);
+            animation: pulse-stressed 1.2s ease-in-out infinite;
+        }
+
+        .organism-body.critical {
+            border-color: var(--accent-critical);
+            background: radial-gradient(circle at 30% 30%, rgba(239, 83, 80, 0.15), rgba(239, 83, 80, 0.05));
+            box-shadow: 0 0 40px var(--glow-critical);
+            animation: pulse-critical 0.8s ease-in-out infinite;
+        }
+
+        .organism-nucleus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--accent-healthy);
+            box-shadow: 0 0 20px var(--glow-healthy);
+            animation: nucleus-float 4s ease-in-out infinite;
+        }
+
+        .organism-body.stressed .organism-nucleus {
+            background: var(--accent-warning);
+            box-shadow: 0 0 20px var(--glow-warning);
+        }
+
+        .organism-body.critical .organism-nucleus {
+            background: var(--accent-critical);
+            box-shadow: 0 0 20px var(--glow-critical);
+        }
+
+        .organism-membrane {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid currentColor;
+            opacity: 0.3;
+        }
+
+        .membrane-1 {
+            width: 280px;
+            height: 280px;
+            color: var(--accent-healthy);
+            animation: membrane-rotate 20s linear infinite;
+        }
+
+        .membrane-2 {
+            width: 360px;
+            height: 360px;
+            color: var(--accent-healthy);
+            animation: membrane-rotate 30s linear infinite reverse;
+        }
+
+        .organism-body.stressed .membrane-1,
+        .organism-body.stressed .membrane-2 {
+            color: var(--accent-warning);
+        }
+
+        .organism-body.critical .membrane-1,
+        .organism-body.critical .membrane-2 {
+            color: var(--accent-critical);
+        }
+
+        .organism-stats {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            right: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--accent-healthy);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .organism-cell.stressed .stat-value {
+            color: var(--accent-warning);
+        }
+
+        .organism-cell.critical .stat-value {
+            color: var(--accent-critical);
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-healthy);
+            box-shadow: 0 0 12px var(--glow-healthy);
+            animation: indicator-pulse 2s ease-in-out infinite;
+        }
+
+        .organism-cell.stressed .status-indicator {
+            background: var(--accent-warning);
+            box-shadow: 0 0 12px var(--glow-warning);
+        }
+
+        .organism-cell.critical .status-indicator {
+            background: var(--accent-critical);
+            box-shadow: 0 0 12px var(--glow-critical);
+        }
+
+        @keyframes breathe-healthy {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes pulse-stressed {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        @keyframes pulse-critical {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.7; }
+        }
+
+        @keyframes nucleus-float {
+            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+            50% { transform: translate(-50%, -50%) translateY(-8px); }
+        }
+
+        @keyframes membrane-rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes indicator-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .neural-connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .connection-line {
+            position: absolute;
+            background: rgba(78, 205, 196, 0.1);
+            transform-origin: left center;
+            animation: data-flow 4s ease-in-out infinite;
+        }
+
+        .connection-1 {
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 1px;
+            transform: translateY(-50%) rotate(-45deg);
+        }
+
+        .connection-2 {
+            top: 30%;
+            left: 60%;
+            width: 150px;
+            height: 1px;
+            transform: rotate(30deg);
+            animation-delay: -1s;
+        }
+
+        @keyframes data-flow {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-container">
+        <div class="organism-cell" id="cpu-organism">
+            <div class="organism-title">CPU Organism</div>
+            <div class="organism-core">
+                <div class="organism-membrane membrane-1"></div>
+                <div class="organism-membrane membrane-2"></div>
+                <div class="organism-body">
+                    <div class="organism-nucleus"></div>
+                </div>
+            </div>
+            <div class="organism-stats">
+                <div>
+                    <div class="stat-value" id="cpu-usage">42%</div>
+                    <div class="stat-label">Usage</div>
+                </div>
+                <div class="status-indicator"></div>
+            </div>
+        </div>
+
+        <div class="organism-cell stressed" id="memory-organism">
+            <div class="organism-title">Memory Organism</div>
+            <div class="organism-core">
+                <div class="organism-membrane membrane-1"></div>
+                <div class="organism-membrane membrane-2"></div>
+                <div class="organism-body stressed">
+                    <div class="organism-nucleus"></div>
+                </div>
+            </div>
+            <div class="organism-stats">
+                <div>
+                    <div class="stat-value" id="memory-usage">78%</div>
+                    <div class="stat-label">Usage</div>
+                </div>
+                <div class="status-indicator"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="neural-connections">
+        <div class="connection-line connection-1"></div>
+        <div class="connection-line connection-2"></div>
+    </div>
+
+    <script>
+        function getRandomUsage(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function updateOrganismState(organism, usage) {
+            const body = organism.querySelector('.organism-body');
+            const nucleus = organism.querySelector('.organism-nucleus');
+            
+            organism.classList.remove('healthy', 'stressed', 'critical');
+            body.classList.remove('healthy', 'stressed', 'critical');
+            
+            if (usage < 50) {
+                organism.classList.add('healthy');
+                body.classList.add('healthy');
+            } else if (usage < 80) {
+                organism.classList.add('stressed');
+                body.classList.add('stressed');
+            } else {
+                organism.classList.add('critical');
+                body.classList.add('critical');
+            }
+        }
+
+        function simulateSystemData() {
+            const cpuOrganism = document.getElementById('cpu-organism');
+            const memoryOrganism = document.getElementById('memory-organism');
+            const cpuUsageEl = document.getElementById('cpu-usage');
+            const memoryUsageEl = document.getElementById('memory-usage');
+
+            const cpuUsage = getRandomUsage(15, 95);
+            const memoryUsage = getRandomUsage(30, 90);
+
+            cpuUsageEl.textContent = cpuUsage + '%';
+            memoryUsageEl.textContent = memoryUsage + '%';
+
+            updateOrganismState(cpuOrganism, cpuUsage);
+            updateOrganismState(memoryOrganism, memoryUsage);
+        }
+
+        // Initial state
+        simulateSystemData();
+
+        // Update every 3 seconds
+        setInterval(simulateSystemData, 3000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Levels Calendar</title>
+    <style>
+        :root {
+            --energy-high: #2ecc71;
+            --energy-medium: #f39c12;
+            --energy-low: #e74c3c;
+            --energy-valley: #8e44ad;
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text-primary: #eee;
+            --text-secondary: #bbb;
+            --border: #334155;
+            --accent: #64ffda;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --radius: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .container {
+            padding: 32px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            margin-bottom: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .nav-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .current-month {
+            font-size: 20px;
+            font-weight: 600;
+            min-width: 140px;
+            text-align: center;
+        }
+
+        .calendar {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .day-header {
+            padding: 16px;
+            text-align: center;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calendar-body {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            height: calc(100% - 60px);
+        }
+
+        .day-cell {
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 16px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .day-cell:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .day-number {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .energy-chart {
+            height: 80px;
+            position: relative;
+            margin-top: 4px;
+        }
+
+        .energy-line {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+        }
+
+        .energy-curve {
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke-width: 2;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .energy-area {
+            width: 100%;
+            height: 100%;
+            opacity: 0.2;
+        }
+
+        .energy-high-curve { stroke: var(--energy-high); }
+        .energy-medium-curve { stroke: var(--energy-medium); }
+        .energy-low-curve { stroke: var(--energy-low); }
+        .energy-valley-curve { stroke: var(--energy-valley); }
+
+        .energy-high-area { fill: var(--energy-high); }
+        .energy-medium-area { fill: var(--energy-medium); }
+        .energy-low-area { fill: var(--energy-low); }
+        .energy-valley-area { fill: var(--energy-valley); }
+
+        .energy-legend {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-top: 24px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-high { background: var(--energy-high); }
+        .dot-medium { background: var(--energy-medium); }
+        .dot-low { background: var(--energy-low); }
+        .dot-valley { background: var(--energy-valley); }
+
+        .other-month {
+            opacity: 0.3;
+        }
+
+        .weekend {
+            background: rgba(255, 255, 255, 0.02);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Energy Levels Calendar</h1>
+            <div class="month-nav">
+                <button class="nav-btn">‹</button>
+                <div class="current-month">December 2024</div>
+                <button class="nav-btn">›</button>
+            </div>
+        </div>
+        
+        <div class="calendar">
+            <div class="calendar-header">
+                <div class="day-header">Sun</div>
+                <div class="day-header">Mon</div>
+                <div class="day-header">Tue</div>
+                <div class="day-header">Wed</div>
+                <div class="day-header">Thu</div>
+                <div class="day-header">Fri</div>
+                <div class="day-header">Sat</div>
+            </div>
+            
+            <div class="calendar-body">
+                <div class="day-cell weekend">
+                    <div class="day-number">1</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q25,20 50,30 Q75,45 100,35 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,60 Q25,20 50,30 Q75,45 100,35" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">2</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q20,25 40,50 Q60,75 80,40 Q90,30 100,35 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,60 Q20,25 40,50 Q60,75 80,40 Q90,30 100,35" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">3</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q15,30 30,65 Q50,70 70,45 Q85,25 100,40 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,60 Q15,30 30,65 Q50,70 70,45 Q85,25 100,40" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">4</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q20,20 40,25 Q60,50 80,30 Q90,25 100,30 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,60 Q20,20 40,25 Q60,50 80,30 Q90,25 100,30" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">5</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q25,35 50,60 Q75,65 100,45 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,65 Q25,35 50,60 Q75,65 100,45" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">6</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-low-area" d="M0,80 Q30,55 60,70 Q80,75 100,65 L100,80 Z" />
+                            <path class="energy-curve energy-low-curve" d="M0,75 Q30,55 60,70 Q80,75 100,65" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">7</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q20,45 40,35 Q60,55 80,40 Q90,35 100,45 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q20,45 40,35 Q60,55 80,40 Q90,35 100,45" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">8</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q25,25 50,35 Q75,50 100,30 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,65 Q25,25 50,35 Q75,50 100,30" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">9</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q20,30 40,65 Q60,75 80,50 Q90,35 100,45 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,65 Q20,30 40,65 Q60,75 80,50 Q90,35 100,45" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">10</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q15,40 30,55 Q50,65 70,45 Q85,35 100,50 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q15,40 30,55 Q50,65 70,45 Q85,35 100,50" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">11</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q30,20 60,30 Q80,45 100,25 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,60 Q30,20 60,30 Q80,45 100,25" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">12</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-low-area" d="M0,80 Q25,60 50,75 Q75,70 100,80 L100,80 Z" />
+                            <path class="energy-curve energy-low-curve" d="M0,80 Q25,60 50,75 Q75,70 100,80" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">13</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q20,45 40,60 Q60,70 80,50 Q90,40 100,55 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,75 Q20,45 40,60 Q60,70 80,50 Q90,40 100,55" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">14</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q25,30 50,25 Q75,40 100,35 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,65 Q25,30 50,25 Q75,40 100,35" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">15</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q15,35 30,70 Q50,75 70,55 Q85,40 100,50 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,70 Q15,35 30,70 Q50,75 70,55 Q85,40 100,50" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">16</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q20,40 40,50 Q60,65 80,45 Q90,35 100,40 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q20,40 40,50 Q60,65 80,45 Q90,35 100,40" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">17</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q25,25 50,20 Q75,35 100,30 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,60 Q25,25 50,20 Q75,35 100,30" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">18</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-low-area" d="M0,80 Q30,65 60,80 Q80,75 100,70 L100,80 Z" />
+                            <path class="energy-curve energy-low-curve" d="M0,80 Q30,65 60,80 Q80,75 100,70" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">19</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q20,40 40,75 Q60,80 80,60 Q90,45 100,55 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,75 Q20,40 40,75 Q60,80 80,60 Q90,45 100,55" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">20</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q25,50 50,55 Q75,60 100,50 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,75 Q25,50 50,55 Q75,60 100,50" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">21</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q20,30 40,25 Q60,40 80,35 Q90,30 100,40 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,65 Q20,30 40,25 Q60,40 80,35 Q90,30 100,40" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">22</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q15,45 30,60 Q50,70 70,50 Q85,40 100,45 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q15,45 30,60 Q50,70 70,50 Q85,40 100,45" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">23</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q25,35 50,70 Q70,80 90,65 Q95,50 100,60 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,70 Q25,35 50,70 Q70,80 90,65 Q95,50 100,60" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">24</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-low-area" d="M0,80 Q20,70 40,80 Q60,75 80,85 Q90,80 100,75 L100,80 Z" />
+                            <path class="energy-curve energy-low-curve" d="M0,85 Q20,70 40,80 Q60,75 80,85 Q90,80 100,75" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">25</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q30,20 60,15 Q80,30 100,25 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,55 Q30,20 60,15 Q80,30 100,25" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">26</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q25,40 50,65 Q75,70 100,55 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,65 Q25,40 50,65 Q75,70 100,55" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">27</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q20,45 40,75 Q60,85 80,70 Q90,55 100,65 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,75 Q20,45 40,75 Q60,85 80,70 Q90,55 100,65" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">28</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q25,35 50,30 Q75,45 100,40 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,70 Q25,35 50,30 Q75,45 100,40" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell weekend">
+                    <div class="day-number">29</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q15,50 30,45 Q50,60 70,55 Q85,45 100,50 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,75 Q15,50 30,45 Q50,60 70,55 Q85,45 100,50" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">30</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-low-area" d="M0,80 Q25,75 50,85 Q75,80 100,85 L100,80 Z" />
+                            <path class="energy-curve energy-low-curve" d="M0,85 Q25,75 50,85 Q75,80 100,85" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">31</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q30,40 60,80 Q80,85 100,70 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,75 Q30,40 60,80 Q80,85 100,70" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month weekend">
+                    <div class="day-number">1</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q25,45 50,50 Q75,55 100,45 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q25,45 50,50 Q75,55 100,45" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">2</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-high-area" d="M0,80 Q20,25 40,30 Q60,40 80,35 Q90,25 100,30 L100,80 Z" />
+                            <path class="energy-curve energy-high-curve" d="M0,65 Q20,25 40,30 Q60,40 80,35 Q90,25 100,30" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">3</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-medium-area" d="M0,80 Q25,50 50,60 Q75,65 100,50 L100,80 Z" />
+                            <path class="energy-curve energy-medium-curve" d="M0,70 Q25,50 50,60 Q75,65 100,50" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month weekend">
+                    <div class="day-number">4</div>
+                    <div class="energy-chart">
+                        <svg class="energy-line">
+                            <path class="energy-area energy-valley-area" d="M0,80 Q15,40 30,75 Q50,80 70,60 Q85,45 100,55 L100,80 Z" />
+                            <path class="energy-curve energy-valley-curve" d="M0,75 Q15,40 30,75 Q50,80 70,60 Q85,45 100,55" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="energy-legend">
+            <div class="legend-item">
+                <div class="legend-dot dot-high"></div>
+                <span>High Energy (Morning Peak)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot dot-medium"></div>
+                <span>Medium Energy</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot dot-low"></div>
+                <span>Low Energy</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot dot-valley"></div>
+                <span>Post-Lunch Valley</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

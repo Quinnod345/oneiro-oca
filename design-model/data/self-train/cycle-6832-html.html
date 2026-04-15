@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --ash: #1a1a1a;
+            --carbon: #2a2a2a;
+            --silver: #c0c0c0;
+            --ghost: #f0f0f0;
+            --prism: #ffffff;
+            --decay-rate: 1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--silver);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .interface {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            height: 100%;
+            position: relative;
+        }
+
+        .control-panel {
+            background: linear-gradient(to right, var(--void), var(--ash));
+            border-right: 1px solid var(--carbon);
+            padding: 48px 32px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .title {
+            font-size: 13px;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--silver);
+            margin-bottom: 48px;
+            opacity: 0.7;
+        }
+
+        .parameter {
+            margin-bottom: 42px;
+        }
+
+        .parameter-label {
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--silver);
+            opacity: 0.5;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .parameter-value {
+            font-size: 14px;
+            font-weight: 300;
+            opacity: 0.8;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 1px;
+            background: var(--carbon);
+            outline: none;
+            position: relative;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--silver);
+            cursor: pointer;
+            transform: rotate(45deg);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .slider:hover::-webkit-slider-thumb {
+            background: var(--ghost);
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .visualization {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(ellipse at center, var(--ash), var(--void));
+        }
+
+        .crystal-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1000px;
+        }
+
+        .memory-crystal {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotateY(0deg) rotateX(-15deg); }
+            to { transform: rotateY(360deg) rotateX(-15deg); }
+        }
+
+        .crystal-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.15;
+            border: 1px solid var(--silver);
+            background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.05) 50%, transparent 60%);
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .crystal-face:nth-child(1) { transform: rotateY(0deg) translateZ(140px); }
+        .crystal-face:nth-child(2) { transform: rotateY(72deg) translateZ(140px); }
+        .crystal-face:nth-child(3) { transform: rotateY(144deg) translateZ(140px); }
+        .crystal-face:nth-child(4) { transform: rotateY(216deg) translateZ(140px); }
+        .crystal-face:nth-child(5) { transform: rotateY(288deg) translateZ(140px); }
+
+        .crystal-face.fragmenting {
+            animation: fragment 2s ease-out forwards;
+        }
+
+        @keyframes fragment {
+            to {
+                transform: translateY(300px) translateX(var(--drift-x)) rotateZ(var(--drift-rotate)) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        .fragment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: var(--silver);
+            opacity: 0.1;
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            animation: drift calc(3s * var(--decay-rate)) ease-out forwards;
+        }
+
+        @keyframes drift {
+            to {
+                transform: translateY(400px) translateX(var(--drift-x)) rotateZ(720deg) scale(0);
+                opacity: 0;
+            }
+        }
+
+        .timeline {
+            height: 120px;
+            border-top: 1px solid var(--carbon);
+            position: relative;
+            background: linear-gradient(to top, var(--void), transparent);
+            display: flex;
+            align-items: center;
+            padding: 0 48px;
+        }
+
+        .timeline-track {
+            width: 100%;
+            height: 1px;
+            background: var(--carbon);
+            position: relative;
+        }
+
+        .preservation-point {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--silver);
+            transform: translate(-50%, -50%) rotate(45deg);
+            top: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .preservation-point:hover {
+            background: var(--ghost);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+
+        .preservation-point::before {
+            content: attr(data-time);
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-45deg);
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            color: var(--silver);
+            opacity: 0.5;
+            white-space: nowrap;
+        }
+
+        .decay-indicator {
+            position: absolute;
+            top: 24px;
+            right: 48px;
+            text-align: right;
+        }
+
+        .decay-label {
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.5;
+            margin-bottom: 8px;
+        }
+
+        .decay-value {
+            font-size: 32px;
+            font-weight: 100;
+            letter-spacing: -0.02em;
+        }
+
+        .decay-unit {
+            font-size: 14px;
+            opacity: 0.5;
+            margin-left: 4px;
+        }
+
+        .edge-refraction {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+            background: conic-gradient(from 180deg at 50% 50%, transparent, rgba(255, 255, 255, 0.1), transparent, rgba(255, 255, 255, 0.05), transparent);
+            mix-blend-mode: screen;
+        }
+
+        .parameter-graph {
+            height: 32px;
+            margin-top: 12px;
+            position: relative;
+            opacity: 0.3;
+        }
+
+        .graph-line {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, var(--silver));
+            clip-path: polygon(0% 100%, 20% 80%, 40% 85%, 60% 60%, 80% 70%, 100% 20%);
+        }
+
+        .critical-marker {
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.3);
+            left: 60%;
+            top: 0;
+        }
+
+        .critical-marker::after {
+            content: 'CRITICAL';
+            position: absolute;
+            top: -20px;
+            left: 4px;
+            font-size: 8px;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="interface">
+        <div class="control-panel">
+            <h1 class="title">Memory Decay Calculator</h1>
+            
+            <div class="parameter">
+                <div class="parameter-label">
+                    Sleep Quality
+                    <span class="parameter-value">7.2 hrs</span>
+                </div>
+                <input type="range" class="slider" id="sleep" min="0" max="10" value="7.2" step="0.1">
+                <div class="parameter-graph">
+                    <div class="graph-line"></div>
+                    <div class="critical-marker"></div>
+                </div>
+            </div>
+            
+            <div class="parameter">
+                <div class="parameter-label">
+                    Stress Levels
+                    <span class="parameter-value">62%</span>
+                </div>
+                <input type="range" class="slider" id="stress" min="0" max="100" value="62">
+                <div class="parameter-graph">
+                    <div class="graph-line" style="clip-path: polygon(0% 20%, 30% 40%, 50% 30%, 70% 60%, 100% 90%);"></div>
+                    <div class="critical-marker" style="left: 70%;"></div>
+                </div>
+            </div>
+            
+            <div class="parameter">
+                <div class="parameter-label">
+                    Rehearsal Frequency
+                    <span class="parameter-value">3x/day</span>
+                </div>
+                <input type="range" class="slider" id="rehearsal" min="0" max="10" value="3">
+                <div class="parameter-graph">
+                    <div class="graph-line" style="clip-path: polygon(0% 90%, 25% 70%, 50% 75%, 75% 40%, 100% 30%);"></div>
+                    <div class="critical-marker" style="left: 25%;"></div>
+                </div>
+            </div>
+            
+            <div class="parameter">
+                <div class="parameter-label">
+                    Time Elapsed
+                    <span class="parameter-value">18 days</span>
+                </div>
+                <input type="range" class="slider" id="time" min="0" max="365" value="18">
+                <div class="parameter-graph">
+                    <div class="graph-line" style="clip-path: polygon(0% 10%, 15% 25%, 30% 45%, 60% 70%, 100% 95%);"></div>
+                    <div class="critical-marker" style="left: 30%;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="visualization">
+            <div class="decay-indicator">
+                <div class="decay-label">Current Decay Rate</div>
+                <div class="decay-value">0.73<span class="decay-unit">λ/hr</span></div>
+            </div>
+            
+            <div class="crystal-container">
+                <div class="memory-crystal">
+                    <div class="crystal-face" style="--drift-x: -150px; --drift-rotate: 360deg;">
+                        <div class="edge-refraction"></div>
+                    </div>
+                    <div class="crystal-face" style="--drift-x: 100px; --drift-rotate: -240deg;">
+                        <div class="edge-refraction"></div>
+                    </div>
+                    <div class="crystal-face" style="--drift-x: -80px; --drift-rotate: 480deg;">
+                        <div class="edge-refraction"></div>
+                    </div>
+                    <div class="crystal-face" style="--drift-x: 120px; --drift-rotate: -360deg;">
+                        <div class="edge-refraction"></div>
+                    </div>
+                    <div class="crystal-face" style="--drift-x: -60px; --drift-rotate: 300deg;">
+                        <div class="edge-refraction"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="timeline">
+                <div class="timeline-track">
+                    <div class="preservation-point" style="left: 15%;" data-time="2 HRS"></div>
+                    <div class="preservation-point" style="left: 35%;" data-time="24 HRS"></div>
+                    <div class="preservation-point" style="left: 60%;" data-time="7 DAYS"></div>
+                    <div class="preservation-point" style="left: 85%;" data-time="30 DAYS"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const sliders = document.querySelectorAll('.slider');
+        const crystal = document.querySelector('.memory-crystal');
+        const decayValue = document.querySelector('.decay-value');
+        
+        function calculateDecay() {
+            const sleep = parseFloat(document.getElementById('sleep').value);
+            const stress = parseFloat(document.getElementById('stress').value);
+            const rehearsal = parseFloat(document.getElementById('rehearsal').value);
+            const time = parseFloat(document.getElementById('time').value);
+            
+            const decay = ((10 - sleep) * 0.1 + stress * 0.01 + (10 - rehearsal) * 0.15) * (1 + time * 0.01);
+            
+            decayValue.innerHTML = decay.toFixed(2) + '<span class="decay-unit">λ/hr</span>';
+            document.documentElement.style.setProperty('--decay-rate', decay / 2);
+            
+            if (decay > 1.5) {
+                fragmentCrystal();
+            }
+        }
+        
+        function fragmentCrystal() {
+            const faces = crystal.querySelectorAll('.crystal-face');
+            faces.forEach((face, index) => {
+                setTimeout(() => {
+                    face.classList.add('fragmenting');
+                    createFragments(face);
+                }, index * 100);
+            });
+            
+            setTimeout(() => {
+                faces.forEach(face => {
+                    face.classList.remove('fragmenting');
+                });
+            }, 3000);
+        }
+        
+        function createFragments(face) {
+            for (let i = 0; i < 5; i++) {
+                const fragment = document.createElement('div');
+                fragment.className = 'fragment';
+                fragment.style.setProperty('--drift-x', `${(Math.random() - 0.5) * 300}px`);
+                fragment.style.left = `${Math.random() * 100}%`;
+                fragment.style.top = `${Math.random() * 100}%`;
+                face.appendChild(fragment);
+                
+                setTimeout(() => fragment.remove(), 3000);
+            }
+        }
+        
+        sliders.forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const label = e.target.parentElement.querySelector('.parameter-value');
+                const id = e.target.id;
+                
+                switch(id) {
+                    case 'sleep':
+                        label.textContent = `${e.target.value} hrs`;
+                        break;
+                    case 'stress':
+                        label.textContent = `${e.target.value}%`;
+                        break;
+                    case 'rehearsal':
+                        label.textContent = `${e.target.value}x/day`;
+                        break;
+                    case 'time':
+                        label.textContent = `${e.target.value} days`;
+                        break;
+                }
+                
+                calculateDecay();
+            });
+        });
+        
+        calculateDecay();
+    </script>
+</body>
+</html>

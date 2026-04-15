@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Architecture Studio</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --crystal-white: #f9f9ff;
+            --quantum-blue: #4a7fff;
+            --temporal-violet: #8b4aff;
+            --gravity-orange: #ff6b4a;
+            --paradox-green: #4affb7;
+            --dream-mist: rgba(255, 255, 255, 0.03);
+            --fragment-glass: rgba(255, 255, 255, 0.08);
+            --beam-glow: rgba(74, 127, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--void-black);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+            perspective: 2000px;
+        }
+
+        .cosmos-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .cosmos-layer {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            opacity: 0.15;
+        }
+
+        .cosmos-layer::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(90deg, transparent, transparent 100px, var(--dream-mist) 100px, var(--dream-mist) 101px),
+                repeating-linear-gradient(0deg, transparent, transparent 100px, var(--dream-mist) 100px, var(--dream-mist) 101px);
+            transform: rotate(15deg) scale(1.5);
+            animation: drift 120s linear infinite;
+        }
+
+        .cosmos-layer::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 40%, var(--quantum-blue) 0%, transparent 20%),
+                        radial-gradient(circle at 70% 60%, var(--temporal-violet) 0%, transparent 25%),
+                        radial-gradient(circle at 50% 50%, var(--gravity-orange) 0%, transparent 30%);
+            opacity: 0.1;
+            animation: pulse-cosmos 30s ease-in-out infinite;
+        }
+
+        @keyframes drift {
+            to { transform: rotate(15deg) scale(1.5) translate(100px, 100px); }
+        }
+
+        @keyframes pulse-cosmos {
+            0%, 100% { opacity: 0.1; transform: scale(1); }
+            50% { opacity: 0.15; transform: scale(1.1); }
+        }
+
+        .studio-header {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            z-index: 100;
+        }
+
+        .studio-title {
+            font-size: 32px;
+            font-weight: 200;
+            color: var(--crystal-white);
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+
+        .studio-subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 0.1em;
+        }
+
+        .fragment-palette {
+            position: absolute;
+            left: 60px;
+            top: 160px;
+            width: 320px;
+            height: 600px;
+            z-index: 50;
+        }
+
+        .palette-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 24px;
+        }
+
+        .fragment-card {
+            position: relative;
+            width: 280px;
+            height: 120px;
+            margin-bottom: 20px;
+            background: var(--fragment-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            cursor: grab;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+            transform-style: preserve-3d;
+            animation: float-gentle 6s ease-in-out infinite;
+        }
+
+        .fragment-card::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 12px;
+            padding: 1px;
+            background: linear-gradient(45deg, transparent, var(--quantum-blue), transparent);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .fragment-card:hover {
+            transform: translateY(-4px) rotateX(5deg) rotateY(-5deg);
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px rgba(74, 127, 255, 0.2);
+        }
+
+        .fragment-card:hover::before {
+            opacity: 1;
+        }
+
+        .fragment-card:nth-child(2n) {
+            animation-delay: -2s;
+        }
+
+        .fragment-card:nth-child(3n) {
+            animation-delay: -4s;
+        }
+
+        @keyframes float-gentle {
+            0%, 100% { transform: translateY(0) rotateX(0) rotateY(0); }
+            50% { transform: translateY(-8px) rotateX(2deg) rotateY(-2deg); }
+        }
+
+        .fragment-icon {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+        }
+
+        .fragment-info {
+            position: absolute;
+            top: 20px;
+            left: 80px;
+            right: 20px;
+        }
+
+        .fragment-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--crystal-white);
+            margin-bottom: 4px;
+        }
+
+        .fragment-desc {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.4;
+        }
+
+        .fragment-tag {
+            position: absolute;
+            bottom: 16px;
+            right: 20px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tag-temporal { color: var(--temporal-violet); }
+        .tag-spatial { color: var(--quantum-blue); }
+        .tag-gravity { color: var(--gravity-orange); }
+        .tag-paradox { color: var(--paradox-green); }
+
+        .composition-space {
+            position: absolute;
+            left: 420px;
+            top: 100px;
+            right: 60px;
+            bottom: 60px;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        .composition-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: rotateX(45deg) translateZ(-100px);
+            opacity: 0.1;
+        }
+
+        .grid-line {
+            position: absolute;
+            background: var(--crystal-white);
+        }
+
+        .grid-line.horizontal {
+            width: 100%;
+            height: 1px;
+            top: calc(var(--i) * 50px);
+        }
+
+        .grid-line.vertical {
+            height: 100%;
+            width: 1px;
+            left: calc(var(--i) * 50px);
+        }
+
+        .placed-fragment {
+            position: absolute;
+            width: 200px;
+            height: 160px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            transform-style: preserve-3d;
+            animation: hover-placed 8s ease-in-out infinite;
+        }
+
+        .placed-fragment::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 16px;
+            background: radial-gradient(circle at center, var(--quantum-blue), transparent);
+            opacity: 0.1;
+            animation: pulse-fragment 3s ease-in-out infinite;
+        }
+
+        @keyframes hover-placed {
+            0%, 100% { transform: translateZ(0) rotateX(0) rotateY(0); }
+            33% { transform: translateZ(20px) rotateX(5deg) rotateY(-5deg); }
+            66% { transform: translateZ(10px) rotateX(-3deg) rotateY(3deg); }
+        }
+
+        @keyframes pulse-fragment {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.2; }
+        }
+
+        .light-beam {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--quantum-blue), transparent);
+            filter: blur(1px);
+            opacity: 0.6;
+            animation: beam-flow 3s linear infinite;
+        }
+
+        @keyframes beam-flow {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+
+        .tools-panel {
+            position: absolute;
+            right: 60px;
+            top: 40px;
+            display: flex;
+            gap: 16px;
+        }
+
+        .tool-button {
+            width: 48px;
+            height: 48px;
+            background: var(--fragment-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tool-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .infinity-stairs {
+            width: 30px;
+            height: 30px;
+            position: relative;
+        }
+
+        .stair-line {
+            position: absolute;
+            background: var(--crystal-white);
+            height: 2px;
+            width: 100%;
+        }
+
+        .stair-line:nth-child(1) { top: 20%; transform: rotate(-45deg); }
+        .stair-line:nth-child(2) { top: 40%; }
+        .stair-line:nth-child(3) { top: 60%; transform: rotate(45deg); }
+        .stair-line:nth-child(4) { top: 80%; }
+
+        .multi-door {
+            width: 24px;
+            height: 30px;
+            border: 2px solid var(--crystal-white);
+            border-radius: 12px 12px 0 0;
+            position: relative;
+        }
+
+        .multi-door::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--crystal-white);
+            border-radius: 50%;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .quantum-window {
+            width: 28px;
+            height: 28px;
+            border: 2px solid var(--crystal-white);
+            position: relative;
+        }
+
+        .quantum-window::before,
+        .quantum-window::after {
+            content: '';
+            position: absolute;
+            background: var(--crystal-white);
+        }
+
+        .quantum-window::before {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .quantum-window::after {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .paradox-room {
+            width: 30px;
+            height: 30px;
+            position: relative;
+            transform: rotateX(45deg) rotateY(45deg);
+        }
+
+        .paradox-face {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--crystal-white);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .paradox-face:nth-child(1) { transform: translateZ(15px); }
+        .paradox-face:nth-child(2) { transform: translateZ(-15px); }
+        .paradox-face:nth-child(3) { transform: rotateY(90deg) translateZ(15px); }
+        .paradox-face:nth-child(4) { transform: rotateY(90deg) translateZ(-15px); }
+
+        .status-bar {
+            position: absolute;
+            bottom: 40px;
+            left: 60px;
+            right: 60px;
+            height: 60px;
+            background: var(--fragment-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            gap: 40px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .status-value {
+            font-size: 16px;
+            color: var(--crystal-white);
+            font-weight: 300;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse-indicator 2s ease-in-out infinite;
+        }
+
+        .indicator-active {
+            background: var(--paradox-green);
+        }
+
+        @keyframes pulse-indicator {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmos-grid">
+        <div class="cosmos-layer"></div>
+    </div>
+
+    <div class="studio-header">
+        <h1 class="studio-title">Dream Architecture Studio</h1>
+        <p class="studio-subtitle">Compose impossible spaces</p>
+    </div>
+
+    <div class="fragment-palette">
+        <h2 class="palette-title">Architectural Fragments</h2>
+        
+        <div class="fragment-card">
+            <div class="fragment-icon infinity-stairs">
+                <div class="stair-line"></div>
+                <div class="stair-line"></div>
+                <div class="stair-line"></div>
+                <div class="stair-line"></div>
+            </div>
+            <div class="fragment-info">
+                <h3 class="fragment-name">Infinite Staircase</h3>
+                <p class="fragment-desc">Loops endlessly through space</p>
+            </div>
+            <span class="fragment-tag tag-spatial">SPATIAL</span>
+        </div>
+
+        <div class="fragment-card">
+            <div class="fragment-icon multi-door"></div>
+            <div class="fragment-info">
+                <h3 class="fragment-name">Temporal Door</h3>
+                <p class="fragment-desc">Opens to different times</p>
+            </div>
+            <span class="fragment-tag tag-temporal">TEMPORAL</span>
+        </div>
+
+        <div class="fragment-card">
+            <div class="fragment-icon quantum-window"></div>
+            <div class="fragment-info">
+                <h3 class="fragment-name">Quantum Window</h3>
+                <p class="fragment-desc">Shows multiple realities</p>
+            </div>
+            <span class="fragment-tag tag-paradox">PARADOX</span>
+        </div>
+
+        <div class="fragment-card">
+            <div class="fragment-icon paradox-room">
+                <div class="paradox-face"></div>
+                <div class="paradox-face"></div>
+                <div class="paradox-face"></div>
+                <div class="paradox-face"></div>
+            </div>
+            <div class="fragment-info">
+                <h3 class="fragment-name">Non-Euclidean Room</h3>
+                <p class="fragment-desc">Defies geometric laws</p>
+            </div>
+            <span class="fragment-tag tag-gravity">GRAVITY</span>
+        </div>
+    </div>
+
+    <div class="composition-space">
+        <div class="composition-grid">
+            <div class="grid-line horizontal" style="--i: 0"></div>
+            <div class="grid-line horizontal" style="--i: 1"></div>
+            <div class="grid-line horizontal" style="--i: 2"></div>
+            <div class="grid-line horizontal" style="--i: 3"></div>
+            <div class="grid-line horizontal" style="--i: 4"></div>
+            <div class="grid-line horizontal" style="--i: 5"></div>
+            <div class="grid-line horizontal" style="--i: 6"></div>
+            <div class="grid-line horizontal" style="--i: 7"></div>
+            <div class="grid-line horizontal" style="--i: 8"></div>
+            <div class="grid-line horizontal" style="--i: 9"></div>
+            <div class="grid-line horizontal" style="--i: 10"></div>
+            <div class="grid-line horizontal" style="--i: 11"></div>
+            <div class="grid-line horizontal" style="--i: 12"></div>
+            <div class="grid-line horizontal" style="--i: 13"></div>
+            <div class="grid-line horizontal" style="--i: 14"></div>
+            <div class="grid-line horizontal" style="--i: 15"></div>
+            <div class="grid-line vertical" style="--i: 0"></div>
+            <div class="grid-line vertical" style="--i: 1"></div>
+            <div class="grid-line vertical" style="--i: 2"></div>
+            <div class="grid-line vertical" style="--i: 3"></div>
+            <div class="grid-line vertical" style="--i: 4"></div>
+            <div class="grid-line vertical" style="--i: 5"></div>
+            <div class="grid-line vertical" style="--i: 6"></div>
+            <div class="grid-line vertical" style="--i: 7"></div>
+            <div class="grid-line vertical" style="--i: 8"></div>
+            <div class="grid-line vertical" style="--i: 9"></div>
+            <div class="grid-line vertical" style="--i: 10"></div>
+            <div class="grid-line vertical" style="--i: 11"></div>
+            <div class="grid-line vertical" style="--i: 12"></div>
+            <div class="grid-line vertical" style="--i: 13"></div>
+            <div class="grid-line vertical" style="--i: 14"></div>
+            <div class="grid-line vertical" style="--i: 15"></div>
+            <div class="grid-line vertical" style="--i: 16"></div>
+            <div class="grid-line vertical" style="--i: 17"></div>
+            <div class="grid-line vertical" style="--i: 18"></div>
+        </div>
+
+        <div class="placed-fragment" style="left: 120px; top: 80px; animation-delay: 0s;"></div>
+        <div class="placed-fragment" style="left: 380px; top: 200px; animation-delay: -2s;"></div>
+        <div class="placed-fragment" style="left: 250px; top: 340px; animation-delay: -4s;"></div>
+        
+        <div class="light-beam" style="width: 240px; left: 220px; top: 160px; transform: rotate(23deg);"></div>
+        <div class="light-beam" style="width: 180px; left: 330px; top: 280px; transform: rotate(-15deg); background: linear-gradient(90deg, transparent, var(--temporal-violet), transparent); animation-delay: -1s;"></div>
+        <div class="light-beam" style="width: 160px; left: 130px; top: 240px; transform: rotate(45deg); background: linear-gradient(90deg, transparent, var(--gravity-orange), transparent); animation-delay: -2s;"></div>
+    </div>
+
+    <div class="tools-panel">
+        <div class="tool-button">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L2 7V17L12 22L22 17V7L12 2Z" stroke="white" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>
+                <path d="M12 22V12" stroke="white" stroke-width="1.5" opacity="0.8"/>
+                <path d="M2 7L12 12L22 7" stroke="white" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>
+            </svg>
+        </div>
+        <div class="tool-button">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="white" stroke-width="1.5" opacity="0.8"/>
+                <path d="M12 2C12 2 16 6 16 12C16 18 12 22 12 22" stroke="white" stroke-width="1.5" opacity="0.8"/>
+                <path d="M12 2C12 2 8 6 8 12C8 18 12 22 12 22" stroke="white" stroke-width="1.5" opacity="0.8"/>
+            </svg>
+        </div>
+        <div class="tool-button">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L7 7H17L12 2Z" stroke="white" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>
+                <path d="M7 7V17L12 22L17 17V7" stroke="white" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/>
+                <path d="M12 12V22" stroke="white" stroke-width="1.5" opacity="0.8"/>
+            </svg>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-item">
+            <div class="status-indicator indicator-active"></div>
+            <span class="status-label">Fragments</span>
+            <span class="status-value">3 Connected</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Spatial Coherence</span>
+            <span class="status-value">47%</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Temporal Flux</span>
+            <span class="status-value">Stable</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Dream Logic</span>
+            <span class="status-value">Active</span>
+        </div>
+    </div>
+</body>
+</html>

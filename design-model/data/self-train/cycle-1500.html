@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow State - Focus Companion</title>
+    <style>
+        :root {
+            --primary-blue: #007AFF;
+            --secondary-blue: #5AC8FA;
+            --tertiary-blue: #BF5AF2;
+            --bg-primary: #1C1C1E;
+            --bg-secondary: #2C2C2E;
+            --bg-tertiary: #3A3A3C;
+            --text-primary: #FFFFFF;
+            --text-secondary: #EBEBF5;
+            --text-tertiary: #EBEBF599;
+            --separator: #38383A;
+            --glass-bg: rgba(28, 28, 30, 0.85);
+            --shadow-light: rgba(255, 255, 255, 0.05);
+            --shadow-dark: rgba(0, 0, 0, 0.3);
+            --focus-glow: rgba(0, 122, 255, 0.4);
+            --deep-focus-glow: rgba(191, 90, 242, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1A1A1C 50%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .desktop-bg {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(0, 122, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(191, 90, 242, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(90, 200, 250, 0.03) 0%, transparent 50%);
+        }
+
+        .menu-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--separator);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 400;
+        }
+
+        .menu-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .menu-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .focus-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(0, 122, 255, 0.15);
+            border: 0.5px solid rgba(0, 122, 255, 0.3);
+            animation: focusPulse 4s ease-in-out infinite;
+        }
+
+        .focus-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            box-shadow: 0 0 8px var(--focus-glow);
+            animation: dotBreath 3s ease-in-out infinite;
+        }
+
+        .app-window {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 420px;
+            height: 280px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(40px) saturate(180%);
+            border-radius: 12px;
+            border: 0.5px solid var(--separator);
+            box-shadow: 
+                0 32px 64px rgba(0, 0, 0, 0.5),
+                0 0 0 0.5px var(--shadow-light) inset;
+            animation: windowFloat 8s ease-in-out infinite;
+        }
+
+        .window-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px 12px;
+            border-bottom: 0.5px solid var(--separator);
+        }
+
+        .traffic-lights {
+            display: flex;
+            gap: 8px;
+        }
+
+        .traffic-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 0.5px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .close { background: #FF5F57; }
+        .minimize { background: #FFBD2E; }
+        .maximize { background: #28CA42; }
+
+        .window-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .window-content {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 20px;
+        }
+
+        .focus-visualization {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .focus-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            background: 
+                linear-gradient(var(--bg-secondary), var(--bg-secondary)) padding-box,
+                linear-gradient(45deg, var(--primary-blue), var(--secondary-blue), var(--tertiary-blue)) border-box;
+            animation: ringRotate 12s linear infinite;
+        }
+
+        .focus-core {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, var(--primary-blue) 0%, var(--tertiary-blue) 100%);
+            box-shadow: 
+                0 0 40px var(--focus-glow),
+                0 0 80px var(--deep-focus-glow) inset;
+            animation: coreBreath 5s ease-in-out infinite;
+        }
+
+        .focus-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--text-primary);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            animation: centerPulse 2s ease-in-out infinite;
+        }
+
+        .status-text {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .status-subtitle {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--text-tertiary);
+        }
+
+        .ambient-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            opacity: 0.3;
+            animation: particleFloat 15s linear infinite;
+        }
+
+        .particle:nth-child(1) { left: 10%; animation-delay: -2s; }
+        .particle:nth-child(2) { left: 20%; animation-delay: -4s; }
+        .particle:nth-child(3) { left: 30%; animation-delay: -6s; }
+        .particle:nth-child(4) { left: 40%; animation-delay: -8s; }
+        .particle:nth-child(5) { left: 50%; animation-delay: -10s; }
+        .particle:nth-child(6) { left: 60%; animation-delay: -12s; }
+        .particle:nth-child(7) { left: 70%; animation-delay: -14s; }
+        .particle:nth-child(8) { left: 80%; animation-delay: -1s; }
+        .particle:nth-child(9) { left: 90%; animation-delay: -3s; }
+
+        @keyframes focusPulse {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        @keyframes dotBreath {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 8px var(--focus-glow); }
+            50% { transform: scale(1.2); box-shadow: 0 0 16px var(--focus-glow); }
+        }
+
+        @keyframes windowFloat {
+            0%, 100% { transform: translate(-50%, -50%) translateY(0px); }
+            50% { transform: translate(-50%, -50%) translateY(-8px); }
+        }
+
+        @keyframes ringRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes coreBreath {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 40px var(--focus-glow),
+                    0 0 80px var(--deep-focus-glow) inset;
+            }
+            50% { 
+                transform: scale(1.1);
+                box-shadow: 
+                    0 0 60px var(--focus-glow),
+                    0 0 120px var(--deep-focus-glow) inset;
+            }
+        }
+
+        @keyframes centerPulse {
+            0%, 100% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1); 
+            }
+            50% { 
+                opacity: 0.7; 
+                transform: translate(-50%, -50%) scale(0.8); 
+            }
+        }
+
+        @keyframes particleFloat {
+            0% { 
+                transform: translateY(100vh) translateX(0px); 
+                opacity: 0; 
+            }
+            10% { opacity: 0.3; }
+            90% { opacity: 0.3; }
+            100% { 
+                transform: translateY(-20px) translateX(50px); 
+                opacity: 0; 
+            }
+        }
+
+        .menu-item {
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .menu-item:hover {
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="desktop-bg"></div>
+    
+    <div class="ambient-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <div class="menu-bar">
+        <div class="menu-left">
+            <div class="menu-item">Flow</div>
+            <div class="menu-item">File</div>
+            <div class="menu-item">Edit</div>
+            <div class="menu-item">View</div>
+        </div>
+        
+        <div class="menu-right">
+            <div class="focus-indicator">
+                <div class="focus-dot"></div>
+                <span>Deep Focus</span>
+            </div>
+            <div class="menu-item">100%</div>
+            <div class="menu-item">⚡</div>
+            <div class="menu-item">🔇</div>
+            <div class="menu-item">Fri 2:47 PM</div>
+        </div>
+    </div>
+
+    <div class="app-window">
+        <div class="window-header">
+            <div class="traffic-lights">
+                <div class="traffic-light close"></div>
+                <div class="traffic-light minimize"></div>
+                <div class="traffic-light maximize"></div>
+            </div>
+            <div class="window-title">Flow State</div>
+            <div></div>
+        </div>
+        
+        <div class="window-content">
+            <div class="focus-visualization">
+                <div class="focus-ring"></div>
+                <div class="focus-core"></div>
+                <div class="focus-center"></div>
+            </div>
+            
+            <div>
+                <div class="status-text">In the Flow</div>
+                <div class="status-subtitle">Your mind is clear and focused</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

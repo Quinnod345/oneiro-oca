@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Garden</title>
+    <style>
+        :root {
+            --soil: #2a1f1a;
+            --bark: #4a3a30;
+            --morning-fog: #e8e2d8;
+            --petal-pink: #f2d4d4;
+            --leaf-green: #7a8a6a;
+            --forget-blue: #8a92a8;
+            --ghost-white: rgba(255, 255, 255, 0.15);
+            --water-blue: #6a8caf;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #f4f0e8 0%, #e8ddd0 100%);
+            font-family: Georgia, serif;
+            position: relative;
+        }
+
+        .garden-bed {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 320px;
+            background: linear-gradient(to bottom, transparent 0%, var(--soil) 30%);
+        }
+
+        .memory-plant {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.6s ease;
+        }
+
+        .stem {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            background: linear-gradient(to top, var(--bark), var(--leaf-green));
+            transform-origin: bottom center;
+            animation: gentleSway 8s ease-in-out infinite;
+        }
+
+        @keyframes gentleSway {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-50%) rotate(1deg); }
+            75% { transform: translateX(-50%) rotate(-1deg); }
+        }
+
+        .flower {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+        }
+
+        .petal {
+            position: absolute;
+            width: 40px;
+            height: 50px;
+            background: var(--petal-pink);
+            border-radius: 20px 20px 45% 45%;
+            transform-origin: bottom center;
+            transition: all 0.8s ease;
+        }
+
+        .petal.falling {
+            animation: petalFall 4s ease-in forwards;
+            opacity: 0.3;
+        }
+
+        @keyframes petalFall {
+            to {
+                transform: translateY(600px) translateX(100px) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .memory-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--bark);
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .memory-date {
+            font-size: 11px;
+            color: var(--forget-blue);
+            opacity: 0.7;
+        }
+
+        .plant-healthy .petal {
+            background: var(--petal-pink);
+            opacity: 1;
+        }
+
+        .plant-fading .petal {
+            background: var(--forget-blue);
+            opacity: 0.6;
+        }
+
+        .plant-ghost .stem {
+            background: var(--ghost-white);
+            border: 1px dashed var(--forget-blue);
+        }
+
+        .plant-ghost .petal {
+            background: transparent;
+            border: 1px dashed var(--ghost-white);
+        }
+
+        .recall-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .recall-modal.active {
+            display: block;
+        }
+
+        .recall-prompt {
+            font-size: 20px;
+            color: var(--bark);
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        .recall-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .recall-option {
+            padding: 15px;
+            border: 2px solid var(--morning-fog);
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 16px;
+            border-radius: 8px;
+        }
+
+        .recall-option:hover {
+            border-color: var(--water-blue);
+            background: #f8fafb;
+        }
+
+        .watering-can {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+        }
+
+        .watering-can.active {
+            opacity: 1;
+        }
+
+        .water-drop {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--water-blue);
+            border-radius: 50%;
+            animation: waterDrop 0.8s ease-in forwards;
+        }
+
+        @keyframes waterDrop {
+            to {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+        }
+
+        .header {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            max-width: 400px;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            color: var(--soil);
+            font-weight: normal;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            color: var(--forget-blue);
+            line-height: 1.6;
+        }
+
+        .memory-stats {
+            position: absolute;
+            top: 40px;
+            right: 60px;
+            text-align: right;
+        }
+
+        .stat-item {
+            margin-bottom: 20px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--forget-blue);
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            color: var(--soil);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Memory Garden</h1>
+        <p>Water your memories to keep them alive. Each plant represents a cherished moment. Care for them through gentle recall.</p>
+    </div>
+
+    <div class="memory-stats">
+        <div class="stat-item">
+            <div class="stat-label">Thriving Memories</div>
+            <div class="stat-value" id="thriving-count">12</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Fading Memories</div>
+            <div class="stat-value" id="fading-count">5</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Ghost Memories</div>
+            <div class="stat-value" id="ghost-count">2</div>
+        </div>
+    </div>
+
+    <div class="garden-bed">
+        <div class="memory-plant plant-healthy" style="left: 200px; bottom: 280px;" data-memory="wedding">
+            <div class="stem" style="height: 140px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(72deg);"></div>
+                    <div class="petal" style="transform: rotate(144deg);"></div>
+                    <div class="petal" style="transform: rotate(216deg);"></div>
+                    <div class="petal" style="transform: rotate(288deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                Wedding Day
+                <div class="memory-date">June 1985</div>
+            </div>
+        </div>
+
+        <div class="memory-plant plant-healthy" style="left: 400px; bottom: 260px;" data-memory="firstchild">
+            <div class="stem" style="height: 160px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(60deg);"></div>
+                    <div class="petal" style="transform: rotate(120deg);"></div>
+                    <div class="petal" style="transform: rotate(180deg);"></div>
+                    <div class="petal" style="transform: rotate(240deg);"></div>
+                    <div class="petal" style="transform: rotate(300deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                Sarah's Birth
+                <div class="memory-date">March 1988</div>
+            </div>
+        </div>
+
+        <div class="memory-plant plant-fading" style="left: 600px; bottom: 290px;" data-memory="vacation">
+            <div class="stem" style="height: 120px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(90deg);"></div>
+                    <div class="petal" style="transform: rotate(180deg);"></div>
+                    <div class="petal" style="transform: rotate(270deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                Italy Trip
+                <div class="memory-date">Summer 1992</div>
+            </div>
+        </div>
+
+        <div class="memory-plant plant-ghost" style="left: 800px; bottom: 270px;" data-memory="friend">
+            <div class="stem" style="height: 100px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(120deg);"></div>
+                    <div class="petal" style="transform: rotate(240deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                College Friend
+                <div class="memory-date">1970s</div>
+            </div>
+        </div>
+
+        <div class="memory-plant plant-fading" style="left: 1000px; bottom: 285px;" data-memory="graduation">
+            <div class="stem" style="height: 130px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(72deg);"></div>
+                    <div class="petal" style="transform: rotate(144deg);"></div>
+                    <div class="petal" style="transform: rotate(216deg);"></div>
+                    <div class="petal" style="transform: rotate(288deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                Tom's Graduation
+                <div class="memory-date">May 2010</div>
+            </div>
+        </div>
+
+        <div class="memory-plant plant-healthy" style="left: 1200px; bottom: 275px;" data-memory="anniversary">
+            <div class="stem" style="height: 150px;">
+                <div class="flower">
+                    <div class="petal" style="transform: rotate(0deg);"></div>
+                    <div class="petal" style="transform: rotate(45deg);"></div>
+                    <div class="petal" style="transform: rotate(90deg);"></div>
+                    <div class="petal" style="transform: rotate(135deg);"></div>
+                    <div class="petal" style="transform: rotate(180deg);"></div>
+                    <div class="petal" style="transform: rotate(225deg);"></div>
+                    <div class="petal" style="transform: rotate(270deg);"></div>
+                    <div class="petal" style="transform: rotate(315deg);"></div>
+                </div>
+            </div>
+            <div class="memory-label">
+                50th Anniversary
+                <div class="memory-date">June 2035</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+
+    <div class="recall-modal" id="recall-modal">
+        <div class="recall-prompt" id="recall-prompt"></div>
+        <div class="recall-options" id="recall-options"></div>
+    </div>
+
+    <div class="watering-can" id="watering-can"></div>
+
+    <script>
+        const memoryData = {
+            wedding: {
+                prompts: [
+                    {
+                        question: "What color was your wedding dress?",
+                        options: ["White", "Ivory", "Champagne", "Blush"],
+                        correct: 1
+                    },
+                    {
+                        question: "Where did you have your first dance?",
+                        options: ["Garden", "Ballroom", "Beach", "Church Hall"],
+                        correct: 3
+                    }
+                ]
+            },
+            firstchild: {
+                prompts: [
+                    {
+                        question: "What was Sarah's first word?",
+                        options: ["Mama", "Dada", "Cat", "Hi"],
+                        correct: 0
+                    },
+                    {
+                        question: "What time was Sarah born?",
+                        options: ["2:30 AM", "7:15 AM", "4:45 PM", "11:20 PM"],
+                        correct: 1
+                    }
+                ]
+            },
+            vacation: {
+                prompts: [
+                    {
+                        question: "Which Italian city did you visit first?",
+                        options: ["Rome", "Venice", "Florence", "Milan"],
+                        correct: 0
+                    }
+                ]
+            },
+            friend: {
+                prompts: [
+                    {
+                        question: "What was your college roommate's name?",
+                        options: ["Linda", "Susan", "Patricia", "Barbara"],
+                        correct: 2
+                    }
+                ]
+            },
+            graduation: {
+                prompts: [
+                    {
+                        question: "What did Tom study in college?",
+                        options: ["Engineering", "Medicine", "Business", "Architecture"],
+                        correct: 0
+                    }
+                ]
+            },
+            anniversary: {
+                prompts: [
+                    {
+                        question: "Where did you celebrate your 50th anniversary?",
+                        options: ["Home", "Restaurant", "Cruise", "Mountain Lodge"],
+                        correct: 2
+                    }
+                ]
+            }
+        };
+
+        let currentPlant = null;
+        let currentPrompt = null;
+
+        document.querySelectorAll('.memory-plant').forEach(plant => {
+            plant.addEventListener('click', function() {
+                currentPlant = this;
+                const memoryType = this.dataset.memory;
+                const memory = memoryData[memoryType];
+                if (memory && memory.prompts.length > 0) {
+                    currentPrompt = memory.prompts[Math.floor(Math.random() * memory.prompts.length)];
+                    showRecallModal(currentPrompt);
+                }
+            });
+        });
+
+        function showRecallModal(prompt) {
+            const modal = document.getElementById('recall-modal');
+            const overlay = document.getElementById('overlay');
+            const promptEl = document.getElementById('recall-prompt');
+            const optionsEl = document.getElementById('recall-options');
+            
+            promptEl.textContent = prompt.question;
+            optionsEl.innerHTML = '';
+            
+            prompt.options.forEach((option, index) => {
+                const optionEl = document.createElement('div');
+                optionEl.className = 'recall-option';
+                optionEl.textContent = option;
+                optionEl.addEventListener('click', () => checkAnswer(index));
+                optionsEl.appendChild(optionEl);
+            });
+            
+            modal.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function checkAnswer(index) {
+            const modal = document.getElementById('recall-modal');
+            const overlay = document.getElementById('overlay');
+            
+            modal.classList.remove('active');
+            overlay.classList.remove('active');
+            
+            if (index === currentPrompt.correct) {
+                waterPlant(currentPlant);
+            } else {
+                shedPetal(currentPlant);
+            }
+        }
+
+        function waterPlant(plant) {
+            const rect = plant.getBoundingClientRect();
+            const can = document.getElementById('watering-can');
+            
+            can.style.left = rect.left + rect.width / 2 - 30 + 'px';
+            can.style.top = rect.top - 100 + 'px';
+            can.classList.add('active');
+            
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const drop = document.createElement('div');
+                    drop.className = 'water-drop';
+                    drop.style.left = Math.random() * 60 + 'px';
+                    drop.style.top = '60px';
+                    can.appendChild(drop);
+                    
+                    setTimeout(() => drop.remove(), 800);
+                }, i * 150);
+            }
+            
+            setTimeout(() => {
+                can.classList.remove('active');
+                if (plant.classList.contains('plant-fading')) {
+                    plant.classList.remove('plant-fading');
+                    plant.classList.add('plant-healthy');
+                    updateStats();
+                }
+            }, 1500);
+        }
+
+        function shedPetal(plant) {
+            const petals = plant.querySelectorAll('.petal:not(.falling)');
+            if (petals.length > 0) {
+                const petal = petals[Math.floor(Math.random() * petals.length)];
+                petal.classList.add('falling');
+                
+                setTimeout(() => {
+                    petal.remove();
+                    
+                    const remainingPetals = plant.querySelectorAll('.petal:not(.falling)');
+                    if (remainingPetals.length <= 2 && !plant.classList.contains('plant-ghost')) {
+                        plant.classList.remove('plant-healthy');
+                        plant.classList.add('plant-fading');
+                    }
+                    if (remainingPetals.length === 0) {
+                        plant.classList.remove('plant-fading');
+                        plant.classList.add('plant-ghost');
+                    }
+                    updateStats();
+                }, 4000);
+            }
+        }
+
+        function updateStats() {
+            const thriving = document.querySelectorAll('.plant-healthy').length;
+            const fading = document.querySelectorAll('.plant-fading').length;
+            const ghost = document.querySelectorAll('.plant-ghost').length;
+            
+            document.getElementById('thriving-count').textContent = thriving;
+            document.getElementById('fading-count').textContent = fading;
+            document.getElementById('ghost-count').textContent = ghost;
+        }
+
+        document.getElementById('overlay').addEventListener('click', function() {
+            document.getElementById('recall-modal').classList.remove('active');
+            this.classList.remove('active');
+        });
+    </script>
+</body>
+</html>

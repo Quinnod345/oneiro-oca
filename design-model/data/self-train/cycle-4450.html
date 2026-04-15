@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Timeline Manager</title>
+    <style>
+        :root {
+            --color-primary: #2c3e50;
+            --color-secondary: #3498db;
+            --color-accent: #e74c3c;
+            --color-success: #27ae60;
+            --color-warning: #f39c12;
+            --color-background: #f8f9fa;
+            --color-surface: #ffffff;
+            --color-text: #2c3e50;
+            --color-text-muted: #6c757d;
+            --color-border: #e9ecef;
+            --color-ingredient: #8e44ad;
+            --color-process: #16a085;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+            --shadow-lg: 0 8px 25px rgba(0,0,0,0.2);
+            --radius: 8px;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--color-background);
+            color: var(--color-text);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        .header {
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--spacing-lg) var(--spacing-xl);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--color-text-muted);
+            margin-top: var(--spacing-xs);
+        }
+
+        .controls {
+            display: flex;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        .btn {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: none;
+            border-radius: var(--radius);
+            font-family: var(--font-family);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--color-secondary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: var(--color-surface);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+
+        .btn-secondary:hover {
+            background: #f1f3f4;
+        }
+
+        .timeline-container {
+            padding: var(--spacing-xl);
+            overflow: auto;
+        }
+
+        .recipe-timeline {
+            position: relative;
+            min-height: 700px;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--color-border);
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--color-ingredient), var(--color-process), var(--color-success));
+            width: 75%;
+            border-radius: 2px;
+        }
+
+        .stage {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+        }
+
+        .stage-ingredients {
+            left: 5%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .stage-prep {
+            left: 25%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .stage-cooking {
+            left: 45%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .stage-plating {
+            left: 65%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .stage-final {
+            left: 85%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .stage-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            box-shadow: var(--shadow-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .stage-ingredients .stage-icon {
+            background: var(--color-ingredient);
+        }
+
+        .stage-prep .stage-icon {
+            background: var(--color-secondary);
+        }
+
+        .stage-cooking .stage-icon {
+            background: var(--color-warning);
+        }
+
+        .stage-plating .stage-icon {
+            background: var(--color-process);
+        }
+
+        .stage-final .stage-icon {
+            background: var(--color-success);
+        }
+
+        .stage-content {
+            background: var(--color-surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: var(--spacing-lg);
+            min-width: 200px;
+            max-width: 250px;
+        }
+
+        .stage-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: var(--spacing-sm);
+            text-align: center;
+        }
+
+        .ingredient-list, .step-list {
+            list-style: none;
+        }
+
+        .ingredient-item {
+            background: #f8f4ff;
+            border: 1px solid #e6d7ff;
+            border-radius: var(--radius);
+            padding: var(--spacing-sm);
+            margin-bottom: var(--spacing-xs);
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ingredient-name {
+            font-weight: 500;
+        }
+
+        .ingredient-amount {
+            color: var(--color-text-muted);
+            font-size: 12px;
+        }
+
+        .step-item {
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            border-radius: var(--radius);
+            padding: var(--spacing-sm);
+            margin-bottom: var(--spacing-xs);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .cooking-step {
+            background: #fef3e2;
+            border-color: #fed7aa;
+        }
+
+        .plating-step {
+            background: #f0fdfa;
+            border-color: #99f6e4;
+        }
+
+        .final-dish {
+            text-align: center;
+        }
+
+        .dish-image {
+            width: 120px;
+            height: 120px;
+            border-radius: var(--radius);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0 auto var(--spacing-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+
+        .dish-name {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .dish-time {
+            color: var(--color-text-muted);
+            font-size: 12px;
+        }
+
+        .flow-connector {
+            position: absolute;
+            top: 50%;
+            height: 1px;
+            background: var(--color-border);
+            z-index: 1;
+        }
+
+        .connector-1 {
+            left: calc(5% + 30px);
+            width: calc(20% - 60px);
+        }
+
+        .connector-2 {
+            left: calc(25% + 30px);
+            width: calc(20% - 60px);
+        }
+
+        .connector-3 {
+            left: calc(45% + 30px);
+            width: calc(20% - 60px);
+        }
+
+        .connector-4 {
+            left: calc(65% + 30px);
+            width: calc(20% - 60px);
+        }
+
+        .time-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--color-surface);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            font-size: 12px;
+            color: var(--color-text-muted);
+        }
+
+        .active {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 152, 219, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
+        }
+
+        .transformation-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--color-secondary);
+            font-size: 20px;
+            z-index: 3;
+        }
+
+        .arrow-1 { left: 18%; }
+        .arrow-2 { left: 38%; }
+        .arrow-3 { left: 58%; }
+        .arrow-4 { left: 78%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div>
+                    <h1 class="title">Recipe Timeline Manager</h1>
+                    <p class="subtitle">Transform ingredients through cooking steps into delicious dishes</p>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-secondary">⏸ Pause</button>
+                    <button class="btn btn-primary">▶ Start Cooking</button>
+                    <button class="btn btn-secondary">📋 View Recipe</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="timeline-container">
+            <div class="recipe-timeline">
+                <div class="timeline-track">
+                    <div class="timeline-progress"></div>
+                </div>
+
+                <div class="transformation-arrow arrow-1">→</div>
+                <div class="transformation-arrow arrow-2">→</div>
+                <div class="transformation-arrow arrow-3">→</div>
+                <div class="transformation-arrow arrow-4">→</div>
+
+                <div class="stage stage-ingredients">
+                    <div class="stage-icon">🥕</div>
+                    <div class="stage-content">
+                        <h3 class="stage-title">Ingredients</h3>
+                        <ul class="ingredient-list">
+                            <li class="ingredient-item">
+                                <span class="ingredient-name">Chicken Breast</span>
+                                <span class="ingredient-amount">2 lbs</span>
+                            </li>
+                            <li class="ingredient-item">
+                                <span class="ingredient-name">Olive Oil</span>
+                                <span class="ingredient-amount">2 tbsp</span>
+                            </li>
+                            <li class="ingredient-item">
+                                <span class="ingredient-name">Garlic</span>
+                                <span class="ingredient-amount">3 cloves</span>
+                            </li>
+                            <li class="ingredient-item">
+                                <span class="ingredient-name">Lemon</span>
+                                <span class="ingredient-amount">1 whole</span>
+                            </li>
+                            <li class="ingredient-item">
+                                <span class="ingredient-name">Herbs</span>
+                                <span class="ingredient-amount">mixed</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="stage stage-prep">
+                    <div class="stage-icon active">🔪</div>
+                    <div class="stage-content">
+                        <h3 class="stage-title">Preparation</h3>
+                        <ul class="step-list">
+                            <li class="step-item">Season chicken with salt and pepper</li>
+                            <li class="step-item">Mince garlic cloves finely</li>
+                            <li class="step-item">Zest and juice the lemon</li>
+                            <li class="step-item">Chop fresh herbs</li>
+                            <li class="step-item">Let chicken marinate 15 minutes</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="stage stage-cooking">
+                    <div class="stage-icon">🔥</div>
+                    <div class="stage-content">
+                        <h3 class="stage-title">Cooking</h3>
+                        <ul class="step-list">
+                            <li class="step-item cooking-step">Heat oil in large skillet</li>
+                            <li class="step-item cooking-step">Sear chicken 6-8 minutes per side</li>
+                            <li class="step-item cooking-step">Add garlic and herbs to pan</li>
+                            <li class="step-item cooking-step">Deglaze with lemon juice</li>
+                            <li class="step-item cooking-step">Simmer until sauce reduces</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="stage stage-plating">
+                    <div class="stage-icon">🍽</div>
+                    <div class="stage-content">
+                        <h3 class="stage-title">Plating</h3>
+                        <ul class="step-list">
+                            <li class="step-item plating-step">Rest chicken 5 minutes</li>
+                            <li class="step-item plating-step">Slice chicken diagonally</li>
+                            <li class="step-item plating-step">Arrange on warmed plates</li>
+                            <li class="step-item plating-step">Drizzle with pan sauce</li>
+                            <li class="step-item plating-step">Garnish with fresh herbs</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="stage stage-final">
+                    <div class="stage-icon">✨</div>
+                    <div class="stage-content final-dish">
+                        <h3 class="stage-title">Final Dish</h3>
+                        <div class="dish-image">🍗</div>
+                        <div class="dish-name">Herb-Crusted Lemon Chicken</div>
+                        <div class="dish-time">Total time: 45 minutes</div>
+                    </div>
+                </div>
+
+                <div class="time-indicator">
+                    Currently preparing ingredients • 12 minutes remaining
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

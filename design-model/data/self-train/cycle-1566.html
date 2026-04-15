@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dimensional Notes</title>
+    <style>
+        :root {
+            --bg-deep: #0a0d14;
+            --bg-surface: #151b26;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-purple: #bc8cff;
+            --accent-green: #7ee787;
+            --accent-orange: #ffa657;
+            --accent-red: #f85149;
+            --note-shadow: rgba(0, 0, 0, 0.4);
+            --connection-glow: rgba(88, 166, 255, 0.3);
+            --surface-1: rgba(255, 255, 255, 0.05);
+            --surface-2: rgba(255, 255, 255, 0.08);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            perspective: 2000px;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        .space-container {
+            position: relative;
+            width: 1440px;
+            height: 900px;
+            transform-style: preserve-3d;
+            transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .note {
+            position: absolute;
+            width: 240px;
+            min-height: 160px;
+            background: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px;
+            transform-style: preserve-3d;
+            backdrop-filter: blur(20px);
+            box-shadow: 
+                0 8px 32px var(--note-shadow),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+        }
+
+        .note:hover {
+            transform: translateZ(20px) scale(1.02);
+            background: var(--surface-2);
+            box-shadow: 
+                0 20px 60px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .note-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .note-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .note-timestamp {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .note-content {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+        }
+
+        .note-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .note-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .tag {
+            font-size: 10px;
+            padding: 3px 8px;
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent-blue);
+            border-radius: 6px;
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        .connection {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .connection-line {
+            stroke: var(--accent-blue);
+            stroke-width: 1;
+            fill: none;
+            filter: drop-shadow(0 0 4px var(--connection-glow));
+            stroke-dasharray: 3, 3;
+            animation: flow 3s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 12; }
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            gap: 12px;
+            z-index: 1000;
+        }
+
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(20px);
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
+
+        .tool-btn:hover {
+            background: var(--surface-2);
+            color: var(--accent-blue);
+            transform: translateY(-1px);
+        }
+
+        .info-panel {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            background: var(--surface-1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px;
+            backdrop-filter: blur(20px);
+            font-size: 12px;
+            color: var(--text-secondary);
+            max-width: 300px;
+        }
+
+        .depth-indicator {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 1000;
+        }
+
+        .depth-level {
+            width: 60px;
+            height: 4px;
+            background: var(--surface-1);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .depth-level::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: var(--accent-blue);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .depth-level.active-1::after { width: 25%; }
+        .depth-level.active-2::after { width: 50%; }
+        .depth-level.active-3::after { width: 75%; }
+        .depth-level.active-4::after { width: 100%; }
+
+        /* Note positioning and depths */
+        .note-1 {
+            transform: translate3d(200px, 150px, 100px) rotateY(-5deg);
+            background: linear-gradient(135deg, var(--surface-2), var(--surface-1));
+            border-color: rgba(126, 231, 135, 0.3);
+        }
+
+        .note-1 .note-dot { background: var(--accent-green); }
+
+        .note-2 {
+            transform: translate3d(500px, 250px, 50px) rotateY(3deg);
+            background: linear-gradient(135deg, var(--surface-2), var(--surface-1));
+            border-color: rgba(88, 166, 255, 0.3);
+        }
+
+        .note-2 .note-dot { background: var(--accent-blue); }
+
+        .note-3 {
+            transform: translate3d(800px, 180px, 150px) rotateY(-8deg);
+            background: linear-gradient(135deg, var(--surface-2), var(--surface-1));
+            border-color: rgba(188, 140, 255, 0.3);
+        }
+
+        .note-3 .note-dot { background: var(--accent-purple); }
+
+        .note-4 {
+            transform: translate3d(300px, 400px, -50px) rotateY(6deg);
+            opacity: 0.7;
+            scale: 0.9;
+            border-color: rgba(255, 166, 87, 0.3);
+        }
+
+        .note-4 .note-dot { background: var(--accent-orange); }
+
+        .note-5 {
+            transform: translate3d(700px, 450px, -100px) rotateY(-4deg);
+            opacity: 0.6;
+            scale: 0.85;
+            border-color: rgba(248, 81, 73, 0.3);
+        }
+
+        .note-5 .note-dot { background: var(--accent-red); }
+
+        .note-6 {
+            transform: translate3d(600px, 100px, -150px) rotateY(10deg);
+            opacity: 0.4;
+            scale: 0.8;
+            border-color: rgba(88, 166, 255, 0.2);
+        }
+
+        .note-6 .note-dot { background: var(--accent-blue); }
+
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .floating-animation:nth-child(even) {
+            animation: float 8s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="tool-btn" title="Add Note">+</div>
+        <div class="tool-btn" title="Search">⌕</div>
+        <div class="tool-btn" title="Settings">⚙</div>
+    </div>
+
+    <div class="depth-indicator">
+        <div class="depth-level active-4"></div>
+        <div class="depth-level active-3"></div>
+        <div class="depth-level active-2"></div>
+        <div class="depth-level active-1"></div>
+    </div>
+
+    <div class="space-container">
+        <svg class="connection" style="width: 100%; height: 100%; position: absolute; z-index: 1;">
+            <path class="connection-line" d="M 340 230 Q 420 240 500 270" />
+            <path class="connection-line" d="M 620 320 Q 720 260 800 260" />
+            <path class="connection-line" d="M 440 350 Q 550 380 680 420" />
+            <path class="connection-line" d="M 740 270 Q 750 300 720 350" />
+        </svg>
+
+        <div class="note note-1 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">2 MINUTES AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">Design System Insights</div>
+                <p>Spatial interfaces need consistent depth cues. Consider shadow intensity, scale, and opacity as primary depth indicators.</p>
+                <div class="note-tags">
+                    <span class="tag">design</span>
+                    <span class="tag">3d</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note note-2 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">15 MINUTES AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">Performance Optimization</div>
+                <p>Use CSS transforms for 3D positioning instead of changing layout properties. GPU acceleration is crucial for smooth interactions.</p>
+                <div class="note-tags">
+                    <span class="tag">performance</span>
+                    <span class="tag">css</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note note-3 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">1 HOUR AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">User Research Findings</div>
+                <p>Users prefer subtle depth changes over dramatic perspectives. Connections should be discoverable but not overwhelming.</p>
+                <div class="note-tags">
+                    <span class="tag">research</span>
+                    <span class="tag">ux</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note note-4 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">3 HOURS AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">Color Psychology</div>
+                <p>Warmer colors appear closer, cooler colors recede. This can enhance the 3D illusion without relying solely on perspective.</p>
+                <div class="note-tags">
+                    <span class="tag">color</span>
+                    <span class="tag">psychology</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note note-5 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">1 DAY AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">Architecture Patterns</div>
+                <p>Spatial data structures like octrees could help organize notes in true 3D space rather than simulated depth.</p>
+                <div class="note-tags">
+                    <span class="tag">architecture</span>
+                    <span class="tag">algorithms</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="note note-6 floating-animation">
+            <div class="note-header">
+                <div class="note-dot"></div>
+                <div class="note-timestamp">1 WEEK AGO</div>
+            </div>
+            <div class="note-content">
+                <div class="note-title">Initial Concept</div>
+                <p>What if note-taking apps worked more like our spatial memory? Recent thoughts stay close, old ones fade into the background.</p>
+                <div class="note-tags">
+                    <span class="tag">concept</span>
+                    <span class="tag">memory</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <strong>Dimensional Notes</strong><br>
+        Drag to rotate • Scroll to zoom<br>
+        Recent notes float closer, older thoughts drift away
+    </div>
+
+    <script>
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let rotation = { x: -10, y: 15 };
+        
+        const container = document.querySelector('.space-container');
+        
+        function updateTransform() {
+            container.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
+        }
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            
+            rotation.y += deltaX * 0.3;
+            rotation.x -= deltaY * 0.3;
+            
+            rotation.x = Math.max(-45, Math.min(45, rotation.x));
+            
+            updateTransform();
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        document.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const scale = e.deltaY > 0 ? 0.95 : 1.05;
+            const currentTransform = container.style.transform;
+            container.style.transform = currentTransform + ` scale(${scale})`;
+        });
+        
+        // Initialize
+        updateTransform();
+    </script>
+</body>
+</html>

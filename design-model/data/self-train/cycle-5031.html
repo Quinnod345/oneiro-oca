@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Pod</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --star-white: #f8f9fa;
+            --nebula-blue: #1e3a8a;
+            --plasma-purple: #7c3aed;
+            --cosmic-teal: #0891b2;
+            --aurora-green: #10b981;
+            --solar-amber: #f59e0b;
+            --glow-radius: 8px;
+            --constellation-opacity: 0.3;
+            --episode-size: 6px;
+            --series-line: 1px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--void-black);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--star-white);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .constellation-field {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: radial-gradient(ellipse at 30% 20%, rgba(30, 58, 138, 0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
+                        var(--void-black);
+        }
+
+        .constellation {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: var(--series-line);
+            background: linear-gradient(90deg, 
+                rgba(248, 249, 250, 0) 0%, 
+                rgba(248, 249, 250, var(--constellation-opacity)) 50%, 
+                rgba(248, 249, 250, 0) 100%);
+            transform-origin: left center;
+            z-index: 1;
+        }
+
+        .episode {
+            position: absolute;
+            width: var(--episode-size);
+            height: var(--episode-size);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
+            z-index: 2;
+            border: 1px solid rgba(248, 249, 250, 0.2);
+        }
+
+        .episode.unplayed {
+            background: rgba(248, 249, 250, 0.6);
+            box-shadow: 0 0 4px rgba(248, 249, 250, 0.3);
+        }
+
+        .episode.played {
+            background: radial-gradient(circle, var(--aurora-green) 0%, var(--cosmic-teal) 100%);
+            box-shadow: 
+                0 0 var(--glow-radius) var(--aurora-green),
+                0 0 calc(var(--glow-radius) * 2) rgba(16, 185, 129, 0.4),
+                inset 0 0 4px rgba(255, 255, 255, 0.3);
+            animation: pulse-glow 3s ease-in-out infinite alternate;
+        }
+
+        .episode.currently-playing {
+            background: radial-gradient(circle, var(--solar-amber) 0%, var(--plasma-purple) 100%);
+            box-shadow: 
+                0 0 calc(var(--glow-radius) * 1.5) var(--solar-amber),
+                0 0 calc(var(--glow-radius) * 3) rgba(245, 158, 11, 0.6),
+                inset 0 0 6px rgba(255, 255, 255, 0.4);
+            animation: active-pulse 1.5s ease-in-out infinite alternate;
+            transform: scale(1.8);
+        }
+
+        .episode:hover {
+            transform: scale(2.2);
+            filter: brightness(1.3);
+        }
+
+        .episode.played:hover {
+            box-shadow: 
+                0 0 calc(var(--glow-radius) * 2) var(--aurora-green),
+                0 0 calc(var(--glow-radius) * 4) rgba(16, 185, 129, 0.6);
+        }
+
+        @keyframes pulse-glow {
+            0% { 
+                box-shadow: 
+                    0 0 var(--glow-radius) var(--aurora-green),
+                    0 0 calc(var(--glow-radius) * 2) rgba(16, 185, 129, 0.4),
+                    inset 0 0 4px rgba(255, 255, 255, 0.3);
+            }
+            100% { 
+                box-shadow: 
+                    0 0 calc(var(--glow-radius) * 1.5) var(--aurora-green),
+                    0 0 calc(var(--glow-radius) * 3) rgba(16, 185, 129, 0.6),
+                    inset 0 0 6px rgba(255, 255, 255, 0.4);
+            }
+        }
+
+        @keyframes active-pulse {
+            0% { 
+                box-shadow: 
+                    0 0 calc(var(--glow-radius) * 1.5) var(--solar-amber),
+                    0 0 calc(var(--glow-radius) * 3) rgba(245, 158, 11, 0.6);
+            }
+            100% { 
+                box-shadow: 
+                    0 0 calc(var(--glow-radius) * 2.5) var(--solar-amber),
+                    0 0 calc(var(--glow-radius) * 5) rgba(245, 158, 11, 0.8);
+            }
+        }
+
+        .episode-tooltip {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            padding: 12px 20px;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid rgba(248, 249, 250, 0.1);
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+            max-width: 300px;
+        }
+
+        .episode-tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--star-white);
+        }
+
+        .tooltip-series {
+            font-size: 12px;
+            color: var(--aurora-green);
+            margin-bottom: 2px;
+        }
+
+        .tooltip-duration {
+            font-size: 12px;
+            color: rgba(248, 249, 250, 0.7);
+        }
+
+        .player-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid rgba(248, 249, 250, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            backdrop-filter: blur(10px);
+            min-width: 280px;
+        }
+
+        .now-playing {
+            font-size: 12px;
+            color: var(--aurora-green);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .track-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .track-series {
+            font-size: 12px;
+            color: rgba(248, 249, 250, 0.7);
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 2px;
+            background: rgba(248, 249, 250, 0.2);
+            border-radius: 1px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--aurora-green), var(--cosmic-teal));
+            width: 34%;
+            transition: width 0.1s ease;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: rgba(248, 249, 250, 0.6);
+        }
+
+        .legend {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 11px;
+            color: rgba(248, 249, 250, 0.8);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .legend-dot.unplayed {
+            background: rgba(248, 249, 250, 0.6);
+            border: 1px solid rgba(248, 249, 250, 0.2);
+        }
+
+        .legend-dot.played {
+            background: var(--aurora-green);
+            box-shadow: 0 0 6px var(--aurora-green);
+        }
+
+        .legend-dot.current {
+            background: var(--solar-amber);
+            box-shadow: 0 0 8px var(--solar-amber);
+        }
+    </style>
+</head>
+<body>
+    <div class="constellation-field">
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot unplayed"></div>
+                <span>Unplayed</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot played"></div>
+                <span>Listened</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot current"></div>
+                <span>Playing</span>
+            </div>
+        </div>
+
+        <!-- Player Controls -->
+        <div class="player-controls">
+            <div class="now-playing">Now Playing</div>
+            <div class="track-title">The Observable Universe</div>
+            <div class="track-series">Cosmos Chronicles • Episode 12</div>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <div class="time-display">
+                <span>14:23</span>
+                <span>42:15</span>
+            </div>
+        </div>
+
+        <!-- Constellation: Cosmos Chronicles -->
+        <div class="constellation" style="top: 180px; left: 200px;">
+            <div class="constellation-line" style="width: 120px; transform: rotate(15deg);"></div>
+            <div class="constellation-line" style="width: 80px; top: 40px; left: 120px; transform: rotate(-30deg);"></div>
+            <div class="constellation-line" style="width: 100px; top: 20px; left: 160px; transform: rotate(45deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="Origins of Everything" data-series="Cosmos Chronicles" data-duration="38:12"></div>
+            <div class="episode played" style="top: 12px; left: 117px;" data-title="Dark Matter Mysteries" data-series="Cosmos Chronicles" data-duration="41:55"></div>
+            <div class="episode played" style="top: 37px; left: 157px;" data-title="Quantum Entanglement" data-series="Cosmos Chronicles" data-duration="35:28"></div>
+            <div class="episode currently-playing" style="top: 17px; left: 237px;" data-title="The Observable Universe" data-series="Cosmos Chronicles" data-duration="42:15"></div>
+            <div class="episode unplayed" style="top: 57px; left: 257px;" data-title="Time Travel Physics" data-series="Cosmos Chronicles" data-duration="44:33"></div>
+        </div>
+
+        <!-- Constellation: Tech Deep Dive -->
+        <div class="constellation" style="top: 120px; left: 600px;">
+            <div class="constellation-line" style="width: 90px; transform: rotate(-20deg);"></div>
+            <div class="constellation-line" style="width: 110px; top: 35px; left: 85px; transform: rotate(25deg);"></div>
+            <div class="constellation-line" style="width: 70px; top: 70px; left: 190px; transform: rotate(-45deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="AI Revolution" data-series="Tech Deep Dive" data-duration="52:14"></div>
+            <div class="episode played" style="top: 32px; left: 82px;" data-title="Blockchain Basics" data-series="Tech Deep Dive" data-duration="47:28"></div>
+            <div class="episode played" style="top: 67px; left: 187px;" data-title="Quantum Computing" data-series="Tech Deep Dive" data-duration="55:12"></div>
+            <div class="episode unplayed" style="top: 102px; left: 257px;" data-title="Neural Networks" data-series="Tech Deep Dive" data-duration="48:45"></div>
+        </div>
+
+        <!-- Constellation: Mindful Moments -->
+        <div class="constellation" style="top: 350px; left: 150px;">
+            <div class="constellation-line" style="width: 60px; transform: rotate(60deg);"></div>
+            <div class="constellation-line" style="width: 80px; top: -15px; left: 45px; transform: rotate(-15deg);"></div>
+            <div class="constellation-line" style="width: 50px; top: 15px; left: 125px; transform: rotate(75deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="Morning Meditation" data-series="Mindful Moments" data-duration="15:30"></div>
+            <div class="episode played" style="top: -18px; left: 42px;" data-title="Breathing Techniques" data-series="Mindful Moments" data-duration="18:45"></div>
+            <div class="episode played" style="top: -3px; left: 122px;" data-title="Walking Meditation" data-series="Mindful Moments" data-duration="22:15"></div>
+            <div class="episode unplayed" style="top: 12px; left: 147px;" data-title="Sleep Stories" data-series="Mindful Moments" data-duration="25:33"></div>
+            <div class="episode unplayed" style="top: 40px; left: 165px;" data-title="Gratitude Practice" data-series="Mindful Moments" data-duration="12:18"></div>
+        </div>
+
+        <!-- Constellation: History Unraveled -->
+        <div class="constellation" style="top: 450px; left: 800px;">
+            <div class="constellation-line" style="width: 130px; transform: rotate(10deg);"></div>
+            <div class="constellation-line" style="width: 95px; top: 25px; left: 130px; transform: rotate(-40deg);"></div>
+            <div class="constellation-line" style="width: 75px; top: 55px; left: 95px; transform: rotate(30deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="Ancient Civilizations" data-series="History Unraveled" data-duration="58:22"></div>
+            <div class="episode played" style="top: 7px; left: 127px;" data-title="Medieval Mysteries" data-series="History Unraveled" data-duration="61:15"></div>
+            <div class="episode played" style="top: 22px; left: 222px;" data-title="Industrial Revolution" data-series="History Unraveled" data-duration="55:48"></div>
+            <div class="episode unplayed" style="top: 52px; left: 92px;" data-title="World War Chronicles" data-series="History Unraveled" data-duration="72:33"></div>
+            <div class="episode unplayed" style="top: 75px; left: 167px;" data-title="Space Race" data-series="History Unraveled" data-duration="49:12"></div>
+        </div>
+
+        <!-- Constellation: Code & Coffee -->
+        <div class="constellation" style="top: 280px; left: 950px;">
+            <div class="constellation-line" style="width: 85px; transform: rotate(-35deg);"></div>
+            <div class="constellation-line" style="width: 65px; top: 40px; left: 80px; transform: rotate(20deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="JavaScript Fundamentals" data-series="Code & Coffee" data-duration="34:18"></div>
+            <div class="episode played" style="top: 37px; left: 77px;" data-title="React Deep Dive" data-series="Code & Coffee" data-duration="42:25"></div>
+            <div class="episode unplayed" style="top: 52px; left: 142px;" data-title="Node.js Mastery" data-series="Code & Coffee" data-duration="38:55"></div>
+        </div>
+
+        <!-- Constellation: Nature Sounds -->
+        <div class="constellation" style="top: 650px; left: 400px;">
+            <div class="constellation-line" style="width: 70px; transform: rotate(45deg);"></div>
+            <div class="constellation-line" style="width: 55px; top: 25px; left: 70px; transform: rotate(-60deg);"></div>
+            
+            <div class="episode played" style="top: -3px; left: -3px;" data-title="Forest Ambience" data-series="Nature Sounds" data-duration="60:00"></div>
+            <div class="episode played" style="top: 22px; left: 67px;" data-title="Ocean Waves" data-series="Nature Sounds" data-duration="45:30"></div>
+            <div class="episode unplayed" style="top: 47px; left: 122px;" data-title="Rainfall" data-series="Nature Sounds" data-duration="55:15"></div>
+        </div>
+
+        <!-- Episode Tooltip -->
+        <div class="episode-tooltip" id="tooltip">
+            <div class="tooltip-series"></div>
+            <div class="tooltip-title"></div>
+            <div class="tooltip-duration"></div>
+        </div>
+    </div>
+
+    <script>
+        const episodes = document.querySelectorAll('.episode');
+        const tooltip = document.getElementById('tooltip');
+        const tooltipSeries = tooltip.querySelector('.tooltip-series');
+        const tooltipTitle = tooltip.querySelector('.tooltip-title');
+        const tooltipDuration = tooltip.querySelector('.tooltip-duration');
+
+        episodes.forEach(episode => {
+            episode.addEventListener('mouseenter', (e) => {
+                const title = e.target.dataset.title;
+                const series = e.target.dataset.series;
+                const duration = e.target.dataset.duration;
+                
+                tooltipSeries.textContent = series;
+                tooltipTitle.textContent = title;
+                tooltipDuration.textContent = duration;
+                
+                tooltip.classList.add('visible');
+            });
+            
+            episode.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+            });
+            
+            episode.addEventListener('click', (e) => {
+                episodes.forEach(ep => ep.classList.remove('currently-playing'));
+                if (!e.target.classList.contains('played')) {
+                    e.target.classList.add('played');
+                }
+                e.target.classList.add('currently-playing');
+                
+                const title = e.target.dataset.title;
+                const series = e.target.dataset.series;
+                
+                document.querySelector('.track-title').textContent = title;
+                document.querySelector('.track-series').innerHTML = `${series} • Episode`;
+            });
+        });
+
+        // Animate progress bar
+        setInterval(() => {
+            const progressFill = document.querySelector('.progress-fill');
+            let currentWidth = parseInt(progressFill.style.width) || 34;
+            if (currentWidth < 100) {
+                progressFill.style.width = (currentWidth + 0.1) + '%';
+            }
+        }, 100);
+    </script>
+</body>
+</html>

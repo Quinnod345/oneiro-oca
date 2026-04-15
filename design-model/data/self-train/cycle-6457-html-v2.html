@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Decay Calculator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+        
+        :root {
+            --primary-light: #f0f4f8;
+            --primary-mid: #8fa3b0;
+            --primary-dark: #2c3e50;
+            --accent-glow: #5dade2;
+            --background-deep: #0a0f14;
+            --decay-gradient: linear-gradient(135deg, rgba(93,173,226,0.1) 0%, transparent 60%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--background-deep);
+            font-family: 'Crimson Text', serif;
+            color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .particle-system {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .decay-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--accent-glow);
+            border-radius: 50%;
+            opacity: 0;
+            animation: decay-fall 8s infinite linear;
+        }
+
+        @keyframes decay-fall {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(100vh) translateX(calc(var(--drift) * 100px));
+                opacity: 0;
+            }
+        }
+
+        .main-container {
+            width: 90%;
+            max-width: 800px;
+            padding: 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .dream-title {
+            font-size: 48px;
+            font-weight: 400;
+            text-align: center;
+            margin-bottom: 60px;
+            letter-spacing: 0.08em;
+            opacity: 0.9;
+            background: linear-gradient(to bottom, var(--primary-light), var(--primary-mid));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .calculator-frame {
+            background: var(--decay-gradient);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(143,163,176,0.2);
+            padding: 40px;
+            position: relative;
+        }
+
+        .input-group {
+            margin-bottom: 30px;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 14px;
+            color: var(--primary-mid);
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .dream-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(143,163,176,0.3);
+            color: var(--primary-light);
+            padding: 12px 0;
+            font-family: inherit;
+            font-size: 18px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .dream-input:focus {
+            border-bottom-color: var(--accent-glow);
+        }
+
+        .dream-input::placeholder {
+            color: rgba(143,163,176,0.4);
+            font-style: italic;
+        }
+
+        .calculate-button {
+            background: transparent;
+            border: 1px solid var(--primary-mid);
+            color: var(--primary-light);
+            padding: 12px 32px;
+            font-family: inherit;
+            font-size: 16px;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 40px auto 0;
+        }
+
+        .calculate-button:hover {
+            background: rgba(93,173,226,0.1);
+            border-color: var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .decay-output {
+            margin-top: 40px;
+            padding-top: 40px;
+            border-top: 1px solid rgba(143,163,176,0.2);
+            min-height: 120px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .decay-output.active {
+            opacity: 1;
+        }
+
+        .decay-value {
+            font-size: 72px;
+            font-weight: 400;
+            color: var(--accent-glow);
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .decay-interpretation {
+            font-size: 18px;
+            color: var(--primary-mid);
+            font-style: italic;
+            line-height: 1.6;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .formula-reference {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 12px;
+            color: var(--primary-mid);
+            opacity: 0.4;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 30px;
+            }
+            
+            .dream-title {
+                font-size: 36px;
+            }
+            
+            .calculator-frame {
+                padding: 30px 20px;
+            }
+            
+            .decay-value {
+                font-size: 54px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="particle-system" id="particleSystem"></div>
+    
+    <div class="main-container">
+        <h1 class="dream-title">Dream Decay Calculator</h1>
+        
+        <div class="calculator-frame">
+            <div class="input-group">
+                <label class="input-label">Dream Content</label>
+                <input type="text" class="dream-input" id="dreamContent" placeholder="Describe your dream..." autocomplete="off">
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">Hours Since Dream</label>
+                <input type="number" class="dream-input" id="hoursSince" placeholder="0" min="0" max="168">
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">Emotional Intensity (1-10)</label>
+                <input type="number" class="dream-input" id="intensity" placeholder="5" min="1" max="10">
+            </div>
+            
+            <button class="calculate-button" id="calculateBtn">Calculate Decay</button>
+            
+            <div class="decay-output" id="output">
+                <div class="decay-value" id="decayValue">0%</div>
+                <p class="decay-interpretation" id="interpretation"></p>
+            </div>
+            
+            <div class="formula-reference">λ = e^(-t/τ) × (1 + 0.1i)</div>
+        </div>
+    </div>
+    
+    <script>
+        // Particle system initialization
+        function createParticles() {
+            const container = document.getElementById('particleSystem');
+            const particleCount = 30;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'decay-particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 8 + 's';
+                particle.style.setProperty('--drift', (Math.random() - 0.5) * 2);
+                container.appendChild(particle);
+            }
+        }
+        
+        // Calculate decay function
+        function calculateDecay() {
+            const hours = parseFloat(document.getElementById('hoursSince').value) || 0;
+            const intensity = parseFloat(document.getElementById('intensity').value) || 5;
+            
+            // Decay formula: retention = e^(-hours/24) * (1 + 0.1 * intensity)
+            const tau = 24; // decay constant in hours
+            const baseRetention = Math.exp(-hours / tau);
+            const intensityFactor = 1 + (0.1 * (intensity - 5));
+            const retention = Math.min(100, baseRetention * intensityFactor * 100);
+            const decay = 100 - retention;
+            
+            // Update output
+            const output = document.getElementById('output');
+            const decayValue = document.getElementById('decayValue');
+            const interpretation = document.getElementById('interpretation');
+            
+            output.classList.add('active');
+            decayValue.textContent = Math.round(decay) + '%';
+            
+            // Generate interpretation
+            let message = '';
+            if (decay < 30) {
+                message = 'Your dream remains vivid, crystallized in memory\'s amber.';
+            } else if (decay < 60) {
+                message = 'The dream fades like morning mist, leaving whispers of its essence.';
+            } else if (decay < 85) {
+                message = 'Only fragments remain, scattered like stars in the void of forgetting.';
+            } else {
+                message = 'The dream has nearly dissolved into the unconscious depths.';
+            }
+            
+            interpretation.textContent = message;
+        }
+        
+        // Event listeners
+        document.getElementById('calculateBtn').addEventListener('click', calculateDecay);
+        
+        // Enter key support
+        document.querySelectorAll('.dream-input').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') calculateDecay();
+            });
+        });
+        
+        // Initialize
+        createParticles();
+    </script>
+</body>
+</html>

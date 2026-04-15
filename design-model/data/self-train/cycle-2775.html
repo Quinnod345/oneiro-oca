@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Organism Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0a0b0d;
+            --bg-secondary: #141618;
+            --bg-tertiary: #1e2023;
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --text-tertiary: #6c757d;
+            --accent-healthy: #20c997;
+            --accent-warning: #ffc107;
+            --accent-critical: #dc3545;
+            --accent-info: #17a2b8;
+            --border-subtle: #343a40;
+            --glow-healthy: rgba(32, 201, 151, 0.3);
+            --glow-warning: rgba(255, 193, 7, 0.3);
+            --glow-critical: rgba(220, 53, 69, 0.3);
+            --membrane-healthy: rgba(32, 201, 151, 0.1);
+            --membrane-warning: rgba(255, 193, 7, 0.1);
+            --membrane-critical: rgba(220, 53, 69, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 80px 1fr 60px;
+            gap: 2px;
+            background: var(--border-subtle);
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .system-time {
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .organism-cell {
+            background: var(--bg-secondary);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .organism-header {
+            padding: 24px 32px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-tertiary);
+        }
+
+        .organism-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .organism-stats {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        }
+
+        .organism-body {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-circle at center, var(--bg-secondary) 0%, var(--bg-primary) 100%;
+        }
+
+        .organism {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .membrane {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid;
+            opacity: 0.6;
+        }
+
+        .membrane-outer {
+            border-color: var(--accent-healthy);
+            background: var(--membrane-healthy);
+            animation: breathe-outer 3s ease-in-out infinite;
+        }
+
+        .membrane-middle {
+            width: 85%;
+            height: 85%;
+            border-color: var(--accent-healthy);
+            background: var(--membrane-healthy);
+            animation: breathe-middle 3s ease-in-out infinite 0.5s;
+            opacity: 0.4;
+        }
+
+        .membrane-inner {
+            width: 70%;
+            height: 70%;
+            border-color: var(--accent-healthy);
+            background: var(--membrane-healthy);
+            animation: breathe-inner 3s ease-in-out infinite 1s;
+            opacity: 0.3;
+        }
+
+        .nucleus {
+            width: 120px;
+            height: 120px;
+            background: var(--accent-healthy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
+            animation: nucleus-pulse 3s ease-in-out infinite;
+            box-shadow: 0 0 40px var(--glow-healthy);
+        }
+
+        .nucleus-text {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--bg-primary);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        }
+
+        .organelles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .organelle {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-healthy);
+            border-radius: 50%;
+            opacity: 0.7;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .organelle:nth-child(1) { top: 20%; left: 15%; animation-delay: 0s; }
+        .organelle:nth-child(2) { top: 30%; right: 20%; animation-delay: 0.8s; }
+        .organelle:nth-child(3) { bottom: 25%; left: 25%; animation-delay: 1.6s; }
+        .organelle:nth-child(4) { bottom: 35%; right: 15%; animation-delay: 2.4s; }
+        .organelle:nth-child(5) { top: 50%; left: 8%; animation-delay: 3.2s; }
+        .organelle:nth-child(6) { top: 60%; right: 12%; animation-delay: 4s; }
+
+        .status-bar {
+            grid-column: 1 / -1;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 24px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-healthy);
+            animation: status-blink 2s ease-in-out infinite;
+        }
+
+        /* CPU Stressed State */
+        .cpu-stressed .membrane-outer,
+        .cpu-stressed .membrane-middle,
+        .cpu-stressed .membrane-inner {
+            border-color: var(--accent-critical);
+            background: var(--membrane-critical);
+        }
+
+        .cpu-stressed .membrane-outer { animation: stress-pulse-outer 0.8s ease-in-out infinite; }
+        .cpu-stressed .membrane-middle { animation: stress-pulse-middle 0.8s ease-in-out infinite 0.1s; }
+        .cpu-stressed .membrane-inner { animation: stress-pulse-inner 0.8s ease-in-out infinite 0.2s; }
+
+        .cpu-stressed .nucleus {
+            background: var(--accent-critical);
+            box-shadow: 0 0 60px var(--glow-critical);
+            animation: nucleus-stress 0.8s ease-in-out infinite;
+        }
+
+        .cpu-stressed .organelle {
+            background: var(--accent-critical);
+            animation: stress-float 0.6s ease-in-out infinite;
+        }
+
+        /* Memory Warning State */
+        .memory-warning .membrane-outer,
+        .memory-warning .membrane-middle,
+        .memory-warning .membrane-inner {
+            border-color: var(--accent-warning);
+            background: var(--membrane-warning);
+        }
+
+        .memory-warning .membrane-outer { animation: warning-breathe-outer 1.5s ease-in-out infinite; }
+        .memory-warning .membrane-middle { animation: warning-breathe-middle 1.5s ease-in-out infinite 0.2s; }
+        .memory-warning .membrane-inner { animation: warning-breathe-inner 1.5s ease-in-out infinite 0.4s; }
+
+        .memory-warning .nucleus {
+            background: var(--accent-warning);
+            box-shadow: 0 0 50px var(--glow-warning);
+            animation: nucleus-warning 1.5s ease-in-out infinite;
+        }
+
+        .memory-warning .organelle {
+            background: var(--accent-warning);
+            animation: warning-float 2s ease-in-out infinite;
+        }
+
+        /* Animations */
+        @keyframes breathe-outer {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        @keyframes breathe-middle {
+            0%, 100% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.08); opacity: 0.6; }
+        }
+
+        @keyframes breathe-inner {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.12); opacity: 0.5; }
+        }
+
+        @keyframes nucleus-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        @keyframes stress-pulse-outer {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        @keyframes stress-pulse-middle {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.9; }
+        }
+
+        @keyframes stress-pulse-inner {
+            0%, 100% { transform: scale(1); opacity: 0.4; }
+            50% { transform: scale(1.25); opacity: 0.7; }
+        }
+
+        @keyframes nucleus-stress {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        @keyframes stress-float {
+            0%, 100% { transform: translateY(0px) translateX(0px); }
+            25% { transform: translateY(-4px) translateX(2px); }
+            75% { transform: translateY(4px) translateX(-2px); }
+        }
+
+        @keyframes warning-breathe-outer {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.08); opacity: 0.9; }
+        }
+
+        @keyframes warning-breathe-middle {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+
+        @keyframes warning-breathe-inner {
+            0%, 100% { transform: scale(1); opacity: 0.35; }
+            50% { transform: scale(1.15); opacity: 0.6; }
+        }
+
+        @keyframes nucleus-warning {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        @keyframes warning-float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+
+        @keyframes status-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-container">
+        <header class="header">
+            <h1 class="title">System Organism Monitor</h1>
+            <div class="system-time" id="systemTime">15:42:33</div>
+        </header>
+
+        <div class="organism-cell">
+            <div class="organism-header">
+                <h2 class="organism-title">CPU Organism</h2>
+                <div class="organism-stats">
+                    <span>Usage: <span id="cpuUsage">87%</span></span>
+                    <span>Temp: <span id="cpuTemp">78°C</span></span>
+                    <span>Threads: <span id="cpuThreads">16</span></span>
+                </div>
+            </div>
+            <div class="organism-body">
+                <div class="organism cpu-stressed" id="cpuOrganism">
+                    <div class="membrane membrane-outer"></div>
+                    <div class="membrane membrane-middle"></div>
+                    <div class="membrane membrane-inner"></div>
+                    <div class="nucleus">
+                        <div class="nucleus-text" id="cpuPercent">87</div>
+                    </div>
+                    <div class="organelles">
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="organism-cell">
+            <div class="organism-header">
+                <h2 class="organism-title">Memory Organism</h2>
+                <div class="organism-stats">
+                    <span>Usage: <span id="memUsage">64%</span></span>
+                    <span>Available: <span id="memAvailable">5.8GB</span></span>
+                    <span>Cached: <span id="memCached">2.1GB</span></span>
+                </div>
+            </div>
+            <div class="organism-body">
+                <div class="organism memory-warning" id="memoryOrganism">
+                    <div class="membrane membrane-outer"></div>
+                    <div class="membrane membrane-middle"></div>
+                    <div class="membrane membrane-inner"></div>
+                    <div class="nucleus">
+                        <div class="nucleus-text" id="memPercent">64</div>
+                    </div>
+                    <div class="organelles">
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                        <div class="organelle"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicators">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>System Health: Critical</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Network: Active</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Disk I/O: Normal</span>
+                </div>
+            </div>
+            <div>Uptime: 2d 14h 23m | Load: 3.47, 2.89, 2.31</div>
+        </div>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('systemTime').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+
+        function simulateSystemChanges() {
+            const cpuUsage = Math.floor(Math.random() * 40) + 60;
+            const memUsage = Math.floor(Math.random() * 30) + 50;
+            
+            document.getElementById('cpuUsage').textContent = cpuUsage + '%';
+            document.getElementById('cpuPercent').textContent = cpuUsage;
+            document.getElementById('memUsage').textContent = memUsage + '%';
+            document.getElementById('memPercent').textContent = memUsage;
+            
+            const cpuOrganism = document.getElementById('cpuOrganism');
+            const memoryOrganism = document.getElementById('memoryOrganism');
+            
+            cpuOrganism.className = 'organism';
+            memoryOrganism.className = 'organism';
+            
+            if (cpuUsage > 85) {
+                cpuOrganism.classList.add('cpu-stressed');
+            } else if (cpuUsage > 70) {
+                cpuOrganism.classList.add('memory-warning');
+            }
+            
+            if (memUsage > 80) {
+                memoryOrganism.classList.add('cpu-stressed');
+            } else if (memUsage > 60) {
+                memoryOrganism.classList.add('memory-warning');
+            }
+        }
+
+        setInterval(updateTime, 1000);
+        setInterval(simulateSystemChanges, 3000);
+        
+        updateTime();
+        simulateSystemChanges();
+    </script>
+</body>
+</html>

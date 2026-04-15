@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Decay Laboratory</title>
+    <style>
+        :root {
+            --glass-clear: rgba(255, 255, 255, 0.03);
+            --glass-frost: rgba(255, 255, 255, 0.08);
+            --liquid-acid: #d4f1d4;
+            --liquid-deep: #89c889;
+            --bubble-light: rgba(255, 255, 255, 0.4);
+            --label-ink: #2a2a2a;
+            --measurement: #666;
+            --steel-cold: #e8e8e8;
+            --steel-warm: #f4f4f4;
+            --memory-gold: #d4af37;
+            --memory-rust: #8b4513;
+            --memory-fade: #a9a9a9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .lab-bench {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 320px;
+            background: linear-gradient(180deg, var(--steel-warm) 0%, var(--steel-cold) 100%);
+            border-top: 1px solid #ddd;
+        }
+
+        .title-plate {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            background: white;
+            padding: 20px 30px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .title-plate h1 {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--label-ink);
+            letter-spacing: 0.02em;
+        }
+
+        .title-plate .subtitle {
+            font-size: 13px;
+            color: var(--measurement);
+            margin-top: 8px;
+            letter-spacing: 0.01em;
+        }
+
+        .beaker-container {
+            position: absolute;
+            bottom: 320px;
+            width: 100%;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            gap: 80px;
+            padding: 0 100px;
+        }
+
+        .beaker {
+            width: 280px;
+            height: 400px;
+            position: relative;
+        }
+
+        .glass-vessel {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 380px;
+            background: var(--glass-clear);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0 0 20px 20px;
+            overflow: hidden;
+        }
+
+        .glass-vessel::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            height: 40px;
+            background: var(--glass-frost);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .measurement-marks {
+            position: absolute;
+            right: 10px;
+            top: 40px;
+            height: 320px;
+            width: 40px;
+        }
+
+        .mark {
+            position: absolute;
+            right: 0;
+            width: 15px;
+            height: 1px;
+            background: var(--measurement);
+            opacity: 0.5;
+        }
+
+        .mark.major {
+            width: 25px;
+            opacity: 0.7;
+        }
+
+        .mark-label {
+            position: absolute;
+            right: 30px;
+            font-size: 10px;
+            color: var(--measurement);
+            transform: translateY(-50%);
+        }
+
+        .liquid {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(180deg, var(--liquid-acid) 0%, var(--liquid-deep) 100%);
+            opacity: 0.7;
+            animation: liquidMove 8s ease-in-out infinite;
+        }
+
+        @keyframes liquidMove {
+            0%, 100% { transform: translateY(0) scaleY(1); }
+            50% { transform: translateY(-5px) scaleY(0.98); }
+        }
+
+        .memory-object {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+        }
+
+        .wedding-ring {
+            width: 60px;
+            height: 60px;
+            border: 8px solid var(--memory-gold);
+            border-radius: 50%;
+            position: relative;
+            animation: dissolve1 20s linear infinite;
+        }
+
+        @keyframes dissolve1 {
+            0% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0.3; transform: translateX(-50%) scale(0.8); }
+        }
+
+        .toy-block {
+            width: 50px;
+            height: 50px;
+            background: #ff6b6b;
+            position: relative;
+            border-radius: 4px;
+            animation: dissolve2 15s linear infinite;
+        }
+
+        .toy-block::before {
+            content: 'A';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 28px;
+            color: white;
+            font-weight: bold;
+        }
+
+        @keyframes dissolve2 {
+            0% { opacity: 1; transform: translateX(-50%) rotate(0deg); }
+            100% { opacity: 0.5; transform: translateX(-50%) rotate(15deg) scale(0.9); }
+        }
+
+        .car-key {
+            width: 30px;
+            height: 70px;
+            background: var(--memory-rust);
+            border-radius: 15px 15px 5px 5px;
+            position: relative;
+            animation: dissolve3 25s linear infinite;
+        }
+
+        .car-key::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 15px;
+            height: 15px;
+            background: var(--memory-rust);
+            clip-path: polygon(0 0, 100% 0, 100% 50%, 80% 50%, 80% 100%, 20% 100%, 20% 50%, 0 50%);
+        }
+
+        @keyframes dissolve3 {
+            0% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0.4; transform: translateX(-50%) scale(0.85); }
+        }
+
+        .bubble {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--bubble-light);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: rise 4s ease-in-out infinite;
+        }
+
+        @keyframes rise {
+            0% {
+                transform: translateY(0) scale(0.8);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-200px) scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        .label {
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            font-size: 12px;
+            color: var(--label-ink);
+            white-space: nowrap;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .decay-rate {
+            position: absolute;
+            bottom: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: var(--measurement);
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 40px;
+            right: 60px;
+            width: 320px;
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 30px;
+        }
+
+        .control-panel h2 {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--label-ink);
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--measurement);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            color: var(--label-ink);
+            background: #fafafa;
+            transition: all 0.2s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--liquid-deep);
+            background: white;
+        }
+
+        .recall-slider {
+            margin-top: 30px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 4px;
+            background: #eee;
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .slider-fill {
+            height: 100%;
+            background: var(--liquid-deep);
+            width: 60%;
+            border-radius: 2px;
+        }
+
+        .slider-handle {
+            position: absolute;
+            top: 50%;
+            left: 60%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            background: white;
+            border: 2px solid var(--liquid-deep);
+            border-radius: 50%;
+            cursor: grab;
+        }
+
+        .timeline {
+            position: absolute;
+            bottom: 40px;
+            left: 60px;
+            right: 60px;
+            height: 60px;
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+        }
+
+        .timeline-marker {
+            position: relative;
+            flex: 1;
+            height: 2px;
+            background: #eee;
+        }
+
+        .timeline-point {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--liquid-deep);
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .timeline-label {
+            position: absolute;
+            top: -20px;
+            font-size: 10px;
+            color: var(--measurement);
+            white-space: nowrap;
+            transform: translateX(-50%);
+        }
+
+        #beaker1 .liquid { height: 75%; }
+        #beaker2 .liquid { height: 60%; }
+        #beaker3 .liquid { height: 85%; }
+
+        #beaker1 .bubble { left: 30%; animation-delay: 0s; }
+        #beaker1 .bubble:nth-child(2) { left: 60%; animation-delay: 1.5s; }
+        #beaker2 .bubble { left: 45%; animation-delay: 0.5s; }
+        #beaker2 .bubble:nth-child(2) { left: 70%; animation-delay: 2s; }
+        #beaker3 .bubble { left: 25%; animation-delay: 1s; }
+        #beaker3 .bubble:nth-child(2) { left: 55%; animation-delay: 2.5s; }
+
+        .status-indicator {
+            position: absolute;
+            top: 140px;
+            left: 60px;
+            font-size: 12px;
+            color: var(--measurement);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-light {
+            width: 8px;
+            height: 8px;
+            background: var(--liquid-deep);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="title-plate">
+        <h1>Memory Decay Laboratory</h1>
+        <div class="subtitle">Biographical Preservation Analysis System</div>
+    </div>
+
+    <div class="status-indicator">
+        <div class="status-light"></div>
+        <span>Active Monitoring</span>
+    </div>
+
+    <div class="beaker-container">
+        <div class="beaker" id="beaker1">
+            <div class="glass-vessel">
+                <div class="measurement-marks">
+                    <div class="mark major" style="top: 0">
+                        <span class="mark-label">100%</span>
+                    </div>
+                    <div class="mark" style="top: 64px"></div>
+                    <div class="mark major" style="top: 128px">
+                        <span class="mark-label">50%</span>
+                    </div>
+                    <div class="mark" style="top: 192px"></div>
+                    <div class="mark major" style="top: 256px">
+                        <span class="mark-label">0%</span>
+                    </div>
+                </div>
+                <div class="liquid">
+                    <div class="bubble"></div>
+                    <div class="bubble"></div>
+                </div>
+                <div class="memory-object wedding-ring"></div>
+            </div>
+            <div class="label">Wedding Day - June 1967</div>
+            <div class="decay-rate">Decay: 2.3% weekly</div>
+        </div>
+
+        <div class="beaker" id="beaker2">
+            <div class="glass-vessel">
+                <div class="measurement-marks">
+                    <div class="mark major" style="top: 0">
+                        <span class="mark-label">100%</span>
+                    </div>
+                    <div class="mark" style="top: 64px"></div>
+                    <div class="mark major" style="top: 128px">
+                        <span class="mark-label">50%</span>
+                    </div>
+                    <div class="mark" style="top: 192px"></div>
+                    <div class="mark major" style="top: 256px">
+                        <span class="mark-label">0%</span>
+                    </div>
+                </div>
+                <div class="liquid">
+                    <div class="bubble"></div>
+                    <div class="bubble"></div>
+                </div>
+                <div class="memory-object toy-block"></div>
+            </div>
+            <div class="label">First Toy - Age 3</div>
+            <div class="decay-rate">Decay: 4.7% weekly</div>
+        </div>
+
+        <div class="beaker" id="beaker3">
+            <div class="glass-vessel">
+                <div class="measurement-marks">
+                    <div class="mark major" style="top: 0">
+                        <span class="mark-label">100%</span>
+                    </div>
+                    <div class="mark" style="top: 64px"></div>
+                    <div class="mark major" style="top: 128px">
+                        <span class="mark-label">50%</span>
+                    </div>
+                    <div class="mark" style="top: 192px"></div>
+                    <div class="mark major" style="top: 256px">
+                        <span class="mark-label">0%</span>
+                    </div>
+                </div>
+                <div class="liquid">
+                    <div class="bubble"></div>
+                    <div class="bubble"></div>
+                </div>
+                <div class="memory-object car-key"></div>
+            </div>
+            <div class="label">First Car - 1952 Buick</div>
+            <div class="decay-rate">Decay: 1.1% weekly</div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <h2>Add Memory Sample</h2>
+        <div class="input-group">
+            <label>Memory Description</label>
+            <input type="text" placeholder="e.g., First day of school">
+        </div>
+        <div class="input-group">
+            <label>Memory Type</label>
+            <input type="text" placeholder="e.g., Education, Family, Work">
+        </div>
+        <div class="recall-slider">
+            <label>Last Recall Strength</label>
+            <div class="slider">
+                <div class="slider-fill"></div>
+                <div class="slider-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="timeline">
+        <div class="timeline-marker">
+            <div class="timeline-point" style="left: 10%">
+                <span class="timeline-label">1945</span>
+            </div>
+            <div class="timeline-point" style="left: 30%">
+                <span class="timeline-label">1967</span>
+            </div>
+            <div class="timeline-point" style="left: 70%">
+                <span class="timeline-label">1998</span>
+            </div>
+            <div class="timeline-point" style="left: 95%">
+                <span class="timeline-label">2023</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="lab-bench"></div>
+</body>
+</html>

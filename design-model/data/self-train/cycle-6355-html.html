@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Temporal Drift Meditation</title>
+    <style>
+        :root {
+            --time-void: #0a0b0f;
+            --chrono-mist: #1a1d24;
+            --stasis-pearl: #e8e2d5;
+            --flux-copper: #c97d5d;
+            --drift-sage: #7a8a7f;
+            --resonance-gold: #d4a574;
+            --chaos-crimson: #a54242;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--time-void);
+            font-family: Garamond, serif;
+            position: relative;
+            user-select: none;
+        }
+
+        #temporal-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 42% 58%, var(--chrono-mist) 0%, var(--time-void) 80%);
+        }
+
+        #clock-face {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 480px;
+            height: 480px;
+            transform: translate(-50%, -50%);
+            transition: all 2s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .temporal-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid;
+            border-radius: 50%;
+            transition: all 1.5s ease-out;
+        }
+
+        #outer-ring {
+            border-color: rgba(232, 226, 213, 0.2);
+            transform: scale(1);
+        }
+
+        #middle-ring {
+            width: 80%;
+            height: 80%;
+            left: 10%;
+            top: 10%;
+            border-color: rgba(122, 138, 127, 0.3);
+        }
+
+        #inner-ring {
+            width: 60%;
+            height: 60%;
+            left: 20%;
+            top: 20%;
+            border-color: rgba(201, 125, 93, 0.2);
+        }
+
+        .time-marker {
+            position: absolute;
+            font-size: 24px;
+            color: var(--stasis-pearl);
+            font-weight: 300;
+            letter-spacing: 2px;
+            transform-origin: center;
+            transition: all 0.8s ease-out;
+            opacity: 0.7;
+        }
+
+        .time-marker.morphed {
+            font-family: monospace;
+            letter-spacing: -2px;
+            filter: blur(1px);
+        }
+
+        .waveform {
+            position: absolute;
+            width: 60px;
+            height: 40px;
+            opacity: 0;
+            transition: opacity 0.6s ease-out;
+        }
+
+        .waveform-bar {
+            position: absolute;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to top, var(--resonance-gold), transparent);
+            transform-origin: bottom;
+        }
+
+        #drift-indicator {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 120px;
+            height: 120px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .drift-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--stasis-pearl);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        #sound-layers {
+            position: absolute;
+            right: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 240px;
+        }
+
+        .sound-layer {
+            margin-bottom: 32px;
+            opacity: 0.8;
+            transition: all 0.6s ease-out;
+        }
+
+        .layer-name {
+            font-size: 14px;
+            color: var(--drift-sage);
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .layer-visualization {
+            height: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wave-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: var(--stasis-pearl);
+            opacity: 0.3;
+            top: 50%;
+            transform-origin: left center;
+        }
+
+        #resonance-meter {
+            position: absolute;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 180px;
+            height: 300px;
+        }
+
+        .resonance-curve {
+            stroke: var(--resonance-gold);
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.6;
+            stroke-linecap: round;
+        }
+
+        #interaction-zone {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 360px;
+            height: 360px;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            z-index: 10;
+        }
+
+        #interaction-zone:active {
+            cursor: grabbing;
+        }
+
+        .temporal-distortion {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease-out;
+        }
+
+        .distortion-wave {
+            position: absolute;
+            border: 1px solid var(--flux-copper);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+
+        #balance-indicator {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            color: var(--drift-sage);
+            letter-spacing: 3px;
+            opacity: 0.6;
+        }
+
+        .morphing {
+            animation: morph 2s ease-in-out forwards;
+        }
+
+        @keyframes morph {
+            0% { border-radius: 50%; }
+            100% { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+        }
+
+        .accelerating {
+            animation: accelerate 0.5s linear infinite;
+        }
+
+        @keyframes accelerate {
+            0% { transform: scaleX(1); }
+            50% { transform: scaleX(1.5); }
+            100% { transform: scaleX(1); }
+        }
+
+        .decelerating {
+            animation: decelerate 3s ease-out infinite;
+        }
+
+        @keyframes decelerate {
+            0% { transform: scaleX(1); opacity: 0.3; }
+            50% { transform: scaleX(0.5); opacity: 0.6; }
+            100% { transform: scaleX(1); opacity: 0.3; }
+        }
+
+        #instructions {
+            position: absolute;
+            top: 60px;
+            left: 60px;
+            max-width: 320px;
+            font-size: 14px;
+            color: var(--drift-sage);
+            line-height: 1.8;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="temporal-field"></div>
+    
+    <div id="clock-face">
+        <div class="temporal-ring" id="outer-ring"></div>
+        <div class="temporal-ring" id="middle-ring"></div>
+        <div class="temporal-ring" id="inner-ring"></div>
+        
+        <div class="time-marker" style="left: 50%; top: 5%; transform: translateX(-50%);">XII</div>
+        <div class="time-marker" style="right: 15%; top: 15%;">I</div>
+        <div class="time-marker" style="right: 5%; top: 50%; transform: translateY(-50%);">III</div>
+        <div class="time-marker" style="right: 15%; bottom: 15%;">V</div>
+        <div class="time-marker" style="left: 50%; bottom: 5%; transform: translateX(-50%);">VI</div>
+        <div class="time-marker" style="left: 15%; bottom: 15%;">VII</div>
+        <div class="time-marker" style="left: 5%; top: 50%; transform: translateY(-50%);">IX</div>
+        <div class="time-marker" style="left: 15%; top: 15%;">XI</div>
+        
+        <div id="drift-indicator"></div>
+    </div>
+    
+    <div id="sound-layers">
+        <div class="sound-layer">
+            <div class="layer-name">RAIN</div>
+            <div class="layer-visualization">
+                <div class="wave-line"></div>
+                <div class="wave-line" style="top: 40%;"></div>
+                <div class="wave-line" style="top: 60%;"></div>
+            </div>
+        </div>
+        <div class="sound-layer">
+            <div class="layer-name">WIND</div>
+            <div class="layer-visualization">
+                <div class="wave-line"></div>
+                <div class="wave-line" style="top: 45%;"></div>
+                <div class="wave-line" style="top: 55%;"></div>
+            </div>
+        </div>
+        <div class="sound-layer">
+            <div class="layer-name">RESONANCE</div>
+            <div class="layer-visualization">
+                <div class="wave-line"></div>
+            </div>
+        </div>
+    </div>
+    
+    <svg id="resonance-meter">
+        <path class="resonance-curve" d="M 20 150 Q 90 100 90 150 T 160 150"></path>
+        <path class="resonance-curve" d="M 20 150 Q 90 200 90 150 T 160 150" style="opacity: 0.3;"></path>
+    </svg>
+    
+    <div id="interaction-zone"></div>
+    
+    <div class="temporal-distortion">
+        <div class="distortion-wave" style="width: 100px; height: 100px; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>
+        <div class="distortion-wave" style="width: 200px; height: 200px; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>
+        <div class="distortion-wave" style="width: 300px; height: 300px; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>
+    </div>
+    
+    <div id="balance-indicator">SEEKING EQUILIBRIUM</div>
+    
+    <div id="instructions">
+        Drag clockwise to accelerate time's flow.<br>
+        Counter-clockwise to approach stillness.<br>
+        Find the resonance between chaos and stasis.
+    </div>
+    
+    <script>
+        const interactionZone = document.getElementById('interaction-zone');
+        const clockFace = document.getElementById('clock-face');
+        const timeMarkers = document.querySelectorAll('.time-marker');
+        const waveLines = document.querySelectorAll('.wave-line');
+        const rings = document.querySelectorAll('.temporal-ring');
+        const balanceIndicator = document.getElementById('balance-indicator');
+        const distortion = document.querySelector('.temporal-distortion');
+        const resonanceCurves = document.querySelectorAll('.resonance-curve');
+        
+        let isDragging = false;
+        let lastAngle = 0;
+        let totalRotation = 0;
+        let balance = 0;
+        let morphProgress = 0;
+        
+        interactionZone.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+        
+        function startDrag(e) {
+            isDragging = true;
+            const rect = interactionZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            lastAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            
+            const rect = interactionZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            
+            let deltaAngle = currentAngle - lastAngle;
+            if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+            if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+            
+            totalRotation += deltaAngle;
+            lastAngle = currentAngle;
+            
+            // Update temporal effects
+            updateTemporalState(deltaAngle);
+        }
+        
+        function endDrag() {
+            isDragging = false;
+        }
+        
+        function updateTemporalState(delta) {
+            const speed = Math.abs(delta) * 50;
+            const direction = delta > 0 ? 1 : -1;
+            
+            // Update balance
+            balance += delta * 10;
+            balance = Math.max(-100, Math.min(100, balance));
+            
+            // Morph clock based on balance
+            morphProgress = Math.abs(balance) / 100;
+            
+            // Update visual elements
+            if (Math.abs(balance) > 80) {
+                clockFace.classList.add('morphing');
+                rings.forEach((ring, i) => {
+                    ring.style.borderRadius = `${50 - morphProgress * 20}%`;
+                    ring.style.transform = `scale(${1 + morphProgress * 0.1 * (i + 1)})`;
+                });
+            }
+            
+            // Animate sound layers
+            waveLines.forEach((line, i) => {
+                if (direction > 0) {
+                    line.classList.add('accelerating');
+                    line.style.opacity = Math.min(1, 0.3 + speed / 10);
+                } else {
+                    line.classList.add('decelerating');
+                    line.style.opacity = Math.max(0.1, 0.3 - speed / 20);
+                }
+            });
+            
+            // Show distortion effect
+            distortion.style.opacity = Math.min(0.6, speed / 5);
+            
+            // Update balance indicator
+            if (Math.abs(balance) < 10) {
+                balanceIndicator.textContent = 'HARMONIC RESONANCE';
+                balanceIndicator.style.color = 'var(--resonance-gold)';
+            } else if (balance > 50) {
+                balanceIndicator.textContent = 'TEMPORAL CHAOS';
+                balanceIndicator.style.color = 'var(--chaos-crimson)';
+            } else if (balance < -50) {
+                balanceIndicator.textContent = 'APPROACHING STASIS';
+                balanceIndicator.style.color = 'var(--drift-sage)';
+            } else {
+                balanceIndicator.textContent = 'SEEKING EQUILIBRIUM';
+                balanceIndicator.style.color = 'var(--drift-sage)';
+            }
+            
+            // Morph time markers to waveforms
+            timeMarkers.forEach((marker, i) => {
+                if (morphProgress > 0.5) {
+                    marker.classList.add('morphed');
+                    marker.style.transform += ` scaleY(${1 + Math.sin(Date.now() / 1000 + i) * morphProgress})`;
+                }
+            });
+            
+            // Decay balance towards zero
+            setTimeout(() => {
+                balance *= 0.95;
+            }, 100);
+        }
+        
+        // Create drift particles
+        for (let i = 0; i < 12; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'drift-particle';
+            const angle = (i / 12) * Math.PI * 2;
+            const radius = 40 + Math.random() * 20;
+            particle.style.left = `${50 + Math.cos(angle) * radius}px`;
+            particle.style.top = `${50 + Math.sin(angle) * radius}px`;
+            document.getElementById('drift-indicator').appendChild(particle);
+        }
+        
+        // Animate drift particles
+        setInterval(() => {
+            const particles = document.querySelectorAll('.drift-particle');
+            particles.forEach((particle, i) => {
+                const angle = (Date.now() / 5000 + i / particles.length) * Math.PI * 2;
+                const radius = 40 + Math.sin(Date.now() / 2000 + i) * 20;
+                particle.style.left = `${60 + Math.cos(angle) * radius}px`;
+                particle.style.top = `${60 + Math.sin(angle) * radius}px`;
+                particle.style.opacity = 0.3 + Math.sin(Date.now() / 1000 + i) * 0.3;
+            });
+        }, 50);
+    </script>
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta viewport="width=device-width, initial-scale=1.0">
+    <title>Dimensional Notes</title>
+    <style>
+        :root {
+            --bg-space: #0a0a0f;
+            --bg-near: #131318;
+            --note-fresh: #f8f9fa;
+            --note-old: #6c757d;
+            --note-ancient: #343a40;
+            --thread-active: #4dabf7;
+            --thread-dormant: #495057;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --text-faded: #adb5bd;
+            --accent-glow: #74c0fc;
+            --shadow-near: rgba(116, 192, 252, 0.4);
+            --shadow-far: rgba(73, 80, 87, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            background: radial-gradient(ellipse at center, var(--bg-near) 0%, var(--bg-space) 70%);
+            overflow: hidden;
+            position: relative;
+            perspective: 2000px;
+            perspective-origin: 50% 40%;
+        }
+
+        .space-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: spaceRotate 240s infinite linear;
+        }
+
+        @keyframes spaceRotate {
+            from { transform: rotateY(0deg) rotateX(-5deg); }
+            to { transform: rotateY(360deg) rotateX(-5deg); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--note-fresh);
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 8px 32px var(--shadow-near);
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            font-size: 14px;
+            line-height: 1.4;
+            max-width: 280px;
+            min-height: 120px;
+        }
+
+        .note:hover {
+            transform: translateZ(50px) scale(1.05);
+            box-shadow: 0 12px 48px var(--accent-glow);
+        }
+
+        .note.recent {
+            transform: translateZ(200px);
+            font-size: 15px;
+            color: var(--text-primary);
+            animation: pulseGlow 4s infinite ease-in-out;
+        }
+
+        .note.medium {
+            transform: translateZ(-100px) scale(0.85);
+            background: color-mix(in srgb, var(--note-fresh) 70%, var(--note-old) 30%);
+            color: var(--text-secondary);
+            box-shadow: 0 6px 24px var(--shadow-far);
+        }
+
+        .note.old {
+            transform: translateZ(-300px) scale(0.65);
+            background: var(--note-old);
+            color: var(--text-faded);
+            opacity: 0.7;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .note.ancient {
+            transform: translateZ(-500px) scale(0.45);
+            background: var(--note-ancient);
+            color: var(--text-faded);
+            opacity: 0.4;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 8px 32px var(--shadow-near); }
+            50% { box-shadow: 0 12px 48px var(--accent-glow); }
+        }
+
+        .note-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .note-content {
+            opacity: 0.8;
+        }
+
+        .note-timestamp {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            font-size: 11px;
+            opacity: 0.5;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, var(--thread-active) 0%, transparent 100%);
+            transform-origin: left center;
+            transform-style: preserve-3d;
+            opacity: 0.6;
+            animation: threadPulse 6s infinite ease-in-out;
+        }
+
+        .connection-thread.dormant {
+            background: linear-gradient(90deg, var(--thread-dormant) 0%, transparent 100%);
+            opacity: 0.3;
+            height: 1px;
+        }
+
+        @keyframes threadPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .ui-overlay {
+            position: fixed;
+            top: 32px;
+            left: 32px;
+            z-index: 1000;
+            background: rgba(19, 19, 24, 0.8);
+            backdrop-filter: blur(16px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px;
+            width: 320px;
+        }
+
+        .new-note-input {
+            width: 100%;
+            background: rgba(248, 249, 250, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-faded);
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            min-height: 80px;
+            margin-bottom: 16px;
+        }
+
+        .new-note-input:focus {
+            outline: none;
+            border-color: var(--accent-glow);
+            box-shadow: 0 0 0 3px rgba(116, 192, 252, 0.1);
+        }
+
+        .control-panel {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            background: var(--accent-glow);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: color-mix(in srgb, var(--accent-glow) 80%, white 20%);
+            transform: translateY(-1px);
+        }
+
+        .stats {
+            color: var(--text-faded);
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        .depth-indicator {
+            position: fixed;
+            right: 32px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            writing-mode: vertical-lr;
+            color: var(--text-faded);
+            font-size: 11px;
+            opacity: 0.6;
+        }
+
+        .depth-line {
+            width: 2px;
+            height: 300px;
+            background: linear-gradient(180deg, var(--accent-glow) 0%, transparent 100%);
+            margin: 16px auto;
+        }
+
+        .floating-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--accent-glow);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: drift 20s infinite linear;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translateZ(300px) translateY(100vh);
+            }
+            to {
+                transform: translateZ(-800px) translateY(-100vh);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-particles">
+        <div class="particle" style="left: 10%; animation-delay: -2s;"></div>
+        <div class="particle" style="left: 30%; animation-delay: -8s;"></div>
+        <div class="particle" style="left: 60%; animation-delay: -15s;"></div>
+        <div class="particle" style="left: 85%; animation-delay: -5s;"></div>
+    </div>
+
+    <div class="space-container">
+        <div class="note recent" style="left: 500px; top: 200px;">
+            <div class="note-title">Meeting Notes - Q4 Planning</div>
+            <div class="note-content">Discussed new feature roadmap, budget allocation for next quarter, and team expansion plans. Focus on user retention metrics.</div>
+            <div class="note-timestamp">2 min ago</div>
+        </div>
+
+        <div class="note recent" style="left: 800px; top: 350px;">
+            <div class="note-title">Design System Ideas</div>
+            <div class="note-content">Exploring micro-interactions for the dashboard. Consider adding subtle animations to improve user engagement and perceived performance.</div>
+            <div class="note-timestamp">12 min ago</div>
+        </div>
+
+        <div class="note medium" style="left: 300px; top: 450px;">
+            <div class="note-title">Book Recommendation</div>
+            <div class="note-content">The Design of Everyday Things - Norman. Great insights on user-centered design principles and cognitive psychology.</div>
+            <div class="note-timestamp">2 hours ago</div>
+        </div>
+
+        <div class="note medium" style="left: 900px; top: 150px;">
+            <div class="note-title">Weekend Project</div>
+            <div class="note-content">Build a small weather app with React. Practice with APIs and state management. Maybe add location detection.</div>
+            <div class="note-timestamp">5 hours ago</div>
+        </div>
+
+        <div class="note old" style="left: 600px; top: 500px;">
+            <div class="note-title">Coffee Shop Discovery</div>
+            <div class="note-content">Found a great spot on 5th street. Excellent wifi, good coffee, quiet atmosphere. Perfect for remote work sessions.</div>
+            <div class="note-timestamp">2 days ago</div>
+        </div>
+
+        <div class="note old" style="left: 200px; top: 250px;">
+            <div class="note-title">Code Review Notes</div>
+            <div class="note-content">Optimize database queries, reduce API calls, implement proper error handling for edge cases.</div>
+            <div class="note-timestamp">3 days ago</div>
+        </div>
+
+        <div class="note ancient" style="left: 750px; top: 600px;">
+            <div class="note-title">Travel Itinerary</div>
+            <div class="note-content">Tokyo trip planning - visit Shibuya, teamLab, try authentic ramen, book ryokan experience.</div>
+            <div class="note-timestamp">2 weeks ago</div>
+        </div>
+
+        <div class="note ancient" style="left: 450px; top: 100px;">
+            <div class="note-title">Learning Goals</div>
+            <div class="note-content">Master TypeScript, explore WebGL, study system design patterns, improve testing skills.</div>
+            <div class="note-timestamp">1 month ago</div>
+        </div>
+
+        <div class="connection-thread" style="left: 550px; top: 220px; width: 280px; transform: rotateZ(25deg) translateZ(50px);"></div>
+        <div class="connection-thread" style="left: 320px; top: 470px; width: 200px; transform: rotateZ(-15deg) translateZ(-50px);"></div>
+        <div class="connection-thread dormant" style="left: 650px; top: 380px; width: 150px; transform: rotateZ(45deg) translateZ(-200px);"></div>
+        <div class="connection-thread dormant" style="left: 250px; top: 300px; width: 180px; transform: rotateZ(-30deg) translateZ(-350px);"></div>
+    </div>
+
+    <div class="ui-overlay">
+        <textarea class="new-note-input" placeholder="Capture a thought in 3D space..."></textarea>
+        <div class="control-panel">
+            <button class="btn">Add Note</button>
+            <button class="btn" style="background: var(--thread-active);">Connect</button>
+            <div class="stats">24 notes</div>
+        </div>
+    </div>
+
+    <div class="depth-indicator">
+        <div>Recent</div>
+        <div class="depth-line"></div>
+        <div>Ancient</div>
+    </div>
+
+    <script>
+        document.addEventListener('mousemove', (e) => {
+            const container = document.querySelector('.space-container');
+            const x = (e.clientX / window.innerWidth - 0.5) * 20;
+            const y = (e.clientY / window.innerHeight - 0.5) * 10;
+            container.style.transform = `rotateX(${-5 + y}deg) rotateY(${x}deg)`;
+        });
+
+        document.querySelectorAll('.note').forEach(note => {
+            note.addEventListener('click', () => {
+                note.style.transform += ' translateZ(100px)';
+                setTimeout(() => {
+                    note.style.transform = note.style.transform.replace(' translateZ(100px)', '');
+                }, 300);
+            });
+        });
+    </script>
+</body>
+</html>

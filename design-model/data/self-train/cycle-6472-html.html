@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Dream Residue Collector</title>
+    <style>
+        :root {
+            --wake-threshold: #1a1a2e;
+            --rem-blue: #16213e;
+            --theta-violet: #533483;
+            --alpha-gold: #e94560;
+            --consciousness-white: #f5f3f0;
+            --joy-coral: #ff6b6b;
+            --fear-indigo: #4e5283;
+            --curiosity-mint: #51cf66;
+            --memory-fade: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 30% 20%, var(--rem-blue) 0%, var(--wake-threshold) 40%, #0a0a0a 100%);
+            font-family: Georgia, serif;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .temporal-field {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .memory-bubble {
+            position: absolute;
+            border-radius: 50%;
+            backdrop-filter: blur(8px);
+            background: radial-gradient(circle at 30% 30%, var(--memory-fade), transparent);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            pointer-events: auto;
+            cursor: grab;
+        }
+
+        .bubble-content {
+            position: absolute;
+            inset: 20%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--consciousness-white);
+            opacity: 0.6;
+            text-align: center;
+            font-style: italic;
+            letter-spacing: 0.02em;
+        }
+
+        .bubble-1 {
+            width: 180px;
+            height: 180px;
+            top: 150px;
+            left: 200px;
+            animation: drift1 20s infinite ease-in-out;
+        }
+
+        .bubble-2 {
+            width: 140px;
+            height: 140px;
+            top: 400px;
+            left: 600px;
+            animation: drift2 15s infinite ease-in-out;
+        }
+
+        .bubble-3 {
+            width: 200px;
+            height: 200px;
+            top: 250px;
+            right: 300px;
+            animation: drift3 25s infinite ease-in-out;
+        }
+
+        .bubble-4 {
+            width: 120px;
+            height: 120px;
+            bottom: 200px;
+            left: 400px;
+            animation: drift4 18s infinite ease-in-out;
+        }
+
+        @keyframes drift1 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 0.8; }
+            33% { transform: translate(50px, -30px) rotate(20deg); opacity: 0.6; }
+            66% { transform: translate(-30px, 40px) rotate(-15deg); opacity: 0.9; }
+        }
+
+        @keyframes drift2 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.7; }
+            50% { transform: translate(-80px, -50px) scale(1.1); opacity: 0.5; }
+        }
+
+        @keyframes drift3 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 0.9; }
+            25% { transform: translate(-40px, 60px) rotate(45deg); opacity: 0.7; }
+            75% { transform: translate(60px, -40px) rotate(-30deg); opacity: 0.6; }
+        }
+
+        @keyframes drift4 {
+            0%, 100% { transform: translate(0, 0); opacity: 0.6; }
+            50% { transform: translate(100px, -80px); opacity: 0.8; }
+        }
+
+        .vessel-container {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 120px;
+        }
+
+        .vessel {
+            width: 200px;
+            height: 250px;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .vessel-joy {
+            background: conic-gradient(from 180deg at 50% 100%, transparent 40%, var(--joy-coral) 50%, transparent 60%);
+            filter: blur(1px);
+        }
+
+        .vessel-fear {
+            background: linear-gradient(to top, var(--fear-indigo) 0%, transparent 60%);
+            clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+        }
+
+        .vessel-curiosity {
+            background: radial-gradient(circle at center, transparent 30%, var(--curiosity-mint) 40%, transparent 50%);
+            animation: spiral 10s linear infinite;
+        }
+
+        @keyframes spiral {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .vessel-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--consciousness-white);
+            opacity: 0.5;
+            font-size: 18px;
+            letter-spacing: 0.1em;
+            font-weight: 300;
+        }
+
+        .gesture-trail {
+            position: absolute;
+            pointer-events: none;
+            stroke: var(--alpha-gold);
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.6;
+            stroke-linecap: round;
+            filter: blur(1px);
+        }
+
+        .instructions {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: var(--consciousness-white);
+            opacity: 0.3;
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 300px;
+        }
+
+        .fade-timer {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .fade-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--alpha-gold), var(--theta-violet));
+            width: 100%;
+            animation: fadeOut 30s linear infinite;
+        }
+
+        @keyframes fadeOut {
+            0% { width: 100%; }
+            100% { width: 0%; }
+        }
+
+        .captured-fragment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .fragment-joy {
+            background: radial-gradient(circle, var(--joy-coral), transparent);
+            animation: rise 2s ease-out forwards;
+        }
+
+        .fragment-fear {
+            background: radial-gradient(circle, var(--fear-indigo), transparent);
+            animation: sink 2s ease-in forwards;
+        }
+
+        .fragment-curiosity {
+            background: radial-gradient(circle, var(--curiosity-mint), transparent);
+            animation: disperse 2s ease-out forwards;
+        }
+
+        @keyframes rise {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-200px) scale(0.5); opacity: 0; }
+        }
+
+        @keyframes sink {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(200px) scale(1.5); opacity: 0; }
+        }
+
+        @keyframes disperse {
+            0% { transform: rotate(0deg) translateX(0); opacity: 1; }
+            100% { transform: rotate(720deg) translateX(150px); opacity: 0; }
+        }
+
+        .wake-gradient {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(245, 243, 240, 0.02) 100%);
+            pointer-events: none;
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wake-gradient"></div>
+    
+    <div class="instructions">
+        Draw gestures matching the dream's rhythm<br>
+        Swift curves for joy ↗<br>
+        Heavy strokes for fear ↘<br>
+        Spirals for curiosity ↻
+    </div>
+
+    <div class="fade-timer">
+        <div class="fade-progress"></div>
+    </div>
+
+    <div class="temporal-field">
+        <div class="memory-bubble bubble-1">
+            <div class="bubble-content">floating stairs</div>
+        </div>
+        <div class="memory-bubble bubble-2">
+            <div class="bubble-content">mother's voice</div>
+        </div>
+        <div class="memory-bubble bubble-3">
+            <div class="bubble-content">purple ocean</div>
+        </div>
+        <div class="memory-bubble bubble-4">
+            <div class="bubble-content">falling teeth</div>
+        </div>
+    </div>
+
+    <div class="vessel-container">
+        <div class="vessel vessel-joy">
+            <div class="vessel-label">Joy</div>
+        </div>
+        <div class="vessel vessel-fear">
+            <div class="vessel-label">Fear</div>
+        </div>
+        <div class="vessel vessel-curiosity">
+            <div class="vessel-label">Curiosity</div>
+        </div>
+    </div>
+
+    <svg class="gesture-trail" width="1440" height="900">
+        <path d="" />
+    </svg>
+
+    <script>
+        let isDrawing = false;
+        let currentPath = '';
+        let pathPoints = [];
+        const svg = document.querySelector('.gesture-trail');
+        const path = svg.querySelector('path');
+        const bubbles = document.querySelectorAll('.memory-bubble');
+        const vessels = document.querySelectorAll('.vessel');
+
+        document.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            currentPath = `M ${e.clientX} ${e.clientY}`;
+            pathPoints = [{x: e.clientX, y: e.clientY}];
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            currentPath += ` L ${e.clientX} ${e.clientY}`;
+            pathPoints.push({x: e.clientX, y: e.clientY});
+            path.setAttribute('d', currentPath);
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            const gesture = analyzeGesture(pathPoints);
+            const nearbyBubble = findNearbyBubble(e.clientX, e.clientY);
+            
+            if (nearbyBubble && gesture) {
+                captureBubble(nearbyBubble, gesture);
+            }
+            
+            setTimeout(() => {
+                currentPath = '';
+                path.setAttribute('d', '');
+                pathPoints = [];
+            }, 500);
+        });
+
+        function analyzeGesture(points) {
+            if (points.length < 3) return null;
+            
+            const start = points[0];
+            const end = points[points.length - 1];
+            const deltaY = end.y - start.y;
+            const deltaX = end.x - start.x;
+            
+            let totalCurvature = 0;
+            for (let i = 1; i < points.length - 1; i++) {
+                const angle1 = Math.atan2(points[i].y - points[i-1].y, points[i].x - points[i-1].x);
+                const angle2 = Math.atan2(points[i+1].y - points[i].y, points[i+1].x - points[i].x);
+                totalCurvature += Math.abs(angle2 - angle1);
+            }
+            
+            if (deltaY < -50 && deltaX > 20) return 'joy';
+            if (deltaY > 50 && Math.abs(deltaX) < 50) return 'fear';
+            if (totalCurvature > 3) return 'curiosity';
+            
+            return null;
+        }
+
+        function findNearbyBubble(x, y) {
+            for (let bubble of bubbles) {
+                const rect = bubble.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                
+                if (distance < rect.width / 2) {
+                    return bubble;
+                }
+            }
+            return null;
+        }
+
+        function captureBubble(bubble, gestureType) {
+            const rect = bubble.getBoundingClientRect();
+            const fragment = document.createElement('div');
+            fragment.className = `captured-fragment fragment-${gestureType}`;
+            fragment.style.left = rect.left + rect.width / 2 - 20 + 'px';
+            fragment.style.top = rect.top + rect.height / 2 - 20 + 'px';
+            
+            document.body.appendChild(fragment);
+            
+            bubble.style.transform = 'scale(0)';
+            bubble.style.opacity = '0';
+            
+            setTimeout(() => {
+                bubble.remove();
+                fragment.remove();
+            }, 2000);
+        }
+
+        bubbles.forEach(bubble => {
+            bubble.addEventListener('mouseenter', () => {
+                bubble.style.transform = 'scale(1.1)';
+            });
+            
+            bubble.addEventListener('mouseleave', () => {
+                bubble.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>

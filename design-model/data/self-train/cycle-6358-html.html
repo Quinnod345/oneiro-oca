@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Culinary Score Composer</title>
+    <style>
+        :root {
+            --base-black: #0a0a0a;
+            --track-dark: #1a1a1a;
+            --heat-low: #2a4858;
+            --heat-medium: #d4784e;
+            --heat-high: #e63946;
+            --timing-node: #f1faee;
+            --ingredient-text: #a8dadc;
+            --grid-line: #2a2a2a;
+            --collision-ripple: #ffb700;
+            --time-marker: #457b9d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--base-black);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #timeline-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+                linear-gradient(0deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 60px 80px;
+            opacity: 0.3;
+        }
+
+        #time-ruler {
+            position: absolute;
+            top: 40px;
+            left: 200px;
+            right: 40px;
+            height: 40px;
+            border-bottom: 1px solid var(--time-marker);
+            display: flex;
+            align-items: flex-end;
+            padding-bottom: 5px;
+        }
+
+        .time-mark {
+            flex: 1;
+            font-size: 11px;
+            color: var(--time-marker);
+            opacity: 0.7;
+            font-weight: 300;
+        }
+
+        #track-container {
+            position: absolute;
+            left: 0;
+            top: 120px;
+            bottom: 100px;
+            width: 100%;
+        }
+
+        .ingredient-track {
+            position: relative;
+            height: 80px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        .track-label {
+            width: 180px;
+            padding: 0 20px;
+            color: var(--ingredient-text);
+            font-size: 14px;
+            font-weight: 500;
+            text-align: right;
+            letter-spacing: 0.5px;
+        }
+
+        .track-timeline {
+            flex: 1;
+            height: 60px;
+            position: relative;
+            margin-right: 40px;
+        }
+
+        .cooking-block {
+            position: absolute;
+            height: 100%;
+            background: var(--track-dark);
+            border-radius: 3px;
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .cooking-block:active {
+            cursor: grabbing;
+            transform: scale(1.02);
+        }
+
+        .heat-gradient {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.8;
+            animation: heatPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes heatPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .block-low-heat .heat-gradient {
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--heat-low) 20%, 
+                var(--heat-low) 80%, 
+                transparent 100%);
+        }
+
+        .block-medium-heat .heat-gradient {
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--heat-medium) 15%, 
+                var(--heat-medium) 85%, 
+                transparent 100%);
+            animation-duration: 2s;
+        }
+
+        .block-high-heat .heat-gradient {
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--heat-high) 10%, 
+                var(--heat-high) 90%, 
+                transparent 100%);
+            animation-duration: 1.5s;
+        }
+
+        .block-content {
+            position: relative;
+            z-index: 2;
+            padding: 8px 12px;
+            color: white;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timing-node {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: var(--timing-node);
+            border-radius: 50%;
+            z-index: 100;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+        }
+
+        .timing-node::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--collision-ripple);
+            border-radius: 50%;
+            opacity: 0;
+            animation: ripple 2s ease-out infinite;
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(3);
+                opacity: 0;
+            }
+        }
+
+        .timing-node:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--collision-ripple);
+        }
+
+        #playback-control {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .play-button {
+            width: 60px;
+            height: 60px;
+            background: var(--track-dark);
+            border: 2px solid var(--time-marker);
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .play-button::after {
+            content: '';
+            position: absolute;
+            left: 22px;
+            top: 18px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 12px 0 12px 20px;
+            border-color: transparent transparent transparent var(--time-marker);
+        }
+
+        .play-button:hover {
+            background: var(--time-marker);
+            transform: scale(1.1);
+        }
+
+        .play-button:hover::after {
+            border-color: transparent transparent transparent var(--track-dark);
+        }
+
+        #time-cursor {
+            position: absolute;
+            top: 80px;
+            bottom: 100px;
+            width: 2px;
+            background: var(--collision-ripple);
+            left: 200px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #time-cursor.playing {
+            opacity: 1;
+            animation: timeSweep 20s linear infinite;
+        }
+
+        @keyframes timeSweep {
+            from { left: 200px; }
+            to { left: calc(100% - 40px); }
+        }
+
+        .tempo-indicator {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            color: var(--ingredient-text);
+            font-size: 12px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .geometric-visualizer {
+            position: absolute;
+            bottom: 120px;
+            left: 200px;
+            right: 40px;
+            height: 60px;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .pressure-shape {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--timing-node);
+            transform: rotate(45deg);
+            animation: pressureExpand 4s ease-in-out infinite;
+        }
+
+        @keyframes pressureExpand {
+            0%, 100% { 
+                transform: rotate(45deg) scale(0.5);
+                opacity: 0.3;
+            }
+            50% { 
+                transform: rotate(45deg) scale(1.5);
+                opacity: 0.8;
+            }
+        }
+
+        .harmony-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--ingredient-text), transparent);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .harmony-line.active {
+            opacity: 0.5;
+            animation: harmonize 1s ease-out;
+        }
+
+        @keyframes harmonize {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="timeline-grid"></div>
+    
+    <div class="tempo-indicator">120 BPM • 4/4</div>
+    
+    <div id="time-ruler">
+        <div class="time-mark">0:00</div>
+        <div class="time-mark">5:00</div>
+        <div class="time-mark">10:00</div>
+        <div class="time-mark">15:00</div>
+        <div class="time-mark">20:00</div>
+        <div class="time-mark">25:00</div>
+        <div class="time-mark">30:00</div>
+    </div>
+    
+    <div id="track-container">
+        <div class="ingredient-track">
+            <div class="track-label">Soufflé Base</div>
+            <div class="track-timeline">
+                <div class="cooking-block block-medium-heat" style="left: 120px; width: 300px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Whisk egg whites to soft peaks</div>
+                </div>
+                <div class="cooking-block block-high-heat" style="left: 480px; width: 200px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Bake 375°F</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ingredient-track">
+            <div class="track-label">Reduction Sauce</div>
+            <div class="track-timeline">
+                <div class="cooking-block block-high-heat" style="left: 60px; width: 180px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Sear shallots</div>
+                </div>
+                <div class="cooking-block block-low-heat" style="left: 240px; width: 440px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Simmer with wine</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ingredient-track">
+            <div class="track-label">Vegetable Garnish</div>
+            <div class="track-timeline">
+                <div class="cooking-block block-medium-heat" style="left: 360px; width: 240px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Blanch asparagus</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ingredient-track">
+            <div class="track-label">Protein</div>
+            <div class="track-timeline">
+                <div class="cooking-block block-low-heat" style="left: 0; width: 160px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Brine</div>
+                </div>
+                <div class="cooking-block block-high-heat" style="left: 420px; width: 260px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Pan sear & finish</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ingredient-track">
+            <div class="track-label">Plating Elements</div>
+            <div class="track-timeline">
+                <div class="cooking-block block-low-heat" style="left: 580px; width: 100px;">
+                    <div class="heat-gradient"></div>
+                    <div class="block-content">Assembly</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="timing-node" style="left: 600px; top: 280px;"></div>
+    <div class="timing-node" style="left: 680px; top: 360px;"></div>
+    <div class="timing-node" style="left: 420px; top: 200px;"></div>
+    
+    <div class="geometric-visualizer">
+        <div class="pressure-shape" style="left: 180px;"></div>
+        <div class="pressure-shape" style="left: 420px; animation-delay: 1s;"></div>
+        <div class="pressure-shape" style="left: 660px; animation-delay: 2s;"></div>
+    </div>
+    
+    <div class="harmony-line active" style="top: 240px; left: 420px; width: 180px;"></div>
+    <div class="harmony-line active" style="top: 320px; left: 580px; width: 100px;"></div>
+    
+    <div id="time-cursor"></div>
+    
+    <div id="playback-control">
+        <div class="play-button" onclick="document.getElementById('time-cursor').classList.toggle('playing')"></div>
+    </div>
+</body>
+</html>

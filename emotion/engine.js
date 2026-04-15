@@ -6,7 +6,7 @@ import { pool, emit } from '../event-bus.js';
 // ═══ LAYER 3: PADCN Core Affect ═══
 // Pleasure, Arousal, Dominance, Certainty, Novelty
 let padcn = { P: 0.0, A: 0.0, D: 0.0, C: 0.0, N: 0.0 };
-const PADCN_DECAY = { P: 0.88, A: 0.92, D: 0.96, C: 0.94, N: 0.90 };
+const PADCN_DECAY = { P: 0.85, A: 0.82, D: 0.84, C: 0.83, N: 0.80 };
 
 // ═══ LAYER 4: 14 Concurrent Emotion Channels ═══
 let channels = {

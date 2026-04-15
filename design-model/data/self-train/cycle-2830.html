@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Flow - Transformation Timeline</title>
+    <style>
+        :root {
+            --primary-hue: 28;
+            --secondary-hue: 186;
+            --accent-hue: 340;
+            
+            --surface-0: hsl(var(--primary-hue), 12%, 97%);
+            --surface-1: hsl(var(--primary-hue), 8%, 94%);
+            --surface-2: hsl(var(--primary-hue), 6%, 89%);
+            --surface-3: hsl(var(--primary-hue), 4%, 82%);
+            
+            --text-primary: hsl(var(--primary-hue), 8%, 15%);
+            --text-secondary: hsl(var(--primary-hue), 6%, 35%);
+            --text-tertiary: hsl(var(--primary-hue), 4%, 55%);
+            
+            --ingredient-bg: hsl(var(--secondary-hue), 45%, 92%);
+            --ingredient-border: hsl(var(--secondary-hue), 35%, 78%);
+            --ingredient-text: hsl(var(--secondary-hue), 40%, 25%);
+            
+            --process-bg: hsl(var(--primary-hue), 25%, 91%);
+            --process-border: hsl(var(--primary-hue), 20%, 75%);
+            --process-accent: hsl(var(--primary-hue), 35%, 68%);
+            
+            --final-bg: hsl(var(--accent-hue), 35%, 92%);
+            --final-border: hsl(var(--accent-hue), 30%, 78%);
+            --final-accent: hsl(var(--accent-hue), 45%, 65%);
+            
+            --flow-line: hsl(var(--primary-hue), 15%, 65%);
+            --flow-active: hsl(var(--primary-hue), 25%, 45%);
+            
+            --shadow-subtle: 0 1px 3px hsla(var(--primary-hue), 20%, 20%, 0.08);
+            --shadow-medium: 0 4px 12px hsla(var(--primary-hue), 20%, 20%, 0.12);
+            --shadow-strong: 0 8px 32px hsla(var(--primary-hue), 20%, 20%, 0.16);
+            
+            --timing-smooth: cubic-bezier(0.4, 0.0, 0.2, 1);
+            --timing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--surface-0);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: var(--surface-1);
+            border-bottom: 1px solid var(--surface-2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-2xl);
+            z-index: 100;
+        }
+
+        .app-title {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .recipe-selector {
+            display: flex;
+            gap: var(--space-md);
+            align-items: center;
+        }
+
+        .recipe-tab {
+            padding: var(--space-sm) var(--space-md);
+            background: var(--surface-0);
+            border: 1px solid var(--surface-3);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s var(--timing-smooth);
+        }
+
+        .recipe-tab.active {
+            background: var(--text-primary);
+            color: var(--surface-0);
+            border-color: var(--text-primary);
+        }
+
+        .timeline-container {
+            position: absolute;
+            top: 80px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: var(--space-2xl);
+            overflow-y: auto;
+        }
+
+        .timeline {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .timeline-stage {
+            position: relative;
+            margin-bottom: var(--space-2xl);
+        }
+
+        .stage-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+
+        .stage-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--process-accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .stage-title {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        .stage-time {
+            margin-left: auto;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .flow-grid {
+            display: grid;
+            grid-template-columns: 1fr 80px 1fr;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        .ingredients-group, .process-group, .output-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .ingredient-card {
+            background: var(--ingredient-bg);
+            border: 1.5px solid var(--ingredient-border);
+            border-radius: 12px;
+            padding: var(--space-md);
+            box-shadow: var(--shadow-subtle);
+            transition: all 0.3s var(--timing-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ingredient-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--ingredient-border);
+            transition: all 0.3s var(--timing-smooth);
+        }
+
+        .ingredient-card:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .ingredient-card:hover::before {
+            background: var(--flow-active);
+        }
+
+        .ingredient-name {
+            font-weight: 600;
+            color: var(--ingredient-text);
+            margin-bottom: var(--space-xs);
+        }
+
+        .ingredient-amount {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .process-card {
+            background: var(--process-bg);
+            border: 1.5px solid var(--process-border);
+            border-radius: 16px;
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-medium);
+            text-align: center;
+            position: relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .process-icon {
+            font-size: 32px;
+            margin-bottom: var(--space-sm);
+        }
+
+        .process-name {
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .process-details {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .output-card {
+            background: var(--final-bg);
+            border: 2px solid var(--final-border);
+            border-radius: 16px;
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .output-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            background: var(--final-accent);
+        }
+
+        .output-name {
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--text-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .output-description {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            font-size: 15px;
+        }
+
+        .flow-connector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .flow-arrow {
+            width: 60px;
+            height: 2px;
+            background: var(--flow-line);
+            position: relative;
+            transition: all 0.3s var(--timing-smooth);
+        }
+
+        .flow-arrow::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: -4px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid var(--flow-line);
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            transition: all 0.3s var(--timing-smooth);
+        }
+
+        .timeline-stage:hover .flow-arrow,
+        .timeline-stage:hover .flow-arrow::after {
+            background: var(--flow-active);
+            border-left-color: var(--flow-active);
+        }
+
+        .final-dish {
+            background: linear-gradient(135deg, var(--final-bg) 0%, hsl(var(--accent-hue), 40%, 88%) 100%);
+            border: 3px solid var(--final-accent);
+            border-radius: 20px;
+            padding: var(--space-2xl);
+            text-align: center;
+            box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .final-dish::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, hsla(var(--accent-hue), 60%, 85%, 0.3) 0%, transparent 70%);
+            animation: shimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: translateX(-25%) translateY(-25%) rotate(0deg); opacity: 0.3; }
+            50% { transform: translateX(-30%) translateY(-30%) rotate(180deg); opacity: 0.6; }
+        }
+
+        .dish-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-md);
+            position: relative;
+            z-index: 1;
+        }
+
+        .dish-name {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: var(--space-md);
+            position: relative;
+            z-index: 1;
+        }
+
+        .dish-description {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .progress-indicator {
+            position: absolute;
+            left: -40px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--surface-3);
+        }
+
+        .progress-fill {
+            width: 100%;
+            background: var(--flow-active);
+            height: 0%;
+            animation: progressFill 8s ease-out forwards;
+            border-radius: 2px;
+        }
+
+        @keyframes progressFill {
+            0% { height: 0%; }
+            100% { height: 100%; }
+        }
+
+        .floating-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--process-accent);
+            border-radius: 50%;
+            animation: float 6s infinite ease-in-out;
+            opacity: 0.4;
+        }
+
+        .particle:nth-child(1) { left: 20%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 40%; animation-delay: 1s; }
+        .particle:nth-child(3) { left: 60%; animation-delay: 2s; }
+        .particle:nth-child(4) { left: 80%; animation-delay: 3s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(900px); opacity: 0; }
+            10% { opacity: 0.4; }
+            50% { transform: translateY(450px); opacity: 0.6; }
+            90% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <header class="app-header">
+        <h1 class="app-title">Recipe Flow</h1>
+        <div class="recipe-selector">
+            <div class="recipe-tab active">Beef Bourguignon</div>
+            <div class="recipe-tab">Coq au Vin</div>
+            <div class="recipe-tab">Ratatouille</div>
+        </div>
+    </header>
+
+    <main class="timeline-container">
+        <div class="timeline">
+            <div class="progress-indicator">
+                <div class="progress-fill"></div>
+            </div>
+
+            <div class="timeline-stage">
+                <div class="stage-header">
+                    <div class="stage-number">1</div>
+                    <h2 class="stage-title">Foundation Prep</h2>
+                    <span class="stage-time">15 minutes</span>
+                </div>
+                <div class="flow-grid">
+                    <div class="ingredients-group">
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Beef Chuck</div>
+                            <div class="ingredient-amount">2 lbs, cubed</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Pearl Onions</div>
+                            <div class="ingredient-amount">1 lb, peeled</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Carrots</div>
+                            <div class="ingredient-amount">4 large, chunked</div>
+                        </div>
+                    </div>
+                    <div class="flow-connector">
+                        <div class="flow-arrow"></div>
+                    </div>
+                    <div class="process-group">
+                        <div class="process-card">
+                            <div class="process-icon">🔥</div>
+                            <div class="process-name">Sear & Brown</div>
+                            <div class="process-details">High heat searing to develop deep flavors and caramelization</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-stage">
+                <div class="stage-header">
+                    <div class="stage-number">2</div>
+                    <h2 class="stage-title">Aromatics Build</h2>
+                    <span class="stage-time">10 minutes</span>
+                </div>
+                <div class="flow-grid">
+                    <div class="ingredients-group">
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Bacon</div>
+                            <div class="ingredient-amount">6 oz, diced</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Garlic</div>
+                            <div class="ingredient-amount">4 cloves, minced</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Mushrooms</div>
+                            <div class="ingredient-amount">8 oz, quartered</div>
+                        </div>
+                    </div>
+                    <div class="flow-connector">
+                        <div class="flow-arrow"></div>
+                    </div>
+                    <div class="process-group">
+                        <div class="process-card">
+                            <div class="process-icon">🌿</div>
+                            <div class="process-name">Sauté & Layer</div>
+                            <div class="process-details">Building aromatic base with rendered fats and fragrant vegetables</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-stage">
+                <div class="stage-header">
+                    <div class="stage-number">3</div>
+                    <h2 class="stage-title">Liquid Transformation</h2>
+                    <span class="stage-time">5 minutes</span>
+                </div>
+                <div class="flow-grid">
+                    <div class="ingredients-group">
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Red Wine</div>
+                            <div class="ingredient-amount">2 cups, burgundy</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Beef Stock</div>
+                            <div class="ingredient-amount">2 cups, rich</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Tomato Paste</div>
+                            <div class="ingredient-amount">2 tbsp, concentrated</div>
+                        </div>
+                    </div>
+                    <div class="flow-connector">
+                        <div class="flow-arrow"></div>
+                    </div>
+                    <div class="process-group">
+                        <div class="process-card">
+                            <div class="process-icon">🍷</div>
+                            <div class="process-name">Deglaze & Combine</div>
+                            <div class="process-details">Releasing fond and creating the braising liquid foundation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-stage">
+                <div class="stage-header">
+                    <div class="stage-number">4</div>
+                    <h2 class="stage-title">Slow Braising</h2>
+                    <span class="stage-time">2.5 hours</span>
+                </div>
+                <div class="flow-grid">
+                    <div class="ingredients-group">
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Thyme</div>
+                            <div class="ingredient-amount">Fresh sprigs</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Bay Leaves</div>
+                            <div class="ingredient-amount">3 whole</div>
+                        </div>
+                        <div class="ingredient-card">
+                            <div class="ingredient-name">Parsley</div>
+                            <div class="ingredient-amount">Bouquet garni</div>
+                        </div>
+                    </div>
+                    <div class="flow-connector">
+                        <div class="flow-arrow"></div>
+                    </div>
+                    <div class="process-group">
+                        <div class="process-card">
+                            <div class="process-icon">⏰</div>
+                            <div class="process-name">Low & Slow</div>
+                            <div class="process-details">Gentle heat breaks down collagen into silky gelatin</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="final-dish">
+                <div class="dish-icon">🍽️</div>
+                <h2 class="dish-name">Beef Bourguignon</h2>
+                <p class="dish-description">
+                    A transformation complete: tough cuts of beef become fork-tender jewels swimming in an intensely 
+                    flavored wine-dark sauce. Each ingredient has surrendered its individual identity to create 
+                    something greater—a harmony of textures and tastes that speaks to centuries of French culinary wisdom.
+                </p>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

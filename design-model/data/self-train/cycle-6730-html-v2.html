@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Debt Cathedral</title>
+    <style>
+        :root {
+            --parchment: #f7f3e9;
+            --shadow: #1a1612;
+            --gold-repair: #d4af37;
+            --torn-edge: #8b7355;
+            --moonlight: #e8e5df;
+            --starlight: rgba(255, 255, 255, 0.9);
+            --deep-sleep: #2c2416;
+            --rem-sleep: #4a3d2a;
+            --light-sleep: #6b5d4f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at top, #0a0908 0%, #22201e 50%, #0a0908 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--parchment);
+            position: relative;
+        }
+
+        .cosmos {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            opacity: 0.3;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--starlight);
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.9; }
+        }
+
+        .cathedral-backdrop {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.15;
+            filter: blur(1px);
+            pointer-events: none;
+        }
+
+        .cathedral-silhouette {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 700px;
+            background: linear-gradient(to top, var(--deep-sleep) 0%, transparent 70%);
+            clip-path: polygon(
+                50% 0%,
+                30% 20%,
+                20% 40%,
+                15% 100%,
+                85% 100%,
+                80% 40%,
+                70% 20%
+            );
+        }
+
+        .main-interface {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 600px;
+            z-index: 10;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 48px;
+            font-weight: 300;
+            letter-spacing: 8px;
+            margin-bottom: 60px;
+            text-transform: uppercase;
+            background: linear-gradient(180deg, var(--parchment) 0%, var(--gold-repair) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+        }
+
+        .sleep-input-container {
+            background: rgba(247, 243, 233, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .sleep-input {
+            width: 120px;
+            padding: 16px 24px;
+            font-size: 32px;
+            text-align: center;
+            background: rgba(26, 22, 18, 0.4);
+            border: 2px solid rgba(212, 175, 55, 0.4);
+            border-radius: 12px;
+            color: var(--parchment);
+            transition: all 0.3s ease;
+        }
+
+        .sleep-input:focus {
+            outline: none;
+            border-color: var(--gold-repair);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .input-label {
+            font-size: 18px;
+            color: var(--moonlight);
+            opacity: 0.8;
+        }
+
+        .calculate-btn {
+            background: linear-gradient(135deg, var(--gold-repair) 0%, #b8941f 100%);
+            border: none;
+            padding: 18px 40px;
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--shadow);
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+        }
+
+        .calculate-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 30px rgba(212, 175, 55, 0.5);
+        }
+
+        .debt-display {
+            background: rgba(26, 22, 18, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            min-height: 200px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .debt-visual {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(212, 175, 55, 0.1) 0%, transparent 100%);
+            transform-origin: bottom;
+            transition: transform 0.6s ease;
+        }
+
+        .debt-amount {
+            font-size: 72px;
+            font-weight: 200;
+            color: var(--gold-repair);
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .debt-label {
+            font-size: 24px;
+            color: var(--moonlight);
+            opacity: 0.7;
+            position: relative;
+            z-index: 2;
+        }
+
+        .repair-animation {
+            position: absolute;
+            width: 4px;
+            height: 60px;
+            background: var(--gold-repair);
+            opacity: 0;
+            animation: repair 2s ease-in-out;
+        }
+
+        @keyframes repair {
+            0% {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-40px);
+            }
+        }
+
+        .moon {
+            position: absolute;
+            top: 80px;
+            right: 120px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, var(--moonlight) 0%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: moonGlow 4s ease-in-out infinite;
+        }
+
+        @keyframes moonGlow {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.4;
+            }
+            50% { 
+                transform: scale(1.1);
+                opacity: 0.6;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmos" id="cosmos"></div>
+    
+    <div class="cathedral-backdrop">
+        <div class="cathedral-silhouette"></div>
+    </div>
+
+    <div class="moon"></div>
+
+    <div class="main-interface">
+        <h1 class="title">Sleep Cathedral</h1>
+        
+        <div class="sleep-input-container">
+            <div class="input-group">
+                <input type="number" id="hoursSlept" class="sleep-input" min="0" max="24" placeholder="7" />
+                <label class="input-label">hours of sleep</label>
+            </div>
+            <button class="calculate-btn" onclick="calculateDebt()">Calculate Debt</button>
+        </div>
+
+        <div class="debt-display">
+            <div class="debt-visual" id="debtVisual"></div>
+            <div class="debt-amount" id="debtAmount">0</div>
+            <div class="debt-label">Hours of Sleep Debt</div>
+        </div>
+    </div>
+
+    <script>
+        // Create stars
+        const cosmos = document.getElementById('cosmos');
+        for (let i = 0; i < 100; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            cosmos.appendChild(star);
+        }
+
+        function calculateDebt() {
+            const hoursSlept = parseFloat(document.getElementById('hoursSlept').value) || 0;
+            const recommendedSleep = 8;
+            const debt = Math.max(0, recommendedSleep - hoursSlept);
+            
+            document.getElementById('debtAmount').textContent = debt.toFixed(1);
+            
+            const debtVisual = document.getElementById('debtVisual');
+            const debtPercentage = Math.min(debt / recommendedSleep, 1);
+            debtVisual.style.transform = `scaleY(${debtPercentage})`;
+
+            // Add repair animation
+            if (debt > 0) {
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        const repair = document.createElement('div');
+                        repair.className = 'repair-animation';
+                        repair.style.left = 20 + (i * 40) + '%';
+                        debtVisual.appendChild(repair);
+                        setTimeout(() => repair.remove(), 2000);
+                    }, i * 300);
+                }
+            }
+        }
+
+        // Initialize with example
+        document.getElementById('hoursSlept').value = 6;
+        calculateDebt();
+    </script>
+</body>
+</html>

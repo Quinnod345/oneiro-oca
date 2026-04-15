@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #151518;
+            --bg-tertiary: #1e1e22;
+            --text-primary: #f8f9fa;
+            --text-secondary: #b8bcc8;
+            --text-muted: #6c7293;
+            --accent-blue: #4f7cff;
+            --accent-purple: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-emphasis: rgba(255, 255, 255, 0.16);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.32);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        .canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(79, 124, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, rgba(16, 185, 129, 0.02) 0%, transparent 50%);
+        }
+
+        .document {
+            position: absolute;
+            width: 180px;
+            height: 240px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+            box-shadow: var(--shadow-sm);
+            user-select: none;
+        }
+
+        .document:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-emphasis);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .document:active {
+            cursor: grabbing;
+            transform: translateY(-2px) scale(1.02);
+        }
+
+        .document-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .document-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .document-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.4;
+            flex: 1;
+        }
+
+        .document-content {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .document-meta {
+            position: absolute;
+            bottom: 16px;
+            left: 20px;
+            right: 20px;
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .document-tag {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 9px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Document Categories */
+        .doc-research { --doc-color: var(--accent-blue); }
+        .doc-design { --doc-color: var(--accent-purple); }
+        .doc-code { --doc-color: var(--accent-emerald); }
+        .doc-docs { --doc-color: var(--accent-amber); }
+        .doc-archive { --doc-color: var(--accent-rose); }
+
+        .document-icon {
+            background: var(--doc-color);
+            color: var(--bg-primary);
+        }
+
+        .document-tag {
+            color: var(--doc-color);
+            border-color: var(--doc-color);
+        }
+
+        /* Connection Lines */
+        .connection {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0.4;
+            transition: opacity 0.3s ease;
+        }
+
+        .connection-line {
+            stroke: var(--border-subtle);
+            stroke-width: 1;
+            stroke-dasharray: 4 4;
+            fill: none;
+        }
+
+        /* Spatial Clusters */
+        .cluster-label {
+            position: absolute;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Mini Navigation */
+        .nav-panel {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--doc-color);
+        }
+
+        /* Search Overlay */
+        .search-overlay {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 12px 16px;
+            backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+        }
+
+        .search-input {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 14px;
+            flex: 1;
+            outline: none;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-icon {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas" id="canvas">
+        <!-- Search -->
+        <div class="search-overlay">
+            <span class="search-icon">⌕</span>
+            <input type="text" class="search-input" placeholder="Search documents...">
+            <span style="color: var(--text-muted); font-size: 11px;">⌘K</span>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-panel">
+            <div class="nav-item doc-research">
+                <div class="nav-dot"></div>
+                <span>Research</span>
+                <span style="margin-left: auto; color: var(--text-muted);">8</span>
+            </div>
+            <div class="nav-item doc-design">
+                <div class="nav-dot"></div>
+                <span>Design</span>
+                <span style="margin-left: auto; color: var(--text-muted);">12</span>
+            </div>
+            <div class="nav-item doc-code">
+                <div class="nav-dot"></div>
+                <span>Code</span>
+                <span style="margin-left: auto; color: var(--text-muted);">6</span>
+            </div>
+            <div class="nav-item doc-docs">
+                <div class="nav-dot"></div>
+                <span>Docs</span>
+                <span style="margin-left: auto; color: var(--text-muted);">15</span>
+            </div>
+            <div class="nav-item doc-archive">
+                <div class="nav-dot"></div>
+                <span>Archive</span>
+                <span style="margin-left: auto; color: var(--text-muted);">4</span>
+            </div>
+        </div>
+
+        <!-- Cluster Labels -->
+        <div class="cluster-label" style="top: 120px; left: 180px;">Research Hub</div>
+        <div class="cluster-label" style="top: 320px; right: 240px;">Design System</div>
+        <div class="cluster-label" style="bottom: 180px; left: 160px;">Development</div>
+        <div class="cluster-label" style="top: 240px; left: 520px;">Documentation</div>
+
+        <!-- Documents -->
+        <div class="document doc-research" style="top: 150px; left: 120px;">
+            <div class="document-header">
+                <div class="document-icon">R</div>
+                <div class="document-title">Market Analysis Q4</div>
+            </div>
+            <div class="document-content">Comprehensive market research covering user behavior patterns and competitive landscape analysis...</div>
+            <div class="document-meta">
+                <span>2 days ago</span>
+                <div class="document-tag">Research</div>
+            </div>
+        </div>
+
+        <div class="document doc-research" style="top: 200px; left: 320px;">
+            <div class="document-header">
+                <div class="document-icon">U</div>
+                <div class="document-title">User Interview Notes</div>
+            </div>
+            <div class="document-content">Key insights from user interviews conducted with 15 participants across different demographics...</div>
+            <div class="document-meta">
+                <span>1 week ago</span>
+                <div class="document-tag">Research</div>
+            </div>
+        </div>
+
+        <div class="document doc-design" style="top: 300px; right: 180px;">
+            <div class="document-header">
+                <div class="document-icon">D</div>
+                <div class="document-title">Design System v2</div>
+            </div>
+            <div class="document-content">Updated component library with new accessibility guidelines and responsive breakpoints...</div>
+            <div class="document-meta">
+                <span>3 days ago</span>
+                <div class="document-tag">Design</div>
+            </div>
+        </div>
+
+        <div class="document doc-design" style="top: 420px; right: 320px;">
+            <div class="document-header">
+                <div class="document-icon">F</div>
+                <div class="document-title">Figma Prototypes</div>
+            </div>
+            <div class="document-content">Interactive prototypes for the new dashboard redesign with micro-interactions and animations...</div>
+            <div class="document-meta">
+                <span>5 days ago</span>
+                <div class="document-tag">Design</div>
+            </div>
+        </div>
+
+        <div class="document doc-code" style="bottom: 160px; left: 100px;">
+            <div class="document-header">
+                <div class="document-icon">C</div>
+                <div class="document-title">API Documentation</div>
+            </div>
+            <div class="document-content">REST API endpoints documentation with examples and authentication methods...</div>
+            <div class="document-meta">
+                <span>1 day ago</span>
+                <div class="document-tag">Code</div>
+            </div>
+        </div>
+
+        <div class="document doc-code" style="bottom: 200px; left: 300px;">
+            <div class="document-header">
+                <div class="document-icon">G</div>
+                <div class="document-title">GitHub Issues</div>
+            </div>
+            <div class="document-content">Bug reports and feature requests from the development team and user feedback...</div>
+            <div class="document-meta">
+                <span>4 hours ago</span>
+                <div class="document-tag">Code</div>
+            </div>
+        </div>
+
+        <div class="document doc-docs" style="top: 260px; left: 480px;">
+            <div class="document-header">
+                <div class="document-icon">P</div>
+                <div class="document-title">Project Roadmap</div>
+            </div>
+            <div class="document-content">Q1 2024 roadmap with feature priorities, timeline estimates, and resource allocation...</div>
+            <div class="document-meta">
+                <span>1 week ago</span>
+                <div class="document-tag">Docs</div>
+            </div>
+        </div>
+
+        <div class="document doc-docs" style="top: 380px; left: 520px;">
+            <div class="document-header">
+                <div class="document-icon">S</div>
+                <div class="document-title">Sprint Planning</div>
+            </div>
+            <div class="document-content">Sprint 23 planning notes with user story breakdown and acceptance criteria...</div>
+            <div class="document-meta">
+                <span>3 days ago</span>
+                <div class="document-tag">Docs</div>
+            </div>
+        </div>
+
+        <div class="document doc-archive" style="bottom: 120px; right: 160px;">
+            <div class="document-header">
+                <div class="document-icon">A</div>
+                <div class="document-title">Legacy Specs</div>
+            </div>
+            <div class="document-content">Old technical specifications and architecture decisions for reference purposes...</div>
+            <div class="document-meta">
+                <span>2 months ago</span>
+                <div class="document-tag">Archive</div>
+            </div>
+        </div>
+
+        <div class="document doc-research" style="top: 120px; left: 680px;">
+            <div class="document-header">
+                <div class="document-icon">M</div>
+                <div class="document-title">Metrics Dashboard</div>
+            </div>
+            <div class="document-content">Analytics data and KPI tracking for product performance and user engagement...</div>
+            <div class="document-meta">
+                <span>6 hours ago</span>
+                <div class="document-tag">Research</div>
+            </div>
+        </div>
+
+        <!-- Connection Lines SVG -->
+        <svg class="connection" style="top: 0; left: 0; width: 100%; height: 100%;">
+            <path class="connection-line" d="M 240 270 Q 350 240 420 300"></path>
+            <path class="connection-line" d="M 500 380 Q 600 350 700 240"></path>
+            <path class="connection-line" d="M 220 400 Q 280 380 350 420"></path>
+            <path class="connection-line" d="M 580 380 Q 650 450 720 500"></path>
+        </svg>
+    </div>
+
+    <script>
+        // Drag functionality
+        let isDragging = false;
+        let currentDocument = null;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.document')) {
+                isDragging = true;
+                currentDocument = e.target.closest('.document');
+                const rect = currentDocument.getBoundingClientRect();
+                startX = e.clientX;
+                startY = e.clientY;
+                startLeft = rect.left;
+                startTop = rect.top;
+                currentDocument.style.zIndex = '1000';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && currentDocument) {
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                currentDocument.style.left = (startLeft + deltaX) + 'px';
+                currentDocument.style.top = (startTop + deltaY) + 'px';
+                currentDocument.style.right = 'auto';
+                currentDocument.style.bottom = 'auto';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (currentDocument) {
+                currentDocument.style.zIndex = 'auto';
+                currentDocument = null;
+            }
+            isDragging = false;
+        });
+
+        // Search functionality
+        document.querySelector('.search-input').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.document').forEach(doc => {
+                const title = doc.querySelector('.document-title').textContent.toLowerCase();
+                const content = doc.querySelector('.document-content').textContent.toLowerCase();
+                if (title.includes(query) || content.includes(query) || query === '') {
+                    doc.style.opacity = '1';
+                    doc.style.transform = 'scale(1)';
+                } else {
+                    doc.style.opacity = '0.3';
+                    doc.style.transform = 'scale(0.95)';
+                }
+            });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                document.querySelector('.search-input').focus();
+            }
+        });
+    </script>
+</body>
+</html>

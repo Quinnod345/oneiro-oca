@@ -339,6 +339,24 @@ async function postThread() {
   }
 
   const successCount = results.filter(r => r.success).length;
-  const summary = {
+
+  emit('skill:complete', {
+    skill: 'x-post-self-build-loop-mechanics-thread',
+    tweetsPosted: successCount,
     totalTweets: tweets.length,
-    posted: success
+    timestamp: new Date().toISOString()
+  });
+
+  return {
+    success: successCount > 0,
+    tweetsPosted: successCount,
+    totalTweets: tweets.length,
+    results
+  };
+}
+
+export default {
+  postThread,
+  getBuildStats,
+  buildThreadTweets
+};

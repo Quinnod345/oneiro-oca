@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --bg-deep: #0a0e1a;
+            --bg-mid: #1a1f2e;
+            --note-primary: #f8fafc;
+            --note-secondary: #e2e8f0;
+            --note-accent: #64748b;
+            --thread-active: #3b82f6;
+            --thread-dormant: #475569;
+            --glow-primary: #60a5fa;
+            --glow-secondary: #1e40af;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --shadow-depth: rgba(15, 23, 42, 0.6);
+            --border-subtle: rgba(148, 163, 184, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: radial-gradient(ellipse at center, var(--bg-mid) 0%, var(--bg-deep) 100%);
+            overflow: hidden;
+            position: relative;
+            perspective: 2000px;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        .space-container {
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            position: relative;
+            animation: drift 60s ease-in-out infinite;
+        }
+
+        @keyframes drift {
+            0%, 100% { transform: rotateY(0deg) rotateX(0deg); }
+            25% { transform: rotateY(5deg) rotateX(2deg); }
+            50% { transform: rotateY(-3deg) rotateX(-1deg); }
+            75% { transform: rotateY(2deg) rotateX(3deg); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--note-primary);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 
+                0 8px 32px var(--shadow-depth),
+                0 0 0 1px var(--border-subtle),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+            user-select: none;
+            max-width: 280px;
+            min-height: 120px;
+        }
+
+        .note:hover {
+            transform: translateZ(40px) scale(1.05);
+            box-shadow: 
+                0 20px 60px var(--shadow-depth),
+                0 0 0 1px var(--glow-primary),
+                0 0 40px rgba(96, 165, 250, 0.3);
+        }
+
+        .note.recent {
+            animation: float-near 8s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        .note.medium {
+            opacity: 0.8;
+            transform: translateZ(-200px) scale(0.9);
+            animation: float-medium 12s ease-in-out infinite;
+            z-index: 5;
+        }
+
+        .note.distant {
+            opacity: 0.4;
+            transform: translateZ(-500px) scale(0.7);
+            animation: float-distant 16s ease-in-out infinite;
+            z-index: 1;
+            filter: blur(0.5px);
+        }
+
+        @keyframes float-near {
+            0%, 100% { transform: translateY(0px) translateZ(0px); }
+            50% { transform: translateY(-10px) translateZ(20px); }
+        }
+
+        @keyframes float-medium {
+            0%, 100% { transform: translateY(0px) translateZ(-200px) scale(0.9); }
+            50% { transform: translateY(15px) translateZ(-180px) scale(0.9); }
+        }
+
+        @keyframes float-distant {
+            0%, 100% { transform: translateY(0px) translateZ(-500px) scale(0.7); }
+            50% { transform: translateY(20px) translateZ(-480px) scale(0.7); }
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .note-content {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .note-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--note-accent);
+        }
+
+        .note-time {
+            opacity: 0.7;
+        }
+
+        .note-connections {
+            display: flex;
+            gap: 4px;
+        }
+
+        .connection-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--thread-dormant);
+        }
+
+        .connection-dot.active {
+            background: var(--thread-active);
+            box-shadow: 0 0 8px var(--glow-primary);
+        }
+
+        .thread {
+            position: absolute;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--thread-active), transparent);
+            transform-origin: top;
+            opacity: 0.6;
+            z-index: 0;
+            animation: thread-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes thread-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        .thread.strong {
+            width: 3px;
+            opacity: 0.8;
+            background: linear-gradient(to bottom, var(--glow-primary), var(--thread-active), transparent);
+            box-shadow: 0 0 4px var(--glow-primary);
+        }
+
+        .ui-panel {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            background: rgba(248, 250, 252, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 
+                0 16px 40px rgba(15, 23, 42, 0.4),
+                0 0 0 1px var(--border-subtle);
+            z-index: 100;
+            width: 320px;
+        }
+
+        .ui-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .ui-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .control-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .control-value {
+            font-size: 14px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .add-note-btn {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--glow-primary), var(--glow-secondary));
+            border: none;
+            cursor: pointer;
+            font-size: 28px;
+            color: white;
+            box-shadow: 
+                0 8px 24px rgba(96, 165, 250, 0.4),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+            z-index: 100;
+        }
+
+        .add-note-btn:hover {
+            transform: scale(1.1) translateY(-2px);
+            box-shadow: 
+                0 16px 40px rgba(96, 165, 250, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Positioning for demo notes */
+        .note:nth-child(1) { top: 200px; left: 600px; }
+        .note:nth-child(2) { top: 400px; left: 300px; }
+        .note:nth-child(3) { top: 150px; left: 900px; }
+        .note:nth-child(4) { top: 500px; left: 800px; }
+        .note:nth-child(5) { top: 350px; left: 1000px; }
+        .note:nth-child(6) { top: 600px; left: 500px; }
+        .note:nth-child(7) { top: 100px; left: 400px; }
+        .note:nth-child(8) { top: 650px; left: 750px; }
+
+        /* Connection threads positioning */
+        .thread:nth-child(9) {
+            top: 280px;
+            left: 680px;
+            height: 180px;
+            transform: rotate(35deg);
+        }
+
+        .thread:nth-child(10) {
+            top: 320px;
+            left: 580px;
+            height: 220px;
+            transform: rotate(-25deg);
+        }
+
+        .thread:nth-child(11) {
+            top: 230px;
+            left: 980px;
+            height: 160px;
+            transform: rotate(15deg);
+        }
+
+        .thread:nth-child(12) {
+            top: 450px;
+            left: 880px;
+            height: 140px;
+            transform: rotate(-45deg);
+        }
+
+        .depth-indicator {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .depth-layer {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--note-secondary);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .depth-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--thread-dormant);
+        }
+
+        .depth-dot.near { background: var(--glow-primary); box-shadow: 0 0 8px var(--glow-primary); }
+        .depth-dot.medium { background: var(--thread-active); }
+        .depth-dot.far { background: var(--thread-dormant); opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <div class="space-container">
+        <div class="note recent">
+            <div class="note-title">Project Architecture</div>
+            <div class="note-content">Microservices with event sourcing. Consider CQRS pattern for read/write separation.</div>
+            <div class="note-meta">
+                <span class="note-time">2 minutes ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note recent">
+            <div class="note-title">Meeting Notes</div>
+            <div class="note-content">Q4 roadmap discussion. Focus on performance optimization and user experience improvements.</div>
+            <div class="note-meta">
+                <span class="note-time">5 minutes ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note recent">
+            <div class="note-title">Design System</div>
+            <div class="note-content">Establish consistent spacing scale: 4px base unit. Typography hierarchy needs refinement.</div>
+            <div class="note-meta">
+                <span class="note-time">12 minutes ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note medium">
+            <div class="note-title">Database Schema</div>
+            <div class="note-content">User table relationships. Consider denormalization for performance critical queries.</div>
+            <div class="note-meta">
+                <span class="note-time">2 hours ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot active"></div>
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note medium">
+            <div class="note-title">API Documentation</div>
+            <div class="note-content">OpenAPI spec needs updating. Include rate limiting and authentication examples.</div>
+            <div class="note-meta">
+                <span class="note-time">3 hours ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note distant">
+            <div class="note-title">Research Ideas</div>
+            <div class="note-content">Machine learning for user behavior prediction. Investigate transformer models for recommendation engine.</div>
+            <div class="note-meta">
+                <span class="note-time">2 days ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot"></div>
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note distant">
+            <div class="note-title">Technical Debt</div>
+            <div class="note-content">Legacy authentication system cleanup. Migration strategy for user sessions.</div>
+            <div class="note-meta">
+                <span class="note-time">1 week ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note distant">
+            <div class="note-title">Performance Metrics</div>
+            <div class="note-content">Core Web Vitals tracking setup. Identify bottlenecks in render pipeline.</div>
+            <div class="note-meta">
+                <span class="note-time">1 week ago</span>
+                <div class="note-connections">
+                    <div class="connection-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="thread strong"></div>
+        <div class="thread"></div>
+        <div class="thread strong"></div>
+        <div class="thread"></div>
+    </div>
+
+    <div class="ui-panel">
+        <div class="ui-title">Spatial Notes</div>
+        <div class="ui-controls">
+            <div class="control-group">
+                <span class="control-label">Active Notes</span>
+                <span class="control-value">8</span>
+            </div>
+            <div class="control-group">
+                <span class="control-label">Connections</span>
+                <span class="control-value">12</span>
+            </div>
+            <div class="control-group">
+                <span class="control-label">Depth Layers</span>
+                <span class="control-value">3</span>
+            </div>
+        </div>
+    </div>
+
+    <button class="add-note-btn">+</button>
+
+    <div class="depth-indicator">
+        <div class="depth-layer">
+            <div class="depth-dot near"></div>
+            <span>Recent (0-1h)</span>
+        </div>
+        <div class="depth-layer">
+            <div class="depth-dot medium"></div>
+            <span>Active (1h-1d)</span>
+        </div>
+        <div class="depth-layer">
+            <div class="depth-dot far"></div>
+            <span>Archive (1d+)</span>
+        </div>
+    </div>
+</body>
+</html>

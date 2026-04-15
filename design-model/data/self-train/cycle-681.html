@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --color-bg: #0a0a0b;
+            --color-surface: #1a1a1d;
+            --color-surface-elevated: #242428;
+            --color-text-primary: #f8f9fa;
+            --color-text-secondary: #9ca3af;
+            --color-text-tertiary: #6b7280;
+            --color-accent-blue: #3b82f6;
+            --color-accent-purple: #8b5cf6;
+            --color-accent-green: #10b981;
+            --color-accent-orange: #f59e0b;
+            --color-accent-red: #ef4444;
+            --color-accent-pink: #ec4899;
+            --color-border: #374151;
+            --color-border-subtle: #1f2937;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --font-size-xs: 0.75rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+        }
+
+        .topic-cluster {
+            position: absolute;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cluster-label {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--color-border-subtle);
+            backdrop-filter: blur(8px);
+            width: fit-content;
+        }
+
+        .document {
+            position: absolute;
+            width: 72px;
+            height: 96px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .document:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-accent-blue);
+        }
+
+        .document::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-color, var(--color-accent-blue));
+        }
+
+        .document-icon {
+            width: 24px;
+            height: 24px;
+            margin: 12px auto 8px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-color, var(--color-accent-blue));
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            color: white;
+        }
+
+        .document-title {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-primary);
+            text-align: center;
+            padding: 0 6px;
+            line-height: 1.2;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .document-meta {
+            font-size: 10px;
+            color: var(--color-text-tertiary);
+            text-align: center;
+            padding: 0 6px;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .document:hover ~ .connection-line,
+        .connection-line:hover {
+            opacity: 1;
+        }
+
+        .search-bar {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 300px;
+            height: 40px;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 0 16px;
+            font-size: var(--font-size-sm);
+            color: var(--color-text-primary);
+            backdrop-filter: blur(10px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .search-bar::placeholder {
+            color: var(--color-text-tertiary);
+        }
+
+        .search-bar:focus {
+            outline: none;
+            border-color: var(--color-accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .toolbar {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-button {
+            width: 40px;
+            height: 40px;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--color-text-secondary);
+            backdrop-filter: blur(10px);
+        }
+
+        .tool-button:hover {
+            background: var(--color-surface);
+            border-color: var(--color-accent-blue);
+            color: var(--color-accent-blue);
+        }
+
+        .minimap {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            width: 200px;
+            height: 120px;
+            background: var(--color-surface-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--color-accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 2px;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            display: flex;
+            gap: 16px;
+            font-size: var(--font-size-xs);
+            color: var(--color-text-tertiary);
+        }
+
+        /* Document type styles */
+        .doc-design { --accent-color: var(--color-accent-purple); }
+        .doc-code { --accent-color: var(--color-accent-green); }
+        .doc-research { --accent-color: var(--color-accent-blue); }
+        .doc-meeting { --accent-color: var(--color-accent-orange); }
+        .doc-personal { --accent-color: var(--color-accent-pink); }
+        .doc-finance { --accent-color: var(--color-accent-red); }
+    </style>
+</head>
+<body>
+    <div class="canvas">
+        <input type="text" class="search-bar" placeholder="Search files and topics...">
+        
+        <div class="toolbar">
+            <div class="tool-button">⊞</div>
+            <div class="tool-button">⚙</div>
+            <div class="tool-button">↗</div>
+        </div>
+
+        <!-- Design Cluster -->
+        <div class="topic-cluster" style="top: 120px; left: 200px;">
+            <div class="cluster-label">Design System</div>
+            <div class="document doc-design" style="top: 40px; left: 0px;">
+                <div class="document-icon">DS</div>
+                <div class="document-title">Design Tokens</div>
+                <div class="document-meta">2 days ago</div>
+            </div>
+            <div class="document doc-design" style="top: 60px; left: 90px;">
+                <div class="document-icon">UI</div>
+                <div class="document-title">Component Library</div>
+                <div class="document-meta">1 week ago</div>
+            </div>
+            <div class="document doc-design" style="top: 20px; left: 180px;">
+                <div class="document-icon">🎨</div>
+                <div class="document-title">Brand Guidelines</div>
+                <div class="document-meta">3 days ago</div>
+            </div>
+        </div>
+
+        <!-- Research Cluster -->
+        <div class="topic-cluster" style="top: 200px; left: 600px;">
+            <div class="cluster-label">User Research</div>
+            <div class="document doc-research" style="top: 40px; left: 0px;">
+                <div class="document-icon">📊</div>
+                <div class="document-title">User Survey Q4</div>
+                <div class="document-meta">5 days ago</div>
+            </div>
+            <div class="document doc-research" style="top: 80px; left: 80px;">
+                <div class="document-icon">👥</div>
+                <div class="document-title">Interview Notes</div>
+                <div class="document-meta">1 day ago</div>
+            </div>
+            <div class="document doc-research" style="top: 20px; left: 120px;">
+                <div class="document-icon">📋</div>
+                <div class="document-title">Usability Test</div>
+                <div class="document-meta">Today</div>
+            </div>
+            <div class="document doc-research" style="top: 100px; left: 160px;">
+                <div class="document-icon">📈</div>
+                <div class="document-title">Analytics Report</div>
+                <div class="document-meta">6 hours ago</div>
+            </div>
+        </div>
+
+        <!-- Development Cluster -->
+        <div class="topic-cluster" style="top: 400px; left: 150px;">
+            <div class="cluster-label">Development</div>
+            <div class="document doc-code" style="top: 40px; left: 0px;">
+                <div class="document-icon">⚡</div>
+                <div class="document-title">API Documentation</div>
+                <div class="document-meta">3 hours ago</div>
+            </div>
+            <div class="document doc-code" style="top: 80px; left: 100px;">
+                <div class="document-icon">🚀</div>
+                <div class="document-title">Deploy Guide</div>
+                <div class="document-meta">2 days ago</div>
+            </div>
+            <div class="document doc-code" style="top: 40px; left: 200px;">
+                <div class="document-icon">🔧</div>
+                <div class="document-title">Configuration</div>
+                <div class="document-meta">1 week ago</div>
+            </div>
+        </div>
+
+        <!-- Meetings Cluster -->
+        <div class="topic-cluster" style="top: 450px; left: 800px;">
+            <div class="cluster-label">Team Meetings</div>
+            <div class="document doc-meeting" style="top: 40px; left: 0px;">
+                <div class="document-icon">🎯</div>
+                <div class="document-title">Sprint Planning</div>
+                <div class="document-meta">Yesterday</div>
+            </div>
+            <div class="document doc-meeting" style="top: 60px; left: 90px;">
+                <div class="document-icon">📝</div>
+                <div class="document-title">Standup Notes</div>
+                <div class="document-meta">2 hours ago</div>
+            </div>
+            <div class="document doc-meeting" style="top: 20px; left: 150px;">
+                <div class="document-icon">💡</div>
+                <div class="document-title">Retrospective</div>
+                <div class="document-meta">4 days ago</div>
+            </div>
+        </div>
+
+        <!-- Finance Cluster -->
+        <div class="topic-cluster" style="top: 100px; left: 1000px;">
+            <div class="cluster-label">Finance</div>
+            <div class="document doc-finance" style="top: 40px; left: 0px;">
+                <div class="document-icon">💰</div>
+                <div class="document-title">Q4 Budget</div>
+                <div class="document-meta">1 week ago</div>
+            </div>
+            <div class="document doc-finance" style="top: 80px; left: 80px;">
+                <div class="document-icon">📊</div>
+                <div class="document-title">Expense Report</div>
+                <div class="document-meta">3 days ago</div>
+            </div>
+        </div>
+
+        <!-- Personal Cluster -->
+        <div class="topic-cluster" style="top: 600px; left: 400px;">
+            <div class="cluster-label">Personal</div>
+            <div class="document doc-personal" style="top: 40px; left: 0px;">
+                <div class="document-icon">✏️</div>
+                <div class="document-title">Journal Entry</div>
+                <div class="document-meta">Today</div>
+            </div>
+            <div class="document doc-personal" style="top: 60px; left: 90px;">
+                <div class="document-icon">🎯</div>
+                <div class="document-title">Goals 2024</div>
+                <div class="document-meta">1 month ago</div>
+            </div>
+            <div class="document doc-personal" style="top: 20px; left: 180px;">
+                <div class="document-icon">📚</div>
+                <div class="document-title">Reading List</div>
+                <div class="document-meta">5 days ago</div>
+            </div>
+        </div>
+
+        <div class="minimap">
+            <div class="minimap-viewport" style="left: 30px; top: 20px; width: 40px; height: 24px;"></div>
+        </div>
+
+        <div class="status-bar">
+            <span>47 documents</span>
+            <span>•</span>
+            <span>6 topics</span>
+            <span>•</span>
+            <span>Last sync: 2 minutes ago</span>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic – Color Instrument</title>
+    <style>
+        :root {
+            --primary-hue: 280;
+            --bg-dark: hsl(var(--primary-hue), 15%, 8%);
+            --bg-medium: hsl(var(--primary-hue), 12%, 12%);
+            --bg-light: hsl(var(--primary-hue), 10%, 16%);
+            --text-primary: hsl(var(--primary-hue), 8%, 92%);
+            --text-secondary: hsl(var(--primary-hue), 6%, 65%);
+            --accent: hsl(var(--primary-hue), 70%, 60%);
+            --accent-bright: hsl(var(--primary-hue), 80%, 70%);
+            --border-subtle: hsl(var(--primary-hue), 8%, 20%);
+            --shadow-key: 0 1px 3px hsla(0, 0%, 0%, 0.3), 0 8px 32px hsla(var(--primary-hue), 50%, 50%, 0.1);
+            --shadow-active: 0 0 20px hsla(var(--primary-hue), 60%, 50%, 0.4), 0 4px 16px hsla(0, 0%, 0%, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            height: 900px;
+            width: 1440px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .main-container {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-medium);
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .control-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 80px;
+            height: 4px;
+            background: var(--bg-light);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px hsla(0, 0%, 0%, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            background: var(--accent-bright);
+            transform: scale(1.1);
+        }
+
+        .instrument-area {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 2rem;
+            height: 100%;
+        }
+
+        .keyboard-container {
+            background: var(--bg-medium);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            border: 1px solid var(--border-subtle);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .keyboard-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .color-keyboard {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 0.5rem;
+            height: 400px;
+        }
+
+        .color-key {
+            background: var(--bg-light);
+            border: 2px solid var(--border-subtle);
+            border-radius: 0.75rem;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .color-key::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: hsl(calc(var(--key-hue, 0)), 70%, 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .color-key:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-key);
+        }
+
+        .color-key:hover::before {
+            opacity: 0.3;
+        }
+
+        .color-key.active {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-active);
+            border-color: hsl(calc(var(--key-hue, 0)), 70%, 60%);
+        }
+
+        .color-key.active::before {
+            opacity: 1;
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            z-index: 2;
+        }
+
+        .chord-section {
+            background: var(--bg-medium);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .harmony-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .color-harmony {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--bg-light);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-subtle);
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .color-harmony:hover {
+            background: var(--bg-dark);
+        }
+
+        .harmony-colors {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .harmony-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 0.375rem;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .harmony-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-left: 0.75rem;
+        }
+
+        .current-palette {
+            background: var(--bg-light);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.5rem;
+        }
+
+        .palette-color {
+            aspect-ratio: 1;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-subtle);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .palette-color:hover {
+            transform: scale(1.05);
+        }
+
+        .color-value {
+            position: absolute;
+            bottom: -1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.625rem;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mode-selector {
+            display: flex;
+            background: var(--bg-medium);
+            border-radius: 0.75rem;
+            padding: 0.25rem;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .mode-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .export-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn:hover {
+            background: var(--accent-bright);
+            transform: translateY(-1px);
+        }
+
+        .wave-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.02;
+            pointer-events: none;
+            background-image: radial-gradient(circle at 30% 20%, hsl(var(--primary-hue), 60%, 50%) 0%, transparent 50%),
+                              radial-gradient(circle at 80% 80%, hsl(calc(var(--primary-hue) + 60), 60%, 50%) 0%, transparent 50%),
+                              radial-gradient(circle at 40% 70%, hsl(calc(var(--primary-hue) + 120), 60%, 50%) 0%, transparent 50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="wave-bg"></div>
+    
+    <div class="main-container">
+        <header class="header">
+            <div class="logo">Chromatic</div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <span class="control-label">Saturation</span>
+                    <input type="range" class="slider" id="saturation" min="0" max="100" value="70">
+                </div>
+                <div class="control-group">
+                    <span class="control-label">Lightness</span>
+                    <input type="range" class="slider" id="lightness" min="10" max="90" value="60">
+                </div>
+                <div class="control-group">
+                    <span class="control-label">Octave</span>
+                    <input type="range" class="slider" id="octave" min="1" max="3" value="1">
+                </div>
+            </div>
+        </header>
+
+        <main class="instrument-area">
+            <div class="keyboard-container">
+                <h2 class="keyboard-title">Color Keyboard</h2>
+                <div class="color-keyboard" id="keyboard">
+                    <!-- Keys generated by JS -->
+                </div>
+            </div>
+
+            <aside class="chord-section">
+                <h3 class="section-title">Harmonies</h3>
+                
+                <div class="harmony-display" id="harmonies">
+                    <div class="color-harmony">
+                        <div class="harmony-colors">
+                            <div class="harmony-swatch" style="background: hsl(0, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(120, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(240, 70%, 60%)"></div>
+                        </div>
+                        <span class="harmony-label">Triadic</span>
+                    </div>
+                    
+                    <div class="color-harmony">
+                        <div class="harmony-colors">
+                            <div class="harmony-swatch" style="background: hsl(180, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(0, 70%, 60%)"></div>
+                        </div>
+                        <span class="harmony-label">Complementary</span>
+                    </div>
+                    
+                    <div class="color-harmony">
+                        <div class="harmony-colors">
+                            <div class="harmony-swatch" style="background: hsl(30, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(60, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(90, 70%, 60%)"></div>
+                            <div class="harmony-swatch" style="background: hsl(120, 70%, 60%)"></div>
+                        </div>
+                        <span class="harmony-label">Analogous</span>
+                    </div>
+                </div>
+
+                <div class="current-palette">
+                    <h4 class="section-title" style="margin-bottom: 1rem;">Current Palette</h4>
+                    <div class="palette-grid" id="palette">
+                        <div class="palette-color" style="background: hsl(0, 70%, 60%)">
+                            <span class="color-value">#E53E3E</span>
+                        </div>
+                        <div class="palette-color" style="background: hsl(120, 70%, 60%)">
+                            <span class="color-value">#38A169</span>
+                        </div>
+                        <div class="palette-color" style="background: hsl(240, 70%, 60%)">
+                            <span class="color-value">#3182CE</span>
+                        </div>
+                        <div class="palette-color" style="background: hsl(60, 70%, 60%)">
+                            <span class="color-value">#D69E2E</span>
+                        </div>
+                        <div class="palette-color" style="background: hsl(300, 70%, 60%)">
+                            <span class="color-value">#B83280</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <footer class="footer">
+            <div class="mode-selector">
+                <button class="mode-btn active">Chromatic</button>
+                <button class="mode-btn">Major</button>
+                <button class="mode-btn">Minor</button>
+                <button class="mode-btn">Pentatonic</button>
+            </div>
+            
+            <button class="export-btn">Export Palette</button>
+        </footer>
+    </div>
+
+    <script>
+        const keyboard = document.getElementById('keyboard');
+        const harmonies = document.getElementById('harmonies');
+        const palette = document.getElementById('palette');
+        
+        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const activeKeys = new Set();
+        
+        // Generate keyboard keys
+        notes.forEach((note, index) => {
+            const key = document.createElement('div');
+            key.className = 'color-key';
+            key.style.setProperty('--key-hue', index * 30);
+            key.innerHTML = `<span class="key-label">${note}</span>`;
+            
+            key.addEventListener('click', () => toggleKey(key, index));
+            keyboard.appendChild(key);
+        });
+        
+        function toggleKey(key, index) {
+            const hue = index * 30;
+            
+            if (key.classList.contains('active')) {
+                key.classList.remove('active');
+                activeKeys.delete(hue);
+            } else {
+                key.classList.add('active');
+                activeKeys.add(hue);
+            }
+            
+            updateHarmonies();
+            updatePalette();
+        }
+        
+        function updateHarmonies() {
+            if (activeKeys.size === 0) return;
+            
+            const baseHue = Math.min(...activeKeys);
+            const saturation = document.getElementById('saturation').value;
+            const lightness = document.getElementById('lightness').value;
+            
+            harmonies.innerHTML = `
+                <div class="color-harmony">
+                    <div class="harmony-colors">
+                        ${[0, 120, 240].map(offset => 
+                            `<div class="harmony-swatch" style="background: hsl(${(baseHue + offset) % 360}, ${saturation}%, ${lightness}%)"></div>`
+                        ).join('')}
+                    </div>
+                    <span class="harmony-label">Triadic</span>
+                </div>
+                <div class="color-harmony">
+                    <div class="harmony-colors">
+                        ${[0, 180].map(offset => 
+                            `<div class="harmony-swatch" style="background: hsl(${(baseHue + offset) % 360}, ${saturation}%, ${lightness}%)"></div>`
+                        ).join('')}
+                    </div>
+                    <span class="harmony-label">Complementary</span>
+                </div>
+                <div class="color-harmony">
+                    <div class="harmony-colors">
+                        ${[-30, 0, 30, 60].map(offset => 
+                            `<div class="harmony-swatch" style="background: hsl(${(baseHue + offset + 360) % 360}, ${saturation}%, ${lightness}%)"></div>`
+                        ).join('')}
+                    </div>
+                    <span class="harmony-label">Analogous</span>
+                </div>
+            `;
+        }
+        
+        function updatePalette() {
+            const colors = Array.from(activeKeys).slice(0, 5);
+            const saturation = document.getElementById('saturation').value;
+            const lightness = document.getElementById('lightness').value;
+            
+            palette.innerHTML = colors.map(hue => {
+                const hslColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                const hexColor = hslToHex(hue, saturation, lightness);
+                return `
+                    <div class="palette-color" style="background: ${hslColor}">
+                        <span class="color-value">${hexColor}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function hslToHex(h, s, l) {
+            h = h % 360;
+            s = s / 100;
+            l = l / 100;
+            
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            
+            let r, g, b;
+            
+            if (h < 60) [r, g, b] = [c, x, 0];
+            else if (h < 120) [r, g, b] = [x, c, 0];
+            else if (h < 180) [r, g, b] = [0, c, x];
+            else if (h < 240) [r, g, b] = [0, x, c];
+            else if (h < 300) [r, g, b] = [x, 0, c];
+            else [r, g, b] = [c, 0, x];
+            
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+            
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+        }
+        
+        // Update on slider changes
+        document.querySelectorAll('.slider').forEach(slider => {
+            slider.addEventListener('input', () => {
+                updateHarmonies();
+                updatePalette();
+            });
+        });
+        
+        // Mode selector functionality
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelector('.mode-btn.active').classList.remove('active');
+                btn.classList.add('active');
+            });
+        });
+        
+        // Export functionality
+        document.querySelector('.export-btn').addEventListener('click', () => {
+            console.log('Exporting palette...');
+        });
+    </script>
+</body>
+</html>
