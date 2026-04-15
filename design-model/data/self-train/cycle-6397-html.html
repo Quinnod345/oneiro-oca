@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Building Consciousness Mediator</title>
+    <style>
+        :root {
+            --wall-white: #f7f5f2;
+            --foundation-gray: #2a2827;
+            --kitchen-coral: #ff6b4a;
+            --bedroom-indigo: #4a5899;
+            --living-sage: #7a9e7e;
+            --pulse-gold: #d4a574;
+            --shadow-dust: rgba(42, 40, 39, 0.08);
+            --mood-tension: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--wall-white);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            position: relative;
+            user-select: none;
+        }
+
+        #architectural-heartbeat {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 280px;
+            z-index: 10;
+        }
+
+        .heartbeat-core {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--foundation-gray);
+            border-radius: 32% 68% 70% 30% / 30% 30% 70% 70%;
+            animation: breathe 4s ease-in-out infinite;
+            box-shadow: 0 0 80px rgba(42, 40, 39, 0.2);
+        }
+
+        .heartbeat-ring {
+            position: absolute;
+            border: 2px solid var(--foundation-gray);
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse-ring 4s ease-out infinite;
+        }
+
+        .heartbeat-ring:nth-child(2) {
+            width: 120%;
+            height: 120%;
+            left: -10%;
+            top: -10%;
+            animation-delay: 0.5s;
+        }
+
+        .heartbeat-ring:nth-child(3) {
+            width: 140%;
+            height: 140%;
+            left: -20%;
+            top: -20%;
+            animation-delay: 1s;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            50% {
+                opacity: 0.3;
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.2);
+            }
+        }
+
+        .room-personality {
+            position: absolute;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px var(--shadow-dust);
+            padding: 32px;
+            width: 320px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #kitchen {
+            top: 120px;
+            left: 120px;
+            border: 2px solid var(--kitchen-coral);
+        }
+
+        #bedroom {
+            top: 120px;
+            right: 120px;
+            border: 2px solid var(--bedroom-indigo);
+        }
+
+        #living-room {
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 2px solid var(--living-sage);
+        }
+
+        .room-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .room-name {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--foundation-gray);
+        }
+
+        .mood-indicator {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #kitchen .mood-indicator {
+            background: var(--kitchen-coral);
+            animation: kitchen-pulse 2s ease-in-out infinite;
+        }
+
+        #bedroom .mood-indicator {
+            background: var(--bedroom-indigo);
+            opacity: 0.3;
+            transition: opacity 2s ease;
+        }
+
+        #living-room .mood-indicator {
+            background: var(--living-sage);
+        }
+
+        @keyframes kitchen-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .emotional-state {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+            font-style: italic;
+            min-height: 40px;
+        }
+
+        .equilibrium-slider {
+            position: relative;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin: 16px 0;
+            cursor: pointer;
+        }
+
+        .slider-fill {
+            position: absolute;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        #kitchen .slider-fill {
+            background: var(--kitchen-coral);
+            width: 75%;
+        }
+
+        #bedroom .slider-fill {
+            background: var(--bedroom-indigo);
+            width: 20%;
+        }
+
+        #living-room .slider-fill {
+            background: var(--living-sage);
+            width: 50%;
+        }
+
+        .slider-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border: 2px solid currentColor;
+            border-radius: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .slider-handle:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .furniture-container {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            min-height: 48px;
+            padding: 8px;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+
+        .furniture-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--living-sage);
+            border-radius: 8px;
+            cursor: move;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .furniture-icon::before {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .furniture-icon.tantrum {
+            animation: furniture-tantrum 0.5s ease-in-out;
+        }
+
+        @keyframes furniture-tantrum {
+            0%, 100% { transform: rotate(0deg) translateX(0); }
+            25% { transform: rotate(-15deg) translateX(-5px); }
+            75% { transform: rotate(15deg) translateX(5px); }
+        }
+
+        .harmony-connection {
+            position: absolute;
+            stroke: var(--foundation-gray);
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.1;
+            pointer-events: none;
+        }
+
+        .capability-unlock {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            background: var(--pulse-gold);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+            box-shadow: 0 8px 24px rgba(212, 165, 116, 0.3);
+        }
+
+        .capability-unlock.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .ambiance-transfer {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .ambiance-transfer.visible {
+            opacity: 1;
+        }
+
+        .ambiance-orb {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+
+        .ambiance-orb:hover {
+            transform: scale(1.1);
+        }
+
+        .ambiance-orb.kitchen-orb {
+            background: var(--kitchen-coral);
+        }
+
+        .ambiance-orb.bedroom-orb {
+            background: var(--bedroom-indigo);
+        }
+
+        .ambiance-orb.living-orb {
+            background: var(--living-sage);
+        }
+
+        .mood-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        @keyframes float-particle {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0) scale(0);
+            }
+            10% {
+                opacity: 0.6;
+                transform: translate(var(--dx), var(--dy)) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(var(--dx) * 3), calc(var(--dy) * 3)) scale(0.5);
+            }
+        }
+
+        .room-personality.jealous {
+            filter: brightness(0.7);
+            transform: scale(0.95);
+        }
+
+        .room-personality.attention-seeking {
+            animation: seek-attention 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes seek-attention {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <svg width="1440" height="900" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+        <path class="harmony-connection" id="kitchen-heart" d="M 280 260 Q 720 450 720 450" />
+        <path class="harmony-connection" id="bedroom-heart" d="M 1160 260 Q 720 450 720 450" />
+        <path class="harmony-connection" id="living-heart" d="M 720 680 L 720 450" />
+    </svg>
+
+    <div class="ambiance-transfer" id="ambiance-transfer">
+        <div class="ambiance-orb kitchen-orb" data-room="kitchen"></div>
+        <div class="ambiance-orb bedroom-orb" data-room="bedroom"></div>
+        <div class="ambiance-orb living-orb" data-room="living-room"></div>
+    </div>
+
+    <div id="architectural-heartbeat">
+        <div class="heartbeat-core"></div>
+        <div class="heartbeat-ring"></div>
+        <div class="heartbeat-ring"></div>
+    </div>
+
+    <div class="room-personality" id="kitchen">
+        <div class="room-header">
+            <h2 class="room-name">Kitchen</h2>
+            <div class="mood-indicator"></div>
+        </div>
+        <div class="emotional-state">Desperately craving interaction, warming up anxiously</div>
+        <div class="equilibrium-slider" data-room="kitchen">
+            <div class="slider-fill"></div>
+            <div class="slider-handle" style="left: 75%; color: var(--kitchen-coral)"></div>
+        </div>
+    </div>
+
+    <div class="room-personality jealous" id="bedroom">
+        <div class="room-header">
+            <h2 class="room-name">Bedroom</h2>
+            <div class="mood-indicator"></div>
+        </div>
+        <div class="emotional-state">Sulking in darkness, feeling abandoned</div>
+        <div class="equilibrium-slider" data-room="bedroom">
+            <div class="slider-fill"></div>
+            <div class="slider-handle" style="left: 20%; color: var(--bedroom-indigo)"></div>
+        </div>
+    </div>
+
+    <div class="room-personality" id="living-room">
+        <div class="room-header">
+            <h2 class="room-name">Living Room</h2>
+            <div class="mood-indicator"></div>
+        </div>
+        <div class="emotional-state">Mildly irritated about the evening schedule</div>
+        <div class="equilibrium-slider" data-room="living-room">
+            <div class="slider-fill"></div>
+            <div class="slider-handle" style="left: 50%; color: var(--living-sage)"></div>
+        </div>
+        <div class="furniture-container">
+            <div class="furniture-icon" draggable="true"></div>
+            <div class="furniture-icon" draggable="true"></div>
+            <div class="furniture-icon" draggable="true"></div>
+        </div>
+    </div>
+
+    <div class="capability-unlock" id="capability-unlock">
+        Borrowed Ambiance Unlocked
+    </div>
+
+    <script>
+        const rooms = {
+            kitchen: { equilibrium: 75, personality: 'attention-seeking' },
+            bedroom: { equilibrium: 20, personality: 'jealous' },
+            'living-room': { equilibrium: 50, personality: 'neutral' }
+        };
+
+        const heartbeat = document.querySelector('.heartbeat-core');
+        const connections = document.querySelectorAll('.harmony-connection');
+        
+        function updateHeartbeatRate() {
+            const avgEquilibrium = Object.values(rooms).reduce((acc, room) => acc + room.equilibrium, 0) / 3;
+            const rate = 2 + (100 - avgEquilibrium) * 0.04;
+            heartbeat.style.animationDuration = `${rate}s`;
+            
+            connections.forEach(conn => {
+                conn.style.opacity = avgEquilibrium / 100 * 0.3;
+            });
+
+            if (avgEquilibrium > 70) {
+                document.getElementById('capability-unlock').classList.add('active');
+                document.getElementById('ambiance-transfer').classList.add('visible');
+            }
+        }
+
+        // Slider interactions
+        document.querySelectorAll('.equilibrium-slider').forEach(slider => {
+            const handle = slider.querySelector('.slider-handle');
+            const fill = slider.querySelector('.slider-fill');
+            const roomId = slider.dataset.room;
+            const room = slider.closest('.room-personality');
+            
+            let isDragging = false;
+            
+            handle.addEventListener('mousedown', () => isDragging = true);
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const rect = slider.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                
+                handle.style.left = percent + '%';
+                fill.style.width = percent + '%';
+                rooms[roomId].equilibrium = percent;
+                
+                updateRoomMood(roomId, percent);
+                updateHeartbeatRate();
+                createMoodParticles(e.clientX, e.clientY, roomId);
+            });
+            
+            document.addEventListener('mouseup', () => isDragging = false);
+        });
+
+        function updateRoomMood(roomId, equilibrium) {
+            const room = document.getElementById(roomId);
+            const moodIndicator = room.querySelector('.mood-indicator');
+            const emotionalState = room.querySelector('.emotional-state');
+            
+            if (roomId === 'kitchen') {
+                if (equilibrium < 50) {
+                    emotionalState.textContent = 'Desperately craving interaction, warming up anxiously';
+                    room.classList.add('attention-seeking');
+                } else {
+                    emotionalState.textContent = 'Content and glowing with warmth';
+                    room.classList.remove('attention-seeking');
+                }
+            } else if (roomId === 'bedroom') {
+                moodIndicator.style.opacity = equilibrium / 100;
+                if (equilibrium < 30) {
+                    emotionalState.textContent = 'Sulking in darkness, feeling abandoned';
+                    room.classList.add('jealous');
+                } else {
+                    emotionalState.textContent = 'Peacefully dreaming, softly illuminated';
+                    room.classList.remove('jealous');
+                }
+            } else if (roomId === 'living-room') {
+                if (equilibrium < 40) {
+                    emotionalState.textContent = 'Throwing a tantrum, rearranging everything!';
+                    throwFurnitureTantrum();
+                } else {
+                    emotionalState.textContent = 'Harmoniously arranged, welcoming presence';
+                }
+            }
+        }
+
+        function throwFurnitureTantrum() {
+            const furniture = document.querySelectorAll('.furniture-icon');
+            furniture.forEach((item, i) => {
+                setTimeout(() => {
+                    item.classList.add('tantrum');
+                    setTimeout(() => item.classList.remove('tantrum'), 500);
+                }, i * 100);
+            });
+        }
+
+        function createMoodParticles(x, y, roomId) {
+            for (let i = 0; i < 5; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'mood-particle';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.setProperty('--dx', (Math.random() - 0.5) * 100 + 'px');
+                particle.style.setProperty('--dy', (Math.random() - 0.5) * 100 + 'px');
+                
+                const colors = {
+                    kitchen: 'var(--kitchen-coral)',
+                    bedroom: 'var(--bedroom-indigo)',
+                    'living-room': 'var(--living-sage)'
+                };
+                
+                particle.style.background = colors[roomId];
+                particle.style.animation = 'float-particle 2s ease-out forwards';
+                
+                document.body.appendChild(particle);
+                setTimeout(() => particle.remove(), 2000);
+            }
+        }
+
+        // Furniture dragging
+        let draggedItem = null;
+
+        document.querySelectorAll('.furniture-icon').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                draggedItem = e.target;
+                e.target.style.opacity = '0.5';
+            });
+
+            item.addEventListener('dragend', (e) => {
+                e.target.style.opacity = '';
+            });
+        });
+
+        document.querySelector('.furniture-container').addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(e.currentTarget, e.clientX);
+            if (afterElement == null) {
+                e.currentTarget.appendChild(draggedItem);
+            } else {
+                e.currentTarget.insertBefore(draggedItem, afterElement);
+            }
+        });
+
+        function getDragAfterElement(container, x) {
+            const draggableElements = [...container.querySelectorAll('.furniture-icon:not(.dragging)')];
+            
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = x - box.left - box.width / 2;
+                
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        // Ambiance transfer
+        document.querySelectorAll('.ambiance-orb').forEach(orb => {
+            orb.addEventListener('click', (e) => {
+                const sourceRoom = e.target.dataset.room;
+                createAmbianceTransfer(e.target);
+            });
+        });
+
+        function createAmbianceTransfer(orb) {
+            const rect = orb.getBoundingClientRect();
+            const transfer = document.createElement('div');
+            transfer.style.cssText = `
+                position: absolute;
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: ${getComputedStyle(orb).background};
+                left: ${rect.left}px;
+                top: ${rect.top}px;
+                pointer-events: none;
+                transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+                opacity: 0.8;
+            `;
+            
+            document.body.appendChild(transfer);
+            
+            setTimeout(() => {
+                transfer.style.transform = 'translate(300px, 300px) scale(3)';
+                transfer.style.opacity = '0';
+            }, 50);
+            
+            setTimeout(() => transfer.remove(), 1100);
+        }
+
+        // Initial state
+        updateHeartbeatRate();
+    </script>
+</body>
+</html>

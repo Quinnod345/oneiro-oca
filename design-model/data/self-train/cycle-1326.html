@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes in Space</title>
+    <style>
+        :root {
+            --space-dark: #0a0b1e;
+            --space-medium: #1a1d3a;
+            --note-primary: #2d3748;
+            --note-secondary: #4a5568;
+            --text-bright: #f7fafc;
+            --text-dim: #a0aec0;
+            --accent-blue: #4299e1;
+            --accent-purple: #805ad5;
+            --accent-green: #48bb78;
+            --accent-orange: #ed8936;
+            --thread-color: rgba(66, 153, 225, 0.6);
+            --glow-intense: rgba(66, 153, 225, 0.8);
+            --shadow-deep: rgba(0, 0, 0, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(ellipse at center, var(--space-medium) 0%, var(--space-dark) 100%);
+            color: var(--text-bright);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            perspective: 2000px;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        .space-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .note {
+            position: absolute;
+            background: linear-gradient(145deg, var(--note-primary), var(--note-secondary));
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 
+                0 8px 32px var(--shadow-deep),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform-style: preserve-3d;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+        }
+
+        .note:hover {
+            transform: translateZ(20px) scale(1.05);
+            box-shadow: 
+                0 16px 64px var(--shadow-deep),
+                0 0 40px var(--glow-intense),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .note.recent {
+            width: 280px;
+            min-height: 160px;
+            z-index: 100;
+        }
+
+        .note.medium {
+            width: 240px;
+            min-height: 140px;
+            opacity: 0.8;
+            z-index: 50;
+        }
+
+        .note.distant {
+            width: 180px;
+            min-height: 100px;
+            opacity: 0.4;
+            z-index: 20;
+        }
+
+        .note.far {
+            width: 120px;
+            min-height: 80px;
+            opacity: 0.2;
+            z-index: 10;
+        }
+
+        .note-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .note-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            box-shadow: 0 0 12px currentColor;
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-bright);
+            flex: 1;
+        }
+
+        .note-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-dim);
+        }
+
+        .note-timestamp {
+            font-size: 11px;
+            color: var(--text-dim);
+            opacity: 0.7;
+            margin-top: 12px;
+        }
+
+        .connection-thread {
+            position: absolute;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .thread-line {
+            position: absolute;
+            background: linear-gradient(90deg, var(--thread-color), transparent);
+            height: 2px;
+            transform-origin: left center;
+            border-radius: 1px;
+            box-shadow: 0 0 8px var(--thread-color);
+            opacity: 0.7;
+            animation: pulse-thread 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-thread {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+
+        .controls {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            gap: 16px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            background: rgba(45, 55, 72, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-bright);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            background: rgba(66, 153, 225, 0.3);
+            box-shadow: 0 8px 32px rgba(66, 153, 225, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .info-panel {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(45, 55, 72, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            max-width: 320px;
+        }
+
+        .info-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--accent-blue);
+        }
+
+        .info-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-dim);
+        }
+
+        /* Floating animation for distant notes */
+        @keyframes float-gentle {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes float-slow {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-8px) rotate(1deg); }
+            66% { transform: translateY(8px) rotate(-1deg); }
+        }
+
+        .note.distant {
+            animation: float-gentle 6s ease-in-out infinite;
+        }
+
+        .note.far {
+            animation: float-slow 8s ease-in-out infinite;
+        }
+
+        /* Color variants */
+        .note.blue .note-indicator { color: var(--accent-blue); }
+        .note.purple .note-indicator { color: var(--accent-purple); }
+        .note.green .note-indicator { color: var(--accent-green); }
+        .note.orange .note-indicator { color: var(--accent-orange); }
+    </style>
+</head>
+<body>
+    <div class="space-container" id="spaceContainer">
+        <!-- Recent Notes -->
+        <div class="note recent blue" style="transform: translate3d(200px, 150px, 100px) rotateY(-5deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Project Architecture</div>
+            </div>
+            <div class="note-content">
+                Considering a microservices approach for the new platform. Need to evaluate trade-offs between complexity and scalability. Docker containers with Kubernetes orchestration seems like the right path.
+            </div>
+            <div class="note-timestamp">2 minutes ago</div>
+        </div>
+
+        <div class="note recent green" style="transform: translate3d(800px, 300px, 80px) rotateY(10deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Meeting Notes</div>
+            </div>
+            <div class="note-content">
+                Team sync went well. Sarah proposed the new design system. Timeline looks aggressive but achievable. Follow up on the API specifications next week.
+            </div>
+            <div class="note-timestamp">15 minutes ago</div>
+        </div>
+
+        <div class="note recent purple" style="transform: translate3d(500px, 100px, 120px) rotateX(5deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">UX Research</div>
+            </div>
+            <div class="note-content">
+                User interviews revealed interesting patterns. 73% prefer minimal interfaces. Need to simplify the onboarding flow significantly.
+            </div>
+            <div class="note-timestamp">1 hour ago</div>
+        </div>
+
+        <!-- Medium Distance Notes -->
+        <div class="note medium orange" style="transform: translate3d(100px, 400px, -100px) rotateY(15deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Database Schema</div>
+            </div>
+            <div class="note-content">
+                Normalized the user relationships table. Performance improved by 40% after indexing optimization.
+            </div>
+            <div class="note-timestamp">Yesterday</div>
+        </div>
+
+        <div class="note medium blue" style="transform: translate3d(900px, 500px, -80px) rotateY(-20deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Marketing Strategy</div>
+            </div>
+            <div class="note-content">
+                Q4 campaign focus on enterprise clients. Budget allocated for LinkedIn and industry publications.
+            </div>
+            <div class="note-timestamp">2 days ago</div>
+        </div>
+
+        <div class="note medium purple" style="transform: translate3d(1100px, 200px, -60px) rotateX(-10deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Code Review</div>
+            </div>
+            <div class="note-content">
+                Authentication module looks solid. Suggested improvements to error handling.
+            </div>
+            <div class="note-timestamp">3 days ago</div>
+        </div>
+
+        <!-- Distant Notes -->
+        <div class="note distant green" style="transform: translate3d(1200px, 400px, -200px) rotateY(25deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Brainstorm</div>
+            </div>
+            <div class="note-content">
+                Wild ideas for the product roadmap. Voice interfaces could be the next big thing.
+            </div>
+            <div class="note-timestamp">1 week ago</div>
+        </div>
+
+        <div class="note distant orange" style="transform: translate3d(50px, 600px, -180px) rotateX(15deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Performance</div>
+            </div>
+            <div class="note-content">
+                Load testing results. Need to optimize the image processing pipeline.
+            </div>
+            <div class="note-timestamp">1 week ago</div>
+        </div>
+
+        <div class="note distant blue" style="transform: translate3d(300px, 700px, -220px) rotateY(-30deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Research</div>
+            </div>
+            <div class="note-content">
+                Competitor analysis shows gaps in mobile experience.
+            </div>
+            <div class="note-timestamp">2 weeks ago</div>
+        </div>
+
+        <!-- Far Notes -->
+        <div class="note far purple" style="transform: translate3d(1300px, 600px, -400px) rotateY(40deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Initial Concept</div>
+            </div>
+            <div class="note-content">
+                First sketches of the 3D interface idea.
+            </div>
+            <div class="note-timestamp">1 month ago</div>
+        </div>
+
+        <div class="note far green" style="transform: translate3d(0px, 800px, -350px) rotateX(20deg);">
+            <div class="note-header">
+                <div class="note-indicator"></div>
+                <div class="note-title">Vision</div>
+            </div>
+            <div class="note-content">
+                Notes should exist in space, not on flat surfaces.
+            </div>
+            <div class="note-timestamp">2 months ago</div>
+        </div>
+
+        <!-- Connection Threads -->
+        <div class="connection-thread" style="left: 480px; top: 180px;">
+            <div class="thread-line" style="width: 340px; transform: rotate(25deg);"></div>
+        </div>
+        <div class="connection-thread" style="left: 320px; top: 280px;">
+            <div class="thread-line" style="width: 200px; transform: rotate(-15deg);"></div>
+        </div>
+        <div class="connection-thread" style="left: 720px; top: 320px;">
+            <div class="thread-line" style="width: 280px; transform: rotate(45deg);"></div>
+        </div>
+        <div class="connection-thread" style="left: 580px; top: 200px;">
+            <div class="thread-line" style="width: 160px; transform: rotate(70deg);"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-btn" title="Add Note">+</div>
+        <div class="control-btn" title="Reset View">↺</div>
+        <div class="control-btn" title="Focus Mode">◯</div>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-title">Notes in Space</div>
+        <div class="info-text">
+            Your thoughts exist in three dimensions. Recent notes stay close, while older ideas drift into the distance. Connections between related thoughts appear as glowing threads. Drag to explore your mental landscape.
+        </div>
+    </div>
+
+    <script>
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let currentX = 0;
+        let currentY = 0;
+        
+        const container = document.getElementById('spaceContainer');
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - currentX;
+            startY = e.clientY - currentY;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                currentX = e.clientX - startX;
+                currentY = e.clientY - startY;
+                
+                const rotateY = currentX * 0.1;
+                const rotateX = -currentY * 0.1;
+                
+                container.style.transform = `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`;
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        // Note hover effects
+        document.querySelectorAll('.note').forEach(note => {
+            note.addEventListener('mouseenter', () => {
+                note.style.zIndex = '999';
+            });
+            
+            note.addEventListener('mouseleave', () => {
+                note.style.zIndex = '';
+            });
+        });
+    </script>
+</body>
+</html>

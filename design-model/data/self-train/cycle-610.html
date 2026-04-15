@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Timeline Manager</title>
+    <style>
+        :root {
+            --surface-primary: #fefefe;
+            --surface-secondary: #f8f9fa;
+            --surface-tertiary: #e9ecef;
+            --surface-accent: #fff5f0;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --text-tertiary: #adb5bd;
+            --accent-primary: #ff6b35;
+            --accent-secondary: #f7931e;
+            --accent-tertiary: #ffb366;
+            --success-primary: #20c997;
+            --success-secondary: #6fdf8f;
+            --border-primary: #dee2e6;
+            --border-secondary: #e9ecef;
+            --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+            --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-medium: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--surface-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            background: linear-gradient(135deg, var(--surface-primary) 0%, var(--surface-secondary) 100%);
+            overflow: hidden;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--space-2xl);
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .btn {
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-sm);
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            color: white;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .btn-primary:hover {
+            background: #e55a2b;
+            box-shadow: var(--shadow-medium);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--surface-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: #dde1e6;
+        }
+
+        .timeline-container {
+            position: absolute;
+            top: 80px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: var(--space-2xl);
+            overflow-y: auto;
+        }
+
+        .recipe-header {
+            margin-bottom: var(--space-2xl);
+            text-align: center;
+        }
+
+        .recipe-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .recipe-meta {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-lg);
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+        }
+
+        .timeline {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, var(--accent-tertiary), var(--accent-primary), var(--success-primary));
+            transform: translateX(-50%);
+            border-radius: 2px;
+        }
+
+        .timeline-step {
+            position: relative;
+            margin-bottom: var(--space-2xl);
+            display: flex;
+            align-items: flex-start;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .timeline-step:nth-child(1) { animation-delay: 0.1s; }
+        .timeline-step:nth-child(2) { animation-delay: 0.2s; }
+        .timeline-step:nth-child(3) { animation-delay: 0.3s; }
+        .timeline-step:nth-child(4) { animation-delay: 0.4s; }
+        .timeline-step:nth-child(5) { animation-delay: 0.5s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .timeline-step.left {
+            flex-direction: row;
+            text-align: right;
+        }
+
+        .timeline-step.right {
+            flex-direction: row-reverse;
+            text-align: left;
+        }
+
+        .step-content {
+            width: calc(50% - 40px);
+            background: var(--surface-primary);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            box-shadow: var(--shadow-medium);
+            border: 1px solid var(--border-secondary);
+            transition: all var(--transition-medium);
+            position: relative;
+        }
+
+        .step-content:hover {
+            box-shadow: var(--shadow-strong);
+            transform: translateY(-2px);
+        }
+
+        .step-content::before {
+            content: '';
+            position: absolute;
+            top: 24px;
+            width: 16px;
+            height: 16px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-secondary);
+            transform: rotate(45deg);
+        }
+
+        .timeline-step.left .step-content::before {
+            right: -9px;
+        }
+
+        .timeline-step.right .step-content::before {
+            left: -9px;
+        }
+
+        .step-number {
+            position: absolute;
+            left: 50%;
+            top: 20px;
+            width: 60px;
+            height: 60px;
+            background: var(--accent-primary);
+            border: 4px solid var(--surface-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            transform: translateX(-50%);
+            box-shadow: var(--shadow-medium);
+            z-index: 10;
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .step-description {
+            color: var(--text-secondary);
+            margin-bottom: var(--space-md);
+            line-height: 1.6;
+        }
+
+        .ingredients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+
+        .ingredient-tag {
+            background: var(--surface-accent);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent-primary);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            text-align: center;
+        }
+
+        .step-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--border-secondary);
+        }
+
+        .step-timing {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .step-temperature {
+            background: var(--surface-secondary);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .transformation-flow {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: var(--space-lg);
+        }
+
+        .flow-arrow {
+            width: 2px;
+            height: 30px;
+            background: linear-gradient(to bottom, var(--accent-secondary), var(--success-secondary));
+            position: relative;
+            animation: pulse 2s infinite;
+        }
+
+        .flow-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: -3px;
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid var(--success-secondary);
+            border-bottom: 2px solid var(--success-secondary);
+            transform: rotate(45deg);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .final-result {
+            background: linear-gradient(135deg, var(--success-primary), var(--success-secondary));
+            color: white;
+            text-align: center;
+            padding: var(--space-xl);
+            border-radius: var(--radius-lg);
+            margin-top: var(--space-2xl);
+            box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .final-result::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .final-result h3 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: var(--space-sm);
+            position: relative;
+            z-index: 1;
+        }
+
+        .final-result p {
+            font-size: 16px;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .floating-elements {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .floating-element {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-tertiary);
+            border-radius: 50%;
+            animation: float 20s infinite linear;
+            opacity: 0.3;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.3;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .floating-element:nth-child(1) { left: 10%; animation-delay: -2s; }
+        .floating-element:nth-child(2) { left: 20%; animation-delay: -4s; }
+        .floating-element:nth-child(3) { left: 30%; animation-delay: -6s; }
+        .floating-element:nth-child(4) { left: 40%; animation-delay: -8s; }
+        .floating-element:nth-child(5) { left: 50%; animation-delay: -10s; }
+        .floating-element:nth-child(6) { left: 60%; animation-delay: -12s; }
+        .floating-element:nth-child(7) { left: 70%; animation-delay: -14s; }
+        .floating-element:nth-child(8) { left: 80%; animation-delay: -16s; }
+        .floating-element:nth-child(9) { left: 90%; animation-delay: -18s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="floating-elements">
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+        </div>
+
+        <header class="header">
+            <h1>Recipe Timeline</h1>
+            <div class="header-controls">
+                <button class="btn btn-secondary">Save Recipe</button>
+                <button class="btn btn-primary">Share Timeline</button>
+            </div>
+        </header>
+
+        <div class="timeline-container">
+            <div class="recipe-header">
+                <h1 class="recipe-title">Classic Beef Bourguignon</h1>
+                <div class="recipe-meta">
+                    <div class="meta-item">
+                        <span>⏱</span>
+                        <span>3h 30min</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>👥</span>
+                        <span>Serves 6</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>📊</span>
+                        <span>Advanced</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-step left">
+                    <div class="step-content">
+                        <h3 class="step-title">Prepare Ingredients</h3>
+                        <p class="step-description">Cut beef chuck into 2-inch cubes, dice vegetables, and prepare aromatics for the foundation of our bourguignon.</p>
+                        <div class="ingredients-grid">
+                            <div class="ingredient-tag">Beef Chuck</div>
+                            <div class="ingredient-tag">Carrots</div>
+                            <div class="ingredient-tag">Onions</div>
+                            <div class="ingredient-tag">Garlic</div>
+                            <div class="ingredient-tag">Herbs</div>
+                        </div>
+                        <div class="step-meta">
+                            <div class="step-timing">
+                                <span>⏱</span>
+                                <span>20 minutes</span>
+                            </div>
+                            <div class="step-temperature">Prep Stage</div>
+                        </div>
+                    </div>
+                    <div class="step-number">1</div>
+                </div>
+
+                <div class="transformation-flow">
+                    <div class="flow-arrow"></div>
+                </div>
+
+                <div class="timeline-step right">
+                    <div class="step-content">
+                        <h3 class="step-title">Sear & Brown</h3>
+                        <p class="step-description">Sear beef cubes until deeply caramelized, building the Maillard reaction that creates the rich, complex flavors.</p>
+                        <div class="ingredients-grid">
+                            <div class="ingredient-tag">+ Oil</div>
+                            <div class="ingredient-tag">+ Seasoning</div>
+                            <div class="ingredient-tag">High Heat</div>
+                        </div>
+                        <div class="step-meta">
+                            <div class="step-timing">
+                                <span>⏱</span>
+                                <span>15 minutes</span>
+                            </div>
+                            <div class="step-temperature">High Heat</div>
+                        </div>
+                    </div>
+                    <div class="step-number">2</div>
+                </div>
+
+                <div class="transformation-flow">
+                    <div class="flow-arrow"></div>
+                </div>
+
+                <div class="timeline-step left">
+                    <div class="step-content">
+                        <h3 class="step-title">Deglaze & Layer</h3>
+                        <p class="step-description">Deglaze with red wine, scraping up fond. Layer vegetables and herbs to build aromatic complexity.</p>
+                        <div class="ingredients-grid">
+                            <div class="ingredient-tag">+ Red Wine</div>
+                            <div class="ingredient-tag">+ Stock</div>
+                            <div class="ingredient-tag">+ Tomato Paste</div>
+                            <div class="ingredient-tag">+ Bay Leaves</div>
+                        </div>
+                        <div class="step-meta">
+                            <div class="step-timing">
+                                <span>⏱</span>
+                                <span>10 minutes</span>
+                            </div>
+                            <div class="step-temperature">Medium Heat</div>
+                        </div>
+                    </div>
+                    <div class="step-number">3</div>
+                </div>
+
+                <div class="transformation-flow">
+                    <div class="flow-arrow"></div>
+                </div>
+
+                <div class="timeline-step right">
+                    <div class="step-content">
+                        <h3 class="step-title">Slow Braise</h3>
+                        <p class="step-description">Long, gentle braising breaks down collagen into gelatin, creating silky texture and concentrated flavors.</p>
+                        <div class="ingredients-grid">
+                            <div class="ingredient-tag">Low Heat</div>
+                            <div class="ingredient-tag">Covered</div>
+                            <div class="ingredient-tag">Time Transform</div>
+                        </div>
+                        <div class="step-meta">
+                            <div class="step-timing">
+                                <span>⏱</span>
+                                <span>2h 30min</span>
+                            </div>
+                            <div class="step-temperature">325°F</div>
+                        </div>
+                    </div>
+                    <div class="step-number">4</div>
+                </div>
+
+                <div class="transformation-flow">
+                    <div class="flow-arrow"></div>
+                </div>
+
+                <div class="timeline-step left">
+                    <div class="step-content">
+                        <h3 class="step-title">Final Assembly</h3>
+                        <p class="step-description">Add sautéed mushrooms and pearl onions. Adjust seasoning and thicken sauce to perfect consistency.</p>
+                        <div class="ingredients-grid">
+                            <div class="ingredient-tag">+ Mushrooms</div>
+                            <div class="ingredient-tag">+ Pearl Onions</div>
+                            <div class="ingredient-tag">+ Fresh Herbs</div>
+                        </div>
+                        <div class="step-meta">
+                            <div class="step-timing">
+                                <span>⏱</span>
+                                <span>15 minutes</span>
+                            </div>
+                            <div class="step-temperature">Gentle Simmer</div>
+                        </div>
+                    </div>
+                    <div class="step-number">5</div>
+                </div>
+
+                <div class="final-result">
+                    <h3>✨ Perfect Beef Bourguignon</h3>
+                    <p>Tender beef in rich wine sauce with vegetables — a masterpiece of French cooking transformed through time and technique</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

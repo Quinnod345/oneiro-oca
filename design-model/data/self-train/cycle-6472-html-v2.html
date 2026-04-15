@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Dream Residue Collector</title>
+    <style>
+        :root {
+            --wake-threshold: #1a1a2e;
+            --rem-blue: #16213e;
+            --theta-violet: #533483;
+            --alpha-gold: #e94560;
+            --consciousness-white: #f5f3f0;
+            --joy-coral: #ff6b6b;
+            --fear-indigo: #4e5283;
+            --curiosity-mint: #51cf66;
+            --memory-fade: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 30% 20%, var(--rem-blue) 0%, var(--wake-threshold) 40%, #0a0a0a 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            position: relative;
+            cursor: default;
+        }
+
+        .header {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: 300;
+            color: var(--consciousness-white);
+            letter-spacing: 0.08em;
+            margin-bottom: 12px;
+            opacity: 0.9;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--consciousness-white);
+            opacity: 0.5;
+            letter-spacing: 0.04em;
+        }
+
+        .temporal-field {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .memory-bubble {
+            position: absolute;
+            border-radius: 50%;
+            backdrop-filter: blur(4px);
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.08), transparent);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            pointer-events: auto;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .memory-bubble:hover {
+            transform: scale(1.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            opacity: 1;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+        }
+
+        .memory-bubble.captured {
+            animation: capture 0.8s ease-out forwards;
+        }
+
+        @keyframes capture {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(0.9); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .bubble-content {
+            position: absolute;
+            inset: 20%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            color: var(--consciousness-white);
+            opacity: 0.8;
+            text-align: center;
+            letter-spacing: 0.02em;
+            font-weight: 400;
+        }
+
+        .bubble-1 {
+            width: 180px;
+            height: 180px;
+            top: 180px;
+            left: 200px;
+            animation: float1 15s infinite ease-in-out;
+        }
+
+        .bubble-2 {
+            width: 140px;
+            height: 140px;
+            top: 350px;
+            left: 600px;
+            animation: float2 18s infinite ease-in-out;
+        }
+
+        .bubble-3 {
+            width: 200px;
+            height: 200px;
+            top: 250px;
+            right: 250px;
+            animation: float3 20s infinite ease-in-out;
+        }
+
+        .bubble-4 {
+            width: 120px;
+            height: 120px;
+            bottom: 250px;
+            left: 400px;
+            animation: float4 16s infinite ease-in-out;
+        }
+
+        @keyframes float1 {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(30px, -20px); }
+        }
+
+        @keyframes float2 {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-40px, -30px); }
+        }
+
+        @keyframes float3 {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-30px, 40px); }
+        }
+
+        @keyframes float4 {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(50px, -40px); }
+        }
+
+        .vessel-container {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 140px;
+        }
+
+        .vessel {
+            width: 180px;
+            height: 220px;
+            position: relative;
+            transition: all 0.3s ease-out;
+            cursor: pointer;
+        }
+
+        .vessel:hover {
+            transform: translateY(-10px);
+        }
+
+        .vessel-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            border-radius: 10px 10px 50% 50%;
+            overflow: hidden;
+        }
+
+        .vessel-joy .vessel-inner {
+            background: linear-gradient(180deg, transparent 0%, rgba(255, 107, 107, 0.1) 50%, rgba(255, 107, 107, 0.3) 100%);
+            border: 2px solid rgba(255, 107, 107, 0.4);
+            box-shadow: inset 0 -20px 40px rgba(255, 107, 107, 0.2);
+        }
+
+        .vessel-fear .vessel-inner {
+            background: linear-gradient(180deg, transparent 0%, rgba(78, 82, 131, 0.1) 50%, rgba(78, 82, 131, 0.3) 100%);
+            border: 2px solid rgba(78, 82, 131, 0.4);
+            box-shadow: inset 0 -20px 40px rgba(78, 82, 131, 0.2);
+        }
+
+        .vessel-curiosity .vessel-inner {
+            background: linear-gradient(180deg, transparent 0%, rgba(81, 207, 102, 0.1) 50%, rgba(81, 207, 102, 0.3) 100%);
+            border: 2px solid rgba(81, 207, 102, 0.4);
+            box-shadow: inset 0 -20px 40px rgba(81, 207, 102, 0.2);
+        }
+
+        .vessel-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 0%;
+            transition: height 0.6s ease-out;
+            border-radius: 0 0 50% 50%;
+        }
+
+        .vessel-joy .vessel-fill {
+            background: linear-gradient(180deg, rgba(255, 107, 107, 0.6), rgba(255, 107, 107, 0.3));
+        }
+
+        .vessel-fear .vessel-fill {
+            background: linear-gradient(180deg, rgba(78, 82, 131, 0.6), rgba(78, 82, 131, 0.3));
+        }
+
+        .vessel-curiosity .vessel-fill {
+            background: linear-gradient(180deg, rgba(81, 207, 102, 0.6), rgba(81, 207, 102, 0.3));
+        }
+
+        .vessel-label {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--consciousness-white);
+            opacity: 0.7;
+            font-size: 16px;
+            font-weight: 300;
+            letter-spacing: 0.04em;
+            text-transform: capitalize;
+        }
+
+        .vessel-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: 200;
+            color: var(--consciousness-white);
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .particle-system {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--consciousness-white);
+            opacity: 0.3;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="title">DREAM RESIDUE COLLECTOR</h1>
+        <p class="subtitle">Click memories to collect • Hover vessels to examine</p>
+    </div>
+
+    <div class="particle-system" id="particleSystem"></div>
+
+    <div class="temporal-field" id="temporalField">
+        <div class="memory-bubble bubble-1" data-emotion="joy">
+            <div class="bubble-content">summer laughter</div>
+        </div>
+        <div class="memory-bubble bubble-2" data-emotion="fear">
+            <div class="bubble-content">falling endless</div>
+        </div>
+        <div class="memory-bubble bubble-3" data-emotion="curiosity">
+            <div class="bubble-content">what lies beyond</div>
+        </div>
+        <div class="memory-bubble bubble-4" data-emotion="joy">
+            <div class="bubble-content">warm embrace</div>
+        </div>
+    </div>
+
+    <div class="vessel-container">
+        <div class="vessel vessel-joy" data-emotion="joy">
+            <div class="vessel-inner">
+                <div class="vessel-fill" id="joyFill"></div>
+                <div class="vessel-count" id="joyCount">0</div>
+            </div>
+            <div class="vessel-label">joy</div>
+        </div>
+        <div class="vessel vessel-fear" data-emotion="fear">
+            <div class="vessel-inner">
+                <div class="vessel-fill" id="fearFill"></div>
+                <div class="vessel-count" id="fearCount">0</div>
+            </div>
+            <div class="vessel-label">fear</div>
+        </div>
+        <div class="vessel vessel-curiosity" data-emotion="curiosity">
+            <div class="vessel-inner">
+                <div class="vessel-fill" id="curiosityFill"></div>
+                <div class="vessel-count" id="curiosityCount">0</div>
+            </div>
+            <div class="vessel-label">curiosity</div>
+        </div>
+    </div>
+
+    <script>
+        const memories = [
+            { emotion: 'joy', text: 'first snow' },
+            { emotion: 'fear', text: 'shadows moving' },
+            { emotion: 'curiosity', text: 'hidden doorway' },
+            { emotion: 'joy', text: 'childhood song' },
+            { emotion: 'fear', text: 'clock stopped' },
+            { emotion: 'curiosity', text: 'strange symbols' },
+            { emotion: 'joy', text: 'reunion tears' },
+            { emotion: 'fear', text: 'empty rooms' },
+            { emotion: 'curiosity', text: 'floating lights' }
+        ];
+
+        const counts = { joy: 0, fear: 0, curiosity: 0 };
+        const maxCount = 10;
+
+        // Create particles
+        const particleSystem = document.getElementById('particleSystem');
+        for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 1440 + 'px';
+            particle.style.top = Math.random() * 900 + 'px';
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            particleSystem.appendChild(particle);
+        }
+
+        // Handle bubble clicks
+        document.querySelectorAll('.memory-bubble').forEach(bubble => {
+            bubble.addEventListener('click', function() {
+                const emotion = this.dataset.emotion;
+                if (counts[emotion] < maxCount) {
+                    counts[emotion]++;
+                    updateVessel(emotion);
+                    this.classList.add('captured');
+                    
+                    // Create new bubble after capture
+                    setTimeout(() => {
+                        this.classList.remove('captured');
+                        const memory = memories[Math.floor(Math.random() * memories.length)];
+                        this.dataset.emotion = memory.emotion;
+                        this.querySelector('.bubble-content').textContent = memory.text;
+                    }, 800);
+                }
+            });
+        });
+
+        function updateVessel(emotion) {
+            const fill = document.getElementById(emotion + 'Fill');
+            const count = document.getElementById(emotion + 'Count');
+            const percentage = (counts[emotion] / maxCount) * 100;
+            
+            fill.style.height = percentage + '%';
+            count.textContent = counts[emotion];
+            
+            if (counts[emotion] === maxCount) {
+                count.style.opacity = '0.9';
+            }
+        }
+    </script>
+</body>
+</html>

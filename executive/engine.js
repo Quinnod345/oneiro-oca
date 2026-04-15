@@ -10,7 +10,7 @@ import cohabitation from '../cohabitation.js';
 // ═══════════════════════════════════════════════════
 
 const MAX_WORKING_MEMORY = 7; // Miller's Law
-const WM_DECAY_PER_MINUTE = 72.0;
+const WM_DECAY_PER_MINUTE = 24.0;
 
 export async function addToWorkspace(contentType, content, sourceLayer, salience = 0.5) {
   const { rows: active } = await pool.query(
@@ -69,7 +69,7 @@ export async function decayWorkspace(decayAmount = null) {
   );
   await pool.query(
     `UPDATE working_memory SET is_active = FALSE, deactivated_at = NOW()
-     WHERE is_active AND salience <= 0.15`
+     WHERE is_active AND salience <= 0.30`
   );
 }
 

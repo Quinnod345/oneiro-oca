@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, height=900">
+<title>Dream Logic Navigator</title>
+<style>
+:root {
+  --ink: #0a0908;
+  --ash: #49473e;
+  --bone: #f2f0e6;
+  --pulse: #ff6b35;
+  --dream: #004643;
+  --whisper: #abd1c6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 1440px;
+  height: 900px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bone);
+  cursor: none;
+}
+
+#cursor-trail {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.heat-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle, var(--pulse) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: heatFade 3s forwards;
+}
+
+@keyframes heatFade {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+#dilemma-portal {
+  position: absolute;
+  top: 60px;
+  left: 120px;
+  width: 400px;
+  z-index: 10;
+}
+
+#dilemma-input {
+  width: 100%;
+  padding: 20px;
+  font-size: 18px;
+  font-family: Georgia, serif;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid var(--ash);
+  color: var(--ink);
+  transition: border-color 0.3s;
+}
+
+#dilemma-input:focus {
+  outline: none;
+  border-color: var(--dream);
+}
+
+#neural-field {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.thought-node {
+  position: absolute;
+  padding: 15px 25px;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--bone);
+  border: 1px solid transparent;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  opacity: 0.3;
+  transform: scale(0.9);
+}
+
+.thought-node:hover {
+  opacity: 1;
+  transform: scale(1.1);
+  border-color: var(--dream);
+  box-shadow: 0 0 30px rgba(0, 70, 67, 0.2);
+}
+
+.synapse {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--whisper), transparent);
+  transform-origin: left center;
+  opacity: 0;
+  animation: synapseFlow 2s infinite;
+}
+
+@keyframes synapseFlow {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.6; }
+}
+
+#revelation-canvas {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  width: 300px;
+  height: 200px;
+  background: rgba(249, 247, 243, 0.9);
+  border: 1px solid var(--ash);
+  border-radius: 4px;
+  padding: 20px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.8s;
+}
+
+#revelation-canvas.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#answer-text {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  color: var(--dream);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.floating-cursor {
+  position: fixed;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--pulse);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1000;
+  mix-blend-mode: difference;
+}
+
+#prompt-whisper {
+  position: absolute;
+  top: 140px;
+  left: 120px;
+  font-size: 14px;
+  color: var(--ash);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.contemplation-ring {
+  position: absolute;
+  border: 1px solid var(--whisper);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: ringExpand 3s forwards;
+}
+
+@keyframes ringExpand {
+  from {
+    width: 40px;
+    height: 40px;
+    opacity: 0.8;
+  }
+  to {
+    width: 200px;
+    height: 200px;
+    opacity: 0;
+  }
+}
+</style>
+</head>
+<body>
+<canvas id="cursor-trail"></canvas>
+
+<div id="dilemma-portal">
+  <input type="text" id="dilemma-input" placeholder="whisper your dilemma..." autocomplete="off">
+  <div id="prompt-whisper">let your cursor wander to find the path</div>
+</div>
+
+<div id="neural-field"></div>
+
+<div id="revelation-canvas">
+  <div id="answer-text"></div>
+</div>
+
+<div class="floating-cursor"></div>
+
+<script>
+const thoughts = [
+  "follow the shadow",
+  "eat the clock",
+  "befriend uncertainty",
+  "dance with the void",
+  "ask the walls",
+  "reverse gravity",
+  "marry chaos",
+  "dissolve boundaries",
+  "become water",
+  "speak in colors",
+  "trust falling",
+  "swim upstream",
+  "embrace paradox",
+  "forget purpose",
+  "remember dreams",
+  "question questions",
+  "love mistakes",
+  "cultivate strange",
+  "bend time",
+  "invite absurdity"
+];
+
+const revelations = [
+  "The answer was always in the spaces between",
+  "Your hesitation drew the perfect map",
+  "What you avoided chose you",
+  "The pattern of your doubt is the solution",
+  "You already knew, but sideways",
+  "The question was the answer wearing a disguise",
+  "Your wandering was the wisdom"
+];
+
+let heatMap = new Array(144).fill(0).map(() => new Array(90).fill(0));
+let thoughtNodes = [];
+let synapses = [];
+let isNavigating = false;
+
+const cursor = document.querySelector('.floating-cursor');
+const trailCanvas = document.getElementById('cursor-trail');
+const ctx = trailCanvas.getContext('2d');
+trailCanvas.width = 1440;
+trailCanvas.height = 900;
+
+document.addEventListener('mousemove', (e) => {
+  cursor.style.left = e.clientX - 10 + 'px';
+  cursor.style.top = e.clientY - 10 + 'px';
+  
+  if (isNavigating) {
+    const gridX = Math.floor(e.clientX / 10);
+    const gridY = Math.floor(e.clientY / 10);
+    if (gridX >= 0 && gridX < 144 && gridY >= 0 && gridY < 90) {
+      heatMap[gridX][gridY] = Math.min(heatMap[gridX][gridY] + 0.5, 10);
+    }
+    
+    createHeatDot(e.clientX, e.clientY);
+    updateSynapses(e.clientX, e.clientY);
+  }
+});
+
+function createHeatDot(x, y) {
+  const dot = document.createElement('div');
+  dot.className = 'heat-dot';
+  dot.style.left = x - 6 + 'px';
+  dot.style.top = y - 6 + 'px';
+  document.body.appendChild(dot);
+  setTimeout(() => dot.remove(), 3000);
+}
+
+document.getElementById('dilemma-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    initializeField();
+    isNavigating = true;
+    e.target.blur();
+  }
+});
+
+function initializeField() {
+  const field = document.getElementById('neural-field');
+  field.innerHTML = '';
+  thoughtNodes = [];
+  synapses = [];
+  
+  const selectedThoughts = [...thoughts].sort(() => Math.random() - 0.5).slice(0, 12);
+  
+  selectedThoughts.forEach((thought, i) => {
+    const node = document.createElement('div');
+    node.className = 'thought-node';
+    node.textContent = thought;
+    
+    const angle = (i / 12) * Math.PI * 2;
+    const radius = 200 + Math.random() * 150;
+    const centerX = 720;
+    const centerY = 450;
+    
+    const x = centerX + Math.cos(angle) * radius + (Math.random() - 0.5) * 100;
+    const y = centerY + Math.sin(angle) * radius + (Math.random() - 0.5) * 100;
+    
+    node.style.left = x + 'px';
+    node.style.top = y + 'px';
+    
+    field.appendChild(node);
+    thoughtNodes.push({ element: node, x, y, connections: [] });
+    
+    node.addEventListener('mouseenter', function() {
+      createContemplationRing(x + node.offsetWidth / 2, y + node.offsetHeight / 2);
+    });
+  });
+  
+  setTimeout(revealAnswer, 15000);
+}
+
+function createContemplationRing(x, y) {
+  const ring = document.createElement('div');
+  ring.className = 'contemplation-ring';
+  ring.style.left = x - 20 + 'px';
+  ring.style.top = y - 20 + 'px';
+  document.body.appendChild(ring);
+  setTimeout(() => ring.remove(), 3000);
+}
+
+function updateSynapses(mouseX, mouseY) {
+  thoughtNodes.forEach((node, i) => {
+    const dist = Math.sqrt(Math.pow(mouseX - node.x, 2) + Math.pow(mouseY - node.y, 2));
+    
+    if (dist < 200) {
+      thoughtNodes.forEach((otherNode, j) => {
+        if (i !== j && Math.random() > 0.95) {
+          createSynapse(node, otherNode);
+        }
+      });
+    }
+  });
+}
+
+function createSynapse(node1, node2) {
+  const synapse = document.createElement('div');
+  synapse.className = 'synapse';
+  
+  const dx = node2.x - node1.x;
+  const dy = node2.y - node1.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+  
+  synapse.style.left = node1.x + 'px';
+  synapse.style.top = node1.y + 'px';
+  synapse.style.width = distance + 'px';
+  synapse.style.transform = `rotate(${angle}deg)`;
+  
+  document.getElementById('neural-field').appendChild(synapse);
+  setTimeout(() => synapse.remove(), 2000);
+}
+
+function revealAnswer() {
+  const canvas = document.getElementById('revelation-canvas');
+  const answerText = document.getElementById('answer-text');
+  
+  let maxHeat = 0;
+  let hotspotX = 0;
+  let hotspotY = 0;
+  
+  for (let x = 0; x < 144; x++) {
+    for (let y = 0; y < 90; y++) {
+      if (heatMap[x][y] > maxHeat) {
+        maxHeat = heatMap[x][y];
+        hotspotX = x;
+        hotspotY = y;
+      }
+    }
+  }
+  
+  const revelation = revelations[Math.floor(Math.random() * revelations.length)];
+  answerText.textContent = revelation;
+  canvas.classList.add('active');
+}
+
+ctx.globalAlpha = 0.02;
+function drawHeatmap() {
+  ctx.fillStyle = '#004643';
+  for (let x = 0; x < 144; x++) {
+    for (let y = 0; y < 90; y++) {
+      if (heatMap[x][y] > 0) {
+        ctx.beginPath();
+        ctx.arc(x * 10, y * 10, heatMap[x][y] * 3, 0, Math.PI * 2);
+        ctx.fill();
+        heatMap[x][y] *= 0.99;
+      }
+    }
+  }
+  requestAnimationFrame(drawHeatmap);
+}
+drawHeatmap();
+</script>
+</body>
+</html>

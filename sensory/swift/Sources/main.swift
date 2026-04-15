@@ -34,6 +34,30 @@ struct Config {
     static let socketPath = "/tmp/oneiro-sensory.sock"
     static let sharedStatePath = "/tmp/oneiro-state/perception.json"
     static let sharedStateTmpPrefix = "/tmp/oneiro-state/perception.json.tmp"
+
+    /// Skip SCStream / SCScreenshotManager so macOS does not keep "Screen Recording" active (DRM video e.g. Netflix).
+    /// Set `ONEIRO_DISABLE_SCREEN_CAPTURE=0` in the environment to re-enable continuous capture.
+    static func isScreenCaptureDisabled() -> Bool {
+        guard let raw = ProcessInfo.processInfo.environment["ONEIRO_DISABLE_SCREEN_CAPTURE"] else {
+            return false
+        }
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if s.isEmpty { return false }
+        if ["0", "false", "no", "off"].contains(s) { return false }
+        return true
+    }
+
+    /// Open `AVAudioEngine` microphone tap only when explicitly requested. Keeping input **off** by default avoids Core Audio
+    /// duplex glitches (crackling) with YouTube, Music, browser playback. Now-playing polling still runs without this.
+    /// Set `ONEIRO_ENABLE_MIC_CAPTURE=1` in `oneiro-core/.env` (picked up by `run-sensory.sh`).
+    static func isMicCaptureEnabled() -> Bool {
+        guard let raw = ProcessInfo.processInfo.environment["ONEIRO_ENABLE_MIC_CAPTURE"] else {
+            return false
+        }
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if s.isEmpty { return false }
+        return ["1", "true", "yes", "on"].contains(s)
+    }
 }
 
 // ═══════════════════════════════════════════════════
@@ -164,6 +188,16 @@ class VisualCortex: NSObject, SCStreamOutput {
     }
 
     func start() async {
+        if Config.isScreenCaptureDisabled() {
+            emitEvent("system", [
+                "message": "Visual cortex: screen capture disabled (ONEIRO_DISABLE_SCREEN_CAPTURE); Accessibility scene graph only"
+            ])
+            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                self?.buildSceneGraph()
+            }
+            return
+        }
+
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first else {
@@ -408,6 +442,8 @@ class VisualCortex: NSObject, SCStreamOutput {
 
 class AuditoryCortex {
     private var audioEngine: AVAudioEngine?
+    /// All RMS / VAD state and `emitEvent` run here — never on the realtime audio tap thread (avoids output crackle).
+    private let rmsQueue = DispatchQueue(label: "com.oneiro.sensory.auditory.rms", qos: .utility)
     private var lastRMS: Float = 0
     private var isSpeechDetected = false
     private var speechRecognizer: SFSpeechRecognizer?
@@ -431,6 +467,12 @@ class AuditoryCortex {
     }
 
     private func startSystemAudioMonitoring() {
+        if !Config.isMicCaptureEnabled() {
+            emitEvent("system", [
+                "message": "Microphone capture off (default). Set ONEIRO_ENABLE_MIC_CAPTURE=1 in .env if you need RMS/VAD — input can crackle system audio."
+            ])
+            return
+        }
         // Audio engine can crash in child-process mode (no tty, piped stdio).
         // Entire function is wrapped so audio failure doesn't kill the process.
         do {
@@ -444,36 +486,45 @@ class AuditoryCortex {
                 return
             }
 
-            inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-                self?.processAudioBuffer(buffer)
+            // Larger buffer + offload processing: fewer callbacks and no I/O on the realtime thread (fixes YouTube/Music crackle).
+            let tapFrames: AVAudioFrameCount = 8192
+            inputNode.installTap(onBus: 0, bufferSize: tapFrames, format: format) { [weak self] buffer, _ in
+                guard let self = self else { return }
+                let rms = Self.computeRMS(buffer)
+                self.rmsQueue.async { [weak self] in
+                    self?.handleRMSFromBackground(rms)
+                }
             }
 
             try engine.start()
-            emitEvent("system", ["message": "Audio engine started (microphone tap)"])
+            emitEvent("system", ["message": "Audio engine started (microphone tap, background RMS)"])
         } catch {
             emitEvent("system", ["message": "Audio engine unavailable (non-fatal): \(error.localizedDescription)"])
             audioEngine = nil
         }
     }
 
-    private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
+    /// Runs on realtime audio thread — only cheap math, no allocations beyond loop.
+    private static func computeRMS(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let channelData = buffer.floatChannelData?[0] else { return 0 }
         let frameCount = Int(buffer.frameLength)
-
-        // RMS volume
+        guard frameCount > 0 else { return 0 }
         var sumOfSquares: Float = 0
         for i in 0..<frameCount {
             let sample = channelData[i]
             sumOfSquares += sample * sample
         }
-        let rms = sqrt(sumOfSquares / Float(frameCount))
+        return sqrt(sumOfSquares / Float(frameCount))
+    }
+
+    /// Runs on `rmsQueue` — safe to call `emitEvent` and resize arrays.
+    private func handleRMSFromBackground(_ rms: Float) {
         lastRMS = rms
         volumeHistory.append(rms)
         if volumeHistory.count > 100 { volumeHistory.removeFirst() }
 
-        // Voice Activity Detection (simple energy-based)
         let wasDetected = isSpeechDetected
-        isSpeechDetected = rms > 0.01 // threshold for voice activity
+        isSpeechDetected = rms > 0.01
         if isSpeechDetected && !wasDetected {
             emitEvent("audio_vad", ["state": "speech_start", "rms": rms])
         } else if !isSpeechDetected && wasDetected {
@@ -524,14 +575,17 @@ class AuditoryCortex {
     }
 
     func getState() -> [String: Any] {
-        let avgRMS = volumeHistory.isEmpty ? 0 : volumeHistory.reduce(0, +) / Float(volumeHistory.count)
-        return [
-            "rms_volume": round(Double(lastRMS) * 1000) / 1000,
-            "avg_volume": round(Double(avgRMS) * 1000) / 1000,
-            "speech_detected": isSpeechDetected,
-            "now_playing": nowPlaying,
-            "silence": lastRMS < 0.001
-        ]
+        rmsQueue.sync {
+            let avgRMS = volumeHistory.isEmpty ? 0 : volumeHistory.reduce(0, +) / Float(volumeHistory.count)
+            return [
+                "rms_volume": round(Double(lastRMS) * 1000) / 1000,
+                "avg_volume": round(Double(avgRMS) * 1000) / 1000,
+                "speech_detected": isSpeechDetected,
+                "now_playing": nowPlaying,
+                "silence": lastRMS < 0.001,
+                "mic_capture_enabled": Config.isMicCaptureEnabled()
+            ]
+        }
     }
 }
 
@@ -783,15 +837,19 @@ class InteroceptiveCortex {
     }
 
     func report() {
-        // Battery
+        // Battery — must use InternalBattery only; sources.first is often a BT accessory (wrong %).
         var batteryLevel: Int = 100
         var isCharging = false
         if let powerSource = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-           let sources = IOPSCopyPowerSourcesList(powerSource)?.takeRetainedValue() as? [Any],
-           let source = sources.first {
-            if let desc = IOPSGetPowerSourceDescription(powerSource, source as CFTypeRef)?.takeUnretainedValue() as? [String: Any] {
+           let sources = IOPSCopyPowerSourcesList(powerSource)?.takeRetainedValue() as? [Any] {
+            let internalType = kIOPSInternalBatteryType as String
+            for source in sources {
+                guard let desc = IOPSGetPowerSourceDescription(powerSource, source as CFTypeRef)?.takeUnretainedValue() as? [String: Any] else { continue }
+                let type = desc[kIOPSTypeKey] as? String ?? ""
+                guard type == internalType else { continue }
                 batteryLevel = desc[kIOPSCurrentCapacityKey] as? Int ?? 100
                 isCharging = (desc[kIOPSPowerSourceStateKey] as? String ?? "") == kIOPSACPowerValue
+                break
             }
         }
 

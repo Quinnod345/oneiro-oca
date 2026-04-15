@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #131318;
+            --surface-primary: #1c1c24;
+            --surface-secondary: #26262f;
+            --text-primary: #f4f4f7;
+            --text-secondary: #a1a1aa;
+            --text-tertiary: #71717a;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-tertiary: #06b6d4;
+            --connection-thread: #4f46e5;
+            --shadow-far: rgba(0, 0, 0, 0.8);
+            --shadow-near: rgba(0, 0, 0, 0.4);
+            --glow-subtle: rgba(99, 102, 241, 0.2);
+            --glow-active: rgba(99, 102, 241, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            perspective: 2000px;
+            perspective-origin: 50% 50%;
+        }
+
+        .spatial-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: gentleRotate 120s infinite linear;
+        }
+
+        @keyframes gentleRotate {
+            from { transform: rotateY(0deg) rotateX(0deg); }
+            25% { transform: rotateY(90deg) rotateX(5deg); }
+            50% { transform: rotateY(180deg) rotateX(0deg); }
+            75% { transform: rotateY(270deg) rotateX(-5deg); }
+            to { transform: rotateY(360deg) rotateX(0deg); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--surface-primary);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 200px;
+            max-width: 280px;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--surface-secondary);
+        }
+
+        .note:hover {
+            transform: translateZ(50px) scale(1.05);
+            box-shadow: 0 20px 60px var(--shadow-near), 0 0 40px var(--glow-active);
+        }
+
+        .note-recent {
+            transform: translateZ(200px);
+            box-shadow: 0 10px 30px var(--shadow-near), 0 0 20px var(--glow-subtle);
+            animation: floatNear 8s ease-in-out infinite;
+        }
+
+        .note-medium {
+            transform: translateZ(0px);
+            opacity: 0.8;
+            box-shadow: 0 5px 20px var(--shadow-near);
+            animation: floatMedium 12s ease-in-out infinite;
+        }
+
+        .note-old {
+            transform: translateZ(-300px);
+            opacity: 0.4;
+            scale: 0.7;
+            box-shadow: 0 2px 10px var(--shadow-far);
+            animation: floatFar 16s ease-in-out infinite;
+        }
+
+        @keyframes floatNear {
+            0%, 100% { transform: translateZ(200px) translateY(0px) rotateY(0deg); }
+            50% { transform: translateZ(220px) translateY(-10px) rotateY(5deg); }
+        }
+
+        @keyframes floatMedium {
+            0%, 100% { transform: translateZ(0px) translateY(0px) rotateY(0deg); }
+            50% { transform: translateZ(-20px) translateY(-8px) rotateY(-3deg); }
+        }
+
+        @keyframes floatFar {
+            0%, 100% { transform: translateZ(-300px) translateY(0px) rotateY(0deg) scale(0.7); }
+            50% { transform: translateZ(-320px) translateY(5px) rotateY(-8deg) scale(0.65); }
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+
+        .note-content {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .note-meta {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-tag {
+            background: var(--accent-primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                transparent, 
+                var(--connection-thread), 
+                var(--accent-secondary),
+                transparent
+            );
+            transform-origin: left center;
+            opacity: 0.6;
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scaleY(1); }
+            50% { opacity: 0.9; transform: scaleY(1.5); }
+        }
+
+        .connection-thread::before {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-tertiary);
+            border-radius: 50%;
+            left: -2px;
+            top: -1px;
+            box-shadow: 0 0 8px var(--accent-tertiary);
+        }
+
+        .connection-thread::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-secondary);
+            border-radius: 50%;
+            right: -2px;
+            top: -1px;
+            box-shadow: 0 0 8px var(--accent-secondary);
+        }
+
+        /* Positioning notes */
+        .note:nth-child(1) { left: 200px; top: 150px; }
+        .note:nth-child(2) { left: 800px; top: 200px; }
+        .note:nth-child(3) { left: 500px; top: 400px; }
+        .note:nth-child(4) { left: 1000px; top: 500px; }
+        .note:nth-child(5) { left: 300px; top: 600px; }
+        .note:nth-child(6) { left: 700px; top: 100px; }
+        .note:nth-child(7) { left: 100px; top: 400px; }
+        .note:nth-child(8) { left: 900px; top: 350px; }
+
+        /* Connection threads positioning */
+        .connection-thread:nth-child(9) { 
+            left: 380px; top: 235px; width: 420px; 
+            transform: rotate(15deg) rotateX(30deg);
+        }
+        .connection-thread:nth-child(10) { 
+            left: 680px; top: 285px; width: 220px; 
+            transform: rotate(-25deg) rotateY(20deg);
+        }
+        .connection-thread:nth-child(11) { 
+            left: 480px; top: 485px; width: 320px; 
+            transform: rotate(45deg) rotateX(-15deg);
+        }
+        .connection-thread:nth-child(12) { 
+            left: 380px; top: 685px; width: 420px; 
+            transform: rotate(-10deg) rotateZ(10deg);
+        }
+
+        .ui-overlay {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+            background: rgba(28, 28, 36, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--surface-secondary);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .ui-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .ui-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .ui-controls {
+            display: flex;
+            gap: 12px;
+        }
+
+        .ui-button {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .ui-button:hover {
+            background: var(--accent-secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px var(--glow-subtle);
+        }
+
+        .depth-indicator {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(28, 28, 36, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--surface-secondary);
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .ambient-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--accent-tertiary);
+            border-radius: 50%;
+            animation: drift 20s linear infinite;
+        }
+
+        @keyframes drift {
+            from { 
+                transform: translateY(0) translateX(0) translateZ(0);
+                opacity: 0;
+            }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            to { 
+                transform: translateY(-900px) translateX(100px) translateZ(200px);
+                opacity: 0;
+            }
+        }
+
+        .particle:nth-child(odd) { animation-duration: 25s; }
+        .particle:nth-child(3n) { animation-duration: 30s; }
+    </style>
+</head>
+<body>
+    <div class="ambient-particles">
+        <div class="particle" style="left: 10%; top: 100%; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 30%; top: 100%; animation-delay: 5s;"></div>
+        <div class="particle" style="left: 60%; top: 100%; animation-delay: 10s;"></div>
+        <div class="particle" style="left: 80%; top: 100%; animation-delay: 15s;"></div>
+        <div class="particle" style="left: 25%; top: 100%; animation-delay: 8s;"></div>
+        <div class="particle" style="left: 75%; top: 100%; animation-delay: 12s;"></div>
+    </div>
+
+    <div class="ui-overlay">
+        <div class="ui-title">Spatial Notes</div>
+        <div class="ui-subtitle">Navigate through time and ideas</div>
+        <div class="ui-controls">
+            <button class="ui-button">New Note</button>
+            <button class="ui-button">Search</button>
+        </div>
+    </div>
+
+    <div class="spatial-container">
+        <div class="note note-recent">
+            <div class="note-title">Meeting Notes</div>
+            <div class="note-content">Discussed the new product roadmap. Key decisions on user experience and technical architecture.</div>
+            <div class="note-meta">
+                <span>2 hours ago</span>
+                <span class="note-tag">Work</span>
+            </div>
+        </div>
+
+        <div class="note note-recent">
+            <div class="note-title">Book Ideas</div>
+            <div class="note-content">Exploring themes of memory and time. How do we construct meaning from fragments of experience?</div>
+            <div class="note-meta">
+                <span>5 hours ago</span>
+                <span class="note-tag">Writing</span>
+            </div>
+        </div>
+
+        <div class="note note-medium">
+            <div class="note-title">Research Findings</div>
+            <div class="note-content">Users prefer spatial interfaces for complex information. Connection visualization improves comprehension by 34%.</div>
+            <div class="note-meta">
+                <span>2 days ago</span>
+                <span class="note-tag">Research</span>
+            </div>
+        </div>
+
+        <div class="note note-medium">
+            <div class="note-title">Travel Planning</div>
+            <div class="note-content">Tokyo itinerary: Shibuya → Harajuku → Meiji Shrine. Book accommodations in Shinjuku district.</div>
+            <div class="note-meta">
+                <span>3 days ago</span>
+                <span class="note-tag">Personal</span>
+            </div>
+        </div>
+
+        <div class="note note-old">
+            <div class="note-title">Design Philosophy</div>
+            <div class="note-content">Good design is invisible. It should feel natural, reduce cognitive load, and enhance human capabilities.</div>
+            <div class="note-meta">
+                <span>2 weeks ago</span>
+                <span class="note-tag">Design</span>
+            </div>
+        </div>
+
+        <div class="note note-old">
+            <div class="note-title">Recipe Collection</div>
+            <div class="note-content">Grandmother's pasta recipe: fresh basil, San Marzano tomatoes, aged parmesan. Simple ingredients, perfect execution.</div>
+            <div class="note-meta">
+                <span>1 month ago</span>
+                <span class="note-tag">Food</span>
+            </div>
+        </div>
+
+        <div class="note note-old">
+            <div class="note-title">Morning Thoughts</div>
+            <div class="note-content">Creativity emerges from the intersection of disciplines. Cross-pollination of ideas leads to innovation.</div>
+            <div class="note-meta">
+                <span>6 weeks ago</span>
+                <span class="note-tag">Ideas</span>
+            </div>
+        </div>
+
+        <div class="note note-old">
+            <div class="note-title">Technical Debt</div>
+            <div class="note-content">Refactor the authentication system. Current implementation has security vulnerabilities and poor performance.</div>
+            <div class="note-meta">
+                <span>2 months ago</span>
+                <span class="note-tag">Code</span>
+            </div>
+        </div>
+
+        <div class="connection-thread"></div>
+        <div class="connection-thread"></div>
+        <div class="connection-thread"></div>
+        <div class="connection-thread"></div>
+    </div>
+
+    <div class="depth-indicator">
+        Near ← → Far<br>
+        Recent notes closer • Old notes distant
+    </div>
+
+    <script>
+        document.querySelectorAll('.note').forEach(note => {
+            note.addEventListener('click', () => {
+                note.style.transform += ' translateZ(100px)';
+                setTimeout(() => {
+                    note.style.transform = note.style.transform.replace(' translateZ(100px)', '');
+                }, 2000);
+            });
+        });
+
+        // Add subtle mouse interaction
+        document.addEventListener('mousemove', (e) => {
+            const container = document.querySelector('.spatial-container');
+            const x = (e.clientX / window.innerWidth - 0.5) * 10;
+            const y = (e.clientY / window.innerHeight - 0.5) * 10;
+            container.style.transform += ` rotateY(${x}deg) rotateX(${-y}deg)`;
+        });
+    </script>
+</body>
+</html>

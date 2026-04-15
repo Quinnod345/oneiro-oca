@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --canvas-bg: #f8f9fa;
+            --surface-primary: #ffffff;
+            --surface-secondary: #f1f3f4;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-tertiary: #9ca3af;
+            --accent-blue: #2563eb;
+            --accent-green: #059669;
+            --accent-purple: #7c3aed;
+            --accent-orange: #ea580c;
+            --accent-red: #dc2626;
+            --border-light: rgba(0, 0, 0, 0.08);
+            --border-medium: rgba(0, 0, 0, 0.12);
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.2);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--canvas-bg);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        .canvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .canvas:active {
+            cursor: grabbing;
+        }
+
+        .viewport {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cluster {
+            position: absolute;
+            min-width: 280px;
+            padding: 24px;
+            background: var(--surface-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cluster:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .cluster-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .cluster-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .cluster-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+
+        .document {
+            position: relative;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            background: var(--surface-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .document:hover {
+            background: var(--surface-primary);
+            border-color: var(--border-medium);
+            transform: translateX(4px);
+        }
+
+        .document:last-child {
+            margin-bottom: 0;
+        }
+
+        .document-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .document-meta {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .connection-line {
+            position: absolute;
+            background: var(--border-light);
+            z-index: 0;
+            border-radius: 1px;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .connection-line:hover {
+            opacity: 1;
+        }
+
+        .floating-doc {
+            position: absolute;
+            background: var(--surface-primary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-width: 200px;
+        }
+
+        .floating-doc:hover {
+            box-shadow: var(--shadow-lg);
+            transform: scale(1.02);
+        }
+
+        .floating-doc .document-name {
+            font-size: 15px;
+            margin-bottom: 8px;
+        }
+
+        .navigation {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .nav-button {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: var(--surface-primary);
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .nav-button:hover {
+            background: var(--text-primary);
+            color: white;
+        }
+
+        .search-box {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 280px;
+            height: 40px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            padding: 0 16px;
+            font-size: 14px;
+            color: var(--text-primary);
+            z-index: 100;
+            transition: all 0.2s ease;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .search-box::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* Cluster-specific styling */
+        .cluster-design .cluster-icon { background: var(--accent-purple); }
+        .cluster-research .cluster-icon { background: var(--accent-blue); }
+        .cluster-development .cluster-icon { background: var(--accent-green); }
+        .cluster-marketing .cluster-icon { background: var(--accent-orange); }
+        .cluster-finance .cluster-icon { background: var(--accent-red); }
+
+        /* Positioning */
+        .cluster-design { top: 25%; left: 15%; }
+        .cluster-research { top: 20%; left: 55%; }
+        .cluster-development { top: 45%; left: 35%; }
+        .cluster-marketing { top: 65%; left: 10%; }
+        .cluster-finance { top: 60%; left: 65%; }
+
+        .floating-design-1 { top: 15%; left: 75%; }
+        .floating-research-1 { top: 35%; left: 80%; }
+        .floating-dev-1 { top: 25%; left: 35%; }
+        .floating-marketing-1 { top: 80%; left: 45%; }
+        .floating-finance-1 { top: 40%; left: 5%; }
+
+        .minimap {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            width: 160px;
+            height: 100px;
+            background: var(--surface-primary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--accent-blue);
+            background: rgba(37, 99, 235, 0.1);
+            border-radius: 2px;
+            width: 40px;
+            height: 25px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .minimap-dot {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas">
+        <div class="navigation">
+            <div class="nav-button">⌂</div>
+            <div class="nav-button">↻</div>
+            <div class="nav-button">⚙</div>
+        </div>
+
+        <input type="text" class="search-box" placeholder="Search documents and clusters...">
+
+        <div class="viewport">
+            <!-- Connection lines -->
+            <div class="connection-line" style="top: 32%; left: 43%; width: 12%; height: 2px; transform: rotate(25deg);"></div>
+            <div class="connection-line" style="top: 48%; left: 58%; width: 8%; height: 2px; transform: rotate(-15deg);"></div>
+            <div class="connection-line" style="top: 55%; left: 32%; width: 15%; height: 2px; transform: rotate(45deg);"></div>
+
+            <!-- Design Cluster -->
+            <div class="cluster cluster-design">
+                <div class="cluster-header">
+                    <div class="cluster-icon">D</div>
+                    <div class="cluster-title">Design Assets</div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Brand Guidelines v2.4</div>
+                    <div class="document-meta">
+                        <span>PDF</span>
+                        <span>2.3 MB</span>
+                        <span>3 days ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">UI Component Library</div>
+                    <div class="document-meta">
+                        <span>Figma</span>
+                        <span>—</span>
+                        <span>1 week ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Logo Variations</div>
+                    <div class="document-meta">
+                        <span>Sketch</span>
+                        <span>45.2 MB</span>
+                        <span>2 weeks ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Research Cluster -->
+            <div class="cluster cluster-research">
+                <div class="cluster-header">
+                    <div class="cluster-icon">R</div>
+                    <div class="cluster-title">Research & Analysis</div>
+                </div>
+                <div class="document">
+                    <div class="document-name">User Interview Insights</div>
+                    <div class="document-meta">
+                        <span>DOCX</span>
+                        <span>1.2 MB</span>
+                        <span>Yesterday</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Market Analysis Q4</div>
+                    <div class="document-meta">
+                        <span>XLSX</span>
+                        <span>3.8 MB</span>
+                        <span>5 days ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Competitive Landscape</div>
+                    <div class="document-meta">
+                        <span>PDF</span>
+                        <span>12.5 MB</span>
+                        <span>1 week ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Development Cluster -->
+            <div class="cluster cluster-development">
+                <div class="cluster-header">
+                    <div class="cluster-icon">C</div>
+                    <div class="cluster-title">Development Docs</div>
+                </div>
+                <div class="document">
+                    <div class="document-name">API Documentation</div>
+                    <div class="document-meta">
+                        <span>MD</span>
+                        <span>156 KB</span>
+                        <span>2 hours ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Architecture Overview</div>
+                    <div class="document-meta">
+                        <span>PDF</span>
+                        <span>4.2 MB</span>
+                        <span>4 days ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Database Schema</div>
+                    <div class="document-meta">
+                        <span>SQL</span>
+                        <span>89 KB</span>
+                        <span>1 week ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Security Guidelines</div>
+                    <div class="document-meta">
+                        <span>DOCX</span>
+                        <span>892 KB</span>
+                        <span>2 weeks ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Marketing Cluster -->
+            <div class="cluster cluster-marketing">
+                <div class="cluster-header">
+                    <div class="cluster-icon">M</div>
+                    <div class="cluster-title">Marketing Materials</div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Campaign Strategy 2024</div>
+                    <div class="document-meta">
+                        <span>PPTX</span>
+                        <span>8.9 MB</span>
+                        <span>6 hours ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Content Calendar</div>
+                    <div class="document-meta">
+                        <span>XLSX</span>
+                        <span>645 KB</span>
+                        <span>2 days ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Press Release Draft</div>
+                    <div class="document-meta">
+                        <span>DOCX</span>
+                        <span>234 KB</span>
+                        <span>1 week ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finance Cluster -->
+            <div class="cluster cluster-finance">
+                <div class="cluster-header">
+                    <div class="cluster-icon">F</div>
+                    <div class="cluster-title">Financial Reports</div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Q4 Budget Review</div>
+                    <div class="document-meta">
+                        <span>XLSX</span>
+                        <span>2.1 MB</span>
+                        <span>3 hours ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Expense Reports</div>
+                    <div class="document-meta">
+                        <span>PDF</span>
+                        <span>1.8 MB</span>
+                        <span>1 day ago</span>
+                    </div>
+                </div>
+                <div class="document">
+                    <div class="document-name">Revenue Projections</div>
+                    <div class="document-meta">
+                        <span>XLSX</span>
+                        <span>956 KB</span>
+                        <span>4 days ago</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating Documents -->
+            <div class="floating-doc floating-design-1">
+                <div class="document-name">Wireframe Sketches</div>
+                <div class="document-meta">
+                    <span>PNG</span>
+                    <span>15.6 MB</span>
+                    <span>5 hours ago</span>
+                </div>
+            </div>
+
+            <div class="floating-doc floating-research-1">
+                <div class="document-name">Survey Results</div>
+                <div class="document-meta">
+                    <span>CSV</span>
+                    <span>892 KB</span>
+                    <span>12 hours ago</span>
+                </div>
+            </div>
+
+            <div class="floating-doc floating-dev-1">
+                <div class="document-name">Code Review Notes</div>
+                <div class="document-meta">
+                    <span>TXT</span>
+                    <span>45 KB</span>
+                    <span>8 hours ago</span>
+                </div>
+            </div>
+
+            <div class="floating-doc floating-marketing-1">
+                <div class="document-name">Social Media Assets</div>
+                <div class="document-meta">
+                    <span>ZIP</span>
+                    <span>156 MB</span>
+                    <span>2 days ago</span>
+                </div>
+            </div>
+
+            <div class="floating-doc floating-finance-1">
+                <div class="document-name">Tax Documents</div>
+                <div class="document-meta">
+                    <span>PDF</span>
+                    <span>3.4 MB</span>
+                    <span>1 month ago</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="minimap">
+            <div class="minimap-viewport"></div>
+            <div class="minimap-dot" style="top: 25%; left: 15%;"></div>
+            <div class="minimap-dot" style="top: 20%; left: 55%;"></div>
+            <div class="minimap-dot" style="top: 45%; left: 35%;"></div>
+            <div class="minimap-dot" style="top: 65%; left: 10%;"></div>
+            <div class="minimap-dot" style="top: 60%; left: 65%;"></div>
+        </div>
+    </div>
+</body>
+</html>

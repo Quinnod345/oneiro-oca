@@ -1,6 +1,26 @@
 // Oneiro Cognitive Dashboard — Substrate Honesty
 // A mind looking at itself. 27 data views across the full SPEC.
-const API = 'http://localhost:3333';
+//
+// API base: local dev uses :3333. Deployed static HTML should be served from the same origin as OCA (reverse proxy), OR set once:
+//   ?api=https://your-host:3333
+//   sessionStorage oneiro_api_base (set from console) for persistent override.
+function getApiBase() {
+    try {
+        const q = new URLSearchParams(window.location.search).get('api');
+        if (q) {
+            const base = q.replace(/\/$/, '');
+            try { sessionStorage.setItem('oneiro_api_base', base); } catch {}
+            return base;
+        }
+        const stored = sessionStorage.getItem('oneiro_api_base');
+        if (stored) return stored.replace(/\/$/, '');
+    } catch {}
+    const h = typeof location !== 'undefined' ? location.hostname : '';
+    if (!h || h === 'localhost' || h === '127.0.0.1') return 'http://localhost:3333';
+    // Same host as dashboard — assume nginx/Caddy proxies /trader, /oca, etc. to cognitive-loop
+    return '';
+}
+const API = getApiBase();
 let connected = false;
 let chatMessages = [];
 
@@ -894,6 +914,23 @@ async function updateTrader() {
     const solVal = cp?.solValueUsd || 0;
     const ethBal = cp?.ethBalance || 0;
     const solBal = cp?.solBalance || 0;
+    const mig = crypto?.migration;
+    const solWallet = cp?.solWallet;
+    let bridgeBlock = '';
+    if (mig && typeof mig === 'object') {
+        const done = mig.bridgeComplete === true;
+        bridgeBlock = `<div style="font-family:var(--mono);font-size:8px;color:${done ? 'var(--seafoam)' : 'var(--gold)'};margin-top:8px;text-align:center;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px">
+            <strong>Auto ETH→SOL bridge</strong> — ${done ? 'complete' : 'in progress'}
+            ${mig.solEstimate ? ` · est ${esc(String(mig.solEstimate))} SOL` : ''}
+            ${mig.bridgedAt ? `<br/><span style="color:var(--dim)">${esc(new Date(mig.bridgedAt).toLocaleString())}</span>` : ''}
+        </div>`;
+        if (mig.note) {
+            bridgeBlock += `<div style="font-size:7px;color:var(--dim);margin-top:4px;text-align:center;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.35">${esc(mig.note)}</div>`;
+        }
+    }
+    const solAddrLine = solWallet && typeof solWallet === 'string'
+        ? `<div style="font-family:var(--mono);font-size:7px;color:var(--dim);margin-top:4px;text-align:center">SOL wallet ${esc(solWallet.slice(0, 4))}…${esc(solWallet.slice(-4))}</div>`
+        : '';
 
     combinedEl.innerHTML = `
         <div class="trader-combined-total">$${(combinedTotal || 0).toFixed(2)}</div>
@@ -902,11 +939,13 @@ async function updateTrader() {
             <span>Crypto $${cryptoTotal.toFixed(2)}</span>
             <span>Stocks $${rhTotal.toFixed(2)}</span>
         </div>
-        <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;display:flex;gap:16px;justify-content:center">
+        <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
             <span>ETH: ${ethBal.toFixed(4)} ($${ethVal.toFixed(2)})</span>
             <span>SOL: ${solBal.toFixed(4)} ($${solVal.toFixed(2)})</span>
             ${rp?.buying_power != null ? `<span>RH BP: $${rp.buying_power.toFixed(2)}</span>` : ''}
-        </div>`;
+        </div>
+        ${solAddrLine}
+        ${bridgeBlock}`;
 
     // Trader MLP panel
     const traderMlpPanel = document.getElementById('traderMlpPanel');
@@ -946,20 +985,27 @@ async function updateTrader() {
         const solPositions = posArr.filter(([, p]) => p.chain === 'solana');
         const ethPositions = posArr.filter(([, p]) => p.chain !== 'solana');
 
-        if (solPositions.length > 0 || solBal > 0) {
-            gridHtml += `<div class="trader-portfolio">
+        // Always show Solana column when crypto-mind portfolio exists (v8 is SOL memecoin focus).
+        // Previously hidden when SOL was 0 and no SPL rows — looked like "Ethereum only".
+        const solTotalUsd = solVal + solPositions.reduce((s, [, p]) => s + (p.valueUsd || 0), 0);
+        gridHtml += `<div class="trader-portfolio">
                 <div class="trader-portfolio-title">Solana</div>
-                <div class="trader-portfolio-total">$${(solVal + solPositions.reduce((s, [,p]) => s + (p.valueUsd||0), 0)).toFixed(2)}</div>`;
-            for (const [sym, pos] of solPositions.slice(0, 10)) {
-                const val = pos.valueUsd || 0;
-                gridHtml += `<div class="trader-pos-row">
+                <div class="trader-portfolio-total">$${solTotalUsd.toFixed(2)}</div>
+                <div style="font-family:var(--mono);font-size:8px;color:var(--text-mid);padding:2px 0 6px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:4px">
+                    ${cp.solWallet ? `<span title="${esc(cp.solWallet)}">${esc(String(cp.solWallet).slice(0, 4))}…${esc(String(cp.solWallet).slice(-4))}</span> · ` : ''}
+                    ${solBal.toFixed(4)} SOL ($${solVal.toFixed(2)})
+                </div>`;
+        for (const [sym, pos] of solPositions.slice(0, 10)) {
+            const val = pos.valueUsd || 0;
+            gridHtml += `<div class="trader-pos-row">
                     <span><span class="trader-pos-symbol">${esc(pos.ticker || sym)}</span></span>
                     <span class="trader-pos-value">$${val.toFixed(2)}</span>
                 </div>`;
-            }
-            if (solPositions.length === 0) gridHtml += `<div style="font-family:var(--mono);font-size:9px;color:var(--dim);padding:4px 0">No token positions yet</div>`;
-            gridHtml += '</div>';
         }
+        if (solPositions.length === 0) {
+            gridHtml += `<div style="font-family:var(--mono);font-size:9px;color:var(--dim);padding:4px 0">No SPL positions yet — balance may be 0 until bridge settles or a buy fills.</div>`;
+        }
+        gridHtml += '</div>';
 
         if (ethPositions.length > 0 || ethBal > 0.001) {
             gridHtml += `<div class="trader-portfolio">

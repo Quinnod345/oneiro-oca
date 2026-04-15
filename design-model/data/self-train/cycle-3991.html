@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Podcast Player</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --deep-space: #1a1a2e;
+            --stellar-blue: #16213e;
+            --nebula-purple: #2d1b69;
+            --cosmic-silver: #9ba3af;
+            --star-white: #e8eaed;
+            --glow-cyan: #64ffda;
+            --glow-amber: #ffb74d;
+            --glow-violet: #ce93d8;
+            --constellation-line: rgba(155, 163, 175, 0.3);
+            --panel-glass: rgba(26, 26, 46, 0.8);
+            --control-hover: rgba(100, 255, 218, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--star-white);
+            user-select: none;
+        }
+
+        .cosmic-background {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, var(--nebula-purple) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, var(--stellar-blue) 0%, transparent 50%),
+                var(--void-black);
+        }
+
+        .starfield {
+            position: absolute;
+            inset: 0;
+        }
+
+        .star {
+            position: absolute;
+            background: var(--star-white);
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite alternate;
+        }
+
+        .star.tiny { width: 1px; height: 1px; opacity: 0.4; }
+        .star.small { width: 2px; height: 2px; opacity: 0.6; }
+        .star.medium { width: 3px; height: 3px; opacity: 0.8; }
+
+        @keyframes twinkle {
+            0% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        .main-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+            z-index: 10;
+        }
+
+        .constellation-view {
+            flex: 1;
+            position: relative;
+            padding: 40px;
+        }
+
+        .constellation-grid {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .series-constellation {
+            position: absolute;
+        }
+
+        .series-tech {
+            top: 15%;
+            left: 20%;
+            width: 300px;
+            height: 200px;
+        }
+
+        .series-design {
+            top: 40%;
+            right: 25%;
+            width: 250px;
+            height: 180px;
+        }
+
+        .series-culture {
+            bottom: 20%;
+            left: 15%;
+            width: 280px;
+            height: 160px;
+        }
+
+        .series-science {
+            top: 20%;
+            right: 10%;
+            width: 200px;
+            height: 220px;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: var(--constellation-line);
+            transform-origin: left center;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        .constellation-line.active {
+            background: var(--glow-cyan);
+            opacity: 0.8;
+            box-shadow: 0 0 4px var(--glow-cyan);
+        }
+
+        .episode-star {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--cosmic-silver);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid transparent;
+        }
+
+        .episode-star:hover {
+            transform: scale(1.5);
+            background: var(--glow-cyan);
+            box-shadow: 0 0 12px var(--glow-cyan), 0 0 20px rgba(100, 255, 218, 0.3);
+        }
+
+        .episode-star.listened {
+            background: var(--glow-amber);
+            box-shadow: 0 0 8px var(--glow-amber), 0 0 16px rgba(255, 183, 77, 0.4);
+            animation: gentle-glow 2s ease-in-out infinite alternate;
+        }
+
+        .episode-star.current {
+            background: var(--glow-violet);
+            box-shadow: 0 0 15px var(--glow-violet), 0 0 25px rgba(206, 147, 216, 0.5);
+            transform: scale(1.3);
+            animation: pulse-glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes gentle-glow {
+            0% { box-shadow: 0 0 8px var(--glow-amber), 0 0 16px rgba(255, 183, 77, 0.4); }
+            100% { box-shadow: 0 0 12px var(--glow-amber), 0 0 24px rgba(255, 183, 77, 0.6); }
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 15px var(--glow-violet), 0 0 25px rgba(206, 147, 216, 0.5); }
+            100% { box-shadow: 0 0 20px var(--glow-violet), 0 0 35px rgba(206, 147, 216, 0.8); }
+        }
+
+        .series-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--cosmic-silver);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .control-panel {
+            width: 380px;
+            background: var(--panel-glass);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(155, 163, 175, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .now-playing {
+            padding: 30px;
+            border-bottom: 1px solid rgba(155, 163, 175, 0.1);
+        }
+
+        .episode-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--star-white);
+        }
+
+        .episode-info p {
+            font-size: 14px;
+            color: var(--cosmic-silver);
+            margin-bottom: 4px;
+        }
+
+        .episode-description {
+            font-size: 13px;
+            color: var(--cosmic-silver);
+            line-height: 1.4;
+            margin-top: 12px;
+            opacity: 0.8;
+        }
+
+        .playback-controls {
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 1px solid rgba(155, 163, 175, 0.1);
+        }
+
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(155, 163, 175, 0.1);
+            color: var(--star-white);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
+
+        .control-btn:hover {
+            background: var(--control-hover);
+            transform: scale(1.05);
+        }
+
+        .play-btn {
+            width: 56px;
+            height: 56px;
+            background: var(--glow-cyan);
+            color: var(--void-black);
+        }
+
+        .play-btn:hover {
+            background: var(--glow-cyan);
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.4);
+        }
+
+        .progress-section {
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(155, 163, 175, 0.1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(155, 163, 175, 0.2);
+            border-radius: 2px;
+            margin: 12px 0;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--glow-cyan);
+            border-radius: 2px;
+            width: 34%;
+            position: relative;
+        }
+
+        .progress-handle {
+            position: absolute;
+            right: -6px;
+            top: -4px;
+            width: 12px;
+            height: 12px;
+            background: var(--glow-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(100, 255, 218, 0.6);
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--cosmic-silver);
+        }
+
+        .series-browser {
+            flex: 1;
+            padding: 20px 30px;
+            overflow-y: auto;
+        }
+
+        .series-browser h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--star-white);
+        }
+
+        .series-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .series-item {
+            padding: 12px 16px;
+            background: rgba(155, 163, 175, 0.05);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .series-item:hover {
+            background: rgba(155, 163, 175, 0.1);
+            border-color: rgba(100, 255, 218, 0.3);
+        }
+
+        .series-item.active {
+            background: rgba(100, 255, 218, 0.1);
+            border-color: var(--glow-cyan);
+        }
+
+        .series-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--star-white);
+            margin-bottom: 4px;
+        }
+
+        .series-stats {
+            font-size: 12px;
+            color: var(--cosmic-silver);
+        }
+
+        .view-controls {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            background: rgba(26, 26, 46, 0.8);
+            border: 1px solid rgba(155, 163, 175, 0.2);
+            border-radius: 6px;
+            color: var(--cosmic-silver);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .view-btn:hover, .view-btn.active {
+            border-color: var(--glow-cyan);
+            color: var(--star-white);
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmic-background"></div>
+    <div class="starfield"></div>
+    
+    <div class="main-container">
+        <div class="constellation-view">
+            <div class="view-controls">
+                <button class="view-btn active">Constellations</button>
+                <button class="view-btn">Timeline</button>
+                <button class="view-btn">Categories</button>
+            </div>
+            
+            <div class="constellation-grid">
+                <!-- Tech Constellation -->
+                <div class="series-constellation series-tech">
+                    <div class="series-label">Tech Talks</div>
+                    <div class="constellation-line" style="width: 60px; top: 40px; left: 20px; transform: rotate(25deg);"></div>
+                    <div class="constellation-line active" style="width: 80px; top: 70px; left: 65px; transform: rotate(-15deg);"></div>
+                    <div class="constellation-line" style="width: 45px; top: 100px; left: 120px; transform: rotate(35deg);"></div>
+                    <div class="episode-star listened" style="top: 40px; left: 20px;" data-episode="1"></div>
+                    <div class="episode-star listened" style="top: 70px; left: 80px;" data-episode="2"></div>
+                    <div class="episode-star current" style="top: 100px; left: 145px;" data-episode="3"></div>
+                    <div class="episode-star" style="top: 130px; left: 180px;" data-episode="4"></div>
+                    <div class="episode-star" style="top: 50px; left: 200px;" data-episode="5"></div>
+                </div>
+
+                <!-- Design Constellation -->
+                <div class="series-constellation series-design">
+                    <div class="series-label">Design Deep Dive</div>
+                    <div class="constellation-line" style="width: 70px; top: 30px; left: 40px; transform: rotate(-20deg);"></div>
+                    <div class="constellation-line" style="width: 55px; top: 80px; left: 90px; transform: rotate(45deg);"></div>
+                    <div class="episode-star listened" style="top: 30px; left: 40px;" data-episode="6"></div>
+                    <div class="episode-star listened" style="top: 60px; left: 110px;" data-episode="7"></div>
+                    <div class="episode-star listened" style="top: 110px; left: 140px;" data-episode="8"></div>
+                    <div class="episode-star" style="top: 140px; left: 180px;" data-episode="9"></div>
+                </div>
+
+                <!-- Culture Constellation -->
+                <div class="series-constellation series-culture">
+                    <div class="series-label">Culture Cast</div>
+                    <div class="constellation-line" style="width: 65px; top: 20px; left: 30px; transform: rotate(10deg);"></div>
+                    <div class="constellation-line" style="width: 75px; top: 50px; left: 85px; transform: rotate(-30deg);"></div>
+                    <div class="constellation-line" style="width: 40px; top: 90px; left: 140px; transform: rotate(60deg);"></div>
+                    <div class="episode-star listened" style="top: 20px; left: 30px;" data-episode="10"></div>
+                    <div class="episode-star listened" style="top: 50px; left: 95px;" data-episode="11"></div>
+                    <div class="episode-star listened" style="top: 80px; left: 160px;" data-episode="12"></div>
+                    <div class="episode-star listened" style="top: 120px; left: 170px;" data-episode="13"></div>
+                    <div class="episode-star" style="top: 30px; left: 190px;" data-episode="14"></div>
+                </div>
+
+                <!-- Science Constellation -->
+                <div class="series-constellation series-science">
+                    <div class="series-label">Science Stories</div>
+                    <div class="constellation-line" style="width: 50px; top: 40px; left: 20px; transform: rotate(70deg);"></div>
+                    <div class="constellation-line" style="width: 60px; top: 90px; left: 40px; transform: rotate(-10deg);"></div>
+                    <div class="episode-star listened" style="top: 40px; left: 20px;" data-episode="15"></div>
+                    <div class="episode-star listened" style="top: 90px; left: 50px;" data-episode="16"></div>
+                    <div class="episode-star listened" style="top: 90px; left: 110px;" data-episode="17"></div>
+                    <div class="episode-star" style="top: 130px; left: 80px;" data-episode="18"></div>
+                    <div class="episode-star" style="top: 160px; left: 120px;" data-episode="19"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="now-playing">
+                <div class="episode-info">
+                    <h3>The Future of Neural Interfaces</h3>
+                    <p>Tech Talks • Episode 3</p>
+                    <p>42 min • Dec 15, 2024</p>
+                    <div class="episode-description">
+                        Exploring the cutting-edge developments in brain-computer interfaces and their potential impact on human augmentation.
+                    </div>
+                </div>
+            </div>
+
+            <div class="playback-controls">
+                <button class="control-btn">⏮</button>
+                <button class="control-btn">⏪</button>
+                <button class="control-btn play-btn">⏸</button>
+                <button class="control-btn">⏩</button>
+                <button class="control-btn">⏭</button>
+            </div>
+
+            <div class="progress-section">
+                <div class="progress-bar">
+                    <div class="progress-fill">
+                        <div class="progress-handle"></div>
+                    </div>
+                </div>
+                <div class="time-display">
+                    <span>14:23</span>
+                    <span>42:18</span>
+                </div>
+            </div>
+
+            <div class="series-browser">
+                <h4>Series</h4>
+                <div class="series-list">
+                    <div class="series-item active">
+                        <div class="series-name">Tech Talks</div>
+                        <div class="series-stats">5 episodes • 3 listened</div>
+                    </div>
+                    <div class="series-item">
+                        <div class="series-name">Design Deep Dive</div>
+                        <div class="series-stats">4 episodes • 3 listened</div>
+                    </div>
+                    <div class="series-item">
+                        <div class="series-name">Culture Cast</div>
+                        <div class="series-stats">5 episodes • 4 listened</div>
+                    </div>
+                    <div class="series-item">
+                        <div class="series-name">Science Stories</div>
+                        <div class="series-stats">5 episodes • 3 listened</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate starfield
+        const starfield = document.querySelector('.starfield');
+        const starTypes = ['tiny', 'small', 'medium'];
+        
+        for (let i = 0; i < 150; i++) {
+            const star = document.createElement('div');
+            star.className = `star ${starTypes[Math.floor(Math.random() * starTypes.length)]}`;
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            starfield.appendChild(star);
+        }
+
+        // Episode interaction
+        document.querySelectorAll('.episode-star').forEach(star => {
+            star.addEventListener('click', () => {
+                // Remove current from all
+                document.querySelectorAll('.episode-star').forEach(s => s.classList.remove('current'));
+                // Add current to clicked
+                star.classList.add('current');
+                star.classList.add('listened');
+            });
+        });
+
+        // Series interaction
+        document.querySelectorAll('.series-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.series-item').forEach(s => s.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+
+        // View controls
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

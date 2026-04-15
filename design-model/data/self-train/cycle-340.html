@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Focus Presence</title>
+    <style>
+        :root {
+            --surface-primary: #1e1e1e;
+            --surface-secondary: #2a2a2a;
+            --surface-tertiary: #353535;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #707070;
+            --accent-flow: #007aff;
+            --accent-deep: #5856d6;
+            --accent-focused: #30d158;
+            --accent-distracted: #ff9500;
+            --accent-break: #ff453a;
+            --divider: rgba(255, 255, 255, 0.1);
+            --shadow-soft: rgba(0, 0, 0, 0.3);
+            --glow-focused: rgba(48, 209, 88, 0.4);
+            --glow-distracted: rgba(255, 149, 0, 0.3);
+            --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(145deg, #1a1a1a 0%, #0f0f0f 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .menu-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(20px) saturate(1.8);
+            -webkit-backdrop-filter: blur(20px) saturate(1.8);
+            border-bottom: 1px solid var(--divider);
+            z-index: 1000;
+        }
+
+        .menu-bar-content {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            padding: 0 16px;
+            justify-content: space-between;
+        }
+
+        .menu-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .menu-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .apple-logo {
+            width: 14px;
+            height: 14px;
+            opacity: 0.8;
+        }
+
+        .menu-item {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--text-primary);
+            opacity: 0.8;
+            transition: opacity 0.2s var(--transition-smooth);
+        }
+
+        .menu-item:hover {
+            opacity: 1;
+        }
+
+        .status-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-focused);
+            animation: pulse-focus 4s ease-in-out infinite;
+        }
+
+        .time-display {
+            font-size: 13px;
+            font-weight: 400;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.5px;
+        }
+
+        .main-content {
+            position: absolute;
+            top: 24px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .focus-container {
+            width: 480px;
+            height: 320px;
+            background: var(--surface-primary);
+            border-radius: 20px;
+            border: 1px solid var(--divider);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 32px 64px var(--shadow-soft),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        }
+
+        .focus-glow {
+            position: absolute;
+            inset: -2px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--glow-focused), transparent 70%);
+            opacity: 0.6;
+            animation: breathe 6s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        .focus-content {
+            padding: 48px 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .focus-state {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent-focused);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: fade-in-up 1s ease-out 0.5s forwards;
+        }
+
+        .focus-title {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 12px;
+            opacity: 0;
+            animation: fade-in-up 1s ease-out 0.7s forwards;
+        }
+
+        .focus-subtitle {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            opacity: 0;
+            animation: fade-in-up 1s ease-out 0.9s forwards;
+        }
+
+        .ambient-orbs {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -2;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.3;
+        }
+
+        .orb-1 {
+            width: 200px;
+            height: 200px;
+            background: var(--accent-focused);
+            top: 10%;
+            left: 15%;
+            animation: float-1 20s ease-in-out infinite;
+        }
+
+        .orb-2 {
+            width: 150px;
+            height: 150px;
+            background: var(--accent-deep);
+            bottom: 20%;
+            right: 10%;
+            animation: float-2 16s ease-in-out infinite reverse;
+        }
+
+        .orb-3 {
+            width: 100px;
+            height: 100px;
+            background: var(--accent-flow);
+            top: 60%;
+            left: 70%;
+            animation: float-3 24s ease-in-out infinite;
+        }
+
+        .presence-indicators {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+        }
+
+        .presence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+            transition: all 0.4s var(--transition-smooth);
+        }
+
+        .presence-dot.active {
+            background: var(--accent-focused);
+            box-shadow: 0 0 16px var(--glow-focused);
+            transform: scale(1.2);
+        }
+
+        @keyframes pulse-focus {
+            0%, 100% { 
+                opacity: 0.8; 
+                transform: scale(1); 
+            }
+            50% { 
+                opacity: 1; 
+                transform: scale(1.2); 
+            }
+        }
+
+        @keyframes breathe {
+            0%, 100% { 
+                opacity: 0.4; 
+                transform: scale(1); 
+            }
+            50% { 
+                opacity: 0.8; 
+                transform: scale(1.02); 
+            }
+        }
+
+        @keyframes fade-in-up {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes float-1 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -30px) rotate(120deg); }
+            66% { transform: translate(-20px, 20px) rotate(240deg); }
+        }
+
+        @keyframes float-2 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-40px, -25px) rotate(180deg); }
+        }
+
+        @keyframes float-3 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(20px, 30px) rotate(90deg); }
+            75% { transform: translate(-30px, -20px) rotate(270deg); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .orb, .focus-glow, .status-indicator {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-bar-content">
+            <div class="menu-left">
+                <svg class="apple-logo" viewBox="0 0 14 17" fill="currentColor">
+                    <path d="M11.053 8.033c-.049-2.083 1.749-3.086 1.829-3.139-1.003-1.436-2.549-1.631-3.096-1.649-1.304-.135-2.568.754-3.236.754-.68 0-1.713-.734-2.825-.714-1.429.021-2.765.814-3.497 2.089-1.516 2.574-.388 6.323 1.073 8.392.722 1.016 1.567 2.155 2.679 2.115 1.091-.043 1.503-.693 2.825-.693 1.311 0 1.701.693 2.825.67 1.173-.018 1.896-1.026 2.603-2.053.83-1.188 1.169-2.358 1.185-2.417-.026-.012-2.254-.848-2.281-3.355z"/>
+                    <path d="M9.124 2.074C9.706 1.36 10.118.382 10.006 0c-.911.037-2.04.598-2.689 1.325-.583.654-1.103 1.704-.964 2.696 1.02.078 2.057-.508 2.771-1.947z"/>
+                </svg>
+                <span class="menu-item">Focus</span>
+            </div>
+            <div class="menu-right">
+                <div class="status-indicator"></div>
+                <span class="time-display">2:47 PM</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="focus-container">
+            <div class="focus-glow"></div>
+            <div class="focus-content">
+                <div class="focus-state">Deep Focus</div>
+                <h1 class="focus-title">In the Zone</h1>
+                <p class="focus-subtitle">Your mind is clear and concentrated.<br>Distractions have faded away.</p>
+            </div>
+        </div>
+        
+        <div class="presence-indicators">
+            <div class="presence-dot"></div>
+            <div class="presence-dot active"></div>
+            <div class="presence-dot"></div>
+            <div class="presence-dot"></div>
+        </div>
+    </div>
+
+    <div class="ambient-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+</body>
+</html>

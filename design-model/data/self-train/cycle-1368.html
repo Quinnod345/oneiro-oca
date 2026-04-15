@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --bedrock: #2c1810;
+            --sedimentary: #4a3426;
+            --metamorphic: #6b4d3a;
+            --igneous: #8b6b4f;
+            --soil: #a58869;
+            --surface: #c4a884;
+            --vegetation: #3d5a27;
+            --accent-gold: #d4af37;
+            --accent-copper: #b87333;
+            --text-light: #f5f1eb;
+            --text-medium: #d4c7b8;
+            --text-dark: #2c1810;
+            --shadow-deep: rgba(44, 24, 16, 0.6);
+            --shadow-medium: rgba(44, 24, 16, 0.3);
+            --shadow-light: rgba(44, 24, 16, 0.1);
+            --border-subtle: rgba(212, 175, 55, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(180deg, #87ceeb 0%, #c4a884 30%, var(--surface) 40%, var(--soil) 50%, var(--igneous) 65%, var(--metamorphic) 80%, var(--sedimentary) 90%, var(--bedrock) 100%);
+            height: 900px;
+            width: 1440px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            padding: 24px 40px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-dark);
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--metamorphic);
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .total-display {
+            text-align: right;
+        }
+
+        .total-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--accent-copper);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .total-label {
+            font-size: 12px;
+            color: var(--text-dark);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        .geological-layers {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .layer {
+            position: relative;
+            display: flex;
+            align-items: center;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .layer:hover {
+            transform: translateX(8px);
+            box-shadow: inset 4px 0 0 var(--accent-gold);
+        }
+
+        .layer-surface {
+            background: linear-gradient(90deg, rgba(196, 168, 132, 0.9) 0%, rgba(196, 168, 132, 0.7) 100%);
+            height: 120px;
+        }
+
+        .layer-soil {
+            background: linear-gradient(90deg, rgba(165, 136, 105, 0.9) 0%, rgba(165, 136, 105, 0.7) 100%);
+            height: 140px;
+        }
+
+        .layer-igneous {
+            background: linear-gradient(90deg, rgba(139, 107, 79, 0.9) 0%, rgba(139, 107, 79, 0.7) 100%);
+            height: 150px;
+        }
+
+        .layer-metamorphic {
+            background: linear-gradient(90deg, rgba(107, 77, 58, 0.9) 0%, rgba(107, 77, 58, 0.7) 100%);
+            height: 160px;
+        }
+
+        .layer-sedimentary {
+            background: linear-gradient(90deg, rgba(74, 52, 38, 0.9) 0%, rgba(74, 52, 38, 0.7) 100%);
+            height: 170px;
+        }
+
+        .layer-bedrock {
+            background: linear-gradient(90deg, rgba(44, 24, 16, 0.95) 0%, rgba(44, 24, 16, 0.8) 100%);
+            height: 160px;
+        }
+
+        .layer-content {
+            display: flex;
+            width: 100%;
+            padding: 0 40px;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .layer-info {
+            flex: 0 0 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .layer-name {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-light);
+            text-shadow: 2px 2px 4px var(--shadow-deep);
+            letter-spacing: -0.3px;
+        }
+
+        .layer-description {
+            font-size: 13px;
+            color: var(--text-medium);
+            line-height: 1.4;
+            text-shadow: 1px 1px 2px var(--shadow-medium);
+        }
+
+        .layer-amount {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            font-variant-numeric: tabular-nums;
+            text-shadow: 1px 1px 2px var(--shadow-deep);
+        }
+
+        .spending-bars {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 600px;
+        }
+
+        .spending-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .spending-item:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow-medium);
+        }
+
+        .item-name {
+            flex: 0 0 140px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-light);
+            text-shadow: 1px 1px 2px var(--shadow-deep);
+        }
+
+        .item-bar {
+            flex: 1;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .item-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-gold) 0%, var(--accent-copper) 100%);
+            border-radius: 4px;
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 2px 4px var(--shadow-medium);
+        }
+
+        .item-amount {
+            flex: 0 0 80px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-light);
+            font-variant-numeric: tabular-nums;
+            text-shadow: 1px 1px 2px var(--shadow-deep);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 8px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--accent-gold) 0%, var(--accent-copper) 50%, var(--bedrock) 100%);
+            box-shadow: 2px 0 8px var(--shadow-medium);
+        }
+
+        .geological-texture {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 120px;
+            height: 100%;
+            opacity: 0.1;
+            background-size: 40px 40px;
+            background-repeat: repeat;
+        }
+
+        .layer-surface .geological-texture {
+            background-image: radial-gradient(circle, var(--text-dark) 1px, transparent 1px);
+        }
+
+        .layer-igneous .geological-texture {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, var(--text-light) 10px, var(--text-light) 12px);
+        }
+
+        .layer-metamorphic .geological-texture {
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 8px, var(--text-light) 8px, var(--text-light) 10px);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .spending-item {
+            animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .spending-item:nth-child(1) { animation-delay: 0.1s; opacity: 0; }
+        .spending-item:nth-child(2) { animation-delay: 0.2s; opacity: 0; }
+        .spending-item:nth-child(3) { animation-delay: 0.3s; opacity: 0; }
+        .spending-item:nth-child(4) { animation-delay: 0.4s; opacity: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div>
+                    <div class="title">Geological Spending Tracker</div>
+                    <div class="subtitle">Financial strata — deeper layers represent life's essential foundations</div>
+                </div>
+                <div class="total-display">
+                    <div class="total-amount">$4,890</div>
+                    <div class="total-label">Monthly Total</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="geological-layers">
+            <div class="depth-indicator"></div>
+            
+            <div class="layer layer-surface">
+                <div class="geological-texture"></div>
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Surface Layer</div>
+                        <div class="layer-description">Discretionary luxuries, entertainment, and lifestyle choices</div>
+                        <div class="layer-amount">$640</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Entertainment</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 75%"></div></div>
+                            <div class="item-amount">$280</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Dining Out</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 60%"></div></div>
+                            <div class="item-amount">$220</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Shopping</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 45%"></div></div>
+                            <div class="item-amount">$140</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer layer-soil">
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Topsoil</div>
+                        <div class="layer-description">Comfort and convenience expenses that enhance daily life</div>
+                        <div class="layer-amount">$520</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Subscriptions</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 50%"></div></div>
+                            <div class="item-amount">$85</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Personal Care</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 70%"></div></div>
+                            <div class="item-amount">$160</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Fitness</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 65%"></div></div>
+                            <div class="item-amount">$120</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Coffee & Snacks</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 55%"></div></div>
+                            <div class="item-amount">$155</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer layer-igneous">
+                <div class="geological-texture"></div>
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Igneous Layer</div>
+                        <div class="layer-description">Transportation and mobility — movement through life</div>
+                        <div class="layer-amount">$680</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Car Payment</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 85%"></div></div>
+                            <div class="item-amount">$420</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Gas & Maintenance</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 60%"></div></div>
+                            <div class="item-amount">$180</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Public Transit</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 40%"></div></div>
+                            <div class="item-amount">$80</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer layer-metamorphic">
+                <div class="geological-texture"></div>
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Metamorphic Layer</div>
+                        <div class="layer-description">Health, education, and personal development investments</div>
+                        <div class="layer-amount">$890</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Health Insurance</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 90%"></div></div>
+                            <div class="item-amount">$340</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Medical Expenses</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 70%"></div></div>
+                            <div class="item-amount">$280</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Education</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 60%"></div></div>
+                            <div class="item-amount">$270</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer layer-sedimentary">
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Sedimentary Layer</div>
+                        <div class="layer-description">Essential utilities and services for daily functioning</div>
+                        <div class="layer-amount">$450</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Electricity</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 80%"></div></div>
+                            <div class="item-amount">$120</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Water & Gas</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 65%"></div></div>
+                            <div class="item-amount">$85</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Internet & Phone</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 70%"></div></div>
+                            <div class="item-amount">$110</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Insurance</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 75%"></div></div>
+                            <div class="item-amount">$135</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer layer-bedrock">
+                <div class="layer-content">
+                    <div class="layer-info">
+                        <div class="layer-name">Bedrock Foundation</div>
+                        <div class="layer-description">Fundamental survival needs — shelter and sustenance</div>
+                        <div class="layer-amount">$1,710</div>
+                    </div>
+                    <div class="spending-bars">
+                        <div class="spending-item">
+                            <div class="item-name">Rent/Mortgage</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 95%"></div></div>
+                            <div class="item-amount">$1,200</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Groceries</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 75%"></div></div>
+                            <div class="item-amount">$380</div>
+                        </div>
+                        <div class="spending-item">
+                            <div class="item-name">Basic Clothing</div>
+                            <div class="item-bar"><div class="item-bar-fill" style="width: 45%"></div></div>
+                            <div class="item-amount">$130</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -117,7 +117,7 @@ export async function upsertNeuralConnection({
   return rows[0] || null;
 }
 
-export async function ingestCoOccurrenceConnections({ windowSeconds = 75, maxPairs = 40 } = {}) {
+export async function ingestCoOccurrenceConnections({ windowSeconds = 300, maxPairs = 40 } = {}) {
   const { rows } = await pool.query(
     `WITH recent AS (
        SELECT id, source_layer, timestamp
@@ -132,7 +132,7 @@ export async function ingestCoOccurrenceConnections({ windowSeconds = 75, maxPai
      JOIN recent b
        ON a.id < b.id
       AND a.source_layer <> b.source_layer
-      AND ABS(EXTRACT(EPOCH FROM (a.timestamp - b.timestamp))) <= 12
+      AND ABS(EXTRACT(EPOCH FROM (a.timestamp - b.timestamp))) <= 30
      GROUP BY 1, 2
      ORDER BY co_count DESC
      LIMIT $2`,
@@ -141,13 +141,13 @@ export async function ingestCoOccurrenceConnections({ windowSeconds = 75, maxPai
 
   let createdOrUpdated = 0;
   for (const r of rows) {
-    const delta = clamp(r.co_count * 0.12, 0.10, 0.35);
+    const delta = clamp(r.co_count * 0.22, 0.12, 0.40);
     const result = await upsertNeuralConnection({
       fromLayer: r.layer_a,
       toLayer: r.layer_b,
       connectionType: 'co_occurrence',
       strengthDelta: delta,
-      baseStrength: 0.55,
+      baseStrength: 0.42,
       label: `${r.layer_a} ↔ ${r.layer_b}`,
       metadata: { co_count: r.co_count, window_seconds: windowSeconds },
     });
@@ -159,7 +159,7 @@ export async function ingestCoOccurrenceConnections({ windowSeconds = 75, maxPai
 // Deterministic fallback for co-occurrence links.
 // Uses current OCA status/sense signals (no LLM calls) to keep the
 // neural graph alive even when creative/consolidation outputs are quiet.
-export async function ingestFallbackCoOccurrence({ status = {}, sense = null, maxPairs = 25 } = {}) {
+export async function ingestFallbackCoOccurrence({ status = {}, sense = null, maxPairs = 75 } = {}) {
   const effects = status?.effects || {};
   const emotion = status?.emotion || {};
   const memory = status?.memory || {};
@@ -198,6 +198,38 @@ export async function ingestFallbackCoOccurrence({ status = {}, sense = null, ma
     0,
     1
   );
+
+  // Create connections based on signal strengths
+  const connections = [];
+  if (sensorySignal > 0.3) {
+    connections.push(['sensory', 'emotion', sensorySignal * 0.2]);
+    connections.push(['sensory', 'executive', sensorySignal * 0.15]);
+  }
+  if (emotionSignal > 0.4) {
+    connections.push(['emotion', 'executive', emotionSignal * 0.25]);
+    connections.push(['emotion', 'hypothesis', emotionSignal * 0.2]);
+  }
+  if (executiveSignal > 0.3) {
+    connections.push(['executive', 'hypothesis', executiveSignal * 0.2]);
+  }
+  if (metacognitionSignal > 0.3) {
+    connections.push(['hypothesis', 'semantic', metacognitionSignal * 0.2]);
+  }
+
+  let created = 0;
+  for (const [from, to, strength] of connections.slice(0, maxPairs)) {
+    const result = await upsertNeuralConnection({
+      fromLayer: from,
+      toLayer: to,
+      connectionType: 'co_occurrence',
+      strengthDelta: strength,
+      baseStrength: 0.4,
+      label: `fallback: ${from} ↔ ${to}`,
+      metadata: { fallback: true, signal_strength: strength }
+    });
+    if (result) created++;
+  }
+  return { created };
   const hypothesisSignal = clamp(hypPending / 8, 0, 1);
   const semanticSignal = clamp(semanticTotal / 40, 0, 1);
   const consolidationSignal = clamp(rawEpisodes / 20, 0, 1);

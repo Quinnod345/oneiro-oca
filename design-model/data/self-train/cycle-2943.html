@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Scheduler</title>
+    <style>
+        :root {
+            --river-blue: #4A90E2;
+            --river-deep: #2E5C8A;
+            --river-light: #E8F4FD;
+            --bridge-stone: #8B7355;
+            --bridge-shadow: #5D4E3A;
+            --foam-white: #FAFCFE;
+            --ripple-blue: #6BA3F5;
+            --current-gold: #F4D03F;
+            --bank-green: #7D8471;
+            --text-charcoal: #2C3E50;
+            --text-slate: #546E7A;
+            --surface-white: #FFFFFF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, var(--river-light) 0%, var(--foam-white) 50%, var(--river-light) 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scheduler-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            height: 80px;
+            background: var(--surface-white);
+            border-bottom: 2px solid var(--river-blue);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-shadow: 0 4px 20px rgba(74, 144, 226, 0.1);
+            z-index: 10;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-charcoal);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header h1::before {
+            content: "🌊";
+            font-size: 32px;
+        }
+
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            color: var(--text-slate);
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: var(--river-blue);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: var(--river-deep);
+            transform: scale(1.05);
+        }
+
+        .river-container {
+            flex: 1;
+            position: relative;
+            background: var(--river-light);
+            overflow: hidden;
+        }
+
+        .time-labels {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 80px;
+            height: 100%;
+            background: linear-gradient(to right, var(--surface-white), rgba(255,255,255,0.9));
+            z-index: 5;
+            padding: 20px 0;
+        }
+
+        .time-label {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-slate);
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(74, 144, 226, 0.1);
+        }
+
+        .river-flow {
+            position: absolute;
+            left: 80px;
+            right: 0;
+            top: 0;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(107, 163, 245, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(107, 163, 245, 0.2) 0%, transparent 50%),
+                linear-gradient(180deg, var(--river-light) 0%, var(--river-blue) 50%, var(--river-deep) 100%);
+        }
+
+        .river-flow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0px,
+                    rgba(255,255,255,0.1) 1px,
+                    transparent 2px,
+                    transparent 40px
+                ),
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(255,255,255,0.05) 0px,
+                    transparent 1px,
+                    transparent 60px
+                );
+            animation: flow 15s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(40px); }
+        }
+
+        .time-slot {
+            position: relative;
+            height: 60px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .time-slot:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .time-slot.available {
+            background: linear-gradient(90deg, 
+                rgba(232, 244, 253, 0.8) 0%, 
+                rgba(107, 163, 245, 0.3) 50%, 
+                rgba(232, 244, 253, 0.8) 100%);
+        }
+
+        .bridge {
+            position: relative;
+            background: var(--bridge-stone);
+            color: white;
+            padding: 0 20px;
+            margin: 5px 0;
+            border-radius: 25px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            box-shadow: 
+                0 8px 16px rgba(93, 78, 58, 0.4),
+                inset 0 2px 4px rgba(255,255,255,0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .bridge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(255,255,255,0.3) 0%, 
+                transparent 50%, 
+                rgba(0,0,0,0.1) 100%);
+        }
+
+        .bridge::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 10%;
+            right: 10%;
+            height: 3px;
+            background: var(--bridge-shadow);
+            border-radius: 2px;
+            opacity: 0.6;
+        }
+
+        .bridge:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 12px 24px rgba(93, 78, 58, 0.5),
+                inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .bridge-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .meeting-title {
+            font-weight: 600;
+            font-size: 15px;
+            flex: 1;
+        }
+
+        .meeting-time {
+            font-size: 13px;
+            opacity: 0.9;
+            background: rgba(0,0,0,0.2);
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+
+        .current-time {
+            position: absolute;
+            left: 80px;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                var(--current-gold) 0%, 
+                #F7DC6F  50%, 
+                var(--current-gold) 100%);
+            z-index: 8;
+            box-shadow: 0 0 15px rgba(244, 208, 63, 0.6);
+            animation: pulse 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.8; transform: scaleY(1); }
+            100% { opacity: 1; transform: scaleY(1.5); }
+        }
+
+        .current-time::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: -3px;
+            width: 9px;
+            height: 9px;
+            background: var(--current-gold);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(244, 208, 63, 0.8);
+        }
+
+        .add-meeting-btn {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, var(--river-blue), var(--river-deep));
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(74, 144, 226, 0.4);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .add-meeting-btn:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 12px 32px rgba(74, 144, 226, 0.6);
+        }
+
+        .water-ripples {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(107, 163, 245, 0.3) 0%, transparent 70%);
+            animation: ripple-effect 4s ease-out infinite;
+        }
+
+        @keyframes ripple-effect {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 80px;
+            bottom: 0;
+            width: 300px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-left: 2px solid var(--river-blue);
+            padding: 30px;
+            transform: translateX(100%);
+            transition: transform 0.4s ease;
+            z-index: 15;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .quick-stats {
+            margin-bottom: 30px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(74, 144, 226, 0.1);
+            color: var(--text-charcoal);
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-slate);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="scheduler-container">
+        <header class="header">
+            <h1>River Scheduler</h1>
+            <div class="date-nav">
+                <button class="nav-btn">‹</button>
+                <span>Today, March 15, 2024</span>
+                <button class="nav-btn">›</button>
+            </div>
+        </header>
+        
+        <div class="river-container">
+            <div class="time-labels">
+                <div class="time-label">9 AM</div>
+                <div class="time-label">10 AM</div>
+                <div class="time-label">11 AM</div>
+                <div class="time-label">12 PM</div>
+                <div class="time-label">1 PM</div>
+                <div class="time-label">2 PM</div>
+                <div class="time-label">3 PM</div>
+                <div class="time-label">4 PM</div>
+                <div class="time-label">5 PM</div>
+                <div class="time-label">6 PM</div>
+                <div class="time-label">7 PM</div>
+                <div class="time-label">8 PM</div>
+                <div class="time-label">9 PM</div>
+            </div>
+            
+            <div class="river-flow">
+                <div class="time-slot available"></div>
+                <div class="time-slot">
+                    <div class="bridge">
+                        <div class="bridge-content">
+                            <div class="meeting-title">Team Standup</div>
+                            <div class="meeting-time">10:00-10:30</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-slot available"></div>
+                <div class="time-slot available"></div>
+                <div class="time-slot">
+                    <div class="bridge">
+                        <div class="bridge-content">
+                            <div class="meeting-title">Product Review</div>
+                            <div class="meeting-time">1:00-2:00</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-slot available"></div>
+                <div class="time-slot">
+                    <div class="bridge">
+                        <div class="bridge-content">
+                            <div class="meeting-title">Client Call</div>
+                            <div class="meeting-time">3:30-4:15</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-slot available"></div>
+                <div class="time-slot available"></div>
+                <div class="time-slot">
+                    <div class="bridge">
+                        <div class="bridge-content">
+                            <div class="meeting-title">Design Review</div>
+                            <div class="meeting-time">6:00-7:00</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-slot available"></div>
+                <div class="time-slot available"></div>
+                <div class="time-slot available"></div>
+            </div>
+            
+            <div class="current-time" style="top: 280px;"></div>
+            
+            <div class="water-ripples">
+                <div class="ripple" style="width: 40px; height: 40px; top: 150px; left: 200px; animation-delay: 0s;"></div>
+                <div class="ripple" style="width: 60px; height: 60px; top: 400px; left: 600px; animation-delay: 1.5s;"></div>
+                <div class="ripple" style="width: 50px; height: 50px; top: 600px; left: 300px; animation-delay: 3s;"></div>
+            </div>
+        </div>
+        
+        <button class="add-meeting-btn">+</button>
+        
+        <div class="sidebar">
+            <div class="quick-stats">
+                <h3 style="margin-bottom: 20px; color: var(--text-charcoal);">Today's Flow</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Meetings</span>
+                    <span class="stat-value">4</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Free Hours</span>
+                    <span class="stat-value">8.5</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Focus Time</span>
+                    <span class="stat-value">4.5h</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Next Meeting</span>
+                    <span class="stat-value">2:15</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

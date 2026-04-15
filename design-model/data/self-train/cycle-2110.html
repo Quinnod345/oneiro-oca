@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Flow - Transformation Timeline</title>
+    <style>
+        :root {
+            --surface-primary: #fdfcfa;
+            --surface-elevated: #ffffff;
+            --surface-recessed: #f6f5f2;
+            --border-subtle: #e8e6e0;
+            --border-medium: #d4d1c7;
+            --text-primary: #1a1916;
+            --text-secondary: #5a564d;
+            --text-tertiary: #8b8680;
+            --accent-sage: #7d8471;
+            --accent-sage-light: #9ba88a;
+            --accent-terracotta: #b8725c;
+            --accent-golden: #d4a574;
+            --accent-cream: #f5f1e8;
+            --shadow-subtle: 0 1px 3px rgba(26, 25, 22, 0.06);
+            --shadow-medium: 0 4px 12px rgba(26, 25, 22, 0.08);
+            --shadow-elevated: 0 8px 24px rgba(26, 25, 22, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --flow-line: #c7c3b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--surface-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        .container {
+            width: 1440px;
+            height: 900px;
+            padding: 32px;
+            position: relative;
+            background: radial-gradient(circle at 20% 20%, var(--accent-cream) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(184, 114, 92, 0.08) 0%, transparent 50%);
+        }
+
+        .header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .recipe-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .recipe-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .timeline-container {
+            position: relative;
+            height: 720px;
+            padding: 20px 0;
+        }
+
+        .flow-path {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .flow-line {
+            position: absolute;
+            background: var(--flow-line);
+            border-radius: 2px;
+            z-index: 1;
+        }
+
+        .flow-line.horizontal {
+            height: 3px;
+        }
+
+        .flow-line.vertical {
+            width: 3px;
+        }
+
+        .flow-line.curve {
+            border: 3px solid var(--flow-line);
+            background: transparent;
+            border-radius: 50%;
+        }
+
+        .ingredients-section {
+            position: absolute;
+            top: 80px;
+            left: 40px;
+            width: 280px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 20px;
+            padding-left: 16px;
+        }
+
+        .ingredient-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ingredient {
+            background: var(--surface-elevated);
+            border: 1.5px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            box-shadow: var(--shadow-subtle);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .ingredient:hover {
+            border-color: var(--accent-sage-light);
+            transform: translateX(4px);
+        }
+
+        .ingredient-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .ingredient-amount {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .steps-section {
+            position: absolute;
+            top: 60px;
+            left: 420px;
+            width: 600px;
+        }
+
+        .step {
+            position: relative;
+            background: var(--surface-elevated);
+            border: 1.5px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px 28px;
+            margin-bottom: 40px;
+            box-shadow: var(--shadow-medium);
+            transition: all 0.3s ease;
+        }
+
+        .step:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-elevated);
+        }
+
+        .step-number {
+            position: absolute;
+            top: -12px;
+            left: 24px;
+            background: var(--accent-sage);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: var(--shadow-medium);
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: 650;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            margin-left: 20px;
+        }
+
+        .step-description {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .step-details {
+            display: flex;
+            gap: 24px;
+            margin-top: 16px;
+        }
+
+        .step-time, .step-temp {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-tertiary);
+            font-weight: 500;
+        }
+
+        .step-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-golden);
+        }
+
+        .transformation-markers {
+            position: absolute;
+            left: 380px;
+            top: 0;
+            bottom: 0;
+            width: 40px;
+            pointer-events: none;
+        }
+
+        .transformation-node {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--accent-terracotta);
+            border: 3px solid var(--surface-primary);
+            border-radius: 50%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3;
+            box-shadow: var(--shadow-medium);
+        }
+
+        .final-dish {
+            position: absolute;
+            top: 120px;
+            right: 40px;
+            width: 320px;
+            background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--accent-cream) 100%);
+            border: 2px solid var(--accent-sage-light);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            box-shadow: var(--shadow-elevated);
+            text-align: center;
+        }
+
+        .dish-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--accent-terracotta);
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-medium);
+        }
+
+        .dish-icon::before {
+            content: "🍽";
+            font-size: 32px;
+        }
+
+        .dish-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            letter-spacing: -0.01em;
+        }
+
+        .dish-description {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .dish-stats {
+            display: flex;
+            justify-content: space-around;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent-sage);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .flow-connector {
+            position: absolute;
+            width: 2px;
+            background: var(--flow-line);
+            z-index: 2;
+        }
+
+        .connector-1 {
+            left: 320px;
+            top: 120px;
+            width: 100px;
+            height: 2px;
+        }
+
+        .connector-2 {
+            left: 320px;
+            top: 180px;
+            width: 100px;
+            height: 2px;
+        }
+
+        .connector-3 {
+            left: 320px;
+            top: 240px;
+            width: 100px;
+            height: 2px;
+        }
+
+        .connector-4 {
+            left: 320px;
+            top: 300px;
+            width: 100px;
+            height: 2px;
+        }
+
+        .connector-out {
+            left: 1020px;
+            top: 240px;
+            width: 100px;
+            height: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="recipe-title">Risotto alla Milanese</h1>
+            <p class="recipe-subtitle">A transformation journey from simple ingredients to golden perfection</p>
+        </div>
+
+        <div class="timeline-container">
+            <!-- Flow connectors -->
+            <div class="flow-line horizontal connector-1"></div>
+            <div class="flow-line horizontal connector-2"></div>
+            <div class="flow-line horizontal connector-3"></div>
+            <div class="flow-line horizontal connector-4"></div>
+            <div class="flow-line horizontal connector-out"></div>
+
+            <!-- Ingredients Section -->
+            <div class="ingredients-section">
+                <h2 class="section-title">Ingredients</h2>
+                <div class="ingredient-list">
+                    <div class="ingredient">
+                        <div class="ingredient-name">Arborio Rice</div>
+                        <div class="ingredient-amount">1½ cups</div>
+                    </div>
+                    <div class="ingredient">
+                        <div class="ingredient-name">Chicken Stock</div>
+                        <div class="ingredient-amount">6 cups, warm</div>
+                    </div>
+                    <div class="ingredient">
+                        <div class="ingredient-name">Saffron Threads</div>
+                        <div class="ingredient-amount">Pinch</div>
+                    </div>
+                    <div class="ingredient">
+                        <div class="ingredient-name">Onion</div>
+                        <div class="ingredient-amount">1 medium, diced</div>
+                    </div>
+                    <div class="ingredient">
+                        <div class="ingredient-name">Parmigiano</div>
+                        <div class="ingredient-amount">½ cup, grated</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transformation Markers -->
+            <div class="transformation-markers">
+                <div class="transformation-node" style="top: 140px;"></div>
+                <div class="transformation-node" style="top: 240px;"></div>
+                <div class="transformation-node" style="top: 340px;"></div>
+                <div class="transformation-node" style="top: 440px;"></div>
+            </div>
+
+            <!-- Steps Section -->
+            <div class="steps-section">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Prepare the Base</h3>
+                    <p class="step-description">Bloom saffron in warm stock. Sauté diced onion in olive oil until translucent and fragrant, creating the aromatic foundation.</p>
+                    <div class="step-details">
+                        <div class="step-time">
+                            <div class="step-icon"></div>
+                            <span>5 minutes</span>
+                        </div>
+                        <div class="step-temp">
+                            <div class="step-icon"></div>
+                            <span>Medium heat</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Toast the Rice</h3>
+                    <p class="step-description">Add Arborio rice, stirring to coat each grain with oil. Toast until edges become translucent, awakening the starch for perfect creaminess.</p>
+                    <div class="step-details">
+                        <div class="step-time">
+                            <div class="step-icon"></div>
+                            <span>3 minutes</span>
+                        </div>
+                        <div class="step-temp">
+                            <div class="step-icon"></div>
+                            <span>Medium-high</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Gradual Transformation</h3>
+                    <p class="step-description">Add warm saffron stock one ladle at a time, stirring constantly. Each addition releases starch, building the signature creamy texture.</p>
+                    <div class="step-details">
+                        <div class="step-time">
+                            <div class="step-icon"></div>
+                            <span>18 minutes</span>
+                        </div>
+                        <div class="step-temp">
+                            <div class="step-icon"></div>
+                            <span>Gentle simmer</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3 class="step-title">Final Mantecatura</h3>
+                    <p class="step-description">Finish with butter and Parmigiano, stirring vigorously to create the perfect wave-like consistency that defines great risotto.</p>
+                    <div class="step-details">
+                        <div class="step-time">
+                            <div class="step-icon"></div>
+                            <span>2 minutes</span>
+                        </div>
+                        <div class="step-temp">
+                            <div class="step-icon"></div>
+                            <span>Off heat</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Final Dish -->
+            <div class="final-dish">
+                <div class="dish-icon"></div>
+                <h3 class="dish-title">Golden Perfection</h3>
+                <p class="dish-description">A creamy, luxurious risotto with the perfect al dente bite, infused with saffron's golden hue and earthy aroma.</p>
+                <div class="dish-stats">
+                    <div class="stat">
+                        <span class="stat-value">4</span>
+                        <span class="stat-label">Servings</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">35</span>
+                        <span class="stat-label">Minutes</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">★★★</span>
+                        <span class="stat-label">Skill</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

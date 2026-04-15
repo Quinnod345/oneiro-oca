@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, height=900, initial-scale=1">
+<title>First Listen</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+:root{
+--bg:          #09080700;
+--surface-0:   #0e0d0b;
+--surface-1:   #141210;
+--surface-2:   #1b1916;
+--surface-3:   #23201d;
+--surface-4:   #2c2925;
+--border-0:    #1a1815;
+--border-1:    #242119;
+--border-2:    #302d28;
+--border-3:    #3e3b35;
+
+--amber:       #d08c18;
+--amber-hi:    #f0a832;
+--amber-lo:    #9a640e;
+--amber-dim:   #5e3d08;
+--amber-glow:  rgba(208,140,24,0.18);
+--amber-trace: rgba(208,140,24,0.08);
+--amber-ghost: rgba(208,140,24,0.04);
+
+--text-0:      #ece7e0;
+--text-1:      #9c9590;
+--text-2:      #605a54;
+--text-3:      #3e3a34;
+--text-amber:  #b8823a;
+
+--font-ui:     -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+--font-dp:     -apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+--font-mono:   "SF Mono","Menlo","Monaco","Cascadia Mono",monospace;
+}
+
+html,body{width:1440px;height:900px;overflow:hidden;background:#090807;font-family:var(--font-ui)}
+
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 800px 600px at 25% 75%, rgba(80,50,18,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 500px at 75% 25%, rgba(40,28,12,0.05) 0%, transparent 55%);
+  pointer-events:none;z-index:0;
+}
+
+/* DAW window suggestion in background */
+.daw-bg{
+  position:fixed;top:52px;left:0;right:0;bottom:72px;
+  opacity:0.22;pointer-events:none;z-index:0;
+  display:flex;gap:0;
+}
+.daw-sidebar{
+  width:180px;background:#0d0b09;border-right:1px solid #1a1815;
+  display:flex;flex-direction:column;gap:1px;padding-top:6px;
+}
+.daw-track-row{
+  height:28px;background:#131110;border-bottom:1px solid #0e0d0b;
+  display:flex;align-items:center;gap:6px;padding:0 10px;
+}
+.daw-track-dot{width:6px;height:6px;border-radius:50%}
+.daw-track-label{font-size:9px;color:#3e3830;font-family:var(--font-ui);letter-spacing:0.03em}
+.daw-main{flex:1;background:#0a0908;position:relative;overflow:hidden}
+.daw-lane{height:28px;border-bottom:1px solid #0d0c0a;display:flex;align-items:center}
+.daw-clip{
+  height:20px;border-radius:3px;margin-left:var(--offset);width:var(--w);
+  background:var(--c);opacity:0.6;
+}
+.daw-ruler{height:18px;background:#0d0c0a;border-bottom:1px solid #171512;display:flex;align-items:center;gap:0}
+.daw-tick{flex:1;height:100%;border-right:1px solid #1a1815;font-size:8px;color:#2d2a24;font-family:var(--font-mono);display:flex;align-items:center;padding-left:4px}
+.daw-playhead-bg{position:absolute;top:0;bottom:0;left:38%;width:1px;background:rgba(208,140,24,0.3)}
+
+/* ── Menubar ── */
+.menubar{
+  position:fixed;top:0;left:0;right:0;height:28px;
+  background:rgba(12,10,9,0.88);
+  backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;z-index:100;
+}
+.mb-left{display:flex;align-items:center;gap:20px}
+.mb-apple{font-size:13px;color:var(--text-0);opacity:0.85;line-height:1;user-select:none}
+.mb-menus{display:flex;align-items:center;gap:2px}
+.mb-item{font-size:13px;color:var(--text-1);padding:2px 8px;border-radius:4px;letter-spacing:-0.01em;cursor:default;user-select:none}
+.mb-item.active{color:var(--text-0);font-weight:500}
+.mb-right{display:flex;align-items:center;gap:3px}
+.mb-sys{font-size:12px;color:var(--text-1);padding:2px 5px;letter-spacing:-0.01em;cursor:default;user-select:none}
+.mb-fl{
+  font-size:10.5px;font-weight:700;letter-spacing:0.06em;color:var(--amber);
+  padding:2px 9px;border-radius:4px;cursor:default;user-select:none;
+  background:rgba(208,140,24,0.1);
+  border:1px solid rgba(208,140,24,0.22);
+  box-shadow:0 0 10px rgba(208,140,24,0.08);
+}
+.mb-time{font-size:12px;font-weight:500;color:var(--text-0);letter-spacing:-0.02em;font-variant-numeric:tabular-nums;user-select:none}
+
+/* ── Popover anchor ── */
+.pop-anchor{
+  position:fixed;top:27px;right:72px;z-index:200;
+}
+.pop-caret{
+  position:relative;z-index:1;margin-right:14px;margin-left:auto;
+  width:0;height:0;
+  border-left:8px solid transparent;border-right:8px solid transparent;
+  border-bottom:8px solid rgba(208,140,24,0.15);
+}
+.pop-caret::after{
+  content:'';position:absolute;top:2px;left:-7px;
+  width:0;height:0;
+  border-left:7px solid transparent;border-right:7px solid transparent;
+  border-bottom:7px solid var(--surface-1);
+}
+
+/* ── Popover ── */
+.popover{
+  width:368px;
+  background:var(--surface-1);
+  border:1px solid var(--border-1);
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:
+    0 0 0 0.5px rgba(0,0,0,0.6),
+    0 2px 4px rgba(0,0,0,0.3),
+    0 8px 20px rgba(0,0,0,0.5),
+    0 24px 56px rgba(0,0,0,0.45),
+    0 48px 96px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  position:relative;
+}
+.popover::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);
+  pointer-events:none;z-index:1;
+}
+
+/* ── Track header ── */
+.track-hd{
+  padding:18px 18px 14px;
+  border-bottom:1px solid var(--border-0);
+  background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface-1) 100%);
+}
+.track-top{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:14px;
+}
+.track-meta{}
+.track-name{
+  font-family:var(--font-dp);
+  font-size:16px;font-weight:300;
+  color:var(--text-0);letter-spacing:-0.03em;line-height:1.2;
+  margin-bottom:4px;
+}
+.track-sub{font-size:11.5px;color:var(--text-2);letter-spacing:0em;font-weight:400;line-height:1.5}
+.track-sub span{color:var(--text-3)}
+.track-badge{
+  font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--amber-lo);background:rgba(94,61,8,0.3);
+  border:1px solid rgba(94,61,8,0.5);border-radius:4px;
+  padding:2px 6px;margin-top:2px;display:inline-block;
+  font-family:var(--font-ui);
+}
+
+/* Transport */
+.transport{display:flex;align-items:center;gap:10px}
+.t-btn{
+  background:none;border:none;cursor:pointer;
+  color:var(--text-2);padding:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:color 0.12s;outline:none;
+}
+.t-btn:hover{color:var(--text-0)}
+.t-play{
+  width:36px;height:36px;
+  background:var(--surface-3);
+  border-radius:50%;
+  border:1px solid var(--border-2);
+  color:var(--text-0);
+  transition:background 0.15s,border-color 0.15s,color 0.15s;
+}
+.t-play:hover{border-color:var(--amber-dim);color:var(--amber-hi)}
+.t-play.playing{
+  background:rgba(94,61,8,0.35);
+  border-color:rgba(160,100,14,0.5);
+  color:var(--amber-hi);
+  box-shadow:0 0 14px rgba(208,140,24,0.15);
+}
+.t-time{
+  margin-left:auto;font-family:var(--font-mono);font-size:11px;
+  color:var(--text-2);letter-spacing:0.025em;white-space:nowrap;
+}
+.t-time .el{color:var(--text-amber)}
+
+/* ── Waveform ── */
+.wave-section{
+  padding:14px 18px 12px;
+  border-bottom:1px solid var(--border-0);
+  background:var(--surface-0);
+}
+.wave-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:7px;
+}
+.wave-label{font-size:10px;color:var(--text-3);letter-spacing:0.04em;text-transform:uppercase;font-weight:500}
+.mood-tag{
+  font-size:10px;color:var(--amber-lo);letter-spacing:0.06em;
+  font-style:italic;transition:opacity 0.4s;
+  font-family:var(--font-ui);
+}
+.energy-strip{
+  width:100%;height:3px;border-radius:2px;margin-bottom:8px;
+  overflow:hidden;background:var(--surface-3);
+}
+#energy-canvas{display:block;width:100%;height:3px}
+
+.wave-wrap{
+  position:relative;width:100%;height:68px;cursor:crosshair;
+}
+#wave-canvas{display:block;width:100%;height:68px;position:relative;z-index:1}
+
+.wave-tip{
+  position:absolute;top:-24px;
+  transform:translateX(-50%);
+  background:var(--surface-4);
+  border:1px solid var(--border-3);
+  color:var(--text-1);
+  font-family:var(--font-mono);font-size:9.5px;
+  padding:2px 6px;border-radius:4px;
+  pointer-events:none;opacity:0;
+  transition:opacity 0.08s;white-space:nowrap;z-index:10;
+}
+.wave-wrap:hover .wave-tip{opacity:1}
+
+.wave-foot{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:9px;
+}
+.wave-hint{font-size:10px;color:var(--text-3)}
+.wave-hint kbd{
+  font-family:var(--font-mono);
+  background:var(--surface-3);border:1px solid var(--border-2);
+  border-radius:3px;padding:0 4px;font-size:9px;color:var(--text-2);
+}
+.ann-btn{
+  background:none;border:1px solid var(--border-2);border-radius:7px;
+  color:var(--text-2);font-family:var(--font-ui);font-size:11px;
+  padding:4px 10px;cursor:pointer;
+  display:flex;align-items:center;gap:5px;
+  transition:all 0.12s;outline:none;
+}
+.ann-btn:hover{border-color:var(--amber-dim);color:var(--amber);background:var(--amber-ghost)}
+.ann-btn.active{border-color:rgba(160,100,14,0.6);color:var(--amber-hi);background:var(--amber-trace)}
+
+.ann-input-wrap{
+  display:none;align-items:center;gap:8px;
+  margin-top:9px;
+  background:var(--surface-2);
+  border:1px solid rgba(94,61,8,0.6);
+  border-radius:8px;padding:8px 11px;
+}
+.ann-input-wrap.on{display:flex}
+.ann-input-ts{
+  font-family:var(--font-mono);font-size:10.5px;
+  color:var(--amber-lo);white-space:nowrap;letter-spacing:0.03em;flex-shrink:0;
+}
+.ann-input{
+  flex:1;background:none;border:none;outline:none;
+  font-family:var(--font-ui);font-size:12.5px;color:var(--text-0);
+  caret-color:var(--amber);
+}
+.ann-input::placeholder{color:var(--text-3)}
+
+/* ── Moments list ── */
+.moments-section{padding:0 0 2px}
+.moments-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 18px 5px;
+}
+.moments-title{
+  font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--text-3);
+}
+.moments-ct{font-family:var(--font-mono);font-size:10px;color:var(--text-3)}
+.moments-list{overflow-y:auto;max-height:172px}
+.moments-list::-webkit-scrollbar{width:2px}
+.moments-list::-webkit-scrollbar-track{background:transparent}
+.moments-list::-webkit-scrollbar-thumb{background:var(--border-1);border-radius:2px}
+
+.m-item{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:7px 18px;cursor:pointer;
+  transition:background 0.1s;position:relative;
+}
+.m-item::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;
+  width:2px;background:transparent;transition:background 0.15s;border-radius:0 1px 1px 0;
+}
+.m-item:hover{background:var(--surface-2)}
+.m-item:hover::before{background:var(--amber-dim)}
+.m-item.past::before{background:rgba(94,61,8,0.4)}
+.m-item.past .m-ts{color:var(--text-amber)}
+.m-ts{
+  font-family:var(--font-mono);font-size:10.5px;color:var(--text-2);
+  letter-spacing:0.03em;padding-top:1px;min-width:34px;flex-shrink:0;
+}
+.m-text{font-size:12.5px;color:var(--text-1);line-height:1.45;letter-spacing:-0.01em}
+.m-del{
+  margin-left:auto;opacity:0;background:none;border:none;
+  color:var(--text-3);font-size:13px;cursor:pointer;
+  padding:0 2px;transition:opacity 0.12s,color 0.12s;outline:none;flex-shrink:0;line-height:1;
+  padding-top:1px;
+}
+.m-item:hover .m-del{opacity:1}
+.m-del:hover{color:var(--text-1)}
+.m-item.new-flash{animation:flashIn 0.5s ease-out}
+@keyframes flashIn{
+  0%{background:rgba(208,140,24,0.12)}
+  100%{background:transparent}
+}
+
+/* ── Footer ── */
+.pop-foot{
+  padding:8px 18px 13px;border-top:1px solid var(--border-0);
+  display:flex;align-items:center;justify-content:space-between;
+  background:linear-gradient(0deg,var(--surface-2) 0%,var(--surface-1) 100%);
+}
+.foot-meta{font-size:10.5px;color:var(--text-3);letter-spacing:0.01em}
+.foot-meta strong{color:var(--text-2);font-weight:400}
+.foot-exp{
+  background:none;border:1px solid var(--border-1);border-radius:7px;
+  color:var(--text-2);font-size:11px;padding:3px 10px;cursor:pointer;
+  font-family:var(--font-ui);transition:all 0.12s;outline:none;
+}
+.foot-exp:hover{border-color:var(--border-2);color:var(--text-1)}
+
+/* ── Dock ── */
+.dock{
+  position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+  background:rgba(22,18,14,0.65);
+  backdrop-filter:blur(20px) saturate(150%);
+  border:1px solid rgba(255,255,255,0.05);
+  border-radius:20px;padding:7px 16px;
+  display:flex;gap:10px;align-items:flex-end;z-index:50;
+}
+.d-icon{
+  width:46px;height:46px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;cursor:default;
+  transition:transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative;
+}
+.d-icon:hover{transform:translateY(-5px) scale(1.12)}
+.d-icon.logic{background:#0e1422;font-size:17px;letter-spacing:-0.05em;font-family:var(--font-mono);color:#4a6fa0;font-weight:700}
+.d-icon.notes{background:#1a1912;font-size:21px}
+.d-icon.finder{background:#0d1420;font-size:22px}
+.d-icon.dot{
+  position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.4);
+}
+</style>
+</head>
+<body>
+
+<!-- DAW background suggestion -->
+<div class="daw-bg">
+  <div class="daw-sidebar">
+    <div class="daw-track-row" style="margin-top:18px">
+      <div class="daw-track-dot" style="background:#4a6fa0"></div>
+      <div class="daw-track-label">Piano</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#7a4a30"></div>
+      <div class="daw-track-label">Bass</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#3a6a3a"></div>
+      <div class="daw-track-label">Drums</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#6a3a6a"></div>
+      <div class="daw-track-label">Strings</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#5a5030"></div>
+      <div class="daw-track-label">Synth</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#4a4a4a"></div>
+      <div class="daw-track-label">Vocal</div>
+    </div>
+    <div class="daw-track-row">
+      <div class="daw-track-dot" style="background:#3a5a6a"></div>
+      <div class="daw-track-label">FX</div>
+    </div>
+  </div>
+  <div class="daw-main">
+    <div class="daw-ruler">
+      <div class="daw-tick">1</div><div class="daw-tick">2</div><div class="daw-tick">3</div>
+      <div class="daw-tick">4</div><div class="daw-tick">5</div><div class="daw-tick">6</div>
+      <div class="daw-tick">7</div><div class="daw-tick">8</div><div class="daw-tick">9</div>
+      <div class="daw-tick">10</div><div class="daw-tick">11</div><div class="daw-tick">12</div>
+      <div class="daw-tick">13</div><div class="daw-tick">14</div><div class="daw-tick">15</div>
+      <div class="daw-tick">16</div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:6px;--w:310px;--c:#2a3850"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:6px;--w:160px;--c:#3a2018"></div>
+      <div class="daw-clip" style="--offset:172px;--w:150px;--c:#3a2018;margin-left:6px"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:6px;--w:310px;--c:#1e381e"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:80px;--w:240px;--c:#2e1e2e"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:6px;--w:100px;--c:#2e2818"></div>
+      <div class="daw-clip" style="--offset:112px;--w:200px;--c:#2e2818;margin-left:6px"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:50px;--w:270px;--c:#282828"></div>
+    </div>
+    <div class="daw-lane">
+      <div class="daw-clip" style="--offset:6px;--w:310px;--c:#182028"></div>
+    </div>
+    <div class="daw-playhead-bg"></div>
+  </div>
+</div>
+
+<!-- Menubar -->
+<div class="menubar">
+  <div class="mb-left">
+    <div class="mb-apple">&#63743;</div>
+    <div class="mb-menus">
+      <div class="mb-item active">Logic Pro</div>
+      <div class="mb-item">File</div>
+      <div class="mb-item">Edit</div>
+      <div class="mb-item">Track</div>
+      <div class="mb-item">Mix</div>
+      <div class="mb-item">View</div>
+    </div>
+  </div>
+  <div class="mb-right">
+    <div class="mb-sys">⌨</div>
+    <div class="mb-sys">▶</div>
+    <div class="mb-sys">⌃</div>
+    <div class="mb-fl">FL</div>
+    <div class="mb-time" id="clock">2:14 AM</div>
+  </div>
+</div>
+
+<!-- Popover -->
+<div class="pop-anchor">
+  <div class="pop-caret"></div>
+  <div class="popover">
+
+    <!-- Track header -->
+    <div class="track-hd">
+      <div class="track-top">
+        <div class="track-meta">
+          <div class="track-name" id="tname">untitled_v4_final.logicx</div>
+          <div class="track-sub">Apr 12 · late session <span>· Logic Pro</span></div>
+          <div class="track-badge">First Listen</div>
+        </div>
+      </div>
+      <div class="transport">
+        <button class="t-btn" id="btn-prev" title="Previous">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 2v9M11 2L5.5 6.5 11 11V2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="t-btn t-play playing" id="btn-play">
+          <svg id="ico-play" width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:none;margin-left:1px">
+            <path d="M2 1.5l9 4.5-9 4.5z" fill="currentColor"/>
+          </svg>
+          <svg id="ico-pause" width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M3.5 2.5v7M8.5 2.5v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="t-btn" id="btn-next" title="Next">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M11 2v9M2 2l5.5 4.5L2 11V2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="t-time">
+          <span class="el" id="t-el">2:14</span>
+          <span style="color:var(--text-3)"> / </span>
+          <span id="t-tot">4:32</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Waveform -->
+    <div class="wave-section">
+      <div class="wave-header">
+        <div class="wave-label">Waveform</div>
+        <div class="mood-tag" id="mood-tag">building</div>
+      </div>
+      <div class="energy-strip">
+        <canvas id="energy-canvas" height="3"></canvas>
+      </div>
+      <div class="wave-wrap" id="wave-wrap">
+        <canvas id="wave-canvas" height="68"></canvas>
+        <div class="wave-tip" id="wave-tip">0:00</div>
+      </div>
+      <div class="wave-foot">
+        <div class="wave-hint">press <kbd>A</kbd> to mark a moment</div>
+        <button class="ann-btn" id="ann-btn">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <circle cx="4.5" cy="4.5" r="3.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4.5 2.5v4M2.5 4.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          Mark moment
+        </button>
+      </div>
+      <div class="ann-input-wrap" id="ann-wrap">
+        <span class="ann-input-ts" id="ann-ts">2:14</span>
+        <input class="ann-input" id="ann-field" type="text" placeholder="what are you hearing…" maxlength="72" autocomplete="off" spellcheck="false"/>
+      </div>
+    </div>
+
+    <!-- Moments -->
+    <div class="moments-section">
+      <div class="moments-hd">
+        <div class="moments-title">Moments</div>
+        <div class="moments-ct" id="m-count">4 marked</div>
+      </div>
+      <div class="moments-list" id="moments-list"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="pop-foot">
+      <div class="foot-meta">Tonight · <strong id="sess-date">Apr 12, 2:14 AM</strong></div>
+      <button class="foot-exp">Export notes</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Dock -->
+<div class="dock">
+  <div class="d-icon logic">LP<div class="dot"></div></div>
+  <div class="d-icon notes">🗒<div class="dot"></div></div>
+  <div class="d-icon finder">🔍</div>
+</div>
+
+<script>
+const TOTAL = 272; // 4:32
+
+let prog      = 0.490;
+let playing   = true;
+let annotMode = false;
+let hovX      = null;
+let hovAnn    = null;
+let raf       = null;
+let lastTs    = null;
+let nextId    = 5;
+
+let moments = [
+  { id:1, pos:0.088, time:'0:24', text:'that opening breath' },
+  { id:2, pos:0.266, time:'1:12', text:'bass drops — wasn\'t expecting that' },
+  { id:3, pos:0.412, time:'1:51', text:'this is the one' },
+  { id:4, pos:0.621, time:'2:49', text:'key change, subtle but it\'s there' },
+];
+
+// ── Canvas setup ──
+const wC  = document.getElementById('wave-canvas');
+const wX  = wC.getContext('2d');
+const eC  = document.getElementById('energy-canvas');
+const eX  = eC.getContext('2d');
+let cW    = 0;
+const DPR = window.devicePixelRatio || 1;
+
+function setupCanvas() {
+  const wrap = document.getElementById('wave-wrap');
+  cW = wrap.offsetWidth;
+
+  wC.width  = cW * DPR; wC.height = 68 * DPR;
+  wC.style.width = cW + 'px'; wC.style.height = '68px';
+  wX.scale(DPR, DPR);
+
+  eC.width  = cW * DPR; eC.height = 3 * DPR;
+  eC.style.width = cW + 'px'; eC.style.height = '3px';
+  eX.scale(DPR, DPR);
+}
+
+// ── Amplitude function ──
+// Represents a real song structure
+function amp(i, n) {
+  const t = i / n;
+  let env;
+  if      (t < 0.04) env = t * 18;
+  else if (t < 0.10) env = 0.72 + Math.sin(t * 60) * 0.06;
+  else if (t < 0.16) env = 0.48 + Math.sin(t * 22) * 0.09;
+  else if (t < 0.27) env = 0.62 + Math.sin(t * 28) * 0.11;
+  else if (t < 0.33) env = 0.82 + Math.sin(t * 14) * 0.06;
+  else if (t < 0.52) env = 0.91 + Math.sin(t * 52) * 0.07;
+  else if (t < 0.58) env = 0.44 + Math.sin(t * 18) * 0.09;
+  else if (t < 0.62) env = 0.75;
+  else if (t < 0.76) env = 0.94 + Math.sin(t * 58) * 0.05;
+  else if (t < 0.84) env = 0.64 + Math.sin(t * 32) * 0.13;
+  else if (t < 0.93) env = 0.96 + Math.sin(t * 62) * 0.04;
+  else               env = Math.max(0, (1 - t) / 0.07);
+
+  const micro =
+    Math.abs(Math.sin(i * 0.43)) * 0.32 +
+    Math.abs(Math.sin(i * 1.17)) * 0.22 +
+    Math.abs(Math.sin(i * 2.83)) * 0.14 +
+    Math.abs(Math.sin(i * 6.91)) * 0.07 +
+    Math.abs(Math.sin(i * 14.3)) * 0.04;
+
+  return Math.max(0.015, env * 0.62 + micro * 0.38);
+}
+
+// ── Draw waveform ──
+function drawWave() {
+  const W = cW, H = 68;
+  wX.clearRect(0, 0, W, H);
+
+  const n    = Math.floor(W / 3.2);
+  const bw   = W / n;
+  const gap  = 1.1;
+  const maxH = H * 0.86;
+  const mid  = H / 2;
+  const px   = prog * W;
+  const now  = Date.now();
+
+  for (let i = 0; i < n; i++) {
+    const cx = (i + 0.5) * bw;
+    const played = cx < px;
+    const a  = amp(i, n);
+
+    // Slight life near playhead when playing
+    const nearPH = playing ? Math.max(0, 1 - Math.abs(cx - px) / 18) : 0;
+    const life   = Math.sin(now * 0.0025 + i * 0.9) * 0.035 * nearPH;
+    const h = Math.max(2, (a + life) * maxH);
+    const halfH = h / 2;
+
+    // Color
+    let fill;
+    if (played) {
+      const heat = Math.max(0, 1 - Math.abs(cx - px) / (W * 0.18));
+      fill = `rgba(${Math.round(175 + heat*50)},${Math.round(95+heat*45+a*18)},${Math.round(8+heat*6)},${0.45+a*0.42+heat*0.13})`;
+    } else {
+      const lum = Math.round(32 + a * 16);
+      fill = `rgba(${lum+5},${lum+2},${lum},0.82)`;
+    }
+    wX.fillStyle = fill;
+
+    const bx = i * bw + gap * 0.5;
+    const bwg = bw - gap;
+
+    // Top cap
+    wX.beginPath();
+    const tr = Math.min(bwg * 0.5, 1.5);
+    wX.moveTo(bx + tr, mid - halfH);
+    wX.lineTo(bx + bwg - tr, mid - halfH);
+    wX.arcTo(bx + bwg, mid - halfH, bx + bwg, mid - halfH + tr, tr);
+    wX.lineTo(bx + bwg, mid - 0.5);
+    wX.lineTo(bx, mid - 0.5);
+    wX.lineTo(bx, mid - halfH + tr);
+    wX.arcTo(bx, mid - halfH, bx + tr, mid - halfH, tr);
+    wX.closePath();
+    wX.fill();
+
+    // Bottom (smaller, asymmetric — feels more natural)
+    const bh = halfH * 0.68;
+    wX.beginPath();
+    wX.moveTo(bx, mid + 0.5);
+    wX.lineTo(bx + bwg, mid + 0.5);
+    wX.lineTo(bx + bwg, mid + bh - tr);
+    wX.arcTo(bx + bwg, mid + bh, bx + bwg - tr, mid + bh, tr);
+    wX.lineTo(bx + tr, mid + bh);
+    wX.arcTo(bx, mid + bh, bx, mid + bh - tr, tr);
+    wX.lineTo(bx, mid + 0.5);
+    wX.closePath();
+    wX.fill();
+  }
+
+  // Playhead glow halo
+  const g = wX.createRadialGradient(px, mid, 0, px, mid, 32);
+  g.addColorStop(0, 'rgba(240,168,50,0.16)');
+  g.addColorStop(1, 'rgba(240,168,50,0)');
+  wX.fillStyle = g;
+  wX.fillRect(px - 32, 0, 64, H);
+
+  // Playhead line
+  wX.fillStyle = 'rgba(245,180,68,0.92)';
+  wX.fillRect(px - 0.75, 0, 1.5, H);
+
+  // Playhead knob
+  wX.beginPath();
+  wX.arc(px, mid, 3.2, 0, Math.PI * 2);
+  wX.fillStyle = '#f5b444';
+  wX.fill();
+  wX.beginPath();
+  wX.arc(px, mid, 1.4, 0, Math.PI * 2);
+  wX.fillStyle = '#ffe8a0';
+  wX.fill();
+
+  // Annotation markers
+  moments.forEach(m => {
+    const ax = m.pos * W;
+    const past = ax < px;
+    const hov = m.id === hovAnn;
+
+    const lineA = hov ? 0.85 : (past ? 0.55 : 0.32);
+    wX.fillStyle = `rgba(208,140,24,${lineA})`;
+    wX.fillRect(ax - 0.5, 0, 1, H);
+
+    // Diamond at top
+    const ds = hov ? 4 : 3;
+    wX.save();
+    wX.translate(ax, 5.5);
+    wX.rotate(Math.PI / 4);
+    wX.fillStyle = hov
+      ? '#f0a832'
+      : (past ? 'rgba(208,140,24,0.75)' : 'rgba(208,140,24,0.42)');
+    wX.fillRect(-ds * 0.5, -ds * 0.5, ds, ds);
+    wX.restore();
+
+    // Glow on hover
+    if (hov) {
+      const hg = wX.createLinearGradient(ax - 12, 0, ax + 12, 0);
+      hg.addColorStop(0, 'rgba(208,140,24,0)');
+      hg.addColorStop(0.5, 'rgba(208,140,24,0.08)');
+      hg.addColorStop(1, 'rgba(208,140,24,0)');
+      wX.fillStyle = hg;
+      wX.fillRect(ax - 12, 0, 24, H);
+    }
+  });
+
+  // Hover cursor
+  if (hovX !== null) {
+    wX.fillStyle = 'rgba(255,255,255,0.06)';
+    wX.fillRect(hovX * W - 0.5, 0, 1, H);
+  }
+}
+
+// ── Draw energy strip ──
+function drawEnergy() {
+  const W = cW;
+  eX.clearRect(0, 0, W, 3);
+  const n = 180;
+  const px = prog * W;
+
+  for (let x = 0; x < W; x++) {
+    const t = x / W;
+    const i = Math.floor(t * n);
+    const a = amp(i, n);
+    const played = x < px;
+    if (played) {
+      const r = Math.round(110 + a * 130);
+      const gr = Math.round(55 + a * 85);
+      const b  = Math.round(8 + a * 18);
+      eX.fillStyle = `rgba(${r},${gr},${b},${0.35 + a * 0.55})`;
+    } else {
+      eX.fillStyle = `rgba(${38+Math.round(a*12)},${34+Math.round(a*8)},${28+Math.round(a*4)},0.8)`;
+    }
+    eX.fillRect(x, 0, 1, 3);
+  }
+}
+
+// ── Mood ──
+const MOODS = [
+  [0.00, 'opening'],
+  [0.05, 'sparse'],
+  [0.12, 'breathing'],
+  [0.20, 'building'],
+  [0.32, 'tension'],
+  [0.38, 'release'],
+  [0.50, 'peak'],
+  [0.54, 'settling'],
+  [0.60, 'quiet'],
+  [0.62, 'rising'],
+  [0.66, 'full'],
+  [0.80, 'drifting'],
+  [0.84, 'catharsis'],
+  [0.93, 'fading'],
+];
+function getMood(p) {
+  let mood = MOODS[0][1];
+  for (const [threshold, label] of MOODS) {
+    if (p >= threshold) mood = label;
+  }
+  return mood;
+}
+
+// ── Format time ──
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+// ── Render ──
+function render() {
+  drawWave();
+  drawEnergy();
+  const el = prog * TOTAL;
+  document.getElementById('t-el').textContent   = fmt(el);
+  document.getElementById('t-tot').textContent  = fmt(TOTAL);
+  document.getElementById('ann-ts').textContent = fmt(el);
+  document.getElementById('mood-tag').textContent = getMood(prog);
+  updateMoments();
+}
+
+// ── Moments list ──
+function updateMoments() {
+  const list = document.getElementById('moments-list');
+  const ct   = document.getElementById('m-count');
+  const sorted = [...moments].sort((a, b) => a.pos - b.pos);
+
+  list.innerHTML = sorted.map(m => `
+    <div class="m-item${m.pos < prog ? ' past' : ''}" data-id="${m.id}" data-pos="${m.pos}">
+      <span class="m-ts">${esc(m.time)}</span>
+      <span class="m-text">${esc(m.text)}</span>
+      <button class="m-del" data-id="${m.id}" title="Remove">×</button>
+    </div>
+  `).join('');
+
+  ct.textContent = moments.length === 1 ? '1 marked' : `${moments.length} marked`;
+
+  list.querySelectorAll('.m-item').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('m-del')) return;
+      prog = parseFloat(el.dataset.pos);
+      render();
+    });
+    el.addEventListener('mouseenter', () => {
+      hovAnn = parseInt(el.dataset.id);
+      render();
+    });
+    el.addEventListener('mouseleave', () => {
+      hovAnn = null;
+      render();
+    });
+  });
+
+  list.querySelectorAll('.m-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      moments = moments.filter(m => m.id !== parseInt(btn.dataset.id));
+      updateMoments();
+      render();
+    });
+  });
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Playback loop ──
+function tick(ts) {
+  if (!playing) { lastTs = null; return; }
+  if (lastTs !== null) {
+    prog = Math.min(1, prog + (ts - lastTs) / 1000 / TOTAL);
+    if (prog >= 1) { prog = 0; playing = false; syncPlayBtn(); }
+  }
+  lastTs = ts;
+  render();
+  if (playing) raf = requestAnimationFrame(tick);
+}
+
+function startLoop() {
+  lastTs = null;
+  raf = requestAnimationFrame(tick);
+}
+function stopLoop() {
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  lastTs = null;
+}
+
+function syncPlayBtn() {
+  const btn = document.getElementById('btn-play');
+  const p   = document.getElementById('ico-play');
+  const ps  = document.getElementById('ico-pause');
+  if (playing) {
+    btn.classList.add('playing');
+    p.style.display  = 'none';
+    ps.style.display = 'block';
+  } else {
+    btn.classList.remove('playing');
+    p.style.display  = 'block';
+    ps.style.display = 'none';
+  }
+}
+
+// ── Controls ──
+document.getElementById('btn-play').addEventListener('click', () => {
+  playing = !playing;
+  syncPlayBtn();
+  if (playing) startLoop(); else { stopLoop(); render(); }
+});
+
+// Seek on click
+wC.addEventListener('click', e => {
+  const r = wC.getBoundingClientRect();
+  prog = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  updateMoments(); render();
+});
+
+// Hover tooltip
+wC.addEventListener('mousemove', e => {
+  const r = wC.getBoundingClientRect();
+  hovX = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  const tip = document.getElementById('wave-tip');
+  tip.textContent = fmt(hovX * TOTAL);
+  tip.style.left  = (e.clientX - r.left) + 'px';
+  render();
+});
+wC.addEventListener('mouseleave', () => { hovX = null; render(); });
+
+// ── Annotation ──
+let wasPlaying = false;
+let capturedProg = 0;
+
+function beginAnnotate() {
+  if (annotMode) return;
+  annotMode = true;
+  capturedProg = prog;
+  wasPlaying = playing;
+
+  document.getElementById('ann-btn').classList.add('active');
+  document.getElementById('ann-wrap').classList.add('on');
+  document.getElementById('ann-ts').textContent = fmt(capturedProg * TOTAL);
+
+  if (playing) { playing = false; stopLoop(); syncPlayBtn(); render(); }
+
+  const field = document.getElementById('ann-field');
+  field.value = '';
+  field.focus();
+}
+
+function endAnnotate(submit) {
+  const field = document.getElementById('ann-field');
+  if (submit) {
+    const txt = field.value.trim();
+    if (txt) {
+      const id = nextId++;
+      moments.push({ id, pos: capturedProg, time: fmt(capturedProg * TOTAL), text: txt });
+      updateMoments();
+      // flash newest item
+      setTimeout(() => {
+        const el = document.querySelector(`.m-item[data-id="${id}"]`);
+        if (el) el.classList.add('new-flash');
+      }, 20);
+    }
+  }
+  annotMode = false;
+  document.getElementById('ann-btn').classList.remove('active');
+  document.getElementById('ann-wrap').classList.remove('on');
+  field.value = '';
+
+  if (wasPlaying && submit) {
+    playing = true; syncPlayBtn(); startLoop();
+  }
+  render();
+}
+
+document.getElementById('ann-btn').addEventListener('click', () => {
+  if (annotMode) endAnnotate(true); else beginAnnotate();
+});
+
+document.getElementById('ann-field').addEventListener('keydown', e => {
+  if (e.key === 'Enter')  { e.preventDefault(); endAnnotate(true); }
+  if (e.key === 'Escape') { e.preventDefault(); endAnnotate(false); }
+});
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.target === document.getElementById('ann-field')) return;
+  if (e.key === 'a' || e.key === 'A') { e.preventDefault(); beginAnnotate(); }
+  if (e.key === ' ') {
+    e.preventDefault();
+    playing = !playing; syncPlayBtn();
+    if (playing) startLoop(); else { stopLoop(); render(); }
+  }
+});
+
+// ── Clock ──
+function tick_clock() {
+  const now = new Date();
+  const h = now.getHours() % 12 || 12;
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const ap = now.getHours() >= 12 ? 'PM' : 'AM';
+  document.getElementById('clock').textContent = `${h}:${m} ${ap}`;
+}
+tick_clock();
+setInterval(tick_clock, 15000);
+
+// ── Init ──
+window.addEventListener('load', () => {
+  setupCanvas();
+  updateMoments();
+  render();
+  if (playing) startLoop();
+  window.addEventListener('resize', () => { setupCanvas(); render(); });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Dream Logic Navigator</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --deep-night: #121219;
+            --star-core: #f8f4e6;
+            --dream-violet: #9b8ec7;
+            --memory-blue: #4a7c8e;
+            --thought-amber: #d4a574;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void);
+            font-family: Georgia, serif;
+            position: relative;
+        }
+
+        #cosmos {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 30% 20%, var(--deep-night) 0%, var(--void) 60%);
+        }
+
+        #cursor-dream {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.3;
+            filter: blur(20px);
+            background: radial-gradient(circle, var(--star-core) 0%, transparent 70%);
+            transform: translate(-50%, -50%);
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .constellation-point {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--star-core);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--star-core), 0 0 40px var(--star-core);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: none;
+        }
+
+        .constellation-point.dreaming {
+            width: 16px;
+            height: 16px;
+            animation: breathe 3s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        .semantic-field {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            opacity: 0;
+            background: radial-gradient(circle, var(--dream-violet) 0%, transparent 60%);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            filter: blur(40px);
+            transition: opacity 1.2s ease-out;
+        }
+
+        .semantic-field.active {
+            opacity: 0.3;
+        }
+
+        .memory-river {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--memory-blue), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.8s ease-in;
+        }
+
+        .memory-river.flowing {
+            opacity: 0.6;
+            animation: flow 4s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { background-position: -100% 0; }
+            100% { background-position: 100% 0; }
+        }
+
+        .dream-text {
+            position: absolute;
+            color: var(--star-core);
+            font-size: 14px;
+            opacity: 0;
+            letter-spacing: 2px;
+            text-transform: lowercase;
+            pointer-events: none;
+            transform: translateY(20px);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dream-text.emerging {
+            opacity: 0.7;
+            transform: translateY(0);
+        }
+
+        .dream-text.fading {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition-duration: 2s;
+        }
+
+        #peripheral-interface {
+            position: fixed;
+            top: 50px;
+            right: -300px;
+            width: 280px;
+            padding: 30px;
+            background: rgba(18, 18, 25, 0.8);
+            border-left: 1px solid rgba(248, 244, 230, 0.1);
+            transition: right 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #peripheral-interface.glimpsed {
+            right: 0;
+        }
+
+        .dream-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            background: transparent;
+            border: 1px solid rgba(248, 244, 230, 0.2);
+            color: var(--star-core);
+            font-family: Georgia, serif;
+            font-size: 16px;
+            opacity: 1;
+            transition: all 0.4s ease;
+        }
+
+        .dream-button.focused {
+            opacity: 0.1;
+            border-color: transparent;
+        }
+
+        .dream-button:not(.focused):hover {
+            border-color: var(--dream-violet);
+            box-shadow: 0 0 20px rgba(155, 142, 199, 0.3);
+        }
+
+        #rhythm-detector {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            width: 200px;
+            height: 60px;
+            opacity: 0.3;
+        }
+
+        .rhythm-wave {
+            position: absolute;
+            bottom: 0;
+            width: 4px;
+            background: var(--thought-amber);
+            transform-origin: bottom;
+            transition: height 0.2s ease-out;
+        }
+
+        #dream-console {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            color: var(--star-core);
+            font-size: 12px;
+            letter-spacing: 1px;
+            opacity: 0.5;
+        }
+
+        .scroll-text {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: var(--star-core);
+            opacity: 0;
+            filter: blur(20px);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .scroll-text.velocity-visible {
+            opacity: 0.8;
+            filter: blur(0);
+        }
+
+        #nebula-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.1;
+            background: 
+                radial-gradient(circle at 20% 30%, var(--dream-violet) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, var(--memory-blue) 0%, transparent 40%),
+                radial-gradient(circle at 50% 90%, var(--thought-amber) 0%, transparent 40%);
+            animation: nebula-drift 20s ease-in-out infinite;
+        }
+
+        @keyframes nebula-drift {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.2) rotate(10deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="cosmos">
+        <div id="nebula-overlay"></div>
+        <div id="cursor-dream"></div>
+        
+        <div id="dream-console">
+            <div>dream state: <span id="state">dormant</span></div>
+            <div>rhythm: <span id="rhythm-value">0</span></div>
+        </div>
+
+        <div id="peripheral-interface">
+            <button class="dream-button" data-action="remember">remember</button>
+            <button class="dream-button" data-action="forget">forget</button>
+            <button class="dream-button" data-action="wander">wander</button>
+            <button class="dream-button" data-action="wake">wake</button>
+        </div>
+
+        <div id="rhythm-detector"></div>
+
+        <div class="scroll-text">the faster you move, the clearer it becomes</div>
+    </div>
+
+    <script>
+        const cosmos = document.getElementById('cosmos');
+        const cursorDream = document.getElementById('cursor-dream');
+        const peripheralInterface = document.getElementById('peripheral-interface');
+        const scrollText = document.querySelector('.scroll-text');
+        const stateDisplay = document.getElementById('state');
+        const rhythmDisplay = document.getElementById('rhythm-value');
+        const rhythmDetector = document.getElementById('rhythm-detector');
+
+        // Dream state
+        let dreamState = {
+            concepts: [],
+            connections: [],
+            mouseHistory: [],
+            scrollVelocity: 0,
+            rhythmPattern: [],
+            lastInteraction: Date.now(),
+            peripheralGlimpse: false
+        };
+
+        // Initialize constellation points
+        const concepts = [
+            { id: 'memory', x: 300, y: 200, word: 'childhood summers' },
+            { id: 'desire', x: 600, y: 300, word: 'unspoken wishes' },
+            { id: 'fear', x: 900, y: 400, word: 'shadow movements' },
+            { id: 'wonder', x: 400, y: 500, word: 'first snowfall' },
+            { id: 'loss', x: 1100, y: 250, word: 'fading photographs' },
+            { id: 'hope', x: 750, y: 600, word: 'morning light' }
+        ];
+
+        concepts.forEach(concept => {
+            const point = document.createElement('div');
+            point.className = 'constellation-point';
+            point.style.left = concept.x + 'px';
+            point.style.top = concept.y + 'px';
+            point.dataset.id = concept.id;
+            point.dataset.word = concept.word;
+            
+            const field = document.createElement('div');
+            field.className = 'semantic-field';
+            field.style.left = concept.x + 'px';
+            field.style.top = concept.y + 'px';
+            
+            cosmos.appendChild(field);
+            cosmos.appendChild(point);
+            
+            dreamState.concepts.push({
+                element: point,
+                field: field,
+                ...concept
+            });
+        });
+
+        // Mouse tracking for dream cursor
+        let mouseX = 0, mouseY = 0;
+        let targetX = 0, targetY = 0;
+        let scrollAccumulator = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            targetX = e.clientX;
+            targetY = e.clientY;
+            
+            dreamState.mouseHistory.push({ x: e.clientX, y: e.clientY, time: Date.now() });
+            if (dreamState.mouseHistory.length > 50) dreamState.mouseHistory.shift();
+            
+            updateRhythm();
+            checkPeripheralVision(e.clientX, e.clientY);
+        });
+
+        // Dream cursor animation
+        function animateCursor() {
+            mouseX += (targetX - mouseX) * 0.1;
+            mouseY += (targetY - mouseY) * 0.1;
+            
+            cursorDream.style.left = mouseX + 'px';
+            cursorDream.style.top = mouseY + 'px';
+            
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
+
+        // Rhythm detection
+        function updateRhythm() {
+            if (dreamState.mouseHistory.length < 3) return;
+            
+            const recent = dreamState.mouseHistory.slice(-3);
+            const velocity = Math.sqrt(
+                Math.pow(recent[2].x - recent[0].x, 2) + 
+                Math.pow(recent[2].y - recent[0].y, 2)
+            ) / (recent[2].time - recent[0].time);
+            
+            dreamState.rhythmPattern.push(velocity);
+            if (dreamState.rhythmPattern.length > 20) dreamState.rhythmPattern.shift();
+            
+            const avgRhythm = dreamState.rhythmPattern.reduce((a, b) => a + b, 0) / dreamState.rhythmPattern.length;
+            rhythmDisplay.textContent = Math.round(avgRhythm * 100);
+            
+            // Update rhythm visualization
+            updateRhythmWaves(avgRhythm);
+            
+            // Trigger dream interactions based on rhythm
+            if (avgRhythm > 0.5) {
+                stateDisplay.textContent = 'lucid';
+                activateDreamConnections();
+            } else if (avgRhythm > 0.2) {
+                stateDisplay.textContent = 'drifting';
+            } else {
+                stateDisplay.textContent = 'dormant';
+            }
+        }
+
+        function updateRhythmWaves(rhythm) {
+            rhythmDetector.innerHTML = '';
+            for (let i = 0; i < 20; i++) {
+                const wave = document.createElement('div');
+                wave.className = 'rhythm-wave';
+                wave.style.left = (i * 10) + 'px';
+                wave.style.height = (Math.sin(i * 0.5 + Date.now() * 0.001) * rhythm * 50 + 20) + 'px';
+                rhythmDetector.appendChild(wave);
+            }
+        }
+
+        // Peripheral vision detection
+        function checkPeripheralVision(x, y) {
+            const interfaceRect = peripheralInterface.getBoundingClientRect();
+            const distance = Math.abs(x - interfaceRect.left);
+            
+            if (distance < 200 && distance > 100) {
+                peripheralInterface.classList.add('glimpsed');
+                dreamState.peripheralGlimpse = true;
+            } else if (distance < 50 || distance > 300) {
+                peripheralInterface.classList.remove('glimpsed');
+                dreamState.peripheralGlimpse = false;
+            }
+        }
+
+        // Dream button interactions (only work when not focused)
+        document.querySelectorAll('.dream-button').forEach(button => {
+            button.addEventListener('mouseenter', () => {
+                button.classList.add('focused');
+            });
+            
+            button.addEventListener('mouseleave', () => {
+                setTimeout(() => button.classList.remove('focused'), 100);
+            });
+            
+            button.addEventListener('click', (e) => {
+                if (!button.classList.contains('focused')) {
+                    const action = button.dataset.action;
+                    performDreamAction(action);
+                }
+            });
+        });
+
+        function performDreamAction(action) {
+            switch(action) {
+                case 'remember':
+                    dreamState.concepts.forEach(concept => {
+                        concept.field.classList.add('active');
+                        concept.element.classList.add('dreaming');
+                    });
+                    break;
+                case 'forget':
+                    document.querySelectorAll('.dream-text').forEach(text => {
+                        text.classList.add('fading');
+                    });
+                    break;
+                case 'wander':
+                    randomizeConstellation();
+                    break;
+                case 'wake':
+                    location.reload();
+                    break;
+            }
+        }
+
+        // Scroll velocity text clarity
+        let lastScrollTime = Date.now();
+        let scrollVelocity = 0;
+
+        window.addEventListener('wheel', (e) => {
+            const now = Date.now();
+            const timeDelta = now - lastScrollTime;
+            scrollVelocity = Math.abs(e.deltaY) / timeDelta;
+            lastScrollTime = now;
+            
+            scrollAccumulator += e.deltaY;
+            
+            if (scrollVelocity > 0.5) {
+                scrollText.classList.add('velocity-visible');
+                scrollText.style.filter = `blur(${Math.max(0, 2 - scrollVelocity * 2)}px)`;
+            } else {
+                scrollText.classList.remove('velocity-visible');
+            }
+            
+            setTimeout(() => {
+                scrollText.classList.remove('velocity-visible');
+            }, 1000);
+        });
+
+        // Dream connections based on proximity
+        function activateDreamConnections() {
+            dreamState.concepts.forEach((concept1, i) => {
+                dreamState.concepts.slice(i + 1).forEach(concept2 => {
+                    const distance = Math.sqrt(
+                        Math.pow(concept1.x - concept2.x, 2) + 
+                        Math.pow(concept1.y - concept2.y, 2)
+                    );
+                    
+                    if (distance < 300) {
+                        createMemoryRiver(concept1, concept2);
+                    }
+                });
+            });
+        }
+
+        function createMemoryRiver(concept1, concept2) {
+            const river = document.createElement('div');
+            river.className = 'memory-river';
+            
+            const angle = Math.atan2(concept2.y - concept1.y, concept2.x - concept1.x);
+            const distance = Math.sqrt(
+                Math.pow(concept2.x - concept1.x, 2) + 
+                Math.pow(concept2.y - concept1.y, 2)
+            );
+            
+            river.style.left = concept1.x + 'px';
+            river.style.top = concept1.y + 'px';
+            river.style.width = distance + 'px';
+            river.style.transform = `rotate(${angle}rad)`;
+            
+            cosmos.appendChild(river);
+            setTimeout(() => river.classList.add('flowing'), 100);
+            
+            // Create dream text along the river
+            const midX = (concept1.x + concept2.x) / 2;
+            const midY = (concept1.y + concept2.y) / 2;
+            
+            const dreamText = document.createElement('div');
+            dreamText.className = 'dream-text';
+            dreamText.textContent = `${concept1.word} dreams of ${concept2.word}`;
+            dreamText.style.left = midX + 'px';
+            dreamText.style.top = midY + 'px';
+            
+            cosmos.appendChild(dreamText);
+            setTimeout(() => dreamText.classList.add('emerging'), 100);
+            
+            setTimeout(() => {
+                river.classList.remove('flowing');
+                setTimeout(() => river.remove(), 800);
+                dreamText.classList.add('fading');
+                setTimeout(() => dreamText.remove(), 2000);
+            }, 4000);
+        }
+
+        // Constellation dragging with dream physics
+        let draggedConcept = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        dreamState.concepts.forEach(concept => {
+            concept.element.addEventListener('mousedown', (e) => {
+                draggedConcept = concept;
+                dragOffset.x = e.clientX - concept.x;
+                dragOffset.y = e.clientY - concept.y;
+                concept.element.classList.add('dreaming');
+                e.preventDefault();
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (draggedConcept) {
+                draggedConcept.x = e.clientX - dragOffset.x;
+                draggedConcept.y = e.clientY - dragOffset.y;
+                
+                // Dream physics: slight lag and drift
+                const targetX = draggedConcept.x + (Math.random() - 0.5) * 10;
+                const targetY = draggedConcept.y + (Math.random() - 0.5) * 10;
+                
+                draggedConcept.element.style.left = targetX + 'px';
+                draggedConcept.element.style.top = targetY + 'px';
+                draggedConcept.field.style.left = targetX + 'px';
+                draggedConcept.field.style.top = targetY + 'px';
+                
+                // Update semantic fields
+                updateSemanticProximity();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (draggedConcept) {
+                draggedConcept.element.classList.remove('dreaming');
+                draggedConcept = null;
+            }
+        });
+
+        function updateSemanticProximity() {
+            dreamState.concepts.forEach((concept1, i) => {
+                let totalProximity = 0;
+                
+                dreamState.concepts.forEach((concept2, j) => {
+                    if (i !== j) {
+                        const distance = Math.sqrt(
+                            Math.pow(concept1.x - concept2.x, 2) + 
+                            Math.pow(concept1.y - concept2.y, 2)
+                        );
+                        totalProximity += 1 / (distance / 100);
+                    }
+                });
+                
+                const brightness = Math.min(1, totalProximity / 5);
+                concept1.element.style.opacity = 0.3 + brightness * 0.7;
+                concept1.element.style.boxShadow = `0 0 ${20 + brightness * 30}px var(--star-core)`;
+            });
+        }
+
+        function randomizeConstellation() {
+            dreamState.concepts.forEach(concept => {
+                concept.x = Math.random() * 1200 + 100;
+                concept.y = Math.random() * 700 + 100;
+                
+                concept.element.style.transition = 'all 2s ease-in-out';
+                concept.field.style.transition = 'all 2s ease-in-out';
+                
+                concept.element.style.left = concept.x + 'px';
+                concept.element.style.top = concept.y + 'px';
+                concept.field.style.left = concept.x + 'px';
+                concept.field.style.top = concept.y + 'px';
+                
+                setTimeout(() => {
+                    concept.element.style.transition = '';
+                    concept.field.style.transition = '';
+                }, 2000);
+            });
+        }
+
+        // Initialize
+        updateSemanticProximity();
+    </script>
+</body>
+</html>

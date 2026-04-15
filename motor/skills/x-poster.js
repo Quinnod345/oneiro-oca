@@ -1,19 +1,25 @@
 // OCA Motor Skill: X Poster
-// Posts to X via intent URL → Dia (Quinn clicks Post)
-// When API credits exist, can post directly via twitter-api-v2
+// Posts to X via agent-browser: navigate to compose, paste text, Cmd+Enter to post.
+// Falls back to API posting when twitter-api-v2 credentials work.
 import { pool, emit } from '../../event-bus.js';
 import { execSync } from 'child_process';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 const PRIVATE_DIR = new URL('../../private/', import.meta.url).pathname;
+const PROFILE = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/private/browser-profile';
+const SESSION = 'oca';
+const STEALTH_ARGS = '--disable-blink-features=AutomationControlled';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// ═══ INTENT URL POSTING (primary path — works NOW) ═══
+function ab(cmd, { timeout = 30000 } = {}) {
+  return execSync(`agent-browser ${cmd} --session ${SESSION} --profile "${PROFILE}" --args "${STEALTH_ARGS}" --user-agent "${USER_AGENT}"`, {
+    encoding: 'utf-8',
+    timeout,
+    env: { ...process.env, AGENT_BROWSER_SESSION: SESSION },
+  }).trim();
+}
 
-/**
- * Open a tweet in Dia via intent URL, then submit with Cmd+Enter via peekaboo.
- * Fully autonomous — no human click required.
- */
 async function isQuinnActive() {
   try {
     const r = await fetch('http://localhost:3333/oca/sense');
@@ -22,59 +28,97 @@ async function isQuinnActive() {
   } catch { return true; }
 }
 
-export async function openInDia(text, { autoSubmit = true } = {}) {
-  if (await isQuinnActive()) {
-    console.log(`[x-poster] ⛔ Quinn is active — skipping browser open. Draft: "${text.slice(0, 60)}..."`);
-    return { blocked: true, draft: text };
-  }
-  if (!text || text.length > 280) {
-    throw new Error(`Tweet must be 1-280 chars (got ${text?.length || 0})`);
-  }
-  const encoded = encodeURIComponent(text);
-  const url = `https://x.com/intent/post?text=${encoded}`;
-  execSync(`open -a "Dia" "${url}"`, { timeout: 5000 });
-  console.log(`[x-poster] 🚀 Opened in Dia (${text.length}/280 chars)`);
-
-  if (autoSubmit) {
-    // Wait for page to load, then Cmd+Enter to post
-    execSync('sleep 4', { timeout: 6000 });
-    execSync('osascript -e \'tell application "Dia" to activate\'', { timeout: 3000 });
-    execSync('sleep 1', { timeout: 3000 });
-    execSync('peekaboo hotkey --keys "cmd,enter" --app Dia', { timeout: 10000 });
-    console.log(`[x-poster] ✅ Auto-submitted via Cmd+Enter`);
-  }
-
-  return { method: 'intent-url', url, chars: text.length, autoSubmit };
-}
-
 /**
- * Post autonomously: intent URL → Cmd+Enter via peekaboo.
+ * Post a single tweet via agent-browser:
+ * 1. Navigate to x.com/compose/post
+ * 2. Wait for the compose textarea
+ * 3. Paste the text via clipboard
+ * 4. Press Meta+Enter to submit
  */
-export async function queuePost(text, context = {}) {
-  if (text.length > 280) {
-    throw new Error(`Too long: ${text.length}/280`);
+async function postViaBrowser(text) {
+  try {
+    ab(`open "https://x.com/compose/post"`, { timeout: 15000 });
+    ab('wait 3000');
+
+    const snap = ab('snapshot -i -c');
+    const hasCompose = snap.includes('textbox') || snap.includes('Post');
+
+    if (!hasCompose) {
+      return { success: false, error: 'Compose box not found — may need to log in. Run: agent-browser open "https://x.com/login" --profile "' + PROFILE + '" --headed' };
+    }
+
+    // Find the compose textbox ref
+    const textboxMatch = snap.match(/textbox[^\n]*\[ref=(e\d+)\]/);
+    const ref = textboxMatch ? textboxMatch[1] : null;
+
+    // Click into compose area then type the text (X uses contenteditable, type works better than paste)
+    if (ref) {
+      ab(`click @${ref}`);
+      ab('wait 300');
+      ab(`type @${ref} "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    } else {
+      ab('click "[data-testid=tweetTextarea_0]"');
+      ab('wait 300');
+      ab(`type "[data-testid=tweetTextarea_0]" "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    }
+    ab('wait 1000');
+
+    // Verify text was entered
+    const content = ab('eval "document.querySelector(\'[data-testid=tweetTextarea_0]\')?.textContent || \'\'"');
+    if (!content || content.length < 5) {
+      return { success: false, error: 'Text did not appear in compose box' };
+    }
+
+    // Submit with Cmd+Enter
+    ab('press "Meta+Enter"');
+    ab('wait 4000');
+
+    console.log(`[x-poster] posted via agent-browser (${text.length}/280 chars)`);
+    return { success: true, method: 'agent-browser' };
+  } catch (e) {
+    return { success: false, error: e.message?.slice(0, 200) };
   }
-
-  // Save draft
-  const draftPath = saveDraft([text], context);
-
-  // Open in Dia and auto-submit
-  openInDia(text, { autoSubmit: true });
-
-  // Log it
-  await logXPost([text], 'posted', { draftPath, method: 'intent-url+peekaboo', ...context });
-
-  console.log(`[x-poster] ✅ Posted autonomously: "${text.slice(0, 60)}..."`);
-  return { success: true, mode: 'autonomous', draftPath, chars: text.length };
 }
 
 /**
- * Post a full thread by composing all tweets in X's compose window.
- * Uses peekaboo to type each tweet and click "Add another post" (+) between them.
+ * Post a single tweet. Tries API first, falls back to agent-browser.
+ */
+export async function post(text, context = {}) {
+  if (!text || text.length > 280) throw new Error(`Bad length: ${text?.length || 0}/280`);
+
+  // Try API
+  const client = await getApiClient();
+  if (client) {
+    try {
+      const result = await client.readWrite.v2.tweet(text);
+      await logXPost([text], 'posted', { method: 'api', tweetId: result.data.id, ...context });
+      console.log(`[x-poster] API posted: ${result.data.id}`);
+      return { success: true, mode: 'api', tweetId: result.data.id };
+    } catch (e) {
+      console.warn(`[x-poster] API failed (${e.message}), falling back to browser`);
+    }
+  }
+
+  // Browser fallback
+  if (await isQuinnActive()) {
+    console.log(`[x-poster] Quinn is active — saving as draft only`);
+    const draftPath = saveDraft([text], context);
+    return { success: false, blocked: true, draft: text, draftPath };
+  }
+
+  const draftPath = saveDraft([text], context);
+  const result = await postViaBrowser(text);
+  if (result.success) {
+    await logXPost([text], 'posted', { draftPath, method: 'agent-browser', ...context });
+  }
+  return { ...result, draftPath, chars: text.length };
+}
+
+/**
+ * Post a thread. Tries API first (proper reply chains), falls back to agent-browser compose.
  */
 export async function postThread(posts, context = {}) {
   if (!Array.isArray(posts) || posts.length === 0) throw new Error('Empty thread');
-
   const tooLong = posts.findIndex(p => p.length > 280);
   if (tooLong !== -1) throw new Error(`Post ${tooLong + 1} is ${posts[tooLong].length}/280`);
 
@@ -92,48 +136,65 @@ export async function postThread(posts, context = {}) {
         const { data } = await client.readWrite.v2.tweet(payload);
         replyToId = data.id;
         results.push(data);
-        console.log(`[x-poster] ✅ Thread [${results.length}/${posts.length}] → ${data.id}`);
+        console.log(`[x-poster] Thread [${results.length}/${posts.length}] -> ${data.id}`);
         if (results.length < posts.length) await new Promise(r => setTimeout(r, 1200));
       }
       await logXPost(posts, 'posted', { draftPath, method: 'api-thread', tweetIds: results.map(r => r.id), ...context });
       return { success: true, mode: 'api-thread', draftPath, postCount: posts.length, tweetIds: results.map(r => r.id) };
     } catch (e) {
-      console.warn(`[x-poster] API thread failed (${e.message}), falling back to compose window`);
+      console.warn(`[x-poster] API thread failed (${e.message}), falling back to browser`);
     }
   }
 
-  // Fallback: use X compose window with peekaboo
-  // Open compose with first tweet text via intent URL
-  openInDia(posts[0], { autoSubmit: false });
-  execSync('sleep 4', { timeout: 6000 });
-  execSync('osascript -e \'tell application "Dia" to activate\'', { timeout: 3000 });
-  execSync('sleep 1', { timeout: 3000 });
-
-  // For each additional tweet, click "+" to add to thread, then paste
-  for (let i = 1; i < posts.length; i++) {
-    // Cmd+Shift+Enter adds another tweet to the thread in X's compose
-    execSync('peekaboo hotkey --keys "cmd,shift,return" --app Dia', { timeout: 10000 });
-    execSync('sleep 1', { timeout: 3000 });
-    // Paste the next tweet text
-    execSync(`peekaboo paste "${posts[i].replace(/"/g, '\\"')}" --app Dia`, { timeout: 10000 });
-    execSync('sleep 0.5', { timeout: 3000 });
-    console.log(`[x-poster] 📝 Added thread [${i + 1}/${posts.length}]`);
+  if (await isQuinnActive()) {
+    console.log(`[x-poster] Quinn is active — saving thread as draft only`);
+    return { success: false, blocked: true, draftPath, postCount: posts.length };
   }
 
-  // Now submit the entire thread with Cmd+Enter
-  execSync('sleep 1', { timeout: 3000 });
-  execSync('peekaboo hotkey --keys "cmd,enter" --app Dia', { timeout: 10000 });
-  console.log(`[x-poster] ✅ Thread submitted (${posts.length} posts)`);
+  // Browser fallback: post first tweet, then add to thread
+  const firstResult = await postViaBrowser(posts[0]);
+  if (!firstResult.success) return { ...firstResult, draftPath };
 
-  await logXPost(posts, 'posted', { draftPath, method: 'compose-thread', thread: true, ...context });
+  for (let i = 1; i < posts.length; i++) {
+    try {
+      ab('wait 2000');
+      ab('press "Meta+Shift+Enter"');
+      ab('wait 1500');
+      // Find the new empty textbox (last one in the thread compose)
+      const threadSnap = ab('snapshot -i -c');
+      const textboxes = [...threadSnap.matchAll(/textbox[^\n]*\[ref=(e\d+)\]/g)];
+      const lastRef = textboxes.length > 0 ? textboxes[textboxes.length - 1][1] : null;
+      if (lastRef) {
+        ab(`click @${lastRef}`);
+        ab('wait 300');
+        ab(`type @${lastRef} "${posts[i].replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+      }
+      ab('wait 500');
+      console.log(`[x-poster] Added thread [${i + 1}/${posts.length}]`);
+    } catch (e) {
+      console.error(`[x-poster] Thread post ${i + 1} failed: ${e.message?.slice(0, 80)}`);
+    }
+  }
 
-  return { success: true, mode: 'compose-thread', draftPath, postCount: posts.length };
+  // Submit the full thread
+  ab('wait 1000');
+  ab('press "Meta+Enter"');
+  ab('wait 3000');
+  console.log(`[x-poster] Thread submitted (${posts.length} posts)`);
+
+  await logXPost(posts, 'posted', { draftPath, method: 'agent-browser-thread', ...context });
+  return { success: true, mode: 'agent-browser-thread', draftPath, postCount: posts.length };
 }
 
-// Legacy alias
+export const queuePost = post;
 export const queueThread = postThread;
 
-// ═══ API POSTING (when credits are loaded) ═══
+// Legacy alias
+export async function openInDia(text, opts = {}) {
+  return post(text, opts);
+}
+
+// ═══ API POSTING (when credentials work) ═══
 
 let apiClient = null;
 
@@ -145,39 +206,15 @@ async function getApiClient() {
       appKey: 'fR5I1VnExh1DwW1b9w9Nmec3h',
       appSecret: 'DCrCqCrulyueETV6VkkY3Zxk6wZChClQPB7ySSroQXxFwOR6vt',
       accessToken: '1567641535021195264-spvm4pN6FBq4JaGqSS58SbK01bJY9S',
-      accessSecret: 'STsSwVM12RLAoVbnMCED6pX0uJjSNB7EKN0ru9IxoPXj4',
+      accessSecret: 'STsSwVM12RLAoVbnMCED6pX0uJtSNB7EKN0ru9IxoPXj4',
     });
-    // Verify auth works
     await apiClient.v2.me();
-    console.log('[x-poster] ✅ API auth verified');
+    console.log('[x-poster] API auth verified');
     return apiClient;
   } catch {
     apiClient = null;
     return null;
   }
-}
-
-/**
- * Try API first, fall back to intent URL.
- */
-export async function post(text, context = {}) {
-  if (!text || text.length > 280) throw new Error(`Bad length: ${text?.length || 0}/280`);
-
-  // Try API
-  const client = await getApiClient();
-  if (client) {
-    try {
-      const result = await client.readWrite.v2.tweet(text);
-      await logXPost([text], 'posted', { method: 'api', tweetId: result.data.id, ...context });
-      console.log(`[x-poster] ✅ API posted: ${result.data.id}`);
-      return { success: true, mode: 'api', tweetId: result.data.id };
-    } catch (e) {
-      console.warn(`[x-poster] API failed (${e.message}), falling back to intent URL`);
-    }
-  }
-
-  // Fallback to intent URL
-  return queuePost(text, context);
 }
 
 // ═══ DRAFTS & LOGGING ═══

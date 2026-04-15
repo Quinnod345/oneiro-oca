@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Temporal Weight Mail</title>
+    <style>
+        :root {
+            --void-black: #0a0a0c;
+            --meteor-trail: #ff6b2b;
+            --feather-drift: #e8e3d3;
+            --fragment-silver: #a8a8b0;
+            --sediment-brown: #3d2f2f;
+            --fossil-beige: #c9b8a8;
+            --basket-copper: #b87333;
+            --impact-crack: #ff4444;
+            --excavation-blue: #4a90e2;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center 20%, #1a1a2e 0%, var(--void-black) 70%);
+            font-family: Georgia, serif;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .gravity-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            perspective: 1000px;
+        }
+
+        .email-object {
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .meteor-email {
+            width: 80px;
+            height: 100px;
+            background: linear-gradient(135deg, var(--meteor-trail), #ff4500);
+            clip-path: polygon(50% 0%, 20% 100%, 80% 100%);
+            box-shadow: 0 0 40px var(--meteor-trail), 0 -20px 60px rgba(255, 107, 43, 0.6);
+            animation: plummet 2s linear infinite;
+        }
+
+        .feather-email {
+            width: 60px;
+            height: 40px;
+            background: var(--feather-drift);
+            border-radius: 50% 10% 50% 10%;
+            opacity: 0.8;
+            animation: drift 12s ease-in-out infinite;
+            filter: blur(0.5px);
+        }
+
+        .standard-email {
+            width: 70px;
+            height: 50px;
+            background: var(--fragment-silver);
+            transform: rotate(15deg);
+            animation: fall 5s linear infinite;
+            clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+        }
+
+        @keyframes plummet {
+            from { transform: translateY(-100px) rotate(0deg) scale(1); }
+            to { transform: translateY(900px) rotate(360deg) scale(1.2); }
+        }
+
+        @keyframes drift {
+            0% { transform: translateY(-100px) translateX(0) rotate(0deg); }
+            25% { transform: translateY(200px) translateX(50px) rotate(45deg); }
+            50% { transform: translateY(400px) translateX(-30px) rotate(90deg); }
+            75% { transform: translateY(600px) translateX(40px) rotate(135deg); }
+            100% { transform: translateY(900px) translateX(0) rotate(180deg); }
+        }
+
+        @keyframes fall {
+            from { transform: translateY(-100px) rotate(0deg); }
+            to { transform: translateY(900px) rotate(180deg); }
+        }
+
+        .basket-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 200px;
+            pointer-events: none;
+        }
+
+        .basket {
+            position: absolute;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 60px;
+            pointer-events: all;
+            transition: left 0.1s linear;
+        }
+
+        .basket-rim {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--basket-copper);
+            clip-path: polygon(10% 0%, 90% 0%, 80% 100%, 20% 100%);
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.4);
+        }
+
+        .sediment-layers {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 140px;
+            background: linear-gradient(to bottom, 
+                transparent 0%,
+                var(--sediment-brown) 20%,
+                var(--fossil-beige) 40%,
+                #2a2a2a 60%,
+                #1a1a1a 100%);
+            box-shadow: inset 0 20px 40px rgba(0,0,0,0.7);
+        }
+
+        .sediment-layer {
+            position: absolute;
+            width: 100%;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            opacity: 0.6;
+        }
+
+        .fossil-email {
+            position: absolute;
+            width: 40px;
+            height: 25px;
+            background: var(--fossil-beige);
+            opacity: 0.3;
+            transform: skewX(-20deg) scaleY(0.3);
+            filter: blur(1px);
+        }
+
+        .excavation-tools {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .tool {
+            width: 50px;
+            height: 50px;
+            background: var(--excavation-blue);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            cursor: pointer;
+            transition: transform 0.2s;
+            opacity: 0.7;
+        }
+
+        .tool:hover {
+            transform: rotate(45deg) scale(1.1);
+            opacity: 1;
+        }
+
+        .impact-zone {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 140px;
+            pointer-events: none;
+        }
+
+        .shatter-fragment {
+            position: absolute;
+            width: 15px;
+            height: 10px;
+            background: var(--impact-crack);
+            clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 20% 100%);
+            animation: fragment-scatter 2s ease-out forwards;
+            opacity: 0.8;
+        }
+
+        @keyframes fragment-scatter {
+            0% { 
+                transform: translate(0, 0) rotate(0deg) scale(1);
+                opacity: 0.8;
+            }
+            100% { 
+                transform: translate(var(--scatter-x), var(--scatter-y)) rotate(720deg) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        .weight-indicator {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            font-size: 14px;
+            color: var(--fragment-silver);
+            letter-spacing: 0.05em;
+            opacity: 0.7;
+        }
+
+        .email-ghost {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            opacity: 0.2;
+            filter: blur(10px);
+            transform: translateY(10px);
+        }
+
+        .time-erosion {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 20%);
+            pointer-events: none;
+        }
+
+        .caught-counter {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            font-size: 18px;
+            color: var(--fossil-beige);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.1em;
+        }
+
+        .urgency-trail {
+            position: absolute;
+            width: 2px;
+            height: 100px;
+            background: linear-gradient(to bottom, var(--meteor-trail), transparent);
+            transform-origin: top center;
+            animation: trail-fade 0.5s linear infinite;
+        }
+
+        @keyframes trail-fade {
+            from { opacity: 1; height: 100px; }
+            to { opacity: 0; height: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="gravity-field" id="gravityField">
+        <div class="weight-indicator">TEMPORAL WEIGHT: <span id="weightValue">0.000</span> kg</div>
+        
+        <div class="email-object" style="left: 300px; top: -100px;">
+            <div class="meteor-email" data-urgency="critical">
+                <div class="urgency-trail"></div>
+            </div>
+        </div>
+        
+        <div class="email-object" style="left: 600px; top: -200px;">
+            <div class="feather-email" data-urgency="contemplative">
+                <div class="email-ghost"></div>
+            </div>
+        </div>
+        
+        <div class="email-object" style="left: 900px; top: -150px;">
+            <div class="standard-email" data-urgency="normal"></div>
+        </div>
+        
+        <div class="email-object" style="left: 450px; top: -300px;">
+            <div class="meteor-email" data-urgency="critical">
+                <div class="urgency-trail"></div>
+            </div>
+        </div>
+        
+        <div class="email-object" style="left: 1200px; top: -250px;">
+            <div class="feather-email" data-urgency="contemplative">
+                <div class="email-ghost"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="excavation-tools">
+        <div class="tool" id="brushTool" title="Brush"></div>
+        <div class="tool" id="chiselTool" title="Chisel"></div>
+        <div class="tool" id="pickaxeTool" title="Pickaxe"></div>
+    </div>
+
+    <div class="basket-container">
+        <div class="basket" id="basket">
+            <div class="basket-rim"></div>
+        </div>
+    </div>
+
+    <div class="sediment-layers">
+        <div class="sediment-layer" style="bottom: 100px;"></div>
+        <div class="sediment-layer" style="bottom: 80px;"></div>
+        <div class="sediment-layer" style="bottom: 60px;"></div>
+        <div class="sediment-layer" style="bottom: 40px;"></div>
+        <div class="sediment-layer" style="bottom: 20px;"></div>
+        
+        <div class="fossil-email" style="left: 200px; bottom: 30px;"></div>
+        <div class="fossil-email" style="left: 500px; bottom: 50px;"></div>
+        <div class="fossil-email" style="left: 800px; bottom: 20px;"></div>
+        <div class="fossil-email" style="left: 1100px; bottom: 70px;"></div>
+    </div>
+
+    <div class="impact-zone" id="impactZone"></div>
+
+    <div class="time-erosion"></div>
+
+    <div class="caught-counter">CAUGHT: <span id="caughtCount">0</span></div>
+
+    <script>
+        let basketX = 720;
+        let caughtCount = 0;
+        let totalWeight = 0;
+        const basket = document.getElementById('basket');
+        const gravityField = document.getElementById('gravityField');
+        const impactZone = document.getElementById('impactZone');
+
+        document.addEventListener('mousemove', (e) => {
+            basketX = Math.max(100, Math.min(1340 - 200, e.clientX));
+            basket.style.left = basketX + 'px';
+        });
+
+        function createEmailObject() {
+            const types = ['meteor-email', 'feather-email', 'standard-email'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const email = document.createElement('div');
+            email.className = 'email-object';
+            email.style.left = Math.random() * 1340 + 'px';
+            email.style.top = '-100px';
+            
+            const inner = document.createElement('div');
+            inner.className = type;
+            
+            if (type === 'meteor-email') {
+                const trail = document.createElement('div');
+                trail.className = 'urgency-trail';
+                inner.appendChild(trail);
+            } else if (type === 'feather-email') {
+                const ghost = document.createElement('div');
+                ghost.className = 'email-ghost';
+                inner.appendChild(ghost);
+            }
+            
+            email.appendChild(inner);
+            gravityField.appendChild(email);
+            
+            return email;
+        }
+
+        function createShatterFragments(x, y) {
+            for (let i = 0; i < 8; i++) {
+                const fragment = document.createElement('div');
+                fragment.className = 'shatter-fragment';
+                fragment.style.left = x + 'px';
+                fragment.style.bottom = '140px';
+                fragment.style.setProperty('--scatter-x', (Math.random() - 0.5) * 200 + 'px');
+                fragment.style.setProperty('--scatter-y', -Math.random() * 100 + 'px');
+                impactZone.appendChild(fragment);
+                
+                setTimeout(() => fragment.remove(), 2000);
+            }
+        }
+
+        setInterval(() => {
+            if (Math.random() > 0.3) {
+                createEmailObject();
+            }
+        }, 2000);
+
+        setInterval(() => {
+            const emails = document.querySelectorAll('.email-object');
+            emails.forEach(email => {
+                const rect = email.getBoundingClientRect();
+                const basketRect = basket.getBoundingClientRect();
+                
+                if (rect.bottom >= basketRect.top && rect.bottom <= basketRect.bottom &&
+                    rect.left >= basketRect.left && rect.right <= basketRect.right) {
+                    email.remove();
+                    caughtCount++;
+                    totalWeight += Math.random() * 2.5 + 0.5;
+                    document.getElementById('caughtCount').textContent = caughtCount;
+                    document.getElementById('weightValue').textContent = totalWeight.toFixed(3);
+                } else if (rect.top > 760) {
+                    createShatterFragments(rect.left + rect.width / 2, 0);
+                    email.remove();
+                }
+            });
+        }, 50);
+    </script>
+</body>
+</html>

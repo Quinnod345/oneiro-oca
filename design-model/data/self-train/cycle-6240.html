@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State - Menu Bar App</title>
+    <style>
+        :root {
+            --focus-deep: #0066cc;
+            --focus-medium: #007aff;
+            --focus-light: #4da6ff;
+            --focus-glow: rgba(0, 122, 255, 0.3);
+            --neutral-bg: #1c1c1e;
+            --neutral-card: rgba(255, 255, 255, 0.05);
+            --neutral-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --shadow-focus: 0 0 40px var(--focus-glow);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, var(--neutral-bg) 0%, #2c2c2e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 1000;
+        }
+
+        .menu-bar-content {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            padding: 0 16px;
+            justify-content: space-between;
+        }
+
+        .menu-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .menu-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+        }
+
+        .focus-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--focus-medium);
+            box-shadow: 0 0 12px var(--focus-glow);
+            animation: pulseGlow 3s ease-in-out infinite;
+        }
+
+        .menu-time {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .main-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding-top: 28px;
+        }
+
+        .focus-card {
+            width: 400px;
+            height: 280px;
+            background: var(--neutral-card);
+            border: 1px solid var(--neutral-border);
+            border-radius: 20px;
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .focus-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 20px;
+            padding: 1px;
+            background: linear-gradient(135deg, var(--focus-light), transparent, var(--focus-medium));
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: xor;
+            -webkit-mask-composite: xor;
+            opacity: 0.6;
+            animation: borderFlow 8s linear infinite;
+        }
+
+        .card-content {
+            padding: 32px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .focus-orb {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--focus-light), var(--focus-deep));
+            box-shadow: var(--shadow-focus);
+            margin-bottom: 24px;
+            position: relative;
+            animation: breathe 4s ease-in-out infinite;
+        }
+
+        .focus-orb::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            filter: blur(1px);
+            animation: innerPulse 2s ease-in-out infinite alternate;
+        }
+
+        .focus-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .focus-subtitle {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            letter-spacing: -0.2px;
+            line-height: 1.4;
+        }
+
+        .ambient-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            border-radius: 50%;
+            background: var(--focus-medium);
+            opacity: 0.4;
+        }
+
+        .particle:nth-child(1) {
+            top: 15%;
+            left: 20%;
+            animation: float 12s ease-in-out infinite;
+        }
+
+        .particle:nth-child(2) {
+            top: 70%;
+            left: 80%;
+            animation: float 8s ease-in-out infinite reverse;
+        }
+
+        .particle:nth-child(3) {
+            top: 40%;
+            left: 10%;
+            animation: float 15s ease-in-out infinite;
+        }
+
+        .particle:nth-child(4) {
+            top: 80%;
+            left: 30%;
+            animation: float 10s ease-in-out infinite reverse;
+        }
+
+        .particle:nth-child(5) {
+            top: 25%;
+            left: 90%;
+            animation: float 14s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 12px var(--focus-glow);
+            }
+            50% {
+                transform: scale(1.1);
+                box-shadow: 0 0 20px var(--focus-glow);
+            }
+        }
+
+        @keyframes breathe {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: var(--shadow-focus);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 60px var(--focus-glow);
+            }
+        }
+
+        @keyframes innerPulse {
+            0% {
+                opacity: 0.2;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            100% {
+                opacity: 0.4;
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+
+        @keyframes borderFlow {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) translateX(0px);
+                opacity: 0.4;
+            }
+            25% {
+                transform: translateY(-20px) translateX(10px);
+                opacity: 0.6;
+            }
+            50% {
+                transform: translateY(-10px) translateX(-15px);
+                opacity: 0.3;
+            }
+            75% {
+                transform: translateY(-30px) translateX(5px);
+                opacity: 0.7;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .focus-indicator,
+            .focus-orb,
+            .focus-orb::after,
+            .focus-card::before,
+            .particle {
+                animation: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-bar-content">
+            <div class="menu-bar-left">
+                <div class="app-name">Focus</div>
+                <div class="focus-indicator"></div>
+            </div>
+            <div class="menu-bar-right">
+                <div class="menu-time">2:47 PM</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ambient-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <div class="main-container">
+        <div class="focus-card">
+            <div class="card-content">
+                <div class="focus-orb"></div>
+                <div class="focus-title">Deep Focus</div>
+                <div class="focus-subtitle">Your mind is clear and<br>ready for meaningful work</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

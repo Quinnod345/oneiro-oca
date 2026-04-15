@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garden Habits</title>
+    <style>
+        :root {
+            --soil-brown: #8B4513;
+            --grass-green: #7CB342;
+            --water-blue: #2196F3;
+            --sun-yellow: #FFC107;
+            --flower-pink: #E91E63;
+            --flower-purple: #9C27B0;
+            --flower-orange: #FF5722;
+            --leaf-green: #4CAF50;
+            --stem-green: #388E3C;
+            --sky-blue: #E3F2FD;
+            --cloud-white: #FFFFFF;
+            --text-dark: #2E2E2E;
+            --text-light: #666666;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --glow: rgba(255, 255, 255, 0.8);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(to bottom, var(--sky-blue) 0%, #C8E6C9 50%, var(--grass-green) 100%);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sun {
+            position: absolute;
+            top: 40px;
+            right: 80px;
+            width: 80px;
+            height: 80px;
+            background: var(--sun-yellow);
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(255, 193, 7, 0.4);
+            animation: shine 4s ease-in-out infinite alternate;
+        }
+
+        .sun::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+            background: conic-gradient(from 0deg, transparent 85%, var(--sun-yellow) 90%, transparent 95%);
+            border-radius: 50%;
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes shine {
+            to { box-shadow: 0 0 50px rgba(255, 193, 7, 0.6); }
+        }
+
+        @keyframes rotate {
+            to { transform: rotate(360deg); }
+        }
+
+        .clouds {
+            position: absolute;
+            top: 60px;
+            left: 200px;
+        }
+
+        .cloud {
+            background: var(--cloud-white);
+            border-radius: 50px;
+            position: absolute;
+            opacity: 0.7;
+        }
+
+        .cloud:nth-child(1) {
+            width: 80px;
+            height: 30px;
+            animation: float 15s ease-in-out infinite;
+        }
+
+        .cloud:nth-child(2) {
+            width: 60px;
+            height: 25px;
+            left: 120px;
+            top: 20px;
+            animation: float 18s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateX(0px) translateY(0px); }
+            50% { transform: translateX(30px) translateY(-10px); }
+        }
+
+        .header {
+            position: absolute;
+            top: 60px;
+            left: 60px;
+            z-index: 10;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--text-dark);
+            text-shadow: 2px 2px 4px var(--shadow);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .garden-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 600px;
+            background: linear-gradient(to bottom, transparent 0%, var(--soil-brown) 85%);
+        }
+
+        .garden-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 40px;
+            padding: 80px 120px 120px;
+            height: 100%;
+            align-items: end;
+        }
+
+        .habit-plant {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .habit-plant:hover {
+            transform: translateY(-5px);
+        }
+
+        .plant-container {
+            position: relative;
+            width: 120px;
+            height: 160px;
+            margin-bottom: 20px;
+        }
+
+        .plant-pot {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 40px;
+            background: #8D6E63;
+            border-radius: 0 0 20px 20px;
+            border: 3px solid #6D4C41;
+        }
+
+        .plant-soil {
+            position: absolute;
+            bottom: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 54px;
+            height: 8px;
+            background: var(--soil-brown);
+            border-radius: 50%;
+        }
+
+        .plant-stem {
+            position: absolute;
+            bottom: 43px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            background: var(--stem-green);
+            border-radius: 2px;
+            transition: height 0.5s ease;
+        }
+
+        .plant-leaves {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .leaf {
+            position: absolute;
+            width: 20px;
+            height: 12px;
+            background: var(--leaf-green);
+            border-radius: 50% 0;
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+
+        .leaf:nth-child(1) {
+            left: -25px;
+            transform: rotate(-45deg);
+        }
+
+        .leaf:nth-child(2) {
+            right: -25px;
+            transform: rotate(45deg);
+        }
+
+        .plant-flower {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            opacity: 0;
+            transition: all 0.7s ease;
+        }
+
+        .plant-flower::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: -6px;
+            right: -6px;
+            bottom: -6px;
+            border-radius: 50%;
+            background: inherit;
+            opacity: 0.3;
+        }
+
+        .habit-label {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .streak-counter {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: var(--sun-yellow);
+            color: var(--text-dark);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .water-drop {
+            position: absolute;
+            width: 8px;
+            height: 12px;
+            background: var(--water-blue);
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            opacity: 0;
+            animation: drop 1s ease-out;
+        }
+
+        @keyframes drop {
+            0% { top: -20px; opacity: 1; }
+            100% { top: 60px; opacity: 0; }
+        }
+
+        /* Plant states */
+        .habit-plant.seedling .plant-stem {
+            height: 20px;
+        }
+
+        .habit-plant.growing .plant-stem {
+            height: 35px;
+        }
+
+        .habit-plant.growing .leaf {
+            opacity: 1;
+        }
+
+        .habit-plant.blooming .plant-stem {
+            height: 50px;
+        }
+
+        .habit-plant.blooming .leaf {
+            opacity: 1;
+        }
+
+        .habit-plant.blooming .plant-flower {
+            opacity: 1;
+            animation: bloom 2s ease-out;
+        }
+
+        @keyframes bloom {
+            0% { transform: translateX(-50%) scale(0); }
+            50% { transform: translateX(-50%) scale(1.2); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+
+        .habit-plant.wilting .plant-stem {
+            height: 15px;
+            background: #A0845C;
+        }
+
+        .habit-plant.wilting .leaf {
+            opacity: 0.3;
+            background: #8BC34A;
+        }
+
+        /* Specific flower colors */
+        .habit-plant:nth-child(1) .plant-flower { background: var(--flower-pink); }
+        .habit-plant:nth-child(2) .plant-flower { background: var(--flower-purple); }
+        .habit-plant:nth-child(3) .plant-flower { background: var(--flower-orange); }
+        .habit-plant:nth-child(4) .plant-flower { background: var(--sun-yellow); }
+        .habit-plant:nth-child(5) .plant-flower { background: var(--water-blue); }
+        .habit-plant:nth-child(6) .plant-flower { background: var(--flower-pink); }
+        .habit-plant:nth-child(7) .plant-flower { background: var(--flower-purple); }
+
+        .watering-can {
+            position: absolute;
+            bottom: 40px;
+            right: 80px;
+            width: 60px;
+            height: 40px;
+            background: #607D8B;
+            border-radius: 10px 10px 5px 5px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .watering-can:hover {
+            transform: scale(1.05);
+        }
+
+        .watering-can::before {
+            content: '';
+            position: absolute;
+            right: -20px;
+            top: 8px;
+            width: 20px;
+            height: 8px;
+            background: #607D8B;
+            border-radius: 0 20px 20px 0;
+        }
+
+        .watering-can::after {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: -8px;
+            width: 15px;
+            height: 15px;
+            background: #607D8B;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="sun"></div>
+    <div class="clouds">
+        <div class="cloud"></div>
+        <div class="cloud"></div>
+    </div>
+
+    <div class="header">
+        <h1>Garden Habits</h1>
+        <p>Nurture your daily habits and watch your garden bloom</p>
+    </div>
+
+    <div class="garden-container">
+        <div class="garden-grid">
+            <div class="habit-plant blooming" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">7</div>
+                </div>
+                <div class="habit-label">Exercise</div>
+            </div>
+
+            <div class="habit-plant growing" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">3</div>
+                </div>
+                <div class="habit-label">Read</div>
+            </div>
+
+            <div class="habit-plant blooming" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">12</div>
+                </div>
+                <div class="habit-label">Meditate</div>
+            </div>
+
+            <div class="habit-plant seedling" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">1</div>
+                </div>
+                <div class="habit-label">Journal</div>
+            </div>
+
+            <div class="habit-plant wilting" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                </div>
+                <div class="habit-label">Sleep Early</div>
+            </div>
+
+            <div class="habit-plant growing" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">4</div>
+                </div>
+                <div class="habit-label">Water</div>
+            </div>
+
+            <div class="habit-plant blooming" onclick="waterPlant(this)">
+                <div class="plant-container">
+                    <div class="plant-pot"></div>
+                    <div class="plant-soil"></div>
+                    <div class="plant-stem"></div>
+                    <div class="plant-leaves">
+                        <div class="leaf"></div>
+                        <div class="leaf"></div>
+                    </div>
+                    <div class="plant-flower"></div>
+                    <div class="streak-counter">9</div>
+                </div>
+                <div class="habit-label">Code</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="watering-can" onclick="showWateringMessage()"></div>
+
+    <script>
+        function waterPlant(plant) {
+            // Create water drop animation
+            const drop = document.createElement('div');
+            drop.className = 'water-drop';
+            drop.style.left = '50%';
+            plant.querySelector('.plant-container').appendChild(drop);
+            
+            setTimeout(() => drop.remove(), 1000);
+
+            // Update plant state
+            const currentState = plant.className.split(' ')[1];
+            const streakElement = plant.querySelector('.streak-counter');
+            
+            if (currentState === 'wilting') {
+                plant.className = 'habit-plant seedling';
+                streakElement.textContent = '1';
+                streakElement.style.display = 'flex';
+            } else if (currentState === 'seedling') {
+                plant.className = 'habit-plant growing';
+                streakElement.textContent = parseInt(streakElement.textContent) + 1;
+            } else if (currentState === 'growing') {
+                if (parseInt(streakElement.textContent) >= 5) {
+                    plant.className = 'habit-plant blooming';
+                }
+                streakElement.textContent = parseInt(streakElement.textContent) + 1;
+            } else if (currentState === 'blooming') {
+                streakElement.textContent = parseInt(streakElement.textContent) + 1;
+            }
+        }
+
+        function showWateringMessage() {
+            const plants = document.querySelectorAll('.habit-plant');
+            plants.forEach((plant, index) => {
+                setTimeout(() => {
+                    const drop = document.createElement('div');
+                    drop.className = 'water-drop';
+                    drop.style.left = '50%';
+                    plant.querySelector('.plant-container').appendChild(drop);
+                    setTimeout(() => drop.remove(), 1000);
+                }, index * 100);
+            });
+        }
+
+        // Auto-wither simulation
+        setInterval(() => {
+            const plants = document.querySelectorAll('.habit-plant');
+            plants.forEach(plant => {
+                if (Math.random() < 0.1 && !plant.classList.contains('wilting')) {
+                    const streakElement = plant.querySelector('.streak-counter');
+                    if (streakElement && parseInt(streakElement.textContent) > 0) {
+                        streakElement.textContent = Math.max(0, parseInt(streakElement.textContent) - 1);
+                        if (parseInt(streakElement.textContent) === 0) {
+                            plant.className = 'habit-plant wilting';
+                            streakElement.style.display = 'none';
+                        }
+                    }
+                }
+            });
+        }, 10000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Converter</title>
+    <style>
+        :root {
+            --parchment: #f4e8d0;
+            --ink-fresh: #2a1810;
+            --ink-aged: #8b7355;
+            --copper-vessel: #b87333;
+            --hearth-glow: #ff6b35;
+            --modern-steel: #e0e5eb;
+            --quantum-blue: #4a90e2;
+            --transform-particle: #ffd700;
+            --timeline-track: #3a3a3a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--modern-steel);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            position: relative;
+        }
+
+        .temporal-interface {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            position: relative;
+        }
+
+        .timeline-control {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: linear-gradient(to top, rgba(58, 58, 58, 0.95), transparent);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 60px;
+        }
+
+        .timeline-track {
+            position: relative;
+            width: 80%;
+            height: 8px;
+            background: var(--timeline-track);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .timeline-slider {
+            position: absolute;
+            top: 50%;
+            left: 75%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--quantum-blue), var(--timeline-track));
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 0 20px rgba(74, 144, 226, 0.6);
+            transition: box-shadow 0.3s;
+        }
+
+        .timeline-slider:active {
+            cursor: grabbing;
+            box-shadow: 0 0 30px rgba(74, 144, 226, 0.9);
+        }
+
+        .era-markers {
+            position: absolute;
+            top: -30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .era-marker {
+            font-size: 12px;
+            color: var(--ink-aged);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .historical-panel {
+            position: relative;
+            background: var(--parchment);
+            overflow: hidden;
+            transition: filter 0.6s ease;
+        }
+
+        .historical-panel.aged {
+            filter: sepia(0.4) contrast(1.1);
+        }
+
+        .modern-panel {
+            background: #ffffff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel-content {
+            padding: 40px;
+            height: calc(100% - 120px);
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .recipe-title {
+            font-size: 32px;
+            margin-bottom: 30px;
+            transition: all 0.5s ease;
+        }
+
+        .historical-panel .recipe-title {
+            color: var(--ink-aged);
+            font-family: 'Baskerville', 'Georgia', serif;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .modern-panel .recipe-title {
+            color: var(--ink-fresh);
+            font-weight: 300;
+            letter-spacing: -0.5px;
+        }
+
+        .ingredient-card {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            position: relative;
+            transition: all 0.4s ease;
+            transform-origin: left center;
+        }
+
+        .historical-panel .ingredient-card {
+            background: rgba(255, 251, 240, 0.7);
+            border: 1px solid var(--ink-aged);
+            font-family: 'Georgia', serif;
+        }
+
+        .modern-panel .ingredient-card {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+        }
+
+        .ingredient-card.transforming {
+            animation: dilate 0.6s ease-in-out;
+        }
+
+        @keyframes dilate {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.2); }
+        }
+
+        .measurement-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            min-height: 60px;
+        }
+
+        .measurement-visual {
+            width: 60px;
+            height: 60px;
+            position: relative;
+        }
+
+        .liquid-container {
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--copper-vessel);
+            border-radius: 0 0 30px 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .liquid {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, var(--quantum-blue), rgba(74, 144, 226, 0.3));
+            transition: height 0.8s ease;
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+        }
+
+        .measurement-text {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .original-measure {
+            font-size: 16px;
+            color: var(--ink-aged);
+            font-style: italic;
+        }
+
+        .modern-measure {
+            font-size: 18px;
+            color: var(--ink-fresh);
+            font-weight: 500;
+        }
+
+        .cooking-method {
+            margin: 40px 0;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .method-illustration {
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .fire-animation {
+            width: 100px;
+            height: 100px;
+            position: relative;
+        }
+
+        .flame {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 60px;
+            background: radial-gradient(ellipse at bottom, var(--hearth-glow), transparent);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: flicker 1s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scaleY(1); opacity: 0.9; }
+            50% { transform: translateX(-50%) scaleY(1.1); opacity: 1; }
+            100% { transform: translateX(-50%) scaleY(0.95); opacity: 0.8; }
+        }
+
+        .modern-appliance {
+            width: 120px;
+            height: 80px;
+            background: #2c3e50;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .oven-display {
+            width: 60px;
+            height: 30px;
+            background: #1abc9c;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .particle-effect {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .transform-particle {
+            width: 4px;
+            height: 4px;
+            background: var(--transform-particle);
+            border-radius: 50%;
+            position: absolute;
+            animation: float-particle 2s infinite;
+            opacity: 0;
+        }
+
+        @keyframes float-particle {
+            0% { transform: translate(0, 0); opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translate(100px, -100px); opacity: 0; }
+        }
+
+        .ingredient-transformation {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .transformation-arrow {
+            font-size: 24px;
+            color: var(--quantum-blue);
+            margin: 10px 0;
+        }
+
+        .panel-texture {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.1;
+            pointer-events: none;
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(139, 115, 85, 0.1) 35px, rgba(139, 115, 85, 0.1) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(139, 115, 85, 0.1) 35px, rgba(139, 115, 85, 0.1) 70px);
+        }
+
+        .time-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 14px;
+            color: var(--ink-aged);
+            font-weight: 500;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 140px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--ink-aged);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s infinite;
+            cursor: pointer;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .scroll-arrow {
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid var(--ink-aged);
+        }
+
+        .ingredient-name {
+            font-size: 20px;
+            margin-bottom: 10px;
+            transition: all 0.4s ease;
+        }
+
+        .historical-panel .ingredient-name {
+            color: var(--copper-vessel);
+            font-family: 'Baskerville', serif;
+        }
+
+        .modern-panel .ingredient-name {
+            color: var(--ink-fresh);
+        }
+
+        .cooking-temp {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .temp-label {
+            font-size: 14px;
+            color: var(--ink-aged);
+            min-width: 120px;
+        }
+
+        .temp-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--hearth-glow);
+        }
+
+        .divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--ink-aged), transparent);
+            margin: 30px 0;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-interface">
+        <div class="historical-panel aged">
+            <div class="panel-texture"></div>
+            <div class="time-indicator">Anno Domini 1823</div>
+            <div class="panel-content">
+                <h1 class="recipe-title">Plumb Pudding for Christmastide</h1>
+                
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Dragon's Blood</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 70%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">One thimble's worth</div>
+                            <div class="modern-measure">→ ½ teaspoon</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Suet of Beef</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 85%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">Half a pound weight</div>
+                            <div class="modern-measure">→ 225 grams</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="cooking-method">
+                    <h3 style="margin-bottom: 20px; color: var(--ink-aged);">Method of Cookery</h3>
+                    <div class="method-illustration">
+                        <div class="fire-animation">
+                            <div class="flame"></div>
+                        </div>
+                    </div>
+                    <div class="cooking-temp">
+                        <div class="temp-label">One candle's burn:</div>
+                        <div class="temp-value">20 minutes</div>
+                    </div>
+                    <div class="cooking-temp">
+                        <div class="temp-label">Hearth heat:</div>
+                        <div class="temp-value">Gentle simmer</div>
+                    </div>
+                </div>
+
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Muscovado Sugar</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 60%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">One teacup</div>
+                            <div class="modern-measure">→ 180ml / ¾ cup</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll-indicator">
+                <div class="scroll-arrow"></div>
+            </div>
+        </div>
+
+        <div class="modern-panel">
+            <div class="time-indicator">Modern Kitchen</div>
+            <div class="panel-content">
+                <h1 class="recipe-title">Christmas Pudding</h1>
+                
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Saffron</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 70%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">Premium grade</div>
+                            <div class="modern-measure">½ teaspoon</div>
+                        </div>
+                    </div>
+                    <div class="particle-effect">
+                        <div class="transform-particle" style="animation-delay: 0s;"></div>
+                        <div class="transform-particle" style="animation-delay: 0.5s;"></div>
+                        <div class="transform-particle" style="animation-delay: 1s;"></div>
+                    </div>
+                </div>
+
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Butter (cold, cubed)</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 85%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">Vegetarian substitute</div>
+                            <div class="modern-measure">225 grams</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="cooking-method">
+                    <h3 style="margin-bottom: 20px; color: var(--ink-fresh); font-weight: 400;">Cooking Method</h3>
+                    <div class="method-illustration">
+                        <div class="modern-appliance">
+                            <div class="oven-display">325°F</div>
+                        </div>
+                    </div>
+                    <div class="cooking-temp">
+                        <div class="temp-label">Timer:</div>
+                        <div class="temp-value">20 minutes</div>
+                    </div>
+                    <div class="cooking-temp">
+                        <div class="temp-label">Setting:</div>
+                        <div class="temp-value">Low heat / Simmer</div>
+                    </div>
+                </div>
+
+                <div class="ingredient-card">
+                    <div class="ingredient-name">Brown Sugar</div>
+                    <div class="measurement-container">
+                        <div class="measurement-visual">
+                            <div class="liquid-container">
+                                <div class="liquid" style="height: 60%;"></div>
+                            </div>
+                        </div>
+                        <div class="measurement-text">
+                            <div class="original-measure">Dark, unrefined</div>
+                            <div class="modern-measure">180ml / ¾ cup</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll-indicator">
+                <div class="scroll-arrow"></div>
+            </div>
+        </div>
+
+        <div class="timeline-control">
+            <div class="timeline-track">
+                <div class="era-markers">
+                    <span class="era-marker">1400s</span>
+                    <span class="era-marker">1600s</span>
+                    <span class="era-marker">1800s</span>
+                    <span class="era-marker">1900s</span>
+                    <span class="era-marker">Present</span>
+                </div>
+                <div class="timeline-slider"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const slider = document.querySelector('.timeline-slider');
+        const track = document.querySelector('.timeline-track');
+        const historicalPanel = document.querySelector('.historical-panel');
+        const cards = document.querySelectorAll('.ingredient-card');
+        let isDragging = false;
+
+        slider.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = track.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            x = Math.max(0, Math.min(x, rect.width));
+            
+            const percentage = x / rect.width;
+            slider.style.left = `${percentage * 100}%`;
+            
+            // Age effect
+            const ageFilter = percentage < 0.7 ? 0.4 - (percentage * 0.4) : 0;
+            historicalPanel.style.filter = `sepia(${ageFilter}) contrast(${1.1 - ageFilter * 0.1})`;
+            
+            // Card dilation effect
+            cards.forEach((card, i) => {
+                setTimeout(() => {
+                    card.style.transform = `scaleX(${1 + Math.sin(percentage * Math.PI) * 0.1})`;
+                }, i * 50);
+            });
+        });
+
+        track.addEventListener('click', (e) => {
+            const rect = track.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = x / rect.width;
+            slider.style.left = `${percentage * 100}%`;
+            
+            cards.forEach(card => {
+                card.classList.add('transforming');
+                setTimeout(() => card.classList.remove('transforming'), 600);
+            });
+        });
+    </script>
+</body>
+</html>

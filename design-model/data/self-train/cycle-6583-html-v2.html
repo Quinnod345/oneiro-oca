@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Garden</title>
+    <style>
+        :root {
+            --soil: #2a1f1a;
+            --bark: #4a3a30;
+            --morning-fog: #e8e2d8;
+            --petal-pink: #f2d4d4;
+            --leaf-green: #7a8a6a;
+            --forget-blue: #8a92a8;
+            --ghost-white: rgba(255, 255, 255, 0.15);
+            --water-blue: #6a8caf;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #f4f0e8 0%, #e8ddd0 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+        }
+
+        .garden-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 2rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .title {
+            font-size: 1.75rem;
+            font-weight: 300;
+            color: var(--soil);
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.875rem;
+            color: var(--forget-blue);
+            font-weight: 400;
+        }
+
+        .garden-view {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .garden-bed {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 35%;
+            background: linear-gradient(to bottom, transparent 0%, var(--soil) 30%);
+        }
+
+        .memory-plant {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.6s ease;
+        }
+
+        .stem {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            background: linear-gradient(to top, var(--bark), var(--leaf-green));
+            transform-origin: bottom center;
+            animation: gentleSway 8s ease-in-out infinite;
+        }
+
+        @keyframes gentleSway {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-50%) rotate(1deg); }
+            75% { transform: translateX(-50%) rotate(-1deg); }
+        }
+
+        .flower {
+            position: absolute;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+        }
+
+        .petal {
+            position: absolute;
+            width: 35px;
+            height: 45px;
+            background: var(--petal-pink);
+            border-radius: 20px 20px 45% 45%;
+            transform-origin: bottom center;
+            transition: all 0.8s ease;
+        }
+
+        .petal:nth-child(1) { transform: rotate(0deg); }
+        .petal:nth-child(2) { transform: rotate(72deg); }
+        .petal:nth-child(3) { transform: rotate(144deg); }
+        .petal:nth-child(4) { transform: rotate(216deg); }
+        .petal:nth-child(5) { transform: rotate(288deg); }
+
+        .petal.falling {
+            animation: petalFall 4s ease-in forwards;
+            opacity: 0.3;
+        }
+
+        @keyframes petalFall {
+            to {
+                transform: translateY(600px) translateX(100px) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .memory-label {
+            position: absolute;
+            bottom: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: var(--bark);
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .memory-date {
+            font-size: 0.7rem;
+            color: var(--forget-blue);
+            opacity: 0.7;
+        }
+
+        .plant-healthy .petal {
+            background: var(--petal-pink);
+            opacity: 1;
+        }
+
+        .plant-fading .petal {
+            background: var(--forget-blue);
+            opacity: 0.6;
+        }
+
+        .plant-ghost .stem {
+            background: var(--ghost-white);
+            border: 1px dashed var(--forget-blue);
+        }
+
+        .plant-ghost .petal {
+            background: transparent;
+            border: 1px dashed var(--ghost-white);
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 3rem;
+            padding: 1rem 2rem;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--bark);
+        }
+
+        .stat-value {
+            font-weight: 500;
+        }
+
+        .stat-label {
+            color: var(--forget-blue);
+            font-weight: 400;
+        }
+
+        .recall-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: white;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            max-width: min(90vw, 450px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .recall-modal.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .recall-prompt {
+            font-size: 1.125rem;
+            color: var(--bark);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        .recall-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .recall-option {
+            padding: 1rem;
+            border: 1.5px solid var(--morning-fog);
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 0.925rem;
+            border-radius: 10px;
+            font-weight: 400;
+        }
+
+        .recall-option:hover {
+            border-color: var(--water-blue);
+            background: #f8fafb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(106, 140, 175, 0.15);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .watering-can {
+            position: fixed;
+            width: 50px;
+            height: 50px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+        }
+
+        .watering-can.active {
+            opacity: 1;
+        }
+
+        .water-drop {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--water-blue);
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(45deg);
+            animation: dropFall 1s ease-in infinite;
+        }
+
+        @keyframes dropFall {
+            to {
+                transform: rotate(45deg) translateY(50px);
+                opacity: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1.5rem;
+            }
+            
+            .title {
+                font-size: 1.5rem;
+            }
+            
+            .status-bar {
+                gap: 1.5rem;
+                padding: 0.75rem 1.5rem;
+                font-size: 0.8rem;
+            }
+            
+            .recall-modal {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="garden-container">
+        <header class="header">
+            <h1 class="title">Memory Garden</h1>
+            <p class="subtitle">Nurture your memories to keep them alive</p>
+        </header>
+        
+        <div class="garden-view">
+            <div class="garden-bed"></div>
+            
+            <div class="memory-plant plant-healthy" style="bottom: 20%; left: 20%;">
+                <div class="stem" style="height: 150px;"></div>
+                <div class="flower">
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                </div>
+                <div class="memory-label">
+                    <div>First Day of School</div>
+                    <div class="memory-date">September 2015</div>
+                </div>
+            </div>
+            
+            <div class="memory-plant plant-fading" style="bottom: 18%; left: 45%;">
+                <div class="stem" style="height: 130px;"></div>
+                <div class="flower">
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                </div>
+                <div class="memory-label">
+                    <div>Summer Vacation</div>
+                    <div class="memory-date">July 2018</div>
+                </div>
+            </div>
+            
+            <div class="memory-plant plant-ghost" style="bottom: 22%; left: 70%;">
+                <div class="stem" style="height: 140px;"></div>
+                <div class="flower">
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                    <div class="petal"></div>
+                </div>
+                <div class="memory-label">
+                    <div>Birthday Party</div>
+                    <div class="memory-date">March 2013</div>
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="stat-item">
+                    <span class="stat-value">12</span>
+                    <span class="stat-label">memories planted</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">8</span>
+                    <span class="stat-label">thriving</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">3</span>
+                    <span class="stat-label">need attention</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="overlay" id="overlay"></div>
+    
+    <div class="recall-modal" id="recallModal">
+        <div class="recall-prompt">Quick! What color was your backpack on the first day of school?</div>
+        <div class="recall-options">
+            <button class="recall-option">Blue with stars</button>
+            <button class="recall-option">Red and black</button>
+            <button class="recall-option">Green</button>
+            <button class="recall-option">I don't remember</button>
+        </div>
+    </div>
+    
+    <div class="watering-can" id="wateringCan">
+        <div class="water-drop"></div>
+    </div>
+    
+    <script>
+        const plants = document.querySelectorAll('.memory-plant');
+        const modal = document.getElementById('recallModal');
+        const overlay = document.getElementById('overlay');
+        const wateringCan = document.getElementById('wateringCan');
+        
+        plants.forEach(plant => {
+            plant.addEventListener('click', () => {
+                modal.classList.add('active');
+                overlay.classList.add('active');
+            });
+        });
+        
+        overlay.addEventListener('click', () => {
+            modal.classList.remove('active');
+            overlay.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.recall-option').forEach(option => {
+            option.addEventListener('click', () => {
+                wateringCan.classList.add('active');
+                wateringCan.style.left = event.clientX + 'px';
+                wateringCan.style.top = event.clientY + 'px';
+                
+                setTimeout(() => {
+                    wateringCan.classList.remove('active');
+                    modal.classList.remove('active');
+                    overlay.classList.remove('active');
+                }, 1500);
+            });
+        });
+    </script>
+</body>
+</html>

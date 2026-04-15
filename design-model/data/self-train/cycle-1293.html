@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Contacts</title>
+    <style>
+        :root {
+            --bg-primary: #0a0b0f;
+            --bg-secondary: #131419;
+            --accent-blue: #4a9eff;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --accent-yellow: #fbbf24;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --glow-intensity: 0.8;
+            --orbit-speed: 60s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .constellation-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, var(--bg-secondary) 0%, var(--bg-primary) 70%);
+        }
+
+        .stars-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.3;
+        }
+
+        .star {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--text-secondary);
+            animation: twinkle 3s infinite ease-in-out alternate;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.3; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .constellation {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 600px;
+        }
+
+        .contact-node {
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: var(--text-primary);
+            user-select: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .contact-node::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+        }
+
+        .contact-node:hover::before {
+            opacity: 1;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 0.9; }
+        }
+
+        .contact-node:hover {
+            transform: scale(1.1);
+            z-index: 100;
+        }
+
+        /* Primary contact (center) */
+        .contact-primary {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            box-shadow: 0 0 40px rgba(74, 158, 255, var(--glow-intensity));
+            font-size: 18px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .contact-primary::before {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            filter: blur(8px);
+        }
+
+        /* Close contacts */
+        .contact-close {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            box-shadow: 0 0 30px rgba(236, 72, 153, calc(var(--glow-intensity) * 0.8));
+            font-size: 14px;
+        }
+
+        .contact-close::before {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            filter: blur(6px);
+        }
+
+        /* Regular contacts */
+        .contact-regular {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--accent-yellow), var(--accent-pink));
+            box-shadow: 0 0 20px rgba(251, 191, 36, calc(var(--glow-intensity) * 0.6));
+            font-size: 12px;
+        }
+
+        .contact-regular::before {
+            background: linear-gradient(135deg, var(--accent-yellow), var(--accent-pink));
+            filter: blur(4px);
+        }
+
+        /* Distant contacts */
+        .contact-distant {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--text-secondary), var(--accent-blue));
+            box-shadow: 0 0 15px rgba(148, 163, 184, calc(var(--glow-intensity) * 0.4));
+            font-size: 10px;
+        }
+
+        .contact-distant::before {
+            background: linear-gradient(135deg, var(--text-secondary), var(--accent-blue));
+            filter: blur(3px);
+        }
+
+        /* Connection lines */
+        .connection {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.3), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .contact-node:hover ~ .connection,
+        .connection:hover,
+        .contact-node:hover + .connection {
+            opacity: 1;
+            animation: flow 2s infinite;
+        }
+
+        @keyframes flow {
+            0%, 100% { background-position: 0% 0%; }
+            50% { background-position: 100% 0%; }
+        }
+
+        /* Orbital animation */
+        .orbit {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            animation: rotate var(--orbit-speed) linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .orbit-1 {
+            width: 250px;
+            height: 250px;
+            animation-duration: calc(var(--orbit-speed) * 0.8);
+        }
+
+        .orbit-2 {
+            width: 400px;
+            height: 350px;
+            animation-duration: calc(var(--orbit-speed) * 1.2);
+        }
+
+        .orbit-3 {
+            width: 600px;
+            height: 500px;
+            animation-duration: calc(var(--orbit-speed) * 1.8);
+        }
+
+        .orbit .contact-node {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(calc(-1 * var(--orbit-rotation, 0deg)));
+        }
+
+        /* Header */
+        .header {
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            z-index: 200;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Controls */
+        .controls {
+            position: absolute;
+            top: 40px;
+            right: 50px;
+            z-index: 200;
+            display: flex;
+            gap: 12px;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px rgba(74, 158, 255, 0.3);
+        }
+
+        /* Contact info panel */
+        .contact-info {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 300px;
+            background: rgba(19, 20, 25, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(20px);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 150;
+        }
+
+        .contact-info.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .contact-info h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .contact-info .role {
+            color: var(--accent-blue);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .contact-info .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .interaction-glow {
+            animation: interaction-pulse 0.8s ease-out;
+        }
+
+        @keyframes interaction-pulse {
+            0% { 
+                box-shadow: 0 0 20px rgba(74, 158, 255, 0.5);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 40px rgba(74, 158, 255, 1);
+                transform: scale(1.05);
+            }
+            100% { 
+                box-shadow: 0 0 20px rgba(74, 158, 255, 0.5);
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="constellation-container">
+        <div class="stars-background" id="starsBackground"></div>
+        
+        <header class="header">
+            <h1>Constellation</h1>
+            <p>Your social universe mapped by connection</p>
+        </header>
+
+        <div class="controls">
+            <button class="control-btn">View All</button>
+            <button class="control-btn">Recent</button>
+            <button class="control-btn">Search</button>
+        </div>
+
+        <div class="constellation">
+            <!-- Primary contact (You) -->
+            <div class="contact-node contact-primary" data-name="You" data-role="Center of your universe" data-interactions="∞" data-closeness="100%">
+                ME
+            </div>
+
+            <!-- Close contacts orbit -->
+            <div class="orbit orbit-1">
+                <div class="contact-node contact-close" data-name="Sarah Chen" data-role="Best Friend" data-interactions="847" data-closeness="95%" style="--orbit-rotation: 0deg;">SC</div>
+                <div class="contact-node contact-close" data-name="Mom" data-role="Family" data-interactions="1,240" data-closeness="98%" style="--orbit-rotation: 90deg;">MOM</div>
+                <div class="contact-node contact-close" data-name="Alex Rivera" data-role="Partner" data-interactions="2,156" data-closeness="99%" style="--orbit-rotation: 180deg;">AR</div>
+                <div class="contact-node contact-close" data-name="David Kim" data-role="Brother" data-interactions="923" data-closeness="92%" style="--orbit-rotation: 270deg;">DK</div>
+            </div>
+
+            <!-- Regular contacts orbit -->
+            <div class="orbit orbit-2">
+                <div class="contact-node contact-regular" data-name="Emma Watson" data-role="Colleague" data-interactions="234" data-closeness="75%" style="--orbit-rotation: 45deg;">EW</div>
+                <div class="contact-node contact-regular" data-name="Mike Johnson" data-role="Friend" data-interactions="156" data-closeness="68%" style="--orbit-rotation: 120deg;">MJ</div>
+                <div class="contact-node contact-regular" data-name="Lisa Zhang" data-role="Teammate" data-interactions="189" data-closeness="72%" style="--orbit-rotation: 200deg;">LZ</div>
+                <div class="contact-node contact-regular" data-name="Tom Wilson" data-role="Neighbor" data-interactions="98" data-closeness="55%" style="--orbit-rotation: 280deg;">TW</div>
+                <div class="contact-node contact-regular" data-name="Anna Foster" data-role="Classmate" data-interactions="145" data-closeness="63%" style="--orbit-rotation: 340deg;">AF</div>
+            </div>
+
+            <!-- Distant contacts orbit -->
+            <div class="orbit orbit-3">
+                <div class="contact-node contact-distant" data-name="James Lee" data-role="Acquaintance" data-interactions="45" data-closeness="35%" style="--orbit-rotation: 30deg;">JL</div>
+                <div class="contact-node contact-distant" data-name="Sophie Martin" data-role="Former colleague" data-interactions="23" data-closeness="25%" style="--orbit-rotation: 85deg;">SM</div>
+                <div class="contact-node contact-distant" data-name="Ryan Davis" data-role="Contact" data-interactions="67" data-closeness="42%" style="--orbit-rotation: 140deg;">RD</div>
+                <div class="contact-node contact-distant" data-name="Nina Patel" data-role="Acquaintance" data-interactions="34" data-closeness="28%" style="--orbit-rotation: 195deg;">NP</div>
+                <div class="contact-node contact-distant" data-name="Carlos Rodriguez" data-role="Connection" data-interactions="56" data-closeness="38%" style="--orbit-rotation: 250deg;">CR</div>
+                <div class="contact-node contact-distant" data-name="Maya Singh" data-role="Contact" data-interactions="41" data-closeness="31%" style="--orbit-rotation: 305deg;">MS</div>
+            </div>
+        </div>
+
+        <div class="contact-info" id="contactInfo">
+            <h3 id="contactName">Select a contact</h3>
+            <div class="role" id="contactRole">Hover over any contact to see details</div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="interactions">-</div>
+                    <div class="stat-label">Interactions</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="closeness">-</div>
+                    <div class="stat-label">Closeness</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate random stars
+        function generateStars() {
+            const starsContainer = document.getElementById('starsBackground');
+            const numStars = 150;
+            
+            for (let i = 0; i < numStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                starsContainer.appendChild(star);
+            }
+        }
+
+        // Contact info display
+        function setupContactInfo() {
+            const contacts = document.querySelectorAll('.contact-node');
+            const contactInfo = document.getElementById('contactInfo');
+            const contactName = document.getElementById('contactName');
+            const contactRole = document.getElementById('contactRole');
+            const interactions = document.getElementById('interactions');
+            const closeness = document.getElementById('closeness');
+
+            contacts.forEach(contact => {
+                contact.addEventListener('mouseenter', () => {
+                    const name = contact.dataset.name;
+                    const role = contact.dataset.role;
+                    const interactionCount = contact.dataset.interactions;
+                    const closenessLevel = contact.dataset.closeness;
+
+                    contactName.textContent = name;
+                    contactRole.textContent = role;
+                    interactions.textContent = interactionCount;
+                    closeness.textContent = closenessLevel;
+                    
+                    contactInfo.classList.add('visible');
+                    
+                    // Add interaction glow
+                    contact.classList.add('interaction-glow');
+                    setTimeout(() => {
+                        contact.classList.remove('interaction-glow');
+                    }, 800);
+                });
+
+                contact.addEventListener('mouseleave', () => {
+                    setTimeout(() => {
+                        if (!contact.matches(':hover')) {
+                            contactInfo.classList.remove('visible');
+                        }
+                    }, 100);
+                });
+            });
+        }
+
+        // Simulate periodic interactions
+        function simulateInteractions() {
+            const contacts = document.querySelectorAll('.contact-node:not(.contact-primary)');
+            
+            setInterval(() => {
+                const randomContact = contacts[Math.floor(Math.random() * contacts.length)];
+                randomContact.classList.add('interaction-glow');
+                
+                setTimeout(() => {
+                    randomContact.classList.remove('interaction-glow');
+                }, 800);
+            }, 3000);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            generateStars();
+            setupContactInfo();
+            simulateInteractions();
+        });
+    </script>
+</body>
+</html>

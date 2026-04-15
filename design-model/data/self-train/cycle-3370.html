@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Flow - Transformation Timeline</title>
+    <style>
+        :root {
+            --surface-primary: #fefefe;
+            --surface-secondary: #f8f9fa;
+            --surface-tertiary: #e9ecef;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --text-tertiary: #adb5bd;
+            --accent-primary: #e67e22;
+            --accent-secondary: #f39c12;
+            --accent-tertiary: #d35400;
+            --flow-line: #dee2e6;
+            --ingredient-node: #2ecc71;
+            --process-node: #3498db;
+            --combine-node: #9b59b6;
+            --final-node: #e74c3c;
+            --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --shadow-medium: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            --shadow-strong: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+            --border-radius: 12px;
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--surface-primary);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .recipe-manager {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            gap: 0;
+        }
+
+        .sidebar {
+            background: var(--surface-secondary);
+            padding: 32px 24px;
+            border-right: 1px solid var(--surface-tertiary);
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: var(--text-primary);
+        }
+
+        .recipe-list {
+            list-style: none;
+        }
+
+        .recipe-item {
+            padding: 16px;
+            margin-bottom: 12px;
+            background: var(--surface-primary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--surface-tertiary);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            position: relative;
+        }
+
+        .recipe-item:hover {
+            box-shadow: var(--shadow-medium);
+            transform: translateY(-1px);
+        }
+
+        .recipe-item.active {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.2);
+        }
+
+        .recipe-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .recipe-meta {
+            font-size: 14px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+        }
+
+        .timeline-container {
+            background: var(--surface-primary);
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .timeline-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .timeline-header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .timeline-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .flow-timeline {
+            position: relative;
+            height: 600px;
+            width: 100%;
+        }
+
+        .flow-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+        }
+
+        .flow-layer:nth-child(1) { top: 60px; }
+        .flow-layer:nth-child(2) { top: 200px; }
+        .flow-layer:nth-child(3) { top: 340px; }
+        .flow-layer:nth-child(4) { top: 480px; }
+
+        .flow-node {
+            background: var(--surface-primary);
+            border-radius: var(--border-radius);
+            padding: 16px 20px;
+            box-shadow: var(--shadow-medium);
+            position: relative;
+            min-width: 140px;
+            text-align: center;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .flow-node:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-strong);
+        }
+
+        .flow-node.ingredient {
+            background: linear-gradient(135deg, var(--ingredient-node), #27ae60);
+            color: white;
+        }
+
+        .flow-node.process {
+            background: linear-gradient(135deg, var(--process-node), #2980b9);
+            color: white;
+        }
+
+        .flow-node.combine {
+            background: linear-gradient(135deg, var(--combine-node), #8e44ad);
+            color: white;
+        }
+
+        .flow-node.final {
+            background: linear-gradient(135deg, var(--final-node), #c0392b);
+            color: white;
+            min-width: 200px;
+        }
+
+        .node-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .node-detail {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .flow-connector {
+            position: absolute;
+            background: var(--flow-line);
+            z-index: 0;
+        }
+
+        .connector-horizontal {
+            height: 2px;
+            top: 50%;
+            transform: translateY(-1px);
+        }
+
+        .connector-vertical {
+            width: 2px;
+            left: 50%;
+            transform: translateX(-1px);
+        }
+
+        .connector-arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-style: solid;
+        }
+
+        .arrow-right {
+            border-left: 8px solid var(--flow-line);
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            right: -4px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .arrow-down {
+            border-top: 8px solid var(--flow-line);
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .details-panel {
+            background: var(--surface-secondary);
+            padding: 32px 24px;
+            border-left: 1px solid var(--surface-tertiary);
+            overflow-y: auto;
+        }
+
+        .details-header {
+            margin-bottom: 24px;
+        }
+
+        .details-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .details-type {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .details-section {
+            margin-bottom: 24px;
+        }
+
+        .details-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .ingredient-list, .instruction-list {
+            list-style: none;
+        }
+
+        .ingredient-item, .instruction-item {
+            padding: 12px 16px;
+            background: var(--surface-primary);
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        .ingredient-amount {
+            font-weight: 600;
+            color: var(--accent-primary);
+        }
+
+        .instruction-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-primary);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        .timing-info {
+            background: var(--surface-primary);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-top: 16px;
+            border: 1px solid var(--surface-tertiary);
+        }
+
+        .timing-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .timing-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .timing-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .timing-value {
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .progress-indicator {
+            position: absolute;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+        }
+
+        .progress-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--surface-tertiary);
+            transition: var(--transition-smooth);
+        }
+
+        .progress-dot.active {
+            background: var(--accent-primary);
+            transform: scale(1.25);
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-manager">
+        <aside class="sidebar">
+            <h2>Recipe Collection</h2>
+            <ul class="recipe-list">
+                <li class="recipe-item active">
+                    <div class="recipe-title">Pasta Carbonara</div>
+                    <div class="recipe-meta">
+                        <span>25 min</span>
+                        <span>4 servings</span>
+                    </div>
+                </li>
+                <li class="recipe-item">
+                    <div class="recipe-title">Beef Stir Fry</div>
+                    <div class="recipe-meta">
+                        <span>20 min</span>
+                        <span>3 servings</span>
+                    </div>
+                </li>
+                <li class="recipe-item">
+                    <div class="recipe-title">Chocolate Cake</div>
+                    <div class="recipe-meta">
+                        <span>90 min</span>
+                        <span>8 servings</span>
+                    </div>
+                </li>
+                <li class="recipe-item">
+                    <div class="recipe-title">Greek Salad</div>
+                    <div class="recipe-meta">
+                        <span>15 min</span>
+                        <span>4 servings</span>
+                    </div>
+                </li>
+                <li class="recipe-item">
+                    <div class="recipe-title">Chicken Curry</div>
+                    <div class="recipe-meta">
+                        <span>45 min</span>
+                        <span>6 servings</span>
+                    </div>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="timeline-container">
+            <header class="timeline-header">
+                <h1>Pasta Carbonara</h1>
+                <div class="timeline-subtitle">Transformation Timeline</div>
+            </header>
+
+            <div class="flow-timeline">
+                <div class="flow-layer">
+                    <div class="flow-node ingredient" style="margin-left: 20px;">
+                        <div class="node-title">Pasta</div>
+                        <div class="node-detail">400g spaghetti</div>
+                    </div>
+                    <div class="flow-node ingredient" style="margin-left: 60px;">
+                        <div class="node-title">Pancetta</div>
+                        <div class="node-detail">200g diced</div>
+                    </div>
+                    <div class="flow-node ingredient" style="margin-left: 60px;">
+                        <div class="node-title">Eggs</div>
+                        <div class="node-detail">4 large</div>
+                    </div>
+                    <div class="flow-node ingredient" style="margin-left: 60px;">
+                        <div class="node-title">Cheese</div>
+                        <div class="node-detail">100g pecorino</div>
+                    </div>
+                </div>
+
+                <div class="flow-layer">
+                    <div class="flow-node process" style="margin-left: 40px;">
+                        <div class="node-title">Boil Pasta</div>
+                        <div class="node-detail">8-10 minutes</div>
+                    </div>
+                    <div class="flow-node process" style="margin-left: 80px;">
+                        <div class="node-title">Cook Pancetta</div>
+                        <div class="node-detail">4-5 minutes</div>
+                    </div>
+                    <div class="flow-node process" style="margin-left: 100px;">
+                        <div class="node-title">Mix Eggs & Cheese</div>
+                        <div class="node-detail">Until smooth</div>
+                    </div>
+                </div>
+
+                <div class="flow-layer">
+                    <div class="flow-node combine" style="margin-left: 120px;">
+                        <div class="node-title">Combine Hot Pasta</div>
+                        <div class="node-detail">With pancetta & fat</div>
+                    </div>
+                    <div class="flow-node combine" style="margin-left: 80px;">
+                        <div class="node-title">Add Egg Mixture</div>
+                        <div class="node-detail">Toss quickly</div>
+                    </div>
+                </div>
+
+                <div class="flow-layer">
+                    <div class="flow-node final" style="margin-left: 200px;">
+                        <div class="node-title">Pasta Carbonara</div>
+                        <div class="node-detail">Creamy, silky perfection</div>
+                    </div>
+                </div>
+
+                <!-- Flow connectors would be positioned dynamically in a real implementation -->
+                <div class="flow-connector connector-horizontal" style="left: 160px; top: 120px; width: 60px;"></div>
+                <div class="flow-connector connector-horizontal" style="left: 280px; top: 120px; width: 60px;"></div>
+                <div class="flow-connector connector-horizontal" style="left: 400px; top: 120px; width: 60px;"></div>
+                
+                <div class="flow-connector connector-vertical" style="left: 120px; top: 140px; height: 80px;"></div>
+                <div class="flow-connector connector-vertical" style="left: 240px; top: 140px; height: 80px;"></div>
+                <div class="flow-connector connector-vertical" style="left: 440px; top: 140px; height: 80px;"></div>
+
+                <div class="flow-connector connector-horizontal" style="left: 180px; top: 260px; width: 80px;"></div>
+                <div class="flow-connector connector-horizontal" style="left: 380px; top: 260px; width: 100px;"></div>
+
+                <div class="flow-connector connector-vertical" style="left: 200px; top: 280px; height: 80px;"></div>
+                <div class="flow-connector connector-vertical" style="left: 320px; top: 280px; height: 80px;"></div>
+
+                <div class="flow-connector connector-horizontal" style="left: 260px; top: 400px; width: 80px;"></div>
+                <div class="flow-connector connector-vertical" style="left: 300px; top: 420px; height: 80px;"></div>
+            </div>
+
+            <div class="progress-indicator">
+                <div class="progress-dot active"></div>
+                <div class="progress-dot active"></div>
+                <div class="progress-dot active"></div>
+                <div class="progress-dot"></div>
+            </div>
+        </main>
+
+        <aside class="details-panel">
+            <div class="details-header">
+                <div class="details-title">Pasta Carbonara</div>
+                <div class="details-type">Classic Italian</div>
+            </div>
+
+            <div class="details-section">
+                <h3>Ingredients</h3>
+                <ul class="ingredient-list">
+                    <li class="ingredient-item">
+                        <span class="ingredient-amount">400g</span> spaghetti
+                    </li>
+                    <li class="ingredient-item">
+                        <span class="ingredient-amount">200g</span> pancetta, diced
+                    </li>
+                    <li class="ingredient-item">
+                        <span class="ingredient-amount">4</span> large eggs
+                    </li>
+                    <li class="ingredient-item">
+                        <span class="ingredient-amount">100g</span> pecorino romano
+                    </li>
+                    <li class="ingredient-item">
+                        <span class="ingredient-amount">1 tsp</span> black pepper
+                    </li>
+                </ul>
+            </div>
+
+            <div class="details-section">
+                <h3>Key Steps</h3>
+                <ul class="instruction-list">
+                    <li class="instruction-item">
+                        <span class="instruction-number">1</span>
+                        Boil pasta in salted water
+                    </li>
+                    <li class="instruction-item">
+                        <span class="instruction-number">2</span>
+                        Render pancetta until crispy
+                    </li>
+                    <li class="instruction-item">
+                        <span class="instruction-number">3</span>
+                        Whisk eggs with cheese
+                    </li>
+                    <li class="instruction-item">
+                        <span class="instruction-number">4</span>
+                        Combine everything off heat
+                    </li>
+                </ul>
+            </div>
+
+            <div class="timing-info">
+                <div class="timing-row">
+                    <span class="timing-label">Prep Time</span>
+                    <span class="timing-value">10 min</span>
+                </div>
+                <div class="timing-row">
+                    <span class="timing-label">Cook Time</span>
+                    <span class="timing-value">15 min</span>
+                </div>
+                <div class="timing-row">
+                    <span class="timing-label">Total Time</span>
+                    <span class="timing-value">25 min</span>
+                </div>
+                <div class="timing-row">
+                    <span class="timing-label">Servings</span>
+                    <span class="timing-value">4</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+</body>
+</html>

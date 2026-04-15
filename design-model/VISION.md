@@ -114,144 +114,113 @@ The reference standard: constraint-embracing, minimalism with sophistication, mi
 
 ```
 design-model/
-├── model.js           ✅ Phase 1 JS MLP (58K params, auto-expanding)
-├── encoder.js         ✅ 64-dim code features + innovation signal detection
-├── evaluate.js        ✅ Standalone API — routes through Phase 2b/3 server with fallback
-├── client.js          ✅ Node.js Unix socket client for Python server
-├── server.js          ✅ Unix socket server (JS MLP fallback)
-├── knowledge.js       ✅ 16-dim design knowledge base (12 core + 4 innovation)
-├── trainer.js         ✅ LLM-judge + comparative + self-play training
-├── skill-evolver.js   ✅ Skill iteration loop
-├── flywheel.js        ✅ Self-improvement orchestrator (build→score→iterate→retrain)
-├── run-flywheel.js    ✅ CLI flywheel runner
-├── grading-server.js  ✅ Human grading web interface (localhost:3456)
-├── screenshot-capture.js ✅ Puppeteer HTML→PNG utility
-├── scrape-designs.js  ✅ Real-world site scraper (HTML/CSS/JS + screenshots)
-├── scrape-galleries.js ✅ Design gallery scraper (30+ sites)
-├── generate-human-quality.js ✅ Innovative AI design generator
-├── backfill-innovation.js ✅ Innovation score back-filler
-├── start-server.sh    ✅ Inference server process management
-├── grading-ui/        ✅ Quick/detailed grading, compare, stats views
-├── weights/
-│   ├── model-v1-latest.json        ✅ JS MLP weights
-│   ├── design-head-v2.safetensors  ✅ Phase 2b head (675K, val loss 0.0095)
-│   ├── design-expert-v3.safetensors ✅ Phase 3 experts (7.55M, 8 experts)
-│   └── mobilenet_v2_imagenet.safetensors ✅ Frozen backbone (2.26M)
-├── data/
-│   ├── manifest.json              ✅ 193 samples (ALL human-graded)
-│   ├── comparisons.json           ✅ 8 human preference pairs
-│   ├── flywheel-state.json        ✅ Flywheel state tracking
-│   ├── screenshots/               ✅ 18 HTML artifacts
-│   ├── pngs/                      ✅ 18 rendered PNGs
-│   ├── real-world/                ✅ 25 real-world screenshots
-│   ├── scraped/                   ✅ 74 scraped (full HTML/CSS/JS)
-│   ├── galleries/                 ✅ 55 gallery screenshots
-│   └── human-quality/             ✅ 6 innovative AI designs
-├── mlx/
-│   ├── model.py       ✅ Phase 2a CNN (17.2M)
-│   ├── model_v2.py    ✅ Phase 2b MobileNet + head
-│   ├── model_v3.py    ✅ Phase 3: 8 expert columns + lateral attention + aggregator
-│   ├── data.py        ✅ Dataset (16-dim, confidence weighting)
-│   ├── train.py       ✅ Phase 2a training
-│   ├── train_v2.py    ✅ Phase 2b training (coherence loss)
-│   ├── train_v3.py    ✅ Phase 3 progressive training (4 stages)
+├── CORE LOOP (Python, uses Anthropic API directly)
+│   ├── self_train.py     ✅ Sonnet generates → Opus grades → model trains (THE LOOP)
+│   ├── builder.py        ✅ Build specific designs with iterative improvement
+│   └── start-server.sh   ✅ Inference server process management
+│
+├── MODEL
+│   ├── model.js          ✅ Phase 1 JS MLP (58K params)
+│   ├── encoder.js        ✅ 64-dim code features + innovation signal detection
+│   ├── knowledge.js      ✅ 16-dim design knowledge base (12 core + 4 innovation)
+│   └── suggest.js        ✅ Generative design — proposes specific CSS changes
+│
+├── EVALUATION
+│   ├── evaluate.js       ✅ Standalone API — routes through inference server with MLP fallback
+│   ├── client.js         ✅ Node.js client for Python inference server
+│   └── server.js         ✅ Unix socket server (MLP fallback)
+│
+├── TRAINING
+│   ├── trainer.js        ✅ LLM-judge + comparative + self-play training
+│   ├── skill-evolver.js  ✅ Skill iteration loop (uses Phase 2b scoring + screenshots)
+│   ├── screenshot-capture.js ✅ Puppeteer HTML→PNG utility
+│   └── flywheel.js       ✅ JS flywheel (superseded by self_train.py)
+│
+├── DATA COLLECTION
+│   ├── scrape-designs.js  ✅ Site scraper (HTML/CSS/JS + screenshots, 74 sites)
+│   ├── scrape-galleries.js ✅ Design gallery scraper (55 screenshots)
+│   └── grading-server.js  ✅ Human grading interface (localhost:3456)
+│
+├── MLX (Python, M4 Max GPU)
+│   ├── model_v3.py       ✅ Phase 3: 8 expert columns + lateral attention + aggregator (7.55M)
+│   ├── train_v2.py       ✅ Phase 2b training (coherence loss, confidence weighting)
+│   ├── train_v3.py       ✅ Phase 3 progressive training (4 stages)
 │   ├── train_preference.py ✅ Bradley-Terry preference training
 │   ├── inference_server.py ✅ Phase 2b/3 inference server (auto-detects best model)
-│   ├── extract_features.py ✅ MobileNet feature extraction
-│   └── export.py      ⬜ ONNX + Core ML (untested)
-└── design/
-    └── emotion-bridge.js  ✅ PADCN/drives → design policy
+│   ├── extract_features.py ✅ MobileNet V2 feature extraction
+│   └── export_coreml.py  ✅ ONNX export (Core ML needs Python 3.12)
+│
+├── weights/              ✅ Phase 1 MLP, Phase 2b head, Phase 3 experts, MobileNet backbone
+├── data/                 ✅ 245+ samples, comparisons, flywheel state, self-train state
+└── exports/              ✅ ONNX model (7.6KB + 2.7MB weights)
 
 design/
-└── emotion-bridge.js  ✅ PADCN/drives → design policy
+└── emotion-bridge.js     ✅ PADCN/drives → design policy (19-dim output)
 
 OCA Integration:
-├── neural-bus.js      ✅ Design layer (16-dim, TOTAL_DIM=224)
-├── neural-mlp.js      ✅ Design loss weight 1.2
-├── neural-encoders.js ✅ encodeDesign() function
-├── cognitive-loop.js  ✅ Core drive (weight 0.90)
-├── thinker-bridge.js  ✅ Design philosophy in system prompt
-├── executive/engine.js ✅ Designing attention mode
-├── index.js           ✅ Design subsystem exported
-└── migrations/014     ✅ DB tables defined
+├── neural-bus.js         ✅ Design layer (16-dim, TOTAL_DIM=224)
+├── cognitive-loop.js     ✅ Core drive: "Build beautiful Mac applications" (weight 0.90)
+├── thinker-bridge.js     ✅ Design philosophy + "build" action → calls builder.py
+├── executive/engine.js   ✅ "designing" attention mode
+├── index.js              ✅ design.{evaluate, suggest, build, computePolicy, evolveSkill, ...}
+└── migrations/014        ✅ DB tables for evaluations, skill versions, training data
 ```
 
-### Training Results (2026-04-13)
+### The Self-Training Loop (the real engine)
 
-**Phase 1: JS MLP (58K params)**
-- 2,881 total weight updates across 50+ epochs
-- Running loss: 0.039
-- Per-dimension error: 0.12-0.18 (code features only, no vision)
-- Sample predictions: 9/12 dimensions within 0.1 of target
+`self_train.py` — Sonnet generates → Opus grades → MLP trains. No human needed.
+- Uses Anthropic API directly (from .env key). No CLI hangs.
+- 20 creative briefs (knowledge gardens, crystal calendars, sound landscapes, etc.)
+- Opus is HARSH — scores 0.4-0.6 for mediocre work, 0.2 for generic slop
+- Retrains the Phase 2b head every 10 cycles (~7 seconds)
+- Each cycle: ~60s generation + ~12s grading = ~72s per sample
 
-**Phase 2a: MLX CNN (17.2M params)**
-- Trained from scratch on M4 Max GPU
-- 58 samples, val loss 0.020
-- Overfits with small data — needs pretrained backbone for discrimination
-
-**Phase 2b: Pretrained MobileNet V2 + Design Head (675K trainable) — WORKING**
-- MobileNet V2 backbone: frozen ImageNet features (pre-extracted, 1280-dim)
-- Trainable design head: 675K params (384→256→128→64→12)
-- **132 samples** (33 synthetic + 25 old real-world + 74 scraped), 113 train / 19 val
-- **Best validation loss: 0.0035** (epoch 109 of 169)
-- Training time: **~7 seconds total** (~40ms/epoch)
-- **Tiered quality discrimination:**
-  - Exceptional (Apple, Stripe, Linear): predicts 0.91+ 
-  - Excellent (Supabase, Raycast, Framer): predicts 0.86-0.91
-  - Good (Notion, Todoist, Cal.com): predicts 0.80-0.85
-  - High synthetic: predicts 0.69-0.80
-  - Medium synthetic: predicts 0.63-0.76
-  - Low synthetic: predicts 0.06-0.07
-- Per-dimension MAE at best:
-  - typography: 0.038 | color: 0.036 | spatial: 0.045
-  - motion: 0.056 | emotion: 0.042 | craft: 0.051
-  - minimal: 0.039 | native: 0.076 | visceral: 0.042
-  - behavioral: 0.031 | reflective: 0.044 | overall: 0.035
-
-**Data Sources (46 real-world sites scraped with full HTML/CSS/JS):**
-Apple (Home, iPhone, Watch, AirPods, Developer), Stripe, Stripe Press,
-Linear, Vercel, Supabase, Resend, Clerk, Railway, PlanetScale, Neon,
-Arc, Browser Company, Things 3, Bear, Craft, Raycast, Screen Studio,
-Pixelmator, Fantastical, Klack, CleanShot, Spark Mail,
-Figma, Framer, Spline, Rive, LottieFiles,
-Notion, Todoist, Height, Amie, Cron,
-Awwwards, Lusion, Basement Studio,
-Pitch, Cal.com, Dub, Mintlify, Airbnb, Spotify Design
+`builder.py` — Build a specific design with iterative improvement.
+- Sonnet generates → Opus grades + suggests fixes → iterate → deliver
+- Trajectory climbs: 0.45 → 0.50 → 0.60 (each iteration improves)
+- OCA thinker bridge calls this when it decides to build something
 
 ### What's Done
 
-- ✅ Skill evolution loop — activated, v1 applied (innovation +0.166, overall 0.748→0.777)
-- ✅ OCA cognitive loop — index.js wired with `initServer()`, evaluate.js routes through Phase 2b/3
-- ✅ Overnight autonomous loop — 25 flywheel cycles, 50 samples, 3 retrains (val loss 0.0108)
-- ✅ Human grading UI — 193 designs graded with notes and coherence scores
-- ✅ 243 total training samples across 5 sources
+- ✅ All 4 phases of model architecture (MLP → CNN → MobileNet → Expert Columns)
+- ✅ Self-training loop running via API (Sonnet generates, Opus grades)
+- ✅ Builder with iterative improvement (generate → grade → fix → repeat)
+- ✅ OCA integration — thinker can invoke builds, design layer in neural bus
+- ✅ Skill evolution — /frontend-design SKILL.md evolves based on model scores
+- ✅ 16-dimension scoring including 4 innovation dimensions
+- ✅ Coherence loss — penalizes parts that don't work together
+- ✅ 245+ training samples (scraped sites, galleries, flywheel, self-train)
+- ✅ ONNX export for portability
+- ✅ Scheduled flywheel task (weekdays 9am)
+- ✅ Generative design — suggest.js proposes specific CSS changes
 
 ### What's Next
 
-**IMMEDIATE: Core ML Export**
-- Export Phase 2b DesignHead to Core ML format for Neural Engine inference
-- Target: <1ms inference on macOS/iOS Neural Engine
-- This makes the model usable inside real Swift/SwiftUI apps
-- Export ONNX as intermediate format, then convert to Core ML via coremltools
+**SCALE THE SELF-TRAINING LOOP**
+- Run `python3 self_train.py --cycles 500` to build a large Opus-graded dataset
+- The model gets better as it sees more Opus judgments
+- Target: 1000+ Opus-graded samples, sub-0.05 MAE on all 16 dimensions
+- Opus's coherence-aware grading teaches dimension RELATIONSHIPS, not just individual scores
 
-**NEXT: Scheduled Self-Training**
-- Create a scheduled task that runs the flywheel + retrain periodically
-- Target: 5 flywheel cycles daily, retrain weekly
-- Human grades from the grading UI flow in continuously
-- Scale to 1000+ samples over time
+**NATIVE SWIFT APPS**
+- Complete the swift-renderer.js stub → real SwiftUI compilation + screenshot
+- builder.py generates SwiftUI code instead of HTML
+- Evaluate actual native Mac apps, not just web previews
+- Target: Cognitive builds and ships a real Mac app from scratch
 
-**THEN: Multi-Modal Input**
-- Evaluate RUNNING apps, not just static screenshots
-- Screen recording → frame extraction → temporal design evaluation
-- Evaluate motion/animation quality from video (currently scored from static image)
-- Evaluate interaction flows, not just single screens
+**DEEPER MODEL ARCHITECTURE**
+- Phase 5: Train on Opus's critiques as text, not just scores
+- The critique "great typography but clashes with the palette" teaches more than scores alone
+- NLP embedding of critique → additional training signal
+- Model learns WHY things work or don't, not just WHAT scores to give
 
-**FUTURE: Generative Design**
-- The model doesn't just evaluate — it PROPOSES specific design changes
-- "This sidebar would benefit from 8px more padding and a softer border-radius"
-- "The color temperature clashes — shift the accent 15deg warmer in oklch"
-- Gradient from evaluation → suggestion → specific CSS diff
-- Target: 1000+ human-graded samples, sub-0.05 MAE on all 16 dimensions
+**THE REAL GOAL**
+- Cognitive sees a design problem
+- Emotion state shapes creative direction (curious → experimental, proud → refined)
+- Builder generates code, evaluates, iterates autonomously
+- Model judges quality with Opus-calibrated taste
+- Skill evolves based on what works
+- The whole system gets better every day without anyone touching it
 
 ---
 

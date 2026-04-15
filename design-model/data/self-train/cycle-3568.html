@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --bedrock: #2a1810;
+            --limestone: #4a3426;
+            --sandstone: #6b4e3d;
+            --clay: #8b6f47;
+            --soil: #a08762;
+            --surface: #b8a082;
+            
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b6b6b;
+            --text-inverse: #f5f5f5;
+            --accent: #d4af37;
+            --warning: #c44536;
+            --success: #2d5016;
+            
+            --shadow-soft: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-medium: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-deep: inset 0 2px 8px rgba(0,0,0,0.2);
+            
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --border-radius: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f8f6f0 0%, #e8e2d4 100%);
+            color: var(--text-primary);
+            line-height: 1.6;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 340px 1fr 280px;
+            grid-template-rows: 80px 1fr;
+            grid-template-areas: 
+                "header header header"
+                "sidebar main panel";
+            height: 100vh;
+            gap: 0;
+        }
+
+        .header {
+            grid-area: header;
+            background: var(--text-inverse);
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .logo::before {
+            content: "⛰️";
+            font-size: 24px;
+        }
+
+        .budget-overview {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+        }
+
+        .budget-item {
+            text-align: center;
+        }
+
+        .budget-value {
+            font-weight: 600;
+            font-size: 18px;
+            color: var(--text-primary);
+        }
+
+        .budget-label {
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--text-inverse);
+            border-right: 1px solid rgba(0,0,0,0.06);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .add-expense {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            font-size: 14px;
+            width: 100%;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 32px;
+        }
+
+        .add-expense:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .expense-form {
+            display: none;
+            gap: 16px;
+            flex-direction: column;
+            margin-bottom: 24px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: var(--border-radius);
+        }
+
+        .expense-form.active {
+            display: flex;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input, .form-select {
+            padding: 10px 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid rgba(0,0,0,0.1);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .recent-expenses {
+            margin-top: 24px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+
+        .expense-details {
+            flex: 1;
+        }
+
+        .expense-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .expense-category {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .expense-amount {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--warning);
+        }
+
+        .main {
+            grid-area: main;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .geological-view {
+            height: 100%;
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-deep);
+        }
+
+        .layer {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            transition: var(--transition);
+            cursor: pointer;
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .layer:hover {
+            transform: translateX(8px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .layer-surface {
+            background: linear-gradient(90deg, var(--surface) 0%, #c4b896 100%);
+            height: 14.28%;
+            color: var(--text-primary);
+        }
+
+        .layer-soil {
+            background: linear-gradient(90deg, var(--soil) 0%, #94956f 100%);
+            height: 14.28%;
+            color: var(--text-inverse);
+        }
+
+        .layer-clay {
+            background: linear-gradient(90deg, var(--clay) 0%, #7f6b42 100%);
+            height: 14.28%;
+            color: var(--text-inverse);
+        }
+
+        .layer-sandstone {
+            background: linear-gradient(90deg, var(--sandstone) 0%, #5f4538 100%);
+            height: 14.28%;
+            color: var(--text-inverse);
+        }
+
+        .layer-limestone {
+            background: linear-gradient(90deg, var(--limestone) 0%, #3e2f21 100%);
+            height: 14.28%;
+            color: var(--text-inverse);
+        }
+
+        .layer-bedrock {
+            background: linear-gradient(90deg, var(--bedrock) 0%, #1f140b 100%);
+            height: 14.32%;
+            color: var(--text-inverse);
+        }
+
+        .layer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .layer-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .layer-name {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .layer-description {
+            font-size: 13px;
+            opacity: 0.8;
+            font-weight: 400;
+        }
+
+        .layer-amount {
+            text-align: right;
+        }
+
+        .layer-spending {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .layer-percentage {
+            font-size: 12px;
+            opacity: 0.7;
+            font-weight: 500;
+        }
+
+        .panel {
+            grid-area: panel;
+            background: var(--text-inverse);
+            border-left: 1px solid rgba(0,0,0,0.06);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .insights-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--accent);
+        }
+
+        .insights-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .insight-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 13px;
+        }
+
+        .insight-label {
+            color: var(--text-secondary);
+        }
+
+        .insight-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .warning-card {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 16px;
+            border-radius: var(--border-radius);
+        }
+
+        .warning-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 8px;
+        }
+
+        .warning-text {
+            font-size: 12px;
+            color: #991b1b;
+            line-height: 1.5;
+        }
+
+        .depth-indicator {
+            position: absolute;
+            right: 32px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 20px 16px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-medium);
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        .depth-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 1440px) {
+            body {
+                width: 100%;
+            }
+            
+            .container {
+                grid-template-columns: 300px 1fr 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">Geological Spending</div>
+            <div class="budget-overview">
+                <div class="budget-item">
+                    <div class="budget-value">$4,247</div>
+                    <div class="budget-label">Monthly Spend</div>
+                </div>
+                <div class="budget-item">
+                    <div class="budget-value">$5,000</div>
+                    <div class="budget-label">Monthly Budget</div>
+                </div>
+                <div class="budget-item">
+                    <div class="budget-value">$753</div>
+                    <div class="budget-label">Remaining</div>
+                </div>
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <button class="add-expense" onclick="toggleExpenseForm()">+ Add Expense</button>
+            
+            <form class="expense-form" id="expenseForm">
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" placeholder="Coffee, groceries...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="number" class="form-input" placeholder="0.00" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Layer</label>
+                    <select class="form-select">
+                        <option value="surface">Surface - Entertainment & Luxury</option>
+                        <option value="soil">Soil - Lifestyle & Social</option>
+                        <option value="clay">Clay - Health & Education</option>
+                        <option value="sandstone">Sandstone - Transportation</option>
+                        <option value="limestone">Limestone - Housing & Utilities</option>
+                        <option value="bedrock">Bedrock - Food & Survival</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Add</button>
+                    <button type="button" class="btn-secondary" onclick="toggleExpenseForm()">Cancel</button>
+                </div>
+            </form>
+
+            <div class="recent-expenses">
+                <h3 class="section-title">Recent Expenses</h3>
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Spotify Premium</div>
+                        <div class="expense-category">Surface</div>
+                    </div>
+                    <div class="expense-amount">$15.99</div>
+                </div>
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Grocery Shopping</div>
+                        <div class="expense-category">Bedrock</div>
+                    </div>
+                    <div class="expense-amount">$127.84</div>
+                </div>
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Gas Station</div>
+                        <div class="expense-category">Sandstone</div>
+                    </div>
+                    <div class="expense-amount">$45.20</div>
+                </div>
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Electric Bill</div>
+                        <div class="expense-category">Limestone</div>
+                    </div>
+                    <div class="expense-amount">$89.67</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <div class="geological-view">
+                <div class="layer layer-surface">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Surface</div>
+                            <div class="layer-description">Entertainment, luxury, discretionary</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$298</div>
+                            <div class="layer-percentage">7.0%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="layer layer-soil">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Organic Soil</div>
+                            <div class="layer-description">Lifestyle, dining out, social activities</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$542</div>
+                            <div class="layer-percentage">12.8%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="layer layer-clay">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Clay</div>
+                            <div class="layer-description">Health, fitness, education, growth</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$423</div>
+                            <div class="layer-percentage">10.0%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="layer layer-sandstone">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Sandstone</div>
+                            <div class="layer-description">Transportation, commuting, travel</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$634</div>
+                            <div class="layer-percentage">14.9%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="layer layer-limestone">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Limestone</div>
+                            <div class="layer-description">Housing, utilities, insurance</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$1,847</div>
+                            <div class="layer-percentage">43.5%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="layer layer-bedrock">
+                    <div class="layer-content">
+                        <div class="layer-info">
+                            <div class="layer-name">Bedrock</div>
+                            <div class="layer-description">Food, water, absolute necessities</div>
+                        </div>
+                        <div class="layer-amount">
+                            <div class="layer-spending">$503</div>
+                            <div class="layer-percentage">11.8%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="depth-indicator">
+                <div class="depth-title">Necessity Depth</div>
+                <div>Surface ↑</div>
+                <div>Discretionary</div>
+                <div>↓</div>
+                <div>Essential</div>
+                <div>↓ Bedrock</div>
+            </div>
+        </main>
+
+        <aside class="panel">
+            <div class="insights-card">
+                <h3 class="insights-title">Monthly Insights</h3>
+                <div class="insight-item">
+                    <span class="insight-label">Deepest expense</span>
+                    <span class="insight-value">Bedrock 78%</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Surface spending</span>
+                    <span class="insight-value">$298 (7%)</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Stability score</span>
+                    <span class="insight-value">8.2/10</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Avg. depth</span>
+                    <span class="insight-value">Limestone</span>
+                </div>
+            </div>
+
+            <div class="insights-card">
+                <h3 class="insights-title">Category Trends</h3>
+                <div class="insight-item">
+                    <span class="insight-label">Housing costs</span>
+                    <span class="insight-value">↑ 3.2%</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Food expenses</span>
+                    <span class="insight-value">→ Stable</span>
+                </div>
+                <div class="insight-item">
+                    <span class="insight-label">Entertainment</span>
+                    <span class="insight-value">↓ 12%</span>
+                </div>
+            </div>
+
+            <div class="warning-card">
+                <h4 class="warning-title">⚠️ Budget Alert</h4>
+                <p class="warning-text">You're approaching your monthly limit. Consider reducing surface-level expenses this week.</p>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        function toggleExpenseForm() {
+            const form = document.getElementById('expenseForm');
+            form.classList.toggle('active');
+        }
+
+        // Add some interactivity to layers
+        document.querySelectorAll('.layer').forEach(layer => {
+            layer.addEventListener('click', function() {
+                const layerName = this.querySelector('.layer-name').textContent;
+                console.log(`Selected layer: ${layerName}`);
+            });
+        });
+    </script>
+</body>
+</html>

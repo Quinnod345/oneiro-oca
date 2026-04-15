@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Levels Calendar</title>
+    <style>
+        :root {
+            --bg-primary: #fafbfc;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #1a1d29;
+            --text-secondary: #6c7293;
+            --text-muted: #9aa0b5;
+            --border-light: #e8ecf4;
+            --border-medium: #d4dceb;
+            --energy-peak: #2d5a27;
+            --energy-high: #52c41a;
+            --energy-medium: #faad14;
+            --energy-low: #ff7875;
+            --energy-valley: #cf1322;
+            --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-moderate: 0 4px 8px rgba(0, 0, 0, 0.08);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            padding: var(--spacing-xl);
+            gap: var(--spacing-xl);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            background: var(--bg-secondary);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: var(--border-light);
+            color: var(--text-primary);
+        }
+
+        .current-month {
+            font-weight: 500;
+            font-size: 16px;
+            min-width: 140px;
+            text-align: center;
+        }
+
+        .calendar {
+            background: white;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-moderate);
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .calendar-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .day-header {
+            padding: var(--spacing-md);
+            text-align: center;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+        }
+
+        .day-cell {
+            border-right: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+            padding: var(--spacing-md);
+            position: relative;
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .day-cell:nth-child(7n) {
+            border-right: none;
+        }
+
+        .day-cell:hover {
+            background: var(--bg-primary);
+        }
+
+        .day-number {
+            font-weight: 500;
+            margin-bottom: var(--spacing-sm);
+            font-size: 14px;
+        }
+
+        .energy-chart {
+            display: flex;
+            align-items: end;
+            height: 40px;
+            gap: 2px;
+        }
+
+        .energy-bar {
+            flex: 1;
+            border-radius: 2px 2px 0 0;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .energy-bar:hover {
+            opacity: 0.8;
+            transform: scaleY(1.05);
+        }
+
+        /* Energy level patterns */
+        .day-cell:nth-child(1) .energy-bar:nth-child(1) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(2) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(3) { height: 90%; background: var(--energy-peak); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(4) { height: 40%; background: var(--energy-low); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(5) { height: 20%; background: var(--energy-valley); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(6) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(7) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(1) .energy-bar:nth-child(8) { height: 50%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(2) .energy-bar:nth-child(1) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(2) { height: 95%; background: var(--energy-peak); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(3) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(4) { height: 35%; background: var(--energy-low); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(5) { height: 15%; background: var(--energy-valley); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(6) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(7) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(2) .energy-bar:nth-child(8) { height: 45%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(3) .energy-bar:nth-child(1) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(2) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(3) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(4) { height: 45%; background: var(--energy-low); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(5) { height: 25%; background: var(--energy-valley); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(6) { height: 60%; background: var(--energy-medium); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(7) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(3) .energy-bar:nth-child(8) { height: 40%; background: var(--energy-low); }
+
+        .day-cell:nth-child(4) .energy-bar:nth-child(1) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(2) { height: 90%; background: var(--energy-peak); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(3) { height: 95%; background: var(--energy-peak); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(4) { height: 30%; background: var(--energy-low); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(5) { height: 10%; background: var(--energy-valley); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(6) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(7) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(4) .energy-bar:nth-child(8) { height: 55%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(5) .energy-bar:nth-child(1) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(2) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(3) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(4) { height: 40%; background: var(--energy-low); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(5) { height: 20%; background: var(--energy-valley); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(6) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(7) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(5) .energy-bar:nth-child(8) { height: 50%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(6) .energy-bar:nth-child(1) { height: 60%; background: var(--energy-medium); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(2) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(3) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(4) { height: 50%; background: var(--energy-medium); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(5) { height: 35%; background: var(--energy-low); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(6) { height: 55%; background: var(--energy-medium); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(7) { height: 60%; background: var(--energy-medium); }
+        .day-cell:nth-child(6) .energy-bar:nth-child(8) { height: 45%; background: var(--energy-low); }
+
+        .day-cell:nth-child(7) .energy-bar:nth-child(1) { height: 55%; background: var(--energy-medium); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(2) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(3) { height: 60%; background: var(--energy-medium); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(4) { height: 45%; background: var(--energy-low); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(5) { height: 30%; background: var(--energy-low); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(6) { height: 50%; background: var(--energy-medium); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(7) { height: 55%; background: var(--energy-medium); }
+        .day-cell:nth-child(7) .energy-bar:nth-child(8) { height: 40%; background: var(--energy-low); }
+
+        /* Repeat similar patterns for other weeks */
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(1) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(2) { height: 90%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(3) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(4) { height: 35%; background: var(--energy-low); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(5) { height: 15%; background: var(--energy-valley); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(6) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(7) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(n+8):nth-child(-n+14) .energy-bar:nth-child(8) { height: 50%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(1) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(2) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(3) { height: 90%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(4) { height: 40%; background: var(--energy-low); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(5) { height: 20%; background: var(--energy-valley); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(6) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(7) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(n+15):nth-child(-n+21) .energy-bar:nth-child(8) { height: 55%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(1) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(2) { height: 95%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(3) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(4) { height: 30%; background: var(--energy-low); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(5) { height: 10%; background: var(--energy-valley); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(6) { height: 75%; background: var(--energy-high); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(7) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(n+22):nth-child(-n+28) .energy-bar:nth-child(8) { height: 60%; background: var(--energy-medium); }
+
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(1) { height: 70%; background: var(--energy-high); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(2) { height: 80%; background: var(--energy-high); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(3) { height: 85%; background: var(--energy-peak); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(4) { height: 45%; background: var(--energy-low); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(5) { height: 25%; background: var(--energy-valley); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(6) { height: 60%; background: var(--energy-medium); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(7) { height: 65%; background: var(--energy-medium); }
+        .day-cell:nth-child(n+29) .energy-bar:nth-child(8) { height: 50%; background: var(--energy-medium); }
+
+        .other-month {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .other-month .energy-chart {
+            opacity: 0.3;
+        }
+
+        .legend {
+            position: absolute;
+            top: var(--spacing-xl);
+            right: var(--spacing-xl);
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            box-shadow: var(--shadow-moderate);
+        }
+
+        .legend-title {
+            font-weight: 500;
+            margin-bottom: var(--spacing-sm);
+            font-size: 14px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-xs);
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 8px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Energy Levels Calendar</h1>
+            <div class="date-nav">
+                <button class="nav-btn">‹</button>
+                <div class="current-month">November 2024</div>
+                <button class="nav-btn">›</button>
+            </div>
+        </div>
+
+        <div class="calendar">
+            <div class="calendar-header">
+                <div class="day-header">Sun</div>
+                <div class="day-header">Mon</div>
+                <div class="day-header">Tue</div>
+                <div class="day-header">Wed</div>
+                <div class="day-header">Thu</div>
+                <div class="day-header">Fri</div>
+                <div class="day-header">Sat</div>
+            </div>
+
+            <div class="calendar-grid">
+                <div class="day-cell other-month">
+                    <div class="day-number">27</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">28</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">29</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">30</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">31</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">1</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">2</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell">
+                    <div class="day-number">3</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">4</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">5</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">6</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">7</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">8</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">9</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell">
+                    <div class="day-number">10</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">11</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">12</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">13</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">14</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">15</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">16</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell">
+                    <div class="day-number">17</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">18</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">19</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">20</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">21</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">22</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">23</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell">
+                    <div class="day-number">24</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">25</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">26</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">27</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">28</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">29</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell">
+                    <div class="day-number">30</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+
+                <div class="day-cell other-month">
+                    <div class="day-number">1</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">2</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">3</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">4</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">5</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">6</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+                <div class="day-cell other-month">
+                    <div class="day-number">7</div>
+                    <div class="energy-chart">
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                        <div class="energy-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-title">Energy Levels</div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--energy-peak)"></div>
+                <span>Peak (Morning)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--energy-high)"></div>
+                <span>High</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--energy-medium)"></div>
+                <span>Medium</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--energy-low)"></div>
+                <span>Low</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--energy-valley)"></div>
+                <span>Valley (Post-lunch)</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State - Menu Bar App</title>
+    <style>
+        :root {
+            --primary-bg: #1c1c1e;
+            --secondary-bg: #2c2c2e;
+            --tertiary-bg: #3a3a3c;
+            --accent-blue: #007aff;
+            --accent-green: #32d74b;
+            --accent-orange: #ff9500;
+            --accent-red: #ff453a;
+            --text-primary: #ffffff;
+            --text-secondary: #98989d;
+            --text-tertiary: #636366;
+            --divider: rgba(255, 255, 255, 0.1);
+            --shadow-light: rgba(0, 0, 0, 0.2);
+            --shadow-heavy: rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, #1a1a1c 0%, #2a2a2e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            font-weight: 400;
+            font-size: 14px;
+            line-height: 1.4;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: rgba(28, 28, 30, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--divider);
+            z-index: 100;
+        }
+
+        .ambient-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.3;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 122, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(50, 215, 75, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 60% 20%, rgba(255, 149, 0, 0.06) 0%, transparent 50%);
+            animation: ambientPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes ambientPulse {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.3; }
+            50% { transform: scale(1.1) rotate(1deg); opacity: 0.5; }
+        }
+
+        .main-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;
+            height: 240px;
+        }
+
+        .focus-indicator {
+            width: 100%;
+            height: 100%;
+            border-radius: 24px;
+            background: var(--secondary-bg);
+            border: 1px solid var(--divider);
+            box-shadow: 
+                0 20px 40px var(--shadow-heavy),
+                0 8px 16px var(--shadow-light),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .focus-indicator:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 25px 50px var(--shadow-heavy),
+                0 12px 20px var(--shadow-light),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .focus-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            box-shadow: 
+                0 0 0 8px rgba(0, 122, 255, 0.2),
+                0 0 0 16px rgba(0, 122, 255, 0.1),
+                0 8px 16px rgba(0, 122, 255, 0.3);
+            animation: focusPulse 3s ease-in-out infinite;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes focusPulse {
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1);
+                box-shadow: 
+                    0 0 0 8px rgba(0, 122, 255, 0.2),
+                    0 0 0 16px rgba(0, 122, 255, 0.1),
+                    0 8px 16px rgba(0, 122, 255, 0.3);
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(1.05);
+                box-shadow: 
+                    0 0 0 12px rgba(0, 122, 255, 0.3),
+                    0 0 0 24px rgba(0, 122, 255, 0.15),
+                    0 12px 24px rgba(0, 122, 255, 0.4);
+            }
+        }
+
+        .focus-state-label {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            opacity: 0.8;
+            animation: labelFade 4s ease-in-out infinite;
+        }
+
+        @keyframes labelFade {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .orbital-elements {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .orbital {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .orbital-1 {
+            width: 140px;
+            height: 140px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: rotate 20s linear infinite;
+        }
+
+        .orbital-2 {
+            width: 180px;
+            height: 180px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: rotate 30s linear infinite reverse;
+            opacity: 0.6;
+        }
+
+        @keyframes rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .focus-particles {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .particle-1 {
+            top: 20%;
+            left: 30%;
+            animation-delay: 0s;
+        }
+
+        .particle-2 {
+            top: 70%;
+            right: 25%;
+            animation-delay: 2s;
+            background: var(--accent-green);
+        }
+
+        .particle-3 {
+            bottom: 30%;
+            left: 20%;
+            animation-delay: 4s;
+            background: var(--accent-orange);
+        }
+
+        @keyframes float {
+            0%, 100% { 
+                transform: translateY(0px) scale(1);
+                opacity: 0.6;
+            }
+            50% { 
+                transform: translateY(-10px) scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        .menu-bar-icon {
+            position: absolute;
+            top: 4px;
+            right: 20px;
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--accent-blue);
+            opacity: 0.8;
+            animation: iconPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes iconPulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .focus-indicator.active .focus-core {
+            background: var(--accent-green);
+            box-shadow: 
+                0 0 0 8px rgba(50, 215, 75, 0.2),
+                0 0 0 16px rgba(50, 215, 75, 0.1),
+                0 8px 16px rgba(50, 215, 75, 0.3);
+        }
+
+        .focus-indicator.break .focus-core {
+            background: var(--accent-orange);
+            box-shadow: 
+                0 0 0 8px rgba(255, 149, 0, 0.2),
+                0 0 0 16px rgba(255, 149, 0, 0.1),
+                0 8px 16px rgba(255, 149, 0, 0.3);
+        }
+
+        .focus-indicator.inactive .focus-core {
+            background: var(--text-tertiary);
+            box-shadow: 
+                0 0 0 8px rgba(99, 99, 102, 0.2),
+                0 0 0 16px rgba(99, 99, 102, 0.1),
+                0 8px 16px rgba(99, 99, 102, 0.2);
+            animation-duration: 6s;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-bar-icon"></div>
+    </div>
+    
+    <div class="ambient-background"></div>
+    
+    <div class="main-container">
+        <div class="focus-indicator">
+            <div class="orbital-elements">
+                <div class="orbital orbital-1"></div>
+                <div class="orbital orbital-2"></div>
+            </div>
+            
+            <div class="focus-core"></div>
+            
+            <div class="focus-particles particle-1"></div>
+            <div class="focus-particles particle-2"></div>
+            <div class="focus-particles particle-3"></div>
+            
+            <div class="focus-state-label">Deep Focus</div>
+        </div>
+    </div>
+</body>
+</html>

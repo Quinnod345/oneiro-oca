@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Player</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --deep-space: #1a1b2e;
+            --nebula-purple: #16213e;
+            --star-white: #f8f9ff;
+            --star-glow: #64b5f6;
+            --listened-glow: #ff9800;
+            --constellation-line: #2c3e66;
+            --ui-surface: rgba(26, 27, 46, 0.85);
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(ellipse at 30% 20%, var(--nebula-purple) 0%, var(--deep-space) 40%, var(--void-black) 100%);
+            color: var(--text-primary);
+            height: 900px;
+            width: 1440px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .cosmic-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, var(--star-white), transparent),
+                radial-gradient(2px 2px at 40px 70px, var(--star-white), transparent),
+                radial-gradient(1px 1px at 90px 40px, var(--star-white), transparent),
+                radial-gradient(1px 1px at 130px 80px, var(--star-white), transparent),
+                radial-gradient(2px 2px at 160px 30px, var(--star-white), transparent);
+            background-repeat: repeat;
+            background-size: 200px 100px;
+            opacity: 0.4;
+            animation: twinkle 8s infinite alternate;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.3; }
+            100% { opacity: 0.6; }
+        }
+
+        .constellation-field {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .constellation {
+            position: absolute;
+        }
+
+        .constellation-line {
+            position: absolute;
+            background: linear-gradient(90deg, var(--constellation-line), transparent);
+            height: 1px;
+            transform-origin: left center;
+            opacity: 0.6;
+        }
+
+        .episode {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--star-white);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: all;
+            box-shadow: 0 0 8px rgba(248, 249, 255, 0.3);
+        }
+
+        .episode:hover {
+            transform: scale(1.4);
+            box-shadow: 0 0 16px var(--star-glow);
+        }
+
+        .episode.listened {
+            background: var(--listened-glow);
+            box-shadow: 0 0 16px var(--listened-glow);
+            animation: pulse-glow 3s infinite ease-in-out;
+        }
+
+        .episode.current {
+            background: var(--star-glow);
+            transform: scale(1.6);
+            box-shadow: 0 0 24px var(--star-glow);
+            animation: current-pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { 
+                box-shadow: 0 0 16px var(--listened-glow);
+                opacity: 1;
+            }
+            50% { 
+                box-shadow: 0 0 24px var(--listened-glow), 0 0 36px rgba(255, 152, 0, 0.3);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes current-pulse {
+            0%, 100% { 
+                transform: scale(1.6);
+                box-shadow: 0 0 24px var(--star-glow);
+            }
+            50% { 
+                transform: scale(1.8);
+                box-shadow: 0 0 32px var(--star-glow), 0 0 48px rgba(100, 181, 246, 0.4);
+            }
+        }
+
+        .player-interface {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: var(--ui-surface);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(248, 249, 255, 0.1);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+        }
+
+        .episode-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .series-name {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .episode-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(248, 249, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--star-glow);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            animation: progress-shimmer 3s infinite ease-in-out;
+        }
+
+        @keyframes progress-shimmer {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .time-display {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin: 0 40px;
+        }
+
+        .control-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            background: rgba(248, 249, 255, 0.1);
+            border-radius: 50%;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 18px;
+        }
+
+        .control-btn:hover {
+            background: rgba(248, 249, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .play-btn {
+            width: 64px;
+            height: 64px;
+            background: var(--star-glow);
+            font-size: 24px;
+            color: var(--void-black);
+        }
+
+        .play-btn:hover {
+            background: var(--star-white);
+            box-shadow: 0 8px 24px rgba(100, 181, 246, 0.3);
+        }
+
+        .series-selector {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            background: var(--ui-surface);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(248, 249, 255, 0.1);
+            min-width: 280px;
+        }
+
+        .series-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .series-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            margin-bottom: 4px;
+        }
+
+        .series-item:hover {
+            background: rgba(248, 249, 255, 0.05);
+        }
+
+        .series-item.active {
+            background: rgba(100, 181, 246, 0.1);
+            border: 1px solid rgba(100, 181, 246, 0.3);
+        }
+
+        .series-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 12px;
+            opacity: 0.7;
+        }
+
+        .series-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .series-name-item {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .series-progress {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .episode-tooltip {
+            position: absolute;
+            background: var(--void-black);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            margin-top: -8px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            border: 1px solid rgba(248, 249, 255, 0.1);
+        }
+
+        .episode:hover + .episode-tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmic-bg"></div>
+
+    <div class="constellation-field">
+        <!-- Cosmic Mysteries Constellation -->
+        <div class="constellation" style="top: 180px; left: 300px;">
+            <div class="constellation-line" style="width: 80px; transform: rotate(25deg);"></div>
+            <div class="episode listened" style="top: 0; left: 0;" data-episode="The Fermi Paradox"></div>
+            <div class="episode listened" style="top: 20px; left: 75px;" data-episode="Dark Matter Mysteries"></div>
+            
+            <div class="constellation-line" style="width: 65px; top: 20px; left: 75px; transform: rotate(-15deg);"></div>
+            <div class="episode listened" style="top: 8px; left: 135px;" data-episode="Quantum Consciousness"></div>
+            
+            <div class="constellation-line" style="width: 90px; top: 8px; left: 135px; transform: rotate(35deg);"></div>
+            <div class="episode current" style="top: 60px; left: 210px;" data-episode="Time Travel Paradoxes"></div>
+            
+            <div class="constellation-line" style="width: 70px; top: 60px; left: 210px; transform: rotate(-45deg);"></div>
+            <div class="episode" style="top: 20px; left: 270px;" data-episode="Multiverse Theory"></div>
+        </div>
+
+        <!-- Tech Futures Constellation -->
+        <div class="constellation" style="top: 350px; left: 600px;">
+            <div class="constellation-line" style="width: 95px; transform: rotate(15deg);"></div>
+            <div class="episode listened" style="top: 0; left: 0;" data-episode="AI Consciousness"></div>
+            <div class="episode listened" style="top: 25px; left: 90px;" data-episode="Neural Interfaces"></div>
+            
+            <div class="constellation-line" style="width: 75px; top: 25px; left: 90px; transform: rotate(45deg);"></div>
+            <div class="episode listened" style="top: 80px; left: 145px;" data-episode="Quantum Computing"></div>
+            
+            <div class="constellation-line" style="width: 85px; top: 80px; left: 145px; transform: rotate(-30deg);"></div>
+            <div class="episode" style="top: 45px; left: 220px;" data-episode="Digital Immortality"></div>
+            
+            <div class="constellation-line" style="width: 60px; top: 0; left: 0; transform: rotate(-25deg);"></div>
+            <div class="episode listened" style="top: -25px; left: -45px;" data-episode="Synthetic Biology"></div>
+        </div>
+
+        <!-- Ancient Wisdom Constellation -->
+        <div class="constellation" style="top: 120px; left: 950px;">
+            <div class="constellation-line" style="width: 70px; transform: rotate(60deg);"></div>
+            <div class="episode listened" style="top: 0; left: 0;" data-episode="Stoic Philosophy"></div>
+            <div class="episode listened" style="top: 60px; left: 35px;" data-episode="Eastern Meditation"></div>
+            
+            <div class="constellation-line" style="width: 80px; top: 60px; left: 35px; transform: rotate(-20deg);"></div>
+            <div class="episode" style="top: 35px; left: 110px;" data-episode="Indigenous Knowledge"></div>
+            
+            <div class="constellation-line" style="width: 65px; top: 0; left: 0; transform: rotate(-35deg);"></div>
+            <div class="episode listened" style="top: -35px; left: -40px;" data-episode="Hermetic Traditions"></div>
+        </div>
+
+        <!-- Human Stories Constellation -->
+        <div class="constellation" style="top: 450px; left: 200px;">
+            <div class="constellation-line" style="width: 100px; transform: rotate(10deg);"></div>
+            <div class="episode listened" style="top: 0; left: 0;" data-episode="Hidden Histories"></div>
+            <div class="episode listened" style="top: 18px; left: 95px;" data-episode="Lost Civilizations"></div>
+            
+            <div class="constellation-line" style="width: 75px; top: 18px; left: 95px; transform: rotate(70deg);"></div>
+            <div class="episode" style="top: 85px; left: 120px;" data-episode="Cultural Mysteries"></div>
+            
+            <div class="constellation-line" style="width: 85px; top: 0; left: 0; transform: rotate(50deg);"></div>
+            <div class="episode listened" style="top: 65px; left: 55px;" data-episode="Archaeological Enigmas"></div>
+        </div>
+
+        <!-- Mind & Reality Constellation -->
+        <div class="constellation" style="top: 250px; left: 1100px;">
+            <div class="constellation-line" style="width: 90px; transform: rotate(-40deg);"></div>
+            <div class="episode listened" style="top: 0; left: 0;" data-episode="Consciousness Studies"></div>
+            <div class="episode" style="top: 60px; left: -55px;" data-episode="Reality Perception"></div>
+            
+            <div class="constellation-line" style="width: 70px; top: 0; left: 0; transform: rotate(30deg);"></div>
+            <div class="episode listened" style="top: 35px; left: 60px;" data-episode="Lucid Dreaming"></div>
+            
+            <div class="constellation-line" style="width: 80px; top: 35px; left: 60px; transform: rotate(-60deg);"></div>
+            <div class="episode" style="top: -25px; left: 30px;" data-episode="Psychedelic Research"></div>
+        </div>
+    </div>
+
+    <div class="series-selector">
+        <div class="series-title">Podcast Series</div>
+        
+        <div class="series-item active">
+            <div class="series-dot" style="background: var(--listened-glow);"></div>
+            <div class="series-info">
+                <div class="series-name-item">Cosmic Mysteries</div>
+                <div class="series-progress">4 of 5 episodes</div>
+            </div>
+        </div>
+        
+        <div class="series-item">
+            <div class="series-dot" style="background: var(--star-glow);"></div>
+            <div class="series-info">
+                <div class="series-name-item">Tech Futures</div>
+                <div class="series-progress">4 of 5 episodes</div>
+            </div>
+        </div>
+        
+        <div class="series-item">
+            <div class="series-dot" style="background: #9c27b0;"></div>
+            <div class="series-info">
+                <div class="series-name-item">Ancient Wisdom</div>
+                <div class="series-progress">3 of 4 episodes</div>
+            </div>
+        </div>
+        
+        <div class="series-item">
+            <div class="series-dot" style="background: #4caf50;"></div>
+            <div class="series-info">
+                <div class="series-name-item">Human Stories</div>
+                <div class="series-progress">3 of 4 episodes</div>
+            </div>
+        </div>
+        
+        <div class="series-item">
+            <div class="series-dot" style="background: #ff5722;"></div>
+            <div class="series-info">
+                <div class="series-name-item">Mind & Reality</div>
+                <div class="series-progress">2 of 4 episodes</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="player-interface">
+        <div class="episode-info">
+            <div class="series-name">Cosmic Mysteries</div>
+            <div class="episode-title">Time Travel Paradoxes</div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: 34%;"></div>
+            </div>
+            <div class="time-display">14:23 / 42:17</div>
+        </div>
+        
+        <div class="controls">
+            <button class="control-btn">⏮</button>
+            <button class="control-btn">⏪</button>
+            <button class="control-btn play-btn">⏸</button>
+            <button class="control-btn">⏩</button>
+            <button class="control-btn">⏭</button>
+        </div>
+        
+        <div style="width: 200px;"></div>
+    </div>
+
+    <script>
+        // Add interactive behavior
+        document.querySelectorAll('.episode').forEach(episode => {
+            episode.addEventListener('click', function() {
+                // Remove current class from all episodes
+                document.querySelectorAll('.episode').forEach(ep => ep.classList.remove('current'));
+                
+                // Add current class to clicked episode
+                this.classList.add('current');
+                this.classList.add('listened');
+                
+                // Update player info
+                const episodeTitle = this.getAttribute('data-episode');
+                document.querySelector('.episode-title').textContent = episodeTitle;
+                
+                // Reset progress
+                document.querySelector('.progress-fill').style.width = '0%';
+                document.querySelector('.time-display').textContent = '0:00 / 42:17';
+            });
+        });
+
+        // Simulate progress
+        setInterval(() => {
+            const progressBar = document.querySelector('.progress-fill');
+            const currentWidth = parseFloat(progressBar.style.width) || 0;
+            if (currentWidth < 100) {
+                progressBar.style.width = (currentWidth + 0.1) + '%';
+                
+                const totalSeconds = 42 * 60 + 17;
+                const currentSeconds = Math.floor((currentWidth / 100) * totalSeconds);
+                const minutes = Math.floor(currentSeconds / 60);
+                const seconds = currentSeconds % 60;
+                document.querySelector('.time-display').textContent = 
+                    `${minutes}:${seconds.toString().padStart(2, '0')} / 42:17`;
+            }
+        }, 100);
+    </script>
+</body>
+</html>

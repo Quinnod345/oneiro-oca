@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic Harmonizer</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #141417;
+            --bg-tertiary: #1e1e23;
+            --text-primary: #f8f8f9;
+            --text-secondary: #a1a1a8;
+            --text-muted: #6a6a70;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #8b5cf6;
+            --border-primary: #2a2a30;
+            --border-secondary: #3a3a42;
+            --shadow-primary: 0 4px 32px rgba(0, 0, 0, 0.4);
+            --shadow-secondary: 0 2px 16px rgba(0, 0, 0, 0.3);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-medium: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+            --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 1440px;
+            position: relative;
+        }
+
+        .app {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+        }
+
+        .header {
+            padding: 24px 32px;
+            border-bottom: 1px solid var(--border-primary);
+            backdrop-filter: blur(20px);
+            background: rgba(10, 10, 11, 0.8);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            color: white;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: -0.025em;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .control-button {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: inherit;
+        }
+
+        .control-button:hover {
+            background: var(--border-secondary);
+            color: var(--text-primary);
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .keyboard-section {
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .keyboard-container {
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        .keyboard {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 4px;
+            padding: 24px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-primary);
+            border: 1px solid var(--border-primary);
+            min-width: 800px;
+        }
+
+        .key {
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all var(--transition-medium);
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+            min-height: 64px;
+        }
+
+        .key::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .key:hover::before {
+            opacity: 1;
+        }
+
+        .key.active {
+            transform: scale(0.95);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(255, 255, 255, 0.1);
+        }
+
+        .key.locked {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-primary), 0 8px 32px rgba(59, 130, 246, 0.3);
+        }
+
+        .key.locked::after {
+            content: '♪';
+            position: absolute;
+            top: 4px;
+            right: 6px;
+            font-size: 12px;
+            color: var(--accent-primary);
+        }
+
+        .harmony-indicator {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 12px 24px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: all var(--transition-medium);
+        }
+
+        .harmony-indicator.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-primary);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .palette-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .color-swatch {
+            aspect-ratio: 1;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border: 1px solid var(--border-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .color-swatch:hover {
+            transform: scale(1.05);
+            border-color: var(--border-secondary);
+        }
+
+        .color-swatch.locked::after {
+            content: '🔒';
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            font-size: 12px;
+        }
+
+        .hex-values {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hex-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-primary);
+        }
+
+        .hex-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid var(--border-primary);
+        }
+
+        .hex-text {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            flex: 1;
+            outline: none;
+        }
+
+        .harmony-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .harmony-button {
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .harmony-button:hover {
+            background: var(--border-secondary);
+            color: var(--text-primary);
+        }
+
+        .harmony-button.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .footer {
+            padding: 16px 32px;
+            border-top: 1px solid var(--border-primary);
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        .key-hints {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .waveform {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .waveform::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+            top: 50%;
+            transform: translateY(-50%);
+            animation: wave 2s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% { transform: translateY(-50%) scaleX(0); opacity: 0; }
+            50% { transform: translateY(-50%) scaleX(1); opacity: 1; }
+        }
+
+        .playing .waveform::before {
+            animation-play-state: running;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">♪</div>
+                    <span class="logo-text">Chromatic Harmonizer</span>
+                </div>
+                <div class="controls">
+                    <button class="control-button" onclick="exportPalette()">Export</button>
+                    <button class="control-button" onclick="randomize()">Random</button>
+                    <button class="control-button" onclick="clearAll()">Clear</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="keyboard-section">
+                <div class="harmony-indicator" id="harmonyIndicator">Major Triad</div>
+                <div class="keyboard-container">
+                    <div class="keyboard" id="keyboard"></div>
+                </div>
+                <div class="waveform" id="waveform"></div>
+            </div>
+
+            <aside class="sidebar">
+                <div class="palette-section">
+                    <h3 class="section-title">Current Palette</h3>
+                    <div class="palette-grid" id="paletteGrid"></div>
+                    <div class="hex-values" id="hexValues"></div>
+                </div>
+
+                <div class="palette-section">
+                    <h3 class="section-title">Harmony Modes</h3>
+                    <div class="harmony-controls">
+                        <button class="harmony-button active" data-mode="major" onclick="setHarmonyMode('major')">Major Triad</button>
+                        <button class="harmony-button" data-mode="minor" onclick="setHarmonyMode('minor')">Minor Triad</button>
+                        <button class="harmony-button" data-mode="seventh" onclick="setHarmonyMode('seventh')">Seventh Chord</button>
+                        <button class="harmony-button" data-mode="complementary" onclick="setHarmonyMode('complementary')">Complementary</button>
+                        <button class="harmony-button" data-mode="analogous" onclick="setHarmonyMode('analogous')">Analogous</button>
+                        <button class="harmony-button" data-mode="triadic" onclick="setHarmonyMode('triadic')">Triadic</button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <footer class="footer">
+            <div class="footer-text">
+                <span id="colorCount">0</span> colors • <span id="currentMode">Major</span> harmony
+            </div>
+            <div class="key-hints">
+                <span>Click to play • Space to lock • R to randomize</span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        let currentColors = [];
+        let lockedColors = new Set();
+        let harmonyMode = 'major';
+        let isPlaying = false;
+
+        const hues = [
+            0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330
+        ];
+
+        const harmonyModes = {
+            major: [0, 4, 7],
+            minor: [0, 3, 7],
+            seventh: [0, 4, 7, 10],
+            complementary: [0, 6],
+            analogous: [0, 1, 11],
+            triadic: [0, 4, 8]
+        };
+
+        function hslToHex(h, s, l) {
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            let r, g, b;
+
+            if (h >= 0 && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (h >= 60 && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (h >= 120 && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (h >= 180 && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (h >= 240 && h < 300) {
+                r = x; g = 0; b = c;
+            } else {
+                r = c; g = 0; b = x;
+            }
+
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+
+        function createKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            keyboard.innerHTML = '';
+
+            hues.forEach((hue, index) => {
+                const key = document.createElement('div');
+                key.className = 'key';
+                key.dataset.index = index;
+                key.dataset.hue = hue;
+                
+                const saturation = 0.7;
+                const lightness = 0.5;
+                const color = hslToHex(hue, saturation, lightness);
+                
+                key.style.background = color;
+                key.textContent = `${hue}°`;
+                
+                key.addEventListener('click', () => playKey(index, hue));
+                key.addEventListener('mouseenter', () => previewKey(index));
+                key.addEventListener('mouseleave', () => clearPreview());
+                
+                keyboard.appendChild(key);
+            });
+        }
+
+        function playKey(index, hue) {
+            if (isPlaying) return;
+            
+            isPlaying = true;
+            document.body.classList.add('playing');
+            
+            const key = document.querySelector(`[data-index="${index}"]`);
+            key.classList.add('active');
+            
+            const harmony = generateHarmony(hue);
+            currentColors = harmony;
+            
+            harmony.forEach((color, i) => {
+                const keyIndex = hues.findIndex(h => Math.abs(h - color.hue) < 1);
+                if (keyIndex >= 0) {
+                    const harmonyKey = document.querySelector(`[data-index="${keyIndex}"]`);
+                    if (harmonyKey) {
+                        setTimeout(() => {
+                            harmonyKey.classList.add('locked');
+                            lockedColors.add(keyIndex);
+                        }, i * 100);
+                    }
+                }
+            });
+            
+            updatePalette();
+            updateHarmonyIndicator();
+            
+            setTimeout(() => {
+                key.classList.remove('active');
+                isPlaying = false;
+                document.body.classList.remove('playing');
+            }, 500);
+        }
+
+        function generateHarmony(baseHue) {
+            const intervals = harmonyModes[harmonyMode];
+            const colors = [];
+            
+            intervals.forEach(interval => {
+                const hue = (baseHue + interval * 30) % 360;
+                const saturation = 0.6 + Math.random() * 0.3;
+                const lightness = 0.4 + Math.random() * 0.3;
+                
+                colors.push({
+                    hue: hue,
+                    saturation: saturation,
+                    lightness: lightness,
+                    hex: hslToHex(hue, saturation, lightness)
+                });
+            });
+            
+            return colors;
+        }
+
+        function updatePalette() {
+            const paletteGrid = document.getElementById('paletteGrid');
+            const hexValues = document.getElementById('hexValues');
+            
+            paletteGrid.innerHTML = '';
+            hexValues.innerHTML = '';
+            
+            currentColors.forEach((color, index) => {
+                const swatch = document.createElement('div');
+                swatch.className = 'color-swatch';
+                swatch.style.background = color.hex;
+                swatch.addEventListener('click', () => copyToClipboard(color.hex));
+                paletteGrid.appendChild(swatch);
+                
+                const hexInput = document.createElement('div');
+                hexInput.className = 'hex-input';
+                hexInput.innerHTML = `
+                    <div class="hex-color" style="background: ${color.hex}"></div>
+                    <input type="text" class="hex-text" value="${color.hex}" readonly>
+                `;
+                hexValues.appendChild(hexInput);
+            });
+            
+            document.getElementById('colorCount').textContent = currentColors.length;
+        }
+
+        function updateHarmonyIndicator() {
+            const indicator = document.getElementById('harmonyIndicator');
+            const modeNames = {
+                major: 'Major Triad',
+                minor: 'Minor Triad',
+                seventh: 'Seventh Chord',
+                complementary: 'Complementary',
+                analogous: 'Analogous',
+                triadic: 'Triadic'
+            };
+            
+            indicator.textContent = modeNames[harmonyMode];
+            indicator.classList.add('visible');
+            
+            setTimeout(() => {
+                indicator.classList.remove('visible');
+            }, 2000);
+        }
+
+        function setHarmonyMode(mode) {
+            harmonyMode = mode;
+            
+            document.querySelectorAll('.harmony-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+            document.getElementById('currentMode').textContent = mode;
+            
+            clearLocks();
+        }
+
+        function clearLocks() {
+            lockedColors.clear();
+            document.querySelectorAll('.key.locked').forEach(key => {
+                key.classList.remove('locked');
+            });
+        }
+
+        function clearAll() {
+            currentColors = [];
+            clearLocks();
+            updatePalette();
+        }
+
+        function randomize() {
+            const randomHue = hues[Math.floor(Math.random() * hues.length)];
+            const randomIndex = hues.indexOf(randomHue);
+            playKey(randomIndex, randomHue);
+        }
+
+        function exportPalette() {
+            if (currentColors.length === 0) return;
+            
+            const exportData = {
+                mode: harmonyMode,
+                colors: currentColors.map(c => c.hex),
+                timestamp: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `palette-${harmonyMode}-${Date.now()}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        function copyToClipboard(hex) {
+            navigator.clipboard.writeText(hex).then(() => {
+                console.log('Copied to clipboard:', hex);
+            });
+        }
+
+        function previewKey(index) {
+            // Add subtle preview effect
+        }
+
+        function clearPreview() {
+            // Clear preview effect
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                // Toggle lock for hovered key
+            } else if (e.key === 'r' || e.key === 'R') {
+                randomize();
+            } else if (e.key === 'c' || e.key === 'C') {
+                clearAll();
+            }
+        });
+
+        // Initialize
+        createKeyboard();
+        updatePalette();
+    </script>
+</body>
+</html>

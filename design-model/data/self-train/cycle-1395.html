@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organic System Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f0a;
+            --bg-secondary: #1a251a;
+            --accent-healthy: #4ade80;
+            --accent-warning: #fbbf24;
+            --accent-critical: #ef4444;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-subtle: #334155;
+            --glow-healthy: rgba(74, 222, 128, 0.3);
+            --glow-warning: rgba(251, 191, 36, 0.3);
+            --glow-critical: rgba(239, 68, 68, 0.3);
+            --organism-core: #1e293b;
+            --pulse-ring: rgba(74, 222, 128, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-primary);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-container {
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+            background: var(--border-subtle);
+        }
+
+        .organism-panel {
+            background: var(--bg-secondary);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .organism {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .organism-core {
+            width: 100%;
+            height: 100%;
+            background: var(--organism-core);
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid var(--accent-healthy);
+            transition: border-color 0.3s ease;
+        }
+
+        .breathing-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid var(--accent-healthy);
+            opacity: 0.6;
+        }
+
+        .ring-1 {
+            width: 120%;
+            height: 120%;
+            top: -10%;
+            left: -10%;
+            animation: breathe-slow 4s ease-in-out infinite;
+        }
+
+        .ring-2 {
+            width: 140%;
+            height: 140%;
+            top: -20%;
+            left: -20%;
+            animation: breathe-slow 4s ease-in-out infinite 0.5s;
+            opacity: 0.4;
+        }
+
+        .ring-3 {
+            width: 160%;
+            height: 160%;
+            top: -30%;
+            left: -30%;
+            animation: breathe-slow 4s ease-in-out infinite 1s;
+            opacity: 0.2;
+        }
+
+        .organism-label {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.025em;
+        }
+
+        .organism-status {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            width: 320px;
+        }
+
+        .metric {
+            background: var(--organism-core);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .neural-network {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .neural-line {
+            position: absolute;
+            height: 1px;
+            background: var(--accent-healthy);
+            transform-origin: left center;
+        }
+
+        .system-vitals {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            min-width: 200px;
+        }
+
+        .vital-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .vital-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .vital-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .vital-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .status-healthy {
+            --current-accent: var(--accent-healthy);
+            --current-glow: var(--glow-healthy);
+        }
+
+        .status-warning {
+            --current-accent: var(--accent-warning);
+            --current-glow: var(--glow-warning);
+        }
+
+        .status-critical {
+            --current-accent: var(--accent-critical);
+            --current-glow: var(--glow-critical);
+        }
+
+        .status-healthy .organism-core,
+        .status-healthy .breathing-ring {
+            border-color: var(--accent-healthy);
+            box-shadow: 0 0 30px var(--glow-healthy);
+        }
+
+        .status-warning .organism-core,
+        .status-warning .breathing-ring {
+            border-color: var(--accent-warning);
+            box-shadow: 0 0 30px var(--glow-warning);
+        }
+
+        .status-critical .organism-core,
+        .status-critical .breathing-ring {
+            border-color: var(--accent-critical);
+            box-shadow: 0 0 30px var(--glow-critical);
+            animation: pulse-critical 1s ease-in-out infinite;
+        }
+
+        .status-warning .breathing-ring {
+            animation: breathe-medium 2.5s ease-in-out infinite;
+        }
+
+        .status-critical .breathing-ring {
+            animation: breathe-fast 1.2s ease-in-out infinite;
+        }
+
+        @keyframes breathe-slow {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 0.2; }
+        }
+
+        @keyframes breathe-medium {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.15); opacity: 0.3; }
+        }
+
+        @keyframes breathe-fast {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 0.4; }
+        }
+
+        @keyframes pulse-critical {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .organism-icon {
+            font-size: 48px;
+            opacity: 0.7;
+        }
+
+        #cpu-usage, #memory-usage {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .health-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--current-accent, var(--accent-healthy));
+            margin-left: 8px;
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-container">
+        <div class="organism-panel" id="cpu-organism">
+            <div class="organism">
+                <div class="organism-core" id="cpu-core">
+                    <div class="organism-icon">🧠</div>
+                    <div class="breathing-ring ring-1"></div>
+                    <div class="breathing-ring ring-2"></div>
+                    <div class="breathing-ring ring-3"></div>
+                </div>
+            </div>
+            
+            <div class="organism-label">CPU</div>
+            <div class="organism-status" id="cpu-status">Healthy</div>
+            
+            <div class="metrics-grid">
+                <div class="metric">
+                    <div class="metric-label">Usage</div>
+                    <div class="metric-value" id="cpu-usage">24%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Temp</div>
+                    <div class="metric-value" id="cpu-temp">42°C</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cores</div>
+                    <div class="metric-value">8</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Freq</div>
+                    <div class="metric-value" id="cpu-freq">3.2 GHz</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="organism-panel" id="memory-organism">
+            <div class="organism">
+                <div class="organism-core" id="memory-core">
+                    <div class="organism-icon">💾</div>
+                    <div class="breathing-ring ring-1"></div>
+                    <div class="breathing-ring ring-2"></div>
+                    <div class="breathing-ring ring-3"></div>
+                </div>
+            </div>
+            
+            <div class="organism-label">Memory</div>
+            <div class="organism-status" id="memory-status">Healthy</div>
+            
+            <div class="metrics-grid">
+                <div class="metric">
+                    <div class="metric-label">Used</div>
+                    <div class="metric-value" id="memory-usage">6.2 GB</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Available</div>
+                    <div class="metric-value">9.8 GB</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cached</div>
+                    <div class="metric-value" id="memory-cached">2.1 GB</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Swap</div>
+                    <div class="metric-value">0 MB</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="system-vitals">
+        <div class="vital-item">
+            <span class="vital-label">Uptime</span>
+            <span class="vital-value" id="uptime">2d 14h 32m</span>
+        </div>
+        <div class="vital-item">
+            <span class="vital-label">Load</span>
+            <span class="vital-value" id="load-avg">1.42</span>
+        </div>
+        <div class="vital-item">
+            <span class="vital-label">Processes</span>
+            <span class="vital-value">247</span>
+        </div>
+        <div class="vital-item">
+            <span class="vital-label">Network</span>
+            <span class="vital-value">↑ 15.2 MB/s</span>
+        </div>
+        <div class="vital-item">
+            <span class="vital-label">System Health</span>
+            <div style="display: flex; align-items: center;">
+                <span class="vital-value">Optimal</span>
+                <div class="health-indicator"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateSystemMetrics() {
+            // CPU simulation
+            const cpuUsage = Math.floor(Math.random() * 100);
+            const cpuTemp = Math.floor(40 + Math.random() * 40);
+            const cpuFreq = (3.0 + Math.random() * 1.5).toFixed(1);
+            
+            // Memory simulation
+            const memoryUsed = (5.5 + Math.random() * 3).toFixed(1);
+            const memoryCached = (1.8 + Math.random() * 1.2).toFixed(1);
+            
+            // Update values
+            document.getElementById('cpu-usage').textContent = cpuUsage + '%';
+            document.getElementById('cpu-temp').textContent = cpuTemp + '°C';
+            document.getElementById('cpu-freq').textContent = cpuFreq + ' GHz';
+            document.getElementById('memory-usage').textContent = memoryUsed + ' GB';
+            document.getElementById('memory-cached').textContent = memoryCached + ' GB';
+            
+            // Update load average
+            document.getElementById('load-avg').textContent = (0.5 + Math.random() * 2).toFixed(2);
+            
+            // Update organism states based on usage
+            updateOrganismState('cpu', cpuUsage, cpuTemp);
+            updateOrganismState('memory', parseFloat(memoryUsed) / 16 * 100, 0);
+        }
+        
+        function updateOrganismState(type, usage, temp) {
+            const organism = document.getElementById(`${type}-organism`);
+            const status = document.getElementById(`${type}-status`);
+            
+            // Remove existing status classes
+            organism.classList.remove('status-healthy', 'status-warning', 'status-critical');
+            
+            let statusText = 'Healthy';
+            let statusClass = 'status-healthy';
+            
+            if (type === 'cpu') {
+                if (usage > 80 || temp > 75) {
+                    statusText = 'Critical';
+                    statusClass = 'status-critical';
+                } else if (usage > 60 || temp > 65) {
+                    statusText = 'Stressed';
+                    statusClass = 'status-warning';
+                }
+            } else if (type === 'memory') {
+                if (usage > 85) {
+                    statusText = 'Critical';
+                    statusClass = 'status-critical';
+                } else if (usage > 70) {
+                    statusText = 'Stressed';
+                    statusClass = 'status-warning';
+                }
+            }
+            
+            organism.classList.add(statusClass);
+            status.textContent = statusText;
+        }
+        
+        function updateUptime() {
+            let uptimeSeconds = Math.floor(Date.now() / 1000);
+            const days = Math.floor(uptimeSeconds / 86400);
+            uptimeSeconds %= 86400;
+            const hours = Math.floor(uptimeSeconds / 3600);
+            uptimeSeconds %= 3600;
+            const minutes = Math.floor(uptimeSeconds / 60);
+            
+            document.getElementById('uptime').textContent = `${days}d ${hours}h ${minutes}m`;
+        }
+        
+        // Initialize and start updates
+        updateSystemMetrics();
+        updateUptime();
+        
+        // Update metrics every 2 seconds
+        setInterval(updateSystemMetrics, 2000);
+        
+        // Update uptime every minute
+        setInterval(updateUptime, 60000);
+    </script>
+</body>
+</html>

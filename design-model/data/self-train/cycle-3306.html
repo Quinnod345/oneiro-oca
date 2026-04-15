@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --bg-primary: #0a0b0f;
+            --bg-secondary: #1a1d24;
+            --accent-blue: #4a9eff;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-pink: #ec4899;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-subtle: rgba(148, 163, 184, 0.1);
+            --shadow-depth: rgba(0, 0, 0, 0.8);
+            --thread-opacity: 0.4;
+            --note-bg: rgba(26, 29, 36, 0.9);
+            --note-border: rgba(74, 158, 255, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            perspective: 2000px;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .spatial-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transform: rotateX(15deg) rotateY(-10deg);
+            animation: breathe 12s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: rotateX(15deg) rotateY(-10deg) scale3d(1, 1, 1); }
+            50% { transform: rotateX(12deg) rotateY(-8deg) scale3d(1.02, 1.02, 1.02); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--note-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--note-border);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 200px;
+            max-width: 280px;
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 
+                0 8px 32px var(--shadow-depth),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+
+        .note:hover {
+            transform: translateZ(50px) scale(1.05);
+            border-color: var(--accent-blue);
+            box-shadow: 
+                0 20px 60px var(--shadow-depth),
+                0 0 0 1px var(--accent-blue),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .note.recent {
+            transform: translateZ(200px);
+            opacity: 1;
+            filter: saturate(1.2) brightness(1.1);
+        }
+
+        .note.medium {
+            transform: translateZ(0px);
+            opacity: 0.8;
+            filter: saturate(0.9) brightness(0.9);
+        }
+
+        .note.distant {
+            transform: translateZ(-300px);
+            opacity: 0.4;
+            filter: saturate(0.6) brightness(0.7);
+        }
+
+        .note.far {
+            transform: translateZ(-600px);
+            opacity: 0.2;
+            filter: saturate(0.3) brightness(0.5);
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .note-content {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .note-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-tag {
+            background: var(--accent-blue);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .note.purple { --note-border: rgba(139, 92, 246, 0.3); }
+        .note.purple .note-tag { background: var(--accent-purple); }
+
+        .note.green { --note-border: rgba(16, 185, 129, 0.3); }
+        .note.green .note-tag { background: var(--accent-green); }
+
+        .note.orange { --note-border: rgba(245, 158, 11, 0.3); }
+        .note.orange .note-tag { background: var(--accent-orange); }
+
+        .note.pink { --note-border: rgba(236, 72, 153, 0.3); }
+        .note.pink .note-tag { background: var(--accent-pink); }
+
+        .connection-thread {
+            position: absolute;
+            background: linear-gradient(90deg, var(--accent-blue), transparent);
+            height: 2px;
+            transform-style: preserve-3d;
+            opacity: var(--thread-opacity);
+            border-radius: 1px;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: var(--thread-opacity); }
+            50% { opacity: 0.8; }
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            z-index: 1000;
+            display: flex;
+            gap: 16px;
+            background: rgba(26, 29, 36, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 16px 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 8px 32px var(--shadow-depth);
+        }
+
+        .toolbar-btn {
+            background: none;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toolbar-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        .toolbar-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .stats {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            z-index: 1000;
+            background: rgba(26, 29, 36, 0.9);
+            backdrop-filter: blur(20px);
+            padding: 16px 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 8px 32px var(--shadow-depth);
+            text-align: right;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 16px;
+        }
+
+        .stats-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .stats-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .stats-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .add-note-btn {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            background: var(--accent-blue);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            font-weight: 300;
+            cursor: pointer;
+            box-shadow: 0 8px 32px rgba(74, 158, 255, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .add-note-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 12px 40px rgba(74, 158, 255, 0.6);
+        }
+
+        .spatial-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+            background-size: 100px 100px;
+            transform: translateZ(-1000px);
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="spatial-grid"></div>
+    
+    <div class="toolbar">
+        <button class="toolbar-btn active">All Notes</button>
+        <button class="toolbar-btn">Recent</button>
+        <button class="toolbar-btn">Connected</button>
+        <button class="toolbar-btn">Tags</button>
+    </div>
+
+    <div class="stats">
+        <div class="stats-item">
+            <span class="stats-label">Total Notes</span>
+            <span class="stats-value">24</span>
+        </div>
+        <div class="stats-item">
+            <span class="stats-label">Connections</span>
+            <span class="stats-value">12</span>
+        </div>
+        <div class="stats-item">
+            <span class="stats-label">Active Tags</span>
+            <span class="stats-value">8</span>
+        </div>
+    </div>
+
+    <div class="spatial-container">
+        <div class="note recent" style="left: 300px; top: 200px;">
+            <div class="note-title">Project Architecture</div>
+            <div class="note-content">Microservices approach with event-driven communication. Consider using CQRS pattern for data consistency...</div>
+            <div class="note-meta">
+                <span>2 min ago</span>
+                <span class="note-tag">Architecture</span>
+            </div>
+        </div>
+
+        <div class="note recent purple" style="left: 600px; top: 150px;">
+            <div class="note-title">User Interview Insights</div>
+            <div class="note-content">Users prefer simple onboarding flow. Pain points around search functionality need immediate attention.</div>
+            <div class="note-meta">
+                <span>5 min ago</span>
+                <span class="note-tag">UX</span>
+            </div>
+        </div>
+
+        <div class="note medium green" style="left: 450px; top: 350px;">
+            <div class="note-title">API Rate Limiting</div>
+            <div class="note-content">Implement sliding window rate limiting. Consider user tiers: free (100/hr), pro (1000/hr), enterprise (unlimited).</div>
+            <div class="note-meta">
+                <span>1 hour ago</span>
+                <span class="note-tag">Backend</span>
+            </div>
+        </div>
+
+        <div class="note medium" style="left: 800px; top: 300px;">
+            <div class="note-title">Design System Colors</div>
+            <div class="note-content">Updated color palette for better accessibility. WCAG AA compliance achieved across all components.</div>
+            <div class="note-meta">
+                <span>2 hours ago</span>
+                <span class="note-tag">Design</span>
+            </div>
+        </div>
+
+        <div class="note distant orange" style="left: 200px; top: 400px;">
+            <div class="note-title">Database Migration Plan</div>
+            <div class="note-content">PostgreSQL 14 migration scheduled for next weekend. Backup strategy and rollback procedures documented.</div>
+            <div class="note-meta">
+                <span>Yesterday</span>
+                <span class="note-tag">Database</span>
+            </div>
+        </div>
+
+        <div class="note distant pink" style="left: 700px; top: 500px;">
+            <div class="note-title">Marketing Campaign Ideas</div>
+            <div class="note-content">Focus on developer productivity angle. Technical blog posts, conference talks, and open source contributions.</div>
+            <div class="note-meta">
+                <span>2 days ago</span>
+                <span class="note-tag">Marketing</span>
+            </div>
+        </div>
+
+        <div class="note far" style="left: 400px; top: 100px;">
+            <div class="note-title">Security Audit Findings</div>
+            <div class="note-content">Minor vulnerabilities identified in authentication flow. Recommended fixes have been implemented.</div>
+            <div class="note-meta">
+                <span>1 week ago</span>
+                <span class="note-tag">Security</span>
+            </div>
+        </div>
+
+        <div class="note far purple" style="left: 900px; top: 450px;">
+            <div class="note-title">Team Retrospective</div>
+            <div class="note-content">Great sprint velocity. Communication improvements needed between frontend and backend teams.</div>
+            <div class="note-meta">
+                <span>1 week ago</span>
+                <span class="note-tag">Team</span>
+            </div>
+        </div>
+
+        <div class="connection-thread" style="left: 420px; top: 250px; width: 200px; transform: rotateZ(25deg) translateZ(100px);"></div>
+        <div class="connection-thread" style="left: 520px; top: 320px; width: 150px; transform: rotateZ(-15deg) translateZ(50px); background: linear-gradient(90deg, var(--accent-purple), transparent);"></div>
+        <div class="connection-thread" style="left: 350px; top: 380px; width: 120px; transform: rotateZ(45deg) translateZ(-50px); background: linear-gradient(90deg, var(--accent-green), transparent);"></div>
+        <div class="connection-thread" style="left: 650px; top: 280px; width: 180px; transform: rotateZ(-30deg) translateZ(75px); background: linear-gradient(90deg, var(--accent-orange), transparent);"></div>
+    </div>
+
+    <button class="add-note-btn">+</button>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Canvas File Organizer</title>
+    <style>
+        :root {
+            --canvas-bg: #fafbfc;
+            --document-bg: #ffffff;
+            --document-shadow: rgba(0, 0, 0, 0.08);
+            --document-hover-shadow: rgba(0, 0, 0, 0.15);
+            --cluster-border: rgba(99, 102, 241, 0.2);
+            --cluster-bg: rgba(99, 102, 241, 0.04);
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --accent-design: #ef4444;
+            --accent-dev: #10b981;
+            --accent-docs: #3b82f6;
+            --accent-media: #f59e0b;
+            --accent-archive: #8b5cf6;
+            --toolbar-bg: rgba(255, 255, 255, 0.9);
+            --border-light: rgba(0, 0, 0, 0.06);
+            --connection-line: rgba(99, 102, 241, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--canvas-bg);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        .canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-origin: 0 0;
+            transition: transform 0.2s ease-out;
+        }
+
+        .cluster {
+            position: absolute;
+            border: 2px dashed var(--cluster-border);
+            background: var(--cluster-bg);
+            border-radius: 24px;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .cluster-label {
+            position: absolute;
+            top: -8px;
+            left: 16px;
+            background: var(--canvas-bg);
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+        }
+
+        .document {
+            position: absolute;
+            background: var(--document-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px var(--document-shadow);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border-light);
+            z-index: 10;
+        }
+
+        .document:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 8px 24px var(--document-hover-shadow);
+            z-index: 20;
+        }
+
+        .document:active {
+            transform: translateY(0) scale(0.98);
+        }
+
+        .doc-large {
+            width: 180px;
+            height: 240px;
+            padding: 20px;
+        }
+
+        .doc-medium {
+            width: 160px;
+            height: 120px;
+            padding: 16px;
+        }
+
+        .doc-small {
+            width: 140px;
+            height: 80px;
+            padding: 12px;
+        }
+
+        .doc-wide {
+            width: 220px;
+            height: 100px;
+            padding: 16px;
+        }
+
+        .doc-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .doc-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .doc-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .doc-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .doc-preview {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .doc-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: auto;
+        }
+
+        .doc-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--canvas-bg);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-light);
+        }
+
+        .design { --accent: var(--accent-design); }
+        .development { --accent: var(--accent-dev); }
+        .documentation { --accent: var(--accent-docs); }
+        .media { --accent: var(--accent-media); }
+        .archive { --accent: var(--accent-archive); }
+
+        .design .doc-icon { background: var(--accent-design); }
+        .development .doc-icon { background: var(--accent-dev); }
+        .documentation .doc-icon { background: var(--accent-docs); }
+        .media .doc-icon { background: var(--accent-media); }
+        .archive .doc-icon { background: var(--accent-archive); }
+
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--connection-line), transparent);
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            background: var(--toolbar-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 4px 16px var(--document-shadow);
+            border: 1px solid var(--border-light);
+            z-index: 100;
+        }
+
+        .toolbar-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border-light);
+        }
+
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .zoom-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+            transition: all 0.15s ease;
+        }
+
+        .zoom-btn:hover {
+            background: var(--canvas-bg);
+            color: var(--text-primary);
+        }
+
+        .zoom-level {
+            font-size: 12px;
+            color: var(--text-muted);
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .search-box {
+            width: 200px;
+            height: 32px;
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 0 12px;
+            font-size: 12px;
+            background: var(--document-bg);
+            color: var(--text-primary);
+        }
+
+        .search-box::placeholder {
+            color: var(--text-muted);
+        }
+
+        .minimap {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 200px;
+            height: 120px;
+            background: var(--toolbar-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 16px var(--document-shadow);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .minimap-viewport {
+            position: absolute;
+            border: 2px solid var(--accent-docs);
+            border-radius: 3px;
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+        }
+
+        .minimap-doc {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            opacity: 0.8;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --canvas-bg: #0f172a;
+                --document-bg: #1e293b;
+                --document-shadow: rgba(0, 0, 0, 0.3);
+                --document-hover-shadow: rgba(0, 0, 0, 0.5);
+                --text-primary: #f1f5f9;
+                --text-secondary: #cbd5e1;
+                --text-muted: #64748b;
+                --toolbar-bg: rgba(30, 41, 59, 0.9);
+                --border-light: rgba(255, 255, 255, 0.1);
+                --cluster-bg: rgba(99, 102, 241, 0.08);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-section">
+            <input type="text" class="search-box" placeholder="Search documents...">
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-section">
+            <div class="zoom-controls">
+                <button class="zoom-btn">−</button>
+                <span class="zoom-level">100%</span>
+                <button class="zoom-btn">+</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="canvas">
+        <!-- Design Cluster -->
+        <div class="cluster" style="left: 80px; top: 120px; width: 380px; height: 320px;">
+            <div class="cluster-label">Design</div>
+        </div>
+
+        <!-- Development Cluster -->
+        <div class="cluster" style="left: 520px; top: 80px; width: 420px; height: 280px;">
+            <div class="cluster-label">Development</div>
+        </div>
+
+        <!-- Documentation Cluster -->
+        <div class="cluster" style="left: 1000px; top: 140px; width: 340px; height: 400px;">
+            <div class="cluster-label">Documentation</div>
+        </div>
+
+        <!-- Media Cluster -->
+        <div class="cluster" style="left: 160px; top: 480px; width: 450px; height: 240px;">
+            <div class="cluster-label">Media & Assets</div>
+        </div>
+
+        <!-- Archive Cluster -->
+        <div class="cluster" style="left: 720px; top: 460px; width: 280px; height: 300px;">
+            <div class="cluster-label">Archive</div>
+        </div>
+
+        <!-- Connection lines -->
+        <div class="connection-line" style="left: 400px; top: 240px; width: 160px; transform: rotate(-15deg);"></div>
+        <div class="connection-line" style="left: 580px; top: 320px; width: 180px; transform: rotate(25deg);"></div>
+        <div class="connection-line" style="left: 880px; top: 280px; width: 150px; transform: rotate(-10deg);"></div>
+
+        <!-- Design Documents -->
+        <div class="document doc-large design" style="left: 100px; top: 150px;">
+            <div class="doc-header">
+                <div class="doc-icon">🎨</div>
+                <div class="doc-title">Design System v3</div>
+            </div>
+            <div class="doc-meta">Updated 2 hours ago</div>
+            <div class="doc-preview">Complete design system including components, tokens, and guidelines for the new brand identity.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">figma</span>
+                <span class="doc-tag">tokens</span>
+            </div>
+        </div>
+
+        <div class="document doc-medium design" style="left: 300px; top: 200px;">
+            <div class="doc-header">
+                <div class="doc-icon">📱</div>
+                <div class="doc-title">Mobile Wireframes</div>
+            </div>
+            <div class="doc-meta">Yesterday</div>
+            <div class="doc-preview">iOS and Android app wireframes with user flow documentation.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">mobile</span>
+            </div>
+        </div>
+
+        <div class="document doc-small design" style="left: 320px; top: 340px;">
+            <div class="doc-header">
+                <div class="doc-icon">🌈</div>
+                <div class="doc-title">Color Palette</div>
+            </div>
+            <div class="doc-meta">3 days ago</div>
+            <div class="doc-tags">
+                <span class="doc-tag">colors</span>
+            </div>
+        </div>
+
+        <!-- Development Documents -->
+        <div class="document doc-medium development" style="left: 540px; top: 110px;">
+            <div class="doc-header">
+                <div class="doc-icon">⚡</div>
+                <div class="doc-title">API Architecture</div>
+            </div>
+            <div class="doc-meta">5 hours ago</div>
+            <div class="doc-preview">GraphQL schema and REST endpoint specifications for the new platform.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">graphql</span>
+                <span class="doc-tag">api</span>
+            </div>
+        </div>
+
+        <div class="document doc-wide development" style="left: 720px; top: 120px;">
+            <div class="doc-header">
+                <div class="doc-icon">🔧</div>
+                <div class="doc-title">Component Library</div>
+            </div>
+            <div class="doc-meta">1 day ago</div>
+            <div class="doc-preview">React components with TypeScript definitions and Storybook documentation.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">react</span>
+                <span class="doc-tag">typescript</span>
+            </div>
+        </div>
+
+        <div class="document doc-small development" style="left: 580px; top: 240px;">
+            <div class="doc-header">
+                <div class="doc-icon">🔒</div>
+                <div class="doc-title">Auth Flow</div>
+            </div>
+            <div class="doc-meta">4 days ago</div>
+            <div class="doc-tags">
+                <span class="doc-tag">security</span>
+            </div>
+        </div>
+
+        <div class="document doc-medium development" style="left: 780px; top: 240px;">
+            <div class="doc-header">
+                <div class="doc-icon">📊</div>
+                <div class="doc-title">Performance Metrics</div>
+            </div>
+            <div class="doc-meta">6 hours ago</div>
+            <div class="doc-preview">Core web vitals and performance optimization strategies.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">metrics</span>
+            </div>
+        </div>
+
+        <!-- Documentation -->
+        <div class="document doc-large documentation" style="left: 1020px; top: 170px;">
+            <div class="doc-header">
+                <div class="doc-icon">📖</div>
+                <div class="doc-title">User Guide v2.1</div>
+            </div>
+            <div class="doc-meta">Updated today</div>
+            <div class="doc-preview">Complete user documentation with step-by-step tutorials, feature explanations, and troubleshooting guide.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">guide</span>
+                <span class="doc-tag">help</span>
+            </div>
+        </div>
+
+        <div class="document doc-medium documentation" style="left: 1220px; top: 180px;">
+            <div class="doc-header">
+                <div class="doc-icon">🔍</div>
+                <div class="doc-title">API Reference</div>
+            </div>
+            <div class="doc-meta">2 days ago</div>
+            <div class="doc-preview">Complete API documentation with examples and response schemas.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">api</span>
+            </div>
+        </div>
+
+        <div class="document doc-wide documentation" style="left: 1040px; top: 440px;">
+            <div class="doc-header">
+                <div class="doc-icon">🚀</div>
+                <div class="doc-title">Getting Started</div>
+            </div>
+            <div class="doc-meta">1 week ago</div>
+            <div class="doc-preview">Quick start guide for new developers joining the project.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">onboarding</span>
+            </div>
+        </div>
+
+        <!-- Media & Assets -->
+        <div class="document doc-medium media" style="left: 180px; top: 520px;">
+            <div class="doc-header">
+                <div class="doc-icon">🖼️</div>
+                <div class="doc-title">Brand Assets</div>
+            </div>
+            <div class="doc-meta">3 days ago</div>
+            <div class="doc-preview">Logo variations, brand guidelines, and marketing materials.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">brand</span>
+                <span class="doc-tag">logo</span>
+            </div>
+        </div>
+
+        <div class="document doc-small media" style="left: 360px; top: 500px;">
+            <div class="doc-header">
+                <div class="doc-icon">🎬</div>
+                <div class="doc-title">Demo Videos</div>
+            </div>
+            <div class="doc-meta">5 days ago</div>
+            <div class="doc-tags">
+                <span class="doc-tag">video</span>
+            </div>
+        </div>
+
+        <div class="document doc-wide media" style="left: 380px; top: 600px;">
+            <div class="doc-header">
+                <div class="doc-icon">📸</div>
+                <div class="doc-title">Product Screenshots</div>
+            </div>
+            <div class="doc-meta">1 week ago</div>
+            <div class="doc-preview">High-resolution screenshots for marketing and documentation.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">screenshots</span>
+            </div>
+        </div>
+
+        <div class="document doc-small media" style="left: 200px; top: 640px;">
+            <div class="doc-header">
+                <div class="doc-icon">🎵</div>
+                <div class="doc-title">Audio Assets</div>
+            </div>
+            <div class="doc-meta">2 weeks ago</div>
+            <div class="doc-tags">
+                <span class="doc-tag">audio</span>
+            </div>
+        </div>
+
+        <!-- Archive -->
+        <div class="document doc-medium archive" style="left: 740px; top: 490px;">
+            <div class="doc-header">
+                <div class="doc-icon">📦</div>
+                <div class="doc-title">Legacy Components</div>
+            </div>
+            <div class="doc-meta">2 months ago</div>
+            <div class="doc-preview">Old component library for reference and migration purposes.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">legacy</span>
+            </div>
+        </div>
+
+        <div class="document doc-small archive" style="left: 860px; top: 520px;">
+            <div class="doc-header">
+                <div class="doc-icon">📄</div>
+                <div class="doc-title">Old Specs</div>
+            </div>
+            <div class="doc-meta">3 months ago</div>
+            <div class="doc-tags">
+                <span class="doc-tag">specs</span>
+            </div>
+        </div>
+
+        <div class="document doc-wide archive" style="left: 750px; top: 640px;">
+            <div class="doc-header">
+                <div class="doc-icon">🗂️</div>
+                <div class="doc-title">Project Archive 2023</div>
+            </div>
+            <div class="doc-meta">6 months ago</div>
+            <div class="doc-preview">Archived project files and deliverables from previous year.</div>
+            <div class="doc-tags">
+                <span class="doc-tag">archive</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="minimap">
+        <div class="minimap-viewport" style="left: 10px; top: 8px; width: 60px; height: 36px;"></div>
+        <div class="minimap-doc design" style="left: 15px; top: 18px; background: var(--accent-design);"></div>
+        <div class="minimap-doc design" style="left: 35px; top: 25px; background: var(--accent-design);"></div>
+        <div class="minimap-doc development" style="left: 65px; top: 15px; background: var(--accent-dev);"></div>
+        <div class="minimap-doc development" style="left: 85px; top: 20px; background: var(--accent-dev);"></div>
+        <div class="minimap-doc documentation" style="left: 125px; top: 22px; background: var(--accent-docs);"></div>
+        <div class="minimap-doc documentation" style="left: 145px; top: 25px; background: var(--accent-docs);"></div>
+        <div class="minimap-doc media" style="left: 25px; top: 65px; background: var(--accent-media);"></div>
+        <div class="minimap-doc media" style="left: 45px; top: 70px; background: var(--accent-media);"></div>
+        <div class="minimap-doc archive" style="left: 90px; top: 75px; background: var(--accent-archive);"></div>
+        <div class="minimap-doc archive" style="left: 105px; top: 80px; background: var(--accent-archive);"></div>
+    </div>
+</body>
+</html>

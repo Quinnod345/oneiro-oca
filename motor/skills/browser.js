@@ -1,75 +1,80 @@
-// OCA Motor Skill: Browser
-// Navigate, search, read, interact with web content
-import motor from '../engine.js';
-import { pool } from '../../event-bus.js';
+// OCA Motor Skill: Browser — all web interaction via agent-browser CLI
+import { execSync } from 'child_process';
+import { emit } from '../../event-bus.js';
 
-// Open a URL in the default browser
-export async function open(url) {
-  return await motor.openUrl(url);
+const PROFILE = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/private/browser-profile';
+const SESSION = 'oca';
+const STEALTH_ARGS = '--disable-blink-features=AutomationControlled';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function ab(cmd, { timeout = 30000 } = {}) {
+  return execSync(`agent-browser ${cmd} --session ${SESSION} --profile "${PROFILE}" --args "${STEALTH_ARGS}" --user-agent "${USER_AGENT}"`, {
+    encoding: 'utf-8',
+    timeout,
+    env: { ...process.env, AGENT_BROWSER_SESSION: SESSION },
+  }).trim();
 }
 
-// Search the web
-export async function search(query) {
+export function open(url, opts = {}) {
+  return ab(`open "${url}"`, opts);
+}
+
+export function search(query) {
   const encoded = encodeURIComponent(query);
-  return await motor.openUrl(`https://www.google.com/search?q=${encoded}`);
+  return ab(`open "https://www.google.com/search?q=${encoded}"`);
 }
 
-// Open a new tab (cmd+t then navigate)
-export async function newTab(url = null) {
-  await motor.press('t', ['cmd']);
-  if (url) {
-    await sleep(500);
-    await motor.press('l', ['cmd']); // focus address bar
-    await sleep(200);
-    await motor.type(url, { speed: 'instant' });
-    await motor.press('return');
-  }
+export function click(selector) {
+  return ab(`click "${selector}"`);
 }
 
-// Close current tab
-export async function closeTab() {
-  await motor.press('w', ['cmd']);
+export function type(selector, text) {
+  return ab(`type "${selector}" "${text.replace(/"/g, '\\"')}"`);
 }
 
-// Switch to next/previous tab
-export async function nextTab() {
-  await motor.press('tab', ['ctrl']);
+export function fill(selector, text) {
+  return ab(`fill "${selector}" "${text.replace(/"/g, '\\"')}"`);
 }
 
-export async function prevTab() {
-  await motor.press('tab', ['ctrl', 'shift']);
+export function press(key) {
+  return ab(`press "${key}"`);
 }
 
-// Go back/forward
-export async function goBack() {
-  await motor.press('left', ['cmd']);
+export function snapshot(opts = {}) {
+  const flags = [opts.interactive ? '-i' : '', opts.compact ? '-c' : ''].filter(Boolean).join(' ');
+  return ab(`snapshot ${flags}`);
 }
 
-export async function goForward() {
-  await motor.press('right', ['cmd']);
+export function screenshot(path) {
+  return ab(path ? `screenshot "${path}"` : 'screenshot');
 }
 
-// Reload
-export async function reload() {
-  await motor.press('r', ['cmd']);
+export function getText(selector) {
+  return ab(`get text "${selector}"`);
 }
 
-// Find on page
-export async function findOnPage(text) {
-  await motor.press('f', ['cmd']);
-  await sleep(300);
-  await motor.type(text, { speed: 'instant' });
+export function getUrl() {
+  return ab('get url');
 }
 
-// Copy page URL
-export async function copyUrl() {
-  await motor.press('l', ['cmd']); // focus address bar
-  await sleep(200);
-  await motor.press('c', ['cmd']); // copy
-  await sleep(100);
-  return motor.getClipboard();
+export function wait(selectorOrMs) {
+  return ab(`wait ${selectorOrMs}`, { timeout: 60000 });
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+export function evaluate(js) {
+  return ab(`eval "${js.replace(/"/g, '\\"')}"`, { timeout: 15000 });
+}
 
-export default { open, search, newTab, closeTab, nextTab, prevTab, goBack, goForward, reload, findOnPage, copyUrl };
+export function scrollTo(selector) {
+  return ab(`scrollintoview "${selector}"`);
+}
+
+export function close() {
+  try { return ab('close'); } catch { return 'already closed'; }
+}
+
+export default {
+  open, search, click, type, fill, press, snapshot, screenshot,
+  getText, getUrl, wait, evaluate, scrollTo, close,
+  PROFILE, SESSION,
+};

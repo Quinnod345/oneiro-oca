@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Scheduler</title>
+    <style>
+        :root {
+            --water-primary: #1e3a5f;
+            --water-secondary: #2d5a87;
+            --water-light: #4a7ba7;
+            --water-foam: #e8f4f8;
+            --bridge-wood: #8b6f47;
+            --bridge-stone: #5c5c5c;
+            --bridge-shadow: rgba(0, 0, 0, 0.2);
+            --riverbank: #3a5f3a;
+            --text-dark: #2c3e50;
+            --text-light: #ffffff;
+            --ripple-color: rgba(255, 255, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #87ceeb 0%, #4682b4 30%, #1e3a5f 100%);
+            overflow: hidden;
+            height: 900px;
+            width: 1440px;
+            position: relative;
+        }
+
+        .river-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse 800px 200px at 20% 10%, var(--riverbank) 0%, transparent 50%),
+                radial-gradient(ellipse 600px 150px at 80% 90%, var(--riverbank) 0%, transparent 50%);
+        }
+
+        .river-flow {
+            position: absolute;
+            top: 15%;
+            left: 0;
+            width: 100%;
+            height: 70%;
+            background: 
+                linear-gradient(180deg, 
+                    transparent 0%,
+                    var(--water-light) 5%,
+                    var(--water-secondary) 20%,
+                    var(--water-primary) 50%,
+                    var(--water-secondary) 80%,
+                    var(--water-light) 95%,
+                    transparent 100%
+                );
+            overflow: hidden;
+        }
+
+        .water-ripples {
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse 40px 8px at 20% 30%, var(--ripple-color) 0%, transparent 50%),
+                radial-gradient(ellipse 60px 12px at 60% 60%, var(--ripple-color) 0%, transparent 50%),
+                radial-gradient(ellipse 35px 7px at 85% 20%, var(--ripple-color) 0%, transparent 50%),
+                radial-gradient(ellipse 45px 9px at 40% 80%, var(--ripple-color) 0%, transparent 50%);
+            animation: flow 20s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { transform: translateX(-50%); }
+            100% { transform: translateX(0%); }
+        }
+
+        .scheduler-interface {
+            position: absolute;
+            top: 5%;
+            left: 5%;
+            right: 5%;
+            height: 90%;
+            z-index: 10;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-light);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: var(--water-foam);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .timeline-container {
+            position: relative;
+            height: calc(100% - 150px);
+            padding: 0 2rem;
+        }
+
+        .time-labels {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 80px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem 0;
+        }
+
+        .time-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-light);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            text-align: right;
+            padding-right: 1rem;
+        }
+
+        .river-timeline {
+            margin-left: 80px;
+            height: 100%;
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .time-slot {
+            position: absolute;
+            width: 100%;
+            height: 8.33%;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .time-slot:nth-child(1) { top: 0%; }
+        .time-slot:nth-child(2) { top: 8.33%; }
+        .time-slot:nth-child(3) { top: 16.66%; }
+        .time-slot:nth-child(4) { top: 25%; }
+        .time-slot:nth-child(5) { top: 33.33%; }
+        .time-slot:nth-child(6) { top: 41.66%; }
+        .time-slot:nth-child(7) { top: 50%; }
+        .time-slot:nth-child(8) { top: 58.33%; }
+        .time-slot:nth-child(9) { top: 66.66%; }
+        .time-slot:nth-child(10) { top: 75%; }
+        .time-slot:nth-child(11) { top: 83.33%; }
+        .time-slot:nth-child(12) { top: 91.66%; }
+
+        .time-slot.free:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .meeting-bridge {
+            position: absolute;
+            width: calc(100% - 2rem);
+            left: 1rem;
+            height: 100%;
+            background: 
+                linear-gradient(180deg, 
+                    var(--bridge-stone) 0%,
+                    var(--bridge-wood) 20%,
+                    var(--bridge-wood) 80%,
+                    var(--bridge-stone) 100%
+                );
+            border-radius: 8px;
+            box-shadow: 
+                0 4px 8px var(--bridge-shadow),
+                inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .meeting-bridge::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: 10%;
+            right: 10%;
+            height: 4px;
+            background: var(--bridge-stone);
+            border-radius: 2px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .meeting-bridge::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 10%;
+            right: 10%;
+            height: 4px;
+            background: var(--bridge-stone);
+            border-radius: 2px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .meeting-content {
+            color: var(--text-light);
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            z-index: 1;
+        }
+
+        .meeting-bridge:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 6px 12px var(--bridge-shadow),
+                inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .add-meeting-btn {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: 
+                radial-gradient(circle at 30% 30%, 
+                    rgba(255, 255, 255, 0.3) 0%, 
+                    var(--water-secondary) 50%, 
+                    var(--water-primary) 100%
+                );
+            border: 3px solid var(--text-light);
+            color: var(--text-light);
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .add-meeting-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .foam-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .foam {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--water-foam);
+            border-radius: 50%;
+            opacity: 0.7;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .foam:nth-child(1) { left: 15%; top: 20%; animation-delay: 0s; }
+        .foam:nth-child(2) { left: 45%; top: 70%; animation-delay: 2s; }
+        .foam:nth-child(3) { left: 75%; top: 40%; animation-delay: 4s; }
+        .foam:nth-child(4) { left: 25%; top: 80%; animation-delay: 1s; }
+        .foam:nth-child(5) { left: 85%; top: 15%; animation-delay: 3s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); opacity: 0.7; }
+            50% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+        }
+
+        .current-time-indicator {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: 
+                linear-gradient(90deg, 
+                    transparent 0%,
+                    var(--water-foam) 20%,
+                    #ffffff 50%,
+                    var(--water-foam) 80%,
+                    transparent 100%
+                );
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+            top: 33.33%;
+            z-index: 50;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; transform: scaleY(1); }
+            50% { opacity: 1; transform: scaleY(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <div class="river-container">
+        <div class="river-flow">
+            <div class="water-ripples"></div>
+        </div>
+        <div class="foam-particles">
+            <div class="foam"></div>
+            <div class="foam"></div>
+            <div class="foam"></div>
+            <div class="foam"></div>
+            <div class="foam"></div>
+        </div>
+    </div>
+
+    <div class="scheduler-interface">
+        <div class="header">
+            <h1>River Scheduler</h1>
+            <p>Time flows like a river — navigate your day with bridges of purpose</p>
+        </div>
+
+        <div class="timeline-container">
+            <div class="time-labels">
+                <div class="time-label">9:00</div>
+                <div class="time-label">10:00</div>
+                <div class="time-label">11:00</div>
+                <div class="time-label">12:00</div>
+                <div class="time-label">13:00</div>
+                <div class="time-label">14:00</div>
+                <div class="time-label">15:00</div>
+                <div class="time-label">16:00</div>
+                <div class="time-label">17:00</div>
+                <div class="time-label">18:00</div>
+                <div class="time-label">19:00</div>
+                <div class="time-label">20:00</div>
+            </div>
+
+            <div class="river-timeline">
+                <div class="current-time-indicator"></div>
+                
+                <div class="time-slot free"></div>
+                
+                <div class="time-slot">
+                    <div class="meeting-bridge">
+                        <div class="meeting-content">Team Standup</div>
+                    </div>
+                </div>
+                
+                <div class="time-slot free"></div>
+                
+                <div class="time-slot">
+                    <div class="meeting-bridge">
+                        <div class="meeting-content">Client Review</div>
+                    </div>
+                </div>
+                
+                <div class="time-slot free"></div>
+                <div class="time-slot free"></div>
+                
+                <div class="time-slot">
+                    <div class="meeting-bridge">
+                        <div class="meeting-content">Strategy Planning</div>
+                    </div>
+                </div>
+                
+                <div class="time-slot free"></div>
+                
+                <div class="time-slot">
+                    <div class="meeting-bridge">
+                        <div class="meeting-content">Design Review</div>
+                    </div>
+                </div>
+                
+                <div class="time-slot free"></div>
+                <div class="time-slot free"></div>
+                <div class="time-slot free"></div>
+            </div>
+        </div>
+
+        <div class="add-meeting-btn">+</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Dream Decay Calculator</title>
+    <style>
+        :root {
+            --crystal-core: #e3f2fd;
+            --crystal-edge: #90caf9;
+            --fracture-line: #1565c0;
+            --memory-dust: #bbdefb;
+            --void-black: #0a0f14;
+            --essence-glow: #64b5f6;
+            --caught-gold: #ffd54f;
+            --morning-haze: #e1f5fe;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at top, #141e30 0%, var(--void-black) 70%);
+            font-family: Georgia, serif;
+            cursor: grab;
+        }
+
+        .time-gradient {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 120px;
+            background: linear-gradient(to right, 
+                var(--morning-haze) 0%, 
+                transparent 20%, 
+                transparent 80%, 
+                #1a237e 100%);
+            opacity: 0.3;
+        }
+
+        .temporal-axis {
+            position: absolute;
+            top: 60px;
+            left: 120px;
+            right: 120px;
+            height: 1px;
+            background: linear-gradient(to right, 
+                var(--crystal-edge) 0%, 
+                transparent 50%, 
+                var(--fracture-line) 100%);
+            opacity: 0.4;
+        }
+
+        .time-markers {
+            position: absolute;
+            top: 40px;
+            left: 120px;
+            right: 120px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .time-marker {
+            font-size: 11px;
+            color: var(--memory-dust);
+            opacity: 0.6;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .dream-input {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 380px;
+            background: rgba(227, 242, 253, 0.05);
+            border: 1px solid var(--crystal-edge);
+            border-radius: 0;
+            padding: 20px;
+        }
+
+        .dream-input h3 {
+            color: var(--crystal-core);
+            font-size: 14px;
+            margin-bottom: 15px;
+            letter-spacing: 0.05em;
+            font-weight: normal;
+        }
+
+        .dream-field {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--crystal-edge);
+            color: var(--memory-dust);
+            padding: 8px 0;
+            margin-bottom: 12px;
+            font-family: Georgia, serif;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .dream-field:focus {
+            border-bottom-color: var(--essence-glow);
+        }
+
+        .dream-field::placeholder {
+            color: rgba(187, 222, 251, 0.3);
+        }
+
+        .crystallize-btn {
+            background: transparent;
+            border: 1px solid var(--crystal-edge);
+            color: var(--crystal-core);
+            padding: 8px 20px;
+            margin-top: 10px;
+            cursor: pointer;
+            font-family: Georgia, serif;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            transition: all 0.3s;
+        }
+
+        .crystallize-btn:hover {
+            background: rgba(227, 242, 253, 0.1);
+            border-color: var(--essence-glow);
+        }
+
+        .decay-formula {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            font-size: 11px;
+            color: var(--crystal-edge);
+            opacity: 0.4;
+            font-style: italic;
+            text-align: right;
+        }
+
+        .decay-formula .math {
+            font-family: 'Courier New', monospace;
+            display: block;
+            margin-top: 5px;
+            opacity: 0.6;
+        }
+
+        .memory-field {
+            position: absolute;
+            top: 140px;
+            left: 80px;
+            right: 80px;
+            bottom: 200px;
+            pointer-events: none;
+        }
+
+        .memory-crystal {
+            position: absolute;
+            pointer-events: all;
+            transition: transform 0.3s;
+        }
+
+        .crystal-structure {
+            width: 120px;
+            height: 120px;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: float 8s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotateX(15deg) rotateY(0deg); }
+            50% { transform: translateY(-10px) rotateX(15deg) rotateY(180deg); }
+        }
+
+        .crystal-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, 
+                var(--crystal-core) 0%, 
+                var(--crystal-edge) 50%, 
+                transparent 100%);
+            opacity: 0.6;
+            border: 1px solid var(--crystal-edge);
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+        }
+
+        .crystal-face:nth-child(1) { transform: rotateY(0deg) translateZ(30px); }
+        .crystal-face:nth-child(2) { transform: rotateY(72deg) translateZ(30px); }
+        .crystal-face:nth-child(3) { transform: rotateY(144deg) translateZ(30px); }
+        .crystal-face:nth-child(4) { transform: rotateY(216deg) translateZ(30px); }
+        .crystal-face:nth-child(5) { transform: rotateY(288deg) translateZ(30px); }
+
+        .memory-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--crystal-core);
+            font-size: 12px;
+            text-align: center;
+            width: 100px;
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .fracture-line {
+            position: absolute;
+            background: var(--fracture-line);
+            opacity: 0;
+            animation: crack 0.5s forwards;
+        }
+
+        @keyframes crack {
+            to { opacity: 0.8; }
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(45deg, 
+                var(--crystal-core) 0%, 
+                var(--memory-dust) 100%);
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+            opacity: 0.6;
+            pointer-events: all;
+            cursor: grab;
+            transition: all 0.3s;
+            animation: fall var(--fall-duration) linear forwards;
+        }
+
+        @keyframes fall {
+            to { 
+                transform: translateY(400px) rotate(360deg); 
+                opacity: 0.1;
+            }
+        }
+
+        .memory-fragment:hover {
+            transform: scale(1.2);
+            background: var(--caught-gold);
+            animation-play-state: paused;
+        }
+
+        .memory-fragment.caught {
+            animation: preserve 1s forwards;
+        }
+
+        @keyframes preserve {
+            to {
+                transform: translateY(0) scale(1.5);
+                background: var(--caught-gold);
+                opacity: 1;
+            }
+        }
+
+        .essence-cloud {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            filter: blur(30px);
+            opacity: 0;
+            animation: formCloud 3s forwards;
+            pointer-events: none;
+        }
+
+        @keyframes formCloud {
+            to {
+                opacity: 0.3;
+                transform: scale(1.5);
+            }
+        }
+
+        .preservation-meter {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 200px;
+        }
+
+        .meter-label {
+            font-size: 11px;
+            color: var(--crystal-edge);
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+
+        .meter-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(144, 202, 249, 0.1);
+            border: 1px solid var(--crystal-edge);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: var(--caught-gold);
+            width: 0%;
+            transition: width 0.5s;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 140px;
+            left: 40px;
+            width: 300px;
+            font-size: 12px;
+            color: var(--memory-dust);
+            opacity: 0.5;
+            line-height: 1.6;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="time-gradient"></div>
+    
+    <div class="temporal-axis"></div>
+    
+    <div class="time-markers">
+        <span class="time-marker">Dawn</span>
+        <span class="time-marker">Morning</span>
+        <span class="time-marker">Noon</span>
+        <span class="time-marker">Afternoon</span>
+        <span class="time-marker">Dusk</span>
+        <span class="time-marker">Night</span>
+    </div>
+
+    <div class="instructions">
+        Each dream crystallizes into geometric memory.
+        Watch them fracture along forgetting curves.
+        Catch falling fragments to preserve essence longer.
+    </div>
+
+    <div class="preservation-meter">
+        <div class="meter-label">Preserved Fragments</div>
+        <div class="meter-bar">
+            <div class="meter-fill" id="preservationFill"></div>
+        </div>
+    </div>
+
+    <div class="memory-field" id="memoryField"></div>
+
+    <div class="dream-input">
+        <h3>Morning Recall</h3>
+        <input type="text" class="dream-field" id="dreamTitle" placeholder="Dream essence...">
+        <input type="text" class="dream-field" id="dreamDetail1" placeholder="First detail...">
+        <input type="text" class="dream-field" id="dreamDetail2" placeholder="Second detail...">
+        <input type="text" class="dream-field" id="dreamDetail3" placeholder="Third detail...">
+        <button class="crystallize-btn" onclick="crystallizeDream()">Crystallize Memory</button>
+    </div>
+
+    <div class="decay-formula">
+        Memory Retention Formula
+        <span class="math">R(t) = e^(-t/τ) × (1 + α×preservation)</span>
+    </div>
+
+    <script>
+        let memories = [];
+        let preservedCount = 0;
+        let totalFragments = 0;
+
+        function crystallizeDream() {
+            const title = document.getElementById('dreamTitle').value;
+            const details = [
+                document.getElementById('dreamDetail1').value,
+                document.getElementById('dreamDetail2').value,
+                document.getElementById('dreamDetail3').value
+            ].filter(d => d);
+
+            if (!title) return;
+
+            const memory = {
+                id: Date.now(),
+                title: title,
+                details: details,
+                created: Date.now(),
+                fragments: 0
+            };
+
+            memories.push(memory);
+            createMemoryCrystal(memory);
+            
+            // Clear inputs
+            document.getElementById('dreamTitle').value = '';
+            document.getElementById('dreamDetail1').value = '';
+            document.getElementById('dreamDetail2').value = '';
+            document.getElementById('dreamDetail3').value = '';
+        }
+
+        function createMemoryCrystal(memory) {
+            const field = document.getElementById('memoryField');
+            const crystal = document.createElement('div');
+            crystal.className = 'memory-crystal';
+            crystal.id = `crystal-${memory.id}`;
+            
+            const x = 100 + Math.random() * (field.offsetWidth - 200);
+            const y = 50 + Math.random() * (field.offsetHeight - 150);
+            
+            crystal.style.left = x + 'px';
+            crystal.style.top = y + 'px';
+            
+            crystal.innerHTML = `
+                <div class="crystal-structure">
+                    <div class="crystal-face"></div>
+                    <div class="crystal-face"></div>
+                    <div class="crystal-face"></div>
+                    <div class="crystal-face"></div>
+                    <div class="crystal-face"></div>
+                    <div class="memory-text">${memory.title}</div>
+                </div>
+            `;
+            
+            field.appendChild(crystal);
+            
+            // Start decay process
+            setTimeout(() => startDecay(memory), 3000);
+        }
+
+        function startDecay(memory) {
+            const crystal = document.getElementById(`crystal-${memory.id}`);
+            if (!crystal) return;
+            
+            const structure = crystal.querySelector('.crystal-structure');
+            
+            // Add fracture lines
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const fracture = document.createElement('div');
+                    fracture.className = 'fracture-line';
+                    fracture.style.width = '1px';
+                    fracture.style.height = Math.random() * 80 + 40 + 'px';
+                    fracture.style.left = Math.random() * 100 + 'px';
+                    fracture.style.top = Math.random() * 100 + 'px';
+                    fracture.style.transform = `rotate(${Math.random() * 180}deg)`;
+                    structure.appendChild(fracture);
+                }, i * 1000);
+            }
+            
+            // Start fragmenting
+            setTimeout(() => fragment(memory, crystal), 6000);
+        }
+
+        function fragment(memory, crystal) {
+            const field = document.getElementById('memoryField');
+            const rect = crystal.getBoundingClientRect();
+            const fieldRect = field.getBoundingClientRect();
+            
+            // Create fragments
+            const fragmentCount = 8 + Math.random() * 12;
+            memory.fragments = fragmentCount;
+            totalFragments += fragmentCount;
+            
+            for (let i = 0; i < fragmentCount; i++) {
+                const fragment = document.createElement('div');
+                fragment.className = 'memory-fragment';
+                fragment.style.left = (rect.left - fieldRect.left + Math.random() * 120) + 'px';
+                fragment.style.top = (rect.top - fieldRect.top + Math.random() * 120) + 'px';
+                fragment.style.setProperty('--fall-duration', (3 + Math.random() * 4) + 's');
+                
+                fragment.onclick = function() {
+                    if (!this.classList.contains('caught')) {
+                        this.classList.add('caught');
+                        preservedCount++;
+                        updatePreservationMeter();
+                    }
+                };
+                
+                field.appendChild(fragment);
+            }
+            
+            // Fade crystal
+            crystal.style.opacity = '0.3';
+            
+            // Form essence cloud
+            setTimeout(() => {
+                const cloud = document.createElement('div');
+                cloud.className = 'essence-cloud';
+                cloud.style.left = (rect.left - fieldRect.left - 50) + 'px';
+                cloud.style.top = (rect.top - fieldRect.top - 50) + 'px';
+                cloud.style.background = `radial-gradient(circle, var(--essence-glow) 0%, transparent 70%)`;
+                field.appendChild(cloud);
+                
+                crystal.style.display = 'none';
+            }, 8000);
+        }
+
+        function updatePreservationMeter() {
+            const fill = document.getElementById('preservationFill');
+            const percentage = totalFragments > 0 ? (preservedCount / totalFragments) * 100 : 0;
+            fill.style.width = percentage + '%';
+        }
+
+        // Auto-advance time effect
+        setInterval(() => {
+            const field = document.getElementById('memoryField');
+            const fragments = field.querySelectorAll('.memory-fragment:not(.caught)');
+            fragments.forEach(f => {
+                if (Math.random() < 0.1) {
+                    f.style.opacity = parseFloat(f.style.opacity || 0.6) * 0.9;
+                }
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

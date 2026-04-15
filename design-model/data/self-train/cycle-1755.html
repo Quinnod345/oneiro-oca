@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organism System Monitor</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --bg-medium: #1a1a1a;
+            --bg-light: #2a2a2a;
+            --accent-green: #00ff88;
+            --accent-orange: #ff8800;
+            --accent-red: #ff3366;
+            --text-primary: #ffffff;
+            --text-secondary: #999999;
+            --text-dim: #666666;
+            --pulse-healthy: 2s;
+            --pulse-stressed: 0.4s;
+            --pulse-critical: 0.15s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-dark);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 120px;
+            height: 100vh;
+            gap: 2px;
+            background: var(--bg-dark);
+        }
+
+        .organism-container {
+            background: var(--bg-medium);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .organism {
+            width: 300px;
+            height: 300px;
+            position: relative;
+            filter: drop-shadow(0 0 40px currentColor);
+        }
+
+        .organism-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse var(--pulse-rate, var(--pulse-healthy)) ease-in-out infinite;
+        }
+
+        .organism-membrane {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 220px;
+            height: 220px;
+            border: 3px solid currentColor;
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: membrane-pulse var(--pulse-rate, var(--pulse-healthy)) ease-in-out infinite reverse;
+        }
+
+        .organism-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: currentColor;
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        .particle:nth-child(1) { top: 20%; left: 30%; animation: float 3s ease-in-out infinite; }
+        .particle:nth-child(2) { top: 60%; left: 80%; animation: float 4s ease-in-out infinite 0.5s; }
+        .particle:nth-child(3) { top: 80%; left: 20%; animation: float 3.5s ease-in-out infinite 1s; }
+        .particle:nth-child(4) { top: 30%; left: 70%; animation: float 2.8s ease-in-out infinite 1.5s; }
+        .particle:nth-child(5) { top: 70%; left: 40%; animation: float 3.2s ease-in-out infinite 2s; }
+
+        .cpu-organism {
+            color: var(--accent-green);
+            --pulse-rate: var(--pulse-healthy);
+        }
+
+        .memory-organism {
+            color: var(--accent-orange);
+            --pulse-rate: var(--pulse-stressed);
+        }
+
+        .organism-label {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .organism-stats {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            text-align: right;
+            color: var(--text-primary);
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: 300;
+            line-height: 1;
+            color: currentColor;
+        }
+
+        .stat-unit {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .stat-detail {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        .health-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .health-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse var(--pulse-rate, var(--pulse-healthy)) ease-in-out infinite;
+        }
+
+        .health-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .system-info {
+            grid-column: 1 / -1;
+            background: var(--bg-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+        }
+
+        .system-title {
+            color: var(--text-primary);
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .system-metrics {
+            display: flex;
+            gap: 60px;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 18px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .vitals-stream {
+            position: absolute;
+            bottom: 60px;
+            right: 40px;
+            width: 200px;
+            height: 40px;
+            opacity: 0.4;
+        }
+
+        .vital-line {
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+            animation: vitals var(--pulse-rate, var(--pulse-healthy)) ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+        }
+
+        @keyframes membrane-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+            50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.6; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
+            50% { transform: translateY(-15px) scale(1.2); opacity: 1; }
+        }
+
+        @keyframes vitals {
+            0% { stroke-dasharray: 0 100; }
+            50% { stroke-dasharray: 50 50; }
+            100% { stroke-dasharray: 0 100; }
+        }
+
+        .cpu-organism.stressed {
+            --pulse-rate: var(--pulse-stressed);
+            color: var(--accent-orange);
+        }
+
+        .cpu-organism.critical {
+            --pulse-rate: var(--pulse-critical);
+            color: var(--accent-red);
+        }
+
+        .memory-organism.healthy {
+            --pulse-rate: var(--pulse-healthy);
+            color: var(--accent-green);
+        }
+
+        .memory-organism.critical {
+            --pulse-rate: var(--pulse-critical);
+            color: var(--accent-red);
+        }
+    </style>
+</head>
+<body>
+    <div class="monitor-grid">
+        <div class="organism-container">
+            <div class="organism-label">CPU Core</div>
+            <div class="organism-stats">
+                <div class="stat-value">24<span class="stat-unit">%</span></div>
+                <div class="stat-detail">3.2 GHz • 4 cores</div>
+            </div>
+            <div class="organism cpu-organism">
+                <div class="organism-core"></div>
+                <div class="organism-membrane"></div>
+                <div class="organism-particles">
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                </div>
+            </div>
+            <div class="health-indicator">
+                <div class="health-dot"></div>
+                <div class="health-text">Healthy</div>
+            </div>
+            <div class="vitals-stream">
+                <svg width="200" height="40" viewBox="0 0 200 40">
+                    <path class="vital-line" d="M0,20 Q50,10 100,20 T200,20"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="organism-container">
+            <div class="organism-label">Memory Pool</div>
+            <div class="organism-stats">
+                <div class="stat-value">68<span class="stat-unit">%</span></div>
+                <div class="stat-detail">10.9/16 GB used</div>
+            </div>
+            <div class="organism memory-organism">
+                <div class="organism-core"></div>
+                <div class="organism-membrane"></div>
+                <div class="organism-particles">
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                </div>
+            </div>
+            <div class="health-indicator">
+                <div class="health-dot"></div>
+                <div class="health-text">Stressed</div>
+            </div>
+            <div class="vitals-stream">
+                <svg width="200" height="40" viewBox="0 0 200 40">
+                    <path class="vital-line" d="M0,20 Q25,5 50,20 Q75,35 100,20 Q125,5 150,20 Q175,35 200,20"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="system-info">
+            <div class="system-title">Organism System Monitor</div>
+            <div class="system-metrics">
+                <div class="metric">
+                    <div class="metric-label">Uptime</div>
+                    <div class="metric-value">7d 14h</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Processes</div>
+                    <div class="metric-value">247</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Network</div>
+                    <div class="metric-value">↑12 ↓84</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Temperature</div>
+                    <div class="metric-value">52°C</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Power</div>
+                    <div class="metric-value">45W</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simulate dynamic system changes
+        function updateOrganism(selector, usage, state) {
+            const organism = document.querySelector(selector);
+            const statsValue = organism.parentElement.querySelector('.stat-value');
+            const healthText = organism.parentElement.querySelector('.health-text');
+            
+            organism.className = `organism ${selector.replace('.', '')} ${state}`;
+            statsValue.innerHTML = `${usage}<span class="stat-unit">%</span>`;
+            healthText.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+        }
+
+        // Simulate realistic system behavior
+        setInterval(() => {
+            const cpuUsage = Math.random() * 100;
+            const memUsage = 60 + Math.random() * 30;
+            
+            let cpuState = 'healthy';
+            if (cpuUsage > 70) cpuState = 'stressed';
+            if (cpuUsage > 90) cpuState = 'critical';
+            
+            let memState = 'healthy';
+            if (memUsage > 60) memState = 'stressed';
+            if (memUsage > 85) memState = 'critical';
+            
+            updateOrganism('.cpu-organism', Math.round(cpuUsage), cpuState);
+            updateOrganism('.memory-organism', Math.round(memUsage), memState);
+        }, 3000);
+    </script>
+</body>
+</html>

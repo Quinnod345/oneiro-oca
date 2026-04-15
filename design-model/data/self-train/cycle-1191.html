@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Player</title>
+    <style>
+        :root {
+            --void-dark: #0a0b0f;
+            --void-medium: #1a1d24;
+            --nebula-purple: #2d1b3d;
+            --star-white: #f8f9fa;
+            --star-dim: #8892b0;
+            --constellation-line: #3d4663;
+            --glow-primary: #64ffda;
+            --glow-secondary: #bb86fc;
+            --glow-tertiary: #ffd700;
+            --surface: #1e2328;
+            --surface-light: #2a2f36;
+            --text-primary: #e6e8eb;
+            --text-secondary: #8892b0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-dark);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .nebula-bg {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 20% 30%, var(--nebula-purple) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, rgba(45, 27, 61, 0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 60% 10%, rgba(100, 255, 218, 0.03) 0%, transparent 40%);
+        }
+
+        .player-container {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 24px 32px;
+            border-bottom: 1px solid var(--constellation-line);
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .play-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--glow-primary) 0%, var(--glow-secondary) 100%);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(100, 255, 218, 0.3);
+        }
+
+        .play-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 30px rgba(100, 255, 218, 0.5);
+        }
+
+        .play-btn::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border-left: 12px solid var(--void-dark);
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            margin-left: 2px;
+        }
+
+        .progress-container {
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--constellation-line);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 35%;
+            background: linear-gradient(90deg, var(--glow-primary), var(--glow-secondary));
+            border-radius: 2px;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            background: var(--star-white);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--glow-primary);
+        }
+
+        .time-display {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .constellation-view {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .constellation-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .episode-star {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .star-core {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--star-dim);
+            position: relative;
+            transition: all 0.4s ease;
+        }
+
+        .episode-star.listened .star-core {
+            background: var(--glow-primary);
+            box-shadow: 
+                0 0 12px var(--glow-primary),
+                0 0 24px rgba(100, 255, 218, 0.4),
+                0 0 36px rgba(100, 255, 218, 0.1);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        .episode-star.current .star-core {
+            background: var(--glow-tertiary);
+            box-shadow: 
+                0 0 16px var(--glow-tertiary),
+                0 0 32px rgba(255, 215, 0, 0.6);
+            animation: currentPulse 2s ease-in-out infinite;
+        }
+
+        .episode-star.featured .star-core {
+            width: 12px;
+            height: 12px;
+            background: var(--glow-secondary);
+            box-shadow: 
+                0 0 20px var(--glow-secondary),
+                0 0 40px rgba(187, 134, 252, 0.4);
+        }
+
+        .star-rays {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .star-rays::before,
+        .star-rays::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glow-primary), transparent);
+            transform: translate(-50%, -50%);
+        }
+
+        .star-rays::after {
+            transform: translate(-50%, -50%) rotate(90deg);
+        }
+
+        .episode-star:hover .star-rays,
+        .episode-star.listened .star-rays,
+        .episode-star.current .star-rays {
+            opacity: 0.6;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--constellation-line), transparent);
+            opacity: 0.4;
+            transform-origin: left center;
+            transition: opacity 0.4s ease;
+        }
+
+        .constellation-line.active {
+            background: linear-gradient(90deg, transparent, var(--glow-primary), transparent);
+            opacity: 0.6;
+            box-shadow: 0 0 4px rgba(100, 255, 218, 0.3);
+        }
+
+        .episode-tooltip {
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            border: 1px solid var(--constellation-line);
+            backdrop-filter: blur(20px);
+            z-index: 200;
+        }
+
+        .episode-star:hover .episode-tooltip {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+
+        .series-label {
+            position: absolute;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            pointer-events: none;
+            z-index: 50;
+            padding: 4px 8px;
+            background: rgba(26, 29, 36, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 4px;
+            border: 1px solid var(--constellation-line);
+        }
+
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 320px;
+            height: 100%;
+            background: rgba(26, 29, 36, 0.95);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--constellation-line);
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 300;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--constellation-line);
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .episode-list {
+            padding: 16px;
+            height: calc(100% - 80px);
+            overflow-y: auto;
+        }
+
+        .episode-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--surface-light);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .episode-item:hover {
+            background: var(--surface);
+            border-color: var(--constellation-line);
+        }
+
+        .episode-item.played {
+            border-color: var(--glow-primary);
+            background: rgba(100, 255, 218, 0.05);
+        }
+
+        .episode-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .episode-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        @keyframes currentPulse {
+            0%, 100% { box-shadow: 0 0 16px var(--glow-tertiary), 0 0 32px rgba(255, 215, 0, 0.6); }
+            50% { box-shadow: 0 0 24px var(--glow-tertiary), 0 0 48px rgba(255, 215, 0, 0.8); }
+        }
+
+        .toggle-sidebar {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: var(--surface);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid var(--constellation-line);
+            z-index: 400;
+        }
+
+        .toggle-sidebar:hover {
+            background: var(--surface-light);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="nebula-bg"></div>
+    
+    <div class="player-container">
+        <header class="header">
+            <h1>Constellation Player</h1>
+            <p>Navigate your podcast universe — each episode a star, each series a constellation</p>
+            
+            <div class="controls">
+                <button class="play-btn"></button>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="time-display">14:32 / 42:18</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="constellation-view">
+            <div class="constellation-canvas">
+                <!-- Series 1: Tech Talks -->
+                <div class="series-label" style="top: 120px; left: 200px;">Tech Talks</div>
+                <div class="constellation-line active" style="top: 150px; left: 180px; width: 180px; transform: rotate(15deg);"></div>
+                
+                <div class="episode-star listened" style="top: 140px; left: 180px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP01: The Future of AI</div>
+                </div>
+                
+                <div class="episode-star listened" style="top: 160px; left: 240px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP02: Quantum Computing</div>
+                </div>
+                
+                <div class="episode-star current" style="top: 180px; left: 320px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP03: Blockchain Beyond Crypto</div>
+                </div>
+                
+                <div class="episode-star" style="top: 200px; left: 380px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP04: Neural Networks</div>
+                </div>
+
+                <!-- Series 2: Design Stories -->
+                <div class="series-label" style="top: 300px; left: 500px;">Design Stories</div>
+                <div class="constellation-line" style="top: 340px; left: 480px; width: 220px; transform: rotate(-10deg);"></div>
+                
+                <div class="episode-star featured listened" style="top: 320px; left: 480px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">Special: Design in Space</div>
+                </div>
+                
+                <div class="episode-star listened" style="top: 350px; left: 560px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP15: Minimalist Interfaces</div>
+                </div>
+                
+                <div class="episode-star listened" style="top: 380px; left: 640px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP16: Color Psychology</div>
+                </div>
+                
+                <div class="episode-star" style="top: 340px; left: 700px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP17: Typography Trends</div>
+                </div>
+
+                <!-- Series 3: Science Deep Dive -->
+                <div class="series-label" style="top: 480px; left: 300px;">Science Deep Dive</div>
+                <div class="constellation-line" style="top: 520px; left: 280px; width: 160px; transform: rotate(45deg);"></div>
+                <div class="constellation-line" style="top: 540px; left: 380px; width: 140px; transform: rotate(-20deg);"></div>
+                
+                <div class="episode-star listened" style="top: 510px; left: 280px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP08: Dark Matter</div>
+                </div>
+                
+                <div class="episode-star listened" style="top: 540px; left: 360px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP09: CRISPR Revolution</div>
+                </div>
+                
+                <div class="episode-star" style="top: 570px; left: 420px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP10: Climate Modeling</div>
+                </div>
+                
+                <div class="episode-star" style="top: 560px; left: 500px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP11: Exoplanets</div>
+                </div>
+
+                <!-- Series 4: Creative Process -->
+                <div class="series-label" style="top: 200px; left: 800px;">Creative Process</div>
+                <div class="constellation-line" style="top: 240px; left: 780px; width: 200px; transform: rotate(25deg);"></div>
+                
+                <div class="episode-star" style="top: 230px; left: 780px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP05: Finding Inspiration</div>
+                </div>
+                
+                <div class="episode-star" style="top: 260px; left: 840px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP06: Overcoming Blocks</div>
+                </div>
+                
+                <div class="episode-star" style="top: 290px; left: 920px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP07: Collaboration</div>
+                </div>
+
+                <!-- Series 5: Philosophy Hour -->
+                <div class="series-label" style="top: 420px; left: 900px;">Philosophy Hour</div>
+                <div class="constellation-line" style="top: 460px; left: 880px; width: 140px; transform: rotate(-45deg);"></div>
+                
+                <div class="episode-star listened" style="top: 450px; left: 880px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP12: Ethics in AI</div>
+                </div>
+                
+                <div class="episode-star" style="top: 480px; left: 940px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP13: Digital Identity</div>
+                </div>
+                
+                <div class="episode-star" style="top: 510px; left: 1000px;">
+                    <div class="star-core"></div>
+                    <div class="star-rays"></div>
+                    <div class="episode-tooltip">EP14: Future Society</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Episode Library</div>
+            <div style="font-size: 14px; color: var(--text-secondary);">Recently Played</div>
+        </div>
+        
+        <div class="episode-list">
+            <div class="episode-item played">
+                <div class="episode-title">The Future of AI</div>
+                <div class="episode-meta">Tech Talks • 42 min • Played</div>
+            </div>
+            
+            <div class="episode-item played">
+                <div class="episode-title">Quantum Computing</div>
+                <div class="episode-meta">Tech Talks • 38 min • Played</div>
+            </div>
+            
+            <div class="episode-item">
+                <div class="episode-title">Blockchain Beyond Crypto</div>
+                <div class="episode-meta">Tech Talks • 45 min • Playing</div>
+            </div>
+            
+            <div class="episode-item played">
+                <div class="episode-title">Design in Space</div>
+                <div class="episode-meta">Design Stories • 52 min • Played</div>
+            </div>
+            
+            <div class="episode-item played">
+                <div class="episode-title">Minimalist Interfaces</div>
+                <div class="episode-meta">Design Stories • 35 min • Played</div>
+            </div>
+            
+            <div class="episode-item">
+                <div class="episode-title">Neural Networks</div>
+                <div class="episode-meta">Tech Talks • 41 min • Unplayed</div>
+            </div>
+            
+            <div class="episode-item">
+                <div class="episode-title">Typography Trends</div>
+                <div class="episode-meta">Design Stories • 29 min • Unplayed</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Add click handlers for stars
+        document.querySelectorAll('.episode-star').forEach(star => {
+            star.addEventListener('click', function() {
+                // Remove current from all stars
+                document.querySelectorAll('.episode-star').forEach(s => s.classList.remove('current'));
+                // Add current to clicked star
+                this.classList.add('current');
+                // Add listened class if not already there
+                this.classList.add('listened');
+                
+                // Update constellation lines
+                document.querySelectorAll('.constellation-line').forEach(line => {
+                    line.classList.remove('active');
+                });
+                
+                // Find and activate related constellation line (simplified logic)
+                const rect = this.getBoundingClientRect();
+                const lines = document.querySelectorAll('.constellation-line');
+                lines.forEach(line => {
+                    const lineRect = line.getBoundingClientRect();
+                    if (Math.abs(rect.top - lineRect.top) < 50 && Math.abs(rect.left - lineRect.left) < 200) {
+                        line.classList.add('active');
+                    }
+                });
+            });
+        });
+
+        // Simulate progress
+        setInterval(() => {
+            const fill = document.querySelector('.progress-fill');
+            const currentWidth = parseInt(fill.style.width) || 35;
+            if (currentWidth < 100) {
+                fill.style.width = (currentWidth + 0.1) + '%';
+            }
+        }, 100);
+    </script>
+</body>
+</html>

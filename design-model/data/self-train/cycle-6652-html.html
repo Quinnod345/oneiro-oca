@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --mahogany: #3a1f1f;
+            --dust: #d4c4b0;
+            --brass: #b08d57;
+            --velvet: #5a2e2e;
+            --parchment: #f4e8d0;
+            --tarnish: #7a6a5a;
+            --shadow: rgba(26, 13, 13, 0.4);
+            --glow: #ffd4a3;
+            --decay: #8a6a4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: radial-gradient(ellipse at top right, #2a1a1a 0%, #1a0f0f 100%);
+            font-family: Georgia, serif;
+            color: var(--dust);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .shop-interior {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            perspective: 1200px;
+        }
+
+        .dust-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--dust);
+            opacity: 0.3;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            33% { transform: translateY(-30px) translateX(20px); }
+            66% { transform: translateY(20px) translateX(-15px); }
+        }
+
+        .shelving-system {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .shelf {
+            position: absolute;
+            width: 1200px;
+            height: 180px;
+            left: 120px;
+            background: linear-gradient(to bottom, var(--mahogany) 0%, #2a1515 100%);
+            border-bottom: 3px solid var(--brass);
+            transform-style: preserve-3d;
+            transition: all 0.6s ease-out;
+        }
+
+        .shelf::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 20px;
+            bottom: -20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 100%);
+        }
+
+        .shelf-1 { top: 120px; transform: rotateX(-2deg); }
+        .shelf-2 { top: 340px; transform: rotateX(-1deg); }
+        .shelf-3 { top: 560px; transform: rotateX(-0.5deg); }
+
+        .memory-box {
+            position: absolute;
+            width: 140px;
+            height: 100px;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: all 0.4s ease;
+        }
+
+        .memory-box:hover {
+            transform: translateY(-10px) rotateY(5deg);
+        }
+
+        .box-body {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            background: linear-gradient(135deg, var(--velvet) 0%, #4a2020 100%);
+            border: 2px solid var(--brass);
+            border-radius: 8px;
+            box-shadow: 0 8px 20px var(--shadow);
+        }
+
+        .decay-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="100"><filter id="crack"><feTurbulence baseFrequency="0.02" numOctaves="5"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 20 -10"/></filter><rect width="140" height="100" filter="url(%23crack)" opacity="0.6"/></svg>');
+            mix-blend-mode: multiply;
+            border-radius: 8px;
+            transition: opacity 0.8s ease;
+        }
+
+        .memory-box.decaying .decay-overlay {
+            opacity: 1;
+            animation: intensify-decay 3s ease-in-out infinite;
+        }
+
+        @keyframes intensify-decay {
+            0%, 100% { filter: contrast(1); }
+            50% { filter: contrast(1.5); }
+        }
+
+        .music-mechanism {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+        }
+
+        .cylinder {
+            width: 100%;
+            height: 40px;
+            background: var(--brass);
+            border-radius: 20px;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .memory-box:hover .cylinder {
+            animation: rotate-cylinder 2s linear infinite;
+        }
+
+        @keyframes rotate-cylinder {
+            to { transform: rotateZ(360deg); }
+        }
+
+        .memory-label {
+            position: absolute;
+            bottom: -30px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: var(--dust);
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        .bid-tag {
+            position: absolute;
+            top: -25px;
+            right: -10px;
+            background: var(--parchment);
+            color: var(--mahogany);
+            padding: 4px 12px;
+            font-size: 14px;
+            border-radius: 3px;
+            transform: rotate(-5deg);
+            box-shadow: 0 2px 6px var(--shadow);
+            font-weight: bold;
+        }
+
+        .auction-panel {
+            position: fixed;
+            right: 40px;
+            top: 40px;
+            width: 320px;
+            height: 820px;
+            background: linear-gradient(to bottom, rgba(244, 232, 208, 0.95) 0%, rgba(212, 196, 176, 0.95) 100%);
+            border: 3px solid var(--brass);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px var(--shadow);
+            color: var(--mahogany);
+        }
+
+        .panel-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--brass);
+            padding-bottom: 20px;
+        }
+
+        .panel-title {
+            font-size: 24px;
+            font-weight: normal;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .currency-display {
+            font-size: 18px;
+            color: var(--velvet);
+        }
+
+        .currency-amount {
+            font-weight: bold;
+            color: var(--brass);
+        }
+
+        .active-memory {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            text-align: center;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .memory-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .emotional-signature {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .emotion-bar {
+            width: 6px;
+            background: var(--brass);
+            border-radius: 3px;
+            transition: height 0.4s ease;
+        }
+
+        .bid-controls {
+            margin-top: 30px;
+        }
+
+        .bid-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            border: 2px solid var(--brass);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--mahogany);
+            text-align: center;
+            margin-bottom: 15px;
+            font-family: Georgia, serif;
+        }
+
+        .bid-button {
+            width: 100%;
+            padding: 15px;
+            background: var(--velvet);
+            color: var(--parchment);
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: Georgia, serif;
+        }
+
+        .bid-button:hover {
+            background: var(--mahogany);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .warning-text {
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--velvet);
+            text-align: center;
+            font-style: italic;
+            line-height: 1.6;
+        }
+
+        .shop-sign {
+            position: absolute;
+            top: 30px;
+            left: 60px;
+            font-size: 32px;
+            color: var(--brass);
+            font-weight: normal;
+            letter-spacing: 3px;
+            text-shadow: 0 2px 4px var(--shadow);
+        }
+
+        .curiosity-meter {
+            position: absolute;
+            bottom: 40px;
+            left: 60px;
+            width: 300px;
+        }
+
+        .meter-label {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: var(--dust);
+        }
+
+        .meter-bar {
+            width: 100%;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--brass) 0%, var(--glow) 100%);
+            width: 0%;
+            transition: width 1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="shop-interior">
+        <div class="dust-particles" id="dustContainer"></div>
+        
+        <h1 class="shop-sign">MEMORIA ANTIQUARIUS</h1>
+        
+        <div class="shelving-system" id="shelvingSystem">
+            <div class="shelf shelf-1" id="shelf1"></div>
+            <div class="shelf shelf-2" id="shelf2"></div>
+            <div class="shelf shelf-3" id="shelf3"></div>
+        </div>
+
+        <div class="auction-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">AUCTION HOUSE</h2>
+                <div class="currency-display">
+                    Balance: <span class="currency-amount">₼ 10,000</span>
+                </div>
+            </div>
+
+            <div class="active-memory" id="activeMemory">
+                <div class="memory-title">Select a memory...</div>
+            </div>
+
+            <div class="emotional-signature" id="emotionalSignature"></div>
+
+            <div class="bid-controls">
+                <input type="number" class="bid-input" id="bidInput" placeholder="Enter bid amount" min="100" max="10000">
+                <button class="bid-button" id="bidButton">PLACE BID</button>
+            </div>
+
+            <p class="warning-text">
+                Each bid accelerates decay. Once lost, memories cannot be recovered. Choose wisely what deserves preservation.
+            </p>
+        </div>
+
+        <div class="curiosity-meter">
+            <div class="meter-label">Collective Curiosity</div>
+            <div class="meter-bar">
+                <div class="meter-fill" id="curiosityFill"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const memories = [
+            { id: 1, title: "First Day of School", emotion: [8, 3, 6, 9, 4], price: 2500 },
+            { id: 2, title: "Lost Pet", emotion: [2, 9, 4, 3, 8], price: 3200 },
+            { id: 3, title: "Summer Storm", emotion: [5, 6, 8, 7, 5], price: 1800 },
+            { id: 4, title: "Forgotten Birthday", emotion: [3, 8, 2, 4, 7], price: 4100 },
+            { id: 5, title: "Late Night Drive", emotion: [7, 4, 9, 6, 3], price: 2200 },
+            { id: 6, title: "Empty House", emotion: [4, 7, 3, 2, 9], price: 3700 },
+            { id: 7, title: "Broken Promise", emotion: [2, 9, 5, 4, 6], price: 4500 },
+            { id: 8, title: "Morning Coffee", emotion: [8, 3, 7, 8, 5], price: 1500 },
+            { id: 9, title: "Last Goodbye", emotion: [1, 10, 3, 2, 8], price: 5000 }
+        ];
+
+        let balance = 10000;
+        let activeMemory = null;
+        let hoverCounts = {};
+        let bidCounts = {};
+
+        // Create dust particles
+        function createDustParticles() {
+            const container = document.getElementById('dustContainer');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Create memory boxes
+        function createMemoryBoxes() {
+            memories.forEach((memory, index) => {
+                const shelf = document.getElementById(`shelf${Math.floor(index / 3) + 1}`);
+                const box = document.createElement('div');
+                box.className = 'memory-box';
+                box.style.left = `${(index % 3) * 380 + 80}px`;
+                box.style.top = '40px';
+                box.dataset.memoryId = memory.id;
+                
+                hoverCounts[memory.id] = 0;
+                bidCounts[memory.id] = 0;
+
+                box.innerHTML = `
+                    <div class="box-body">
+                        <div class="decay-overlay"></div>
+                        <div class="music-mechanism">
+                            <div class="cylinder"></div>
+                        </div>
+                        <div class="bid-tag">₼ ${memory.price}</div>
+                    </div>
+                    <div class="memory-label">${memory.title}</div>
+                `;
+
+                box.addEventListener('mouseenter', () => handleMemoryHover(memory));
+                box.addEventListener('click', () => selectMemory(memory, box));
+                
+                shelf.appendChild(box);
+            });
+        }
+
+        function handleMemoryHover(memory) {
+            hoverCounts[memory.id]++;
+            updateShelfPositions();
+            updateCuriosityMeter();
+        }
+
+        function updateShelfPositions() {
+            const sortedMemories = [...memories].sort((a, b) => 
+                (hoverCounts[b.id] || 0) - (hoverCounts[a.id] || 0)
+            );
+
+            sortedMemories.forEach((memory, newIndex) => {
+                const box = document.querySelector(`[data-memory-id="${memory.id}"]`);
+                const newShelf = Math.floor(newIndex / 3) + 1;
+                const newPosition = (newIndex % 3) * 380 + 80;
+                
+                setTimeout(() => {
+                    const targetShelf = document.getElementById(`shelf${newShelf}`);
+                    if (box.parentElement !== targetShelf) {
+                        targetShelf.appendChild(box);
+                    }
+                    box.style.left = `${newPosition}px`;
+                }, newIndex * 100);
+            });
+        }
+
+        function updateCuriosityMeter() {
+            const totalHovers = Object.values(hoverCounts).reduce((a, b) => a + b, 0);
+            const percentage = Math.min((totalHovers / 50) * 100, 100);
+            document.getElementById('curiosityFill').style.width = percentage + '%';
+        }
+
+        function selectMemory(memory, boxElement) {
+            activeMemory = { ...memory, element: boxElement };
+            document.getElementById('activeMemory').innerHTML = `
+                <div class="memory-title">${memory.title}</div>
+                <div class="emotional-signature" id="innerSignature"></div>
+            `;
+            
+            const signature = document.getElementById('innerSignature');
+            memory.emotion.forEach((height, i) => {
+                const bar = document.createElement('div');
+                bar.className = 'emotion-bar';
+                bar.style.height = height * 8 + 'px';
+                signature.appendChild(bar);
+            });
+        }
+
+        function placeBid() {
+            if (!activeMemory) return;
+            
+            const bidAmount = parseInt(document.getElementById('bidInput').value);
+            if (bidAmount > balance || bidAmount < 100) return;
+
+            bidCounts[activeMemory.id]++;
+            
+            // Accelerate decay based on bid count
+            if (bidCounts[activeMemory.id] > 2) {
+                activeMemory.element.classList.add('decaying');
+            }
+            
+            if (bidCounts[activeMemory.id] > 5) {
+                // Memory is lost
+                setTimeout(() => {
+                    activeMemory.element.style.opacity = '0.3';
+                    activeMemory.element.style.pointerEvents = 'none';
+                }, 1000);
+            }
+
+            balance -= bidAmount;
+            document.querySelector('.currency-amount').textContent = `₼ ${balance.toLocaleString()}`;
+            document.getElementById('bidInput').value = '';
+        }
+
+        // Initialize
+        createDustParticles();
+        createMemoryBoxes();
+        
+        document.getElementById('bidButton').addEventListener('click', placeBid);
+        document.getElementById('bidInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') placeBid();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Time - Meeting Scheduler</title>
+    <style>
+        :root {
+            --river-blue: #2563eb;
+            --river-light: #3b82f6;
+            --river-dark: #1d4ed8;
+            --bridge-wood: #92400e;
+            --bridge-shadow: #78350f;
+            --water-foam: #dbeafe;
+            --stone-gray: #64748b;
+            --text-dark: #1e293b;
+            --text-light: #475569;
+            --success-green: #059669;
+            --ripple-opacity: 0.6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            color: var(--text-dark);
+            height: 900px;
+            width: 1440px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .river-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: radial-gradient(ellipse at top, #1e40af 0%, #0f172a 70%);
+        }
+
+        .river-header {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            right: 60px;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .river-title {
+            color: white;
+            font-size: 32px;
+            font-weight: 700;
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .river-date {
+            color: var(--water-foam);
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .river-flow {
+            position: absolute;
+            top: 120px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, 
+                transparent 0%, 
+                var(--river-blue) 20%, 
+                var(--river-dark) 80%, 
+                #0f172a 100%);
+            overflow: hidden;
+        }
+
+        .time-markers {
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 80px;
+            z-index: 50;
+        }
+
+        .time-marker {
+            position: absolute;
+            color: var(--water-foam);
+            font-size: 14px;
+            font-weight: 500;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            opacity: 0.8;
+        }
+
+        .river-stream {
+            position: absolute;
+            left: 120px;
+            right: 60px;
+            top: 0;
+            bottom: 0;
+            border-radius: 40px;
+            background: linear-gradient(to right,
+                rgba(59, 130, 246, 0.3) 0%,
+                rgba(37, 99, 235, 0.8) 50%,
+                rgba(29, 78, 216, 0.3) 100%);
+            backdrop-filter: blur(1px);
+            box-shadow: inset 0 4px 20px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .water-current {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            right: -100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent 0px,
+                rgba(255, 255, 255, 0.1) 50px,
+                transparent 100px
+            );
+            animation: flow 8s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { transform: translateX(-50px); }
+            100% { transform: translateX(50px); }
+        }
+
+        .meeting-bridge {
+            position: absolute;
+            left: -20px;
+            right: -20px;
+            height: 60px;
+            background: linear-gradient(to bottom, var(--bridge-wood), var(--bridge-shadow));
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .meeting-bridge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .meeting-bridge::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: 20px;
+            right: 20px;
+            height: 8px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--bridge-shadow) 0px,
+                var(--bridge-shadow) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+            border-radius: 4px;
+        }
+
+        .meeting-info {
+            flex: 1;
+            color: white;
+        }
+
+        .meeting-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .meeting-time {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .meeting-participants {
+            margin-left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .participant-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--success-green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .available-slot {
+            position: absolute;
+            left: 40px;
+            right: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(2px);
+        }
+
+        .available-slot:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: scale(1.02);
+        }
+
+        .slot-text {
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, var(--ripple-opacity)) 0%, transparent 70%);
+            animation: ripple-animation 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-animation {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .river-stones {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .stone {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--stone-gray), #475569);
+            opacity: 0.4;
+        }
+
+        .add-meeting-fab {
+            position: absolute;
+            bottom: 40px;
+            right: 60px;
+            width: 64px;
+            height: 64px;
+            background: var(--success-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(5, 150, 105, 0.3);
+            transition: all 0.3s ease;
+            z-index: 100;
+            border: none;
+            color: white;
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .add-meeting-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 32px rgba(5, 150, 105, 0.4);
+        }
+
+        .week-navigation {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .nav-button {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(4px);
+        }
+
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .week-display {
+            color: white;
+            font-size: 18px;
+            font-weight: 500;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="river-container">
+        <div class="river-header">
+            <h1 class="river-title">River Time</h1>
+            <div class="river-date">Tuesday, March 14, 2024</div>
+        </div>
+
+        <div class="week-navigation">
+            <button class="nav-button">‹</button>
+            <div class="week-display">This Week</div>
+            <button class="nav-button">›</button>
+        </div>
+
+        <div class="river-flow">
+            <div class="time-markers">
+                <div class="time-marker" style="top: 60px;">9:00</div>
+                <div class="time-marker" style="top: 140px;">10:00</div>
+                <div class="time-marker" style="top: 220px;">11:00</div>
+                <div class="time-marker" style="top: 300px;">12:00</div>
+                <div class="time-marker" style="top: 380px;">1:00</div>
+                <div class="time-marker" style="top: 460px;">2:00</div>
+                <div class="time-marker" style="top: 540px;">3:00</div>
+                <div class="time-marker" style="top: 620px;">4:00</div>
+                <div class="time-marker" style="top: 700px;">5:00</div>
+            </div>
+
+            <div class="river-stream">
+                <div class="water-current"></div>
+                
+                <div class="available-slot" style="top: 40px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="meeting-bridge" style="top: 100px;">
+                    <div class="meeting-info">
+                        <div class="meeting-title">Product Review</div>
+                        <div class="meeting-time">10:00 - 11:00 AM</div>
+                    </div>
+                    <div class="meeting-participants">
+                        <div class="participant-avatar">JD</div>
+                        <div class="participant-avatar">SM</div>
+                        <div class="participant-avatar">AK</div>
+                    </div>
+                </div>
+
+                <div class="available-slot" style="top: 180px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="meeting-bridge" style="top: 240px;">
+                    <div class="meeting-info">
+                        <div class="meeting-title">Team Standup</div>
+                        <div class="meeting-time">12:00 - 12:30 PM</div>
+                    </div>
+                    <div class="meeting-participants">
+                        <div class="participant-avatar">TR</div>
+                        <div class="participant-avatar">MJ</div>
+                    </div>
+                </div>
+
+                <div class="available-slot" style="top: 320px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="available-slot" style="top: 400px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="meeting-bridge" style="top: 460px;">
+                    <div class="meeting-info">
+                        <div class="meeting-title">Client Presentation</div>
+                        <div class="meeting-time">2:00 - 3:30 PM</div>
+                    </div>
+                    <div class="meeting-participants">
+                        <div class="participant-avatar">RW</div>
+                        <div class="participant-avatar">LB</div>
+                        <div class="participant-avatar">CF</div>
+                        <div class="participant-avatar">NK</div>
+                    </div>
+                </div>
+
+                <div class="available-slot" style="top: 580px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="available-slot" style="top: 660px;">
+                    <div class="slot-text">+ Schedule meeting</div>
+                </div>
+
+                <div class="river-stones">
+                    <div class="stone" style="width: 24px; height: 18px; top: 150px; left: 200px;"></div>
+                    <div class="stone" style="width: 18px; height: 16px; top: 300px; right: 180px;"></div>
+                    <div class="stone" style="width: 20px; height: 14px; top: 450px; left: 160px;"></div>
+                    <div class="stone" style="width: 16px; height: 20px; top: 600px; right: 220px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <button class="add-meeting-fab">+</button>
+    </div>
+
+    <script>
+        // Add ripple effects to available slots
+        document.querySelectorAll('.available-slot').forEach(slot => {
+            slot.addEventListener('click', function(e) {
+                const ripple = document.createElement('div');
+                ripple.classList.add('ripple');
+                const rect = this.getBoundingClientRect();
+                const size = 60;
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+                ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+                this.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                }, 2000);
+            });
+        });
+
+        // Add floating animation to stones
+        document.querySelectorAll('.stone').forEach((stone, index) => {
+            stone.style.animationDelay = (index * 0.5) + 's';
+            stone.style.animation = 'float 3s ease-in-out infinite alternate';
+        });
+
+        // Add CSS for floating animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes float {
+                0% { transform: translateY(0px); }
+                100% { transform: translateY(-8px); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

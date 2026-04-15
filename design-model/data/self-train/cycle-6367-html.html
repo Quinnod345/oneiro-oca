@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --void-black: #0a0b0e;
+            --memory-dust: #2a2e3a;
+            --glass-crack: #4a5266;
+            --fragment-glow: #8da4c7;
+            --emotional-flow: #e4c4a1;
+            --decay-rust: #7d5a4f;
+            --preservation-blue: #a4c2d4;
+            --forgotten-grey: #3e424d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void-black);
+            font-family: Baskerville, Georgia, serif;
+            position: relative;
+            cursor: none;
+        }
+
+        #archaeological-brush {
+            position: fixed;
+            width: 40px;
+            height: 80px;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            transition: transform 0.2s ease;
+        }
+
+        #archaeological-brush::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 60%;
+            background: linear-gradient(to bottom, 
+                transparent 0%, 
+                rgba(141, 164, 199, 0.1) 20%,
+                rgba(141, 164, 199, 0.3) 50%,
+                rgba(228, 196, 161, 0.2) 100%);
+            border-radius: 50% 50% 5px 5px;
+            filter: blur(2px);
+        }
+
+        #archaeological-brush::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 40%;
+            background: var(--decay-rust);
+            clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+            opacity: 0.6;
+        }
+
+        #memory-void {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 70% 30%, 
+                rgba(42, 46, 58, 0.2) 0%, 
+                var(--void-black) 50%);
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            transform-style: preserve-3d;
+            animation: drift 30s infinite ease-in-out;
+        }
+
+        .memory-fragment:nth-child(1) { left: 200px; top: 150px; animation-delay: 0s; }
+        .memory-fragment:nth-child(2) { left: 600px; top: 400px; animation-delay: -10s; }
+        .memory-fragment:nth-child(3) { left: 1000px; top: 200px; animation-delay: -20s; }
+        .memory-fragment:nth-child(4) { left: 300px; top: 550px; animation-delay: -5s; }
+        .memory-fragment:nth-child(5) { left: 850px; top: 600px; animation-delay: -15s; }
+
+        @keyframes drift {
+            0%, 100% { transform: translateZ(0) rotateX(0deg) rotateY(0deg); }
+            25% { transform: translateZ(20px) rotateX(5deg) rotateY(-5deg); }
+            50% { transform: translateZ(-10px) rotateX(-3deg) rotateY(3deg); }
+            75% { transform: translateZ(15px) rotateX(4deg) rotateY(-2deg); }
+        }
+
+        .puzzle-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform: rotateX(15deg) rotateY(-10deg);
+        }
+
+        .puzzle-piece {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, 
+                rgba(141, 164, 199, 0.1) 0%, 
+                rgba(141, 164, 199, 0.05) 50%,
+                transparent 100%);
+            border: 1px solid rgba(141, 164, 199, 0.2);
+            backdrop-filter: blur(2px);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .puzzle-piece::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.02) 50%, transparent 70%),
+                linear-gradient(-45deg, transparent 30%, rgba(255, 255, 255, 0.01) 50%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .puzzle-piece:hover::before {
+            opacity: 1;
+        }
+
+        .puzzle-piece.missing {
+            background: none;
+            border: 1px dashed rgba(141, 164, 199, 0.1);
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+        }
+
+        .puzzle-piece.cracked {
+            background-image: 
+                linear-gradient(135deg, 
+                    rgba(141, 164, 199, 0.1) 0%, 
+                    rgba(141, 164, 199, 0.05) 50%,
+                    transparent 100%),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20,50 L35,30 L50,55 L65,25 L80,50" stroke="rgba(74,82,102,0.3)" stroke-width="0.5" fill="none"/></svg>');
+            background-size: 100%, 100%;
+        }
+
+        .memory-constellation {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--fragment-glow);
+            opacity: 0.3;
+            animation: constellation-twinkle 5s infinite ease-in-out;
+        }
+
+        @keyframes constellation-twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(to right, 
+                transparent 0%, 
+                rgba(141, 164, 199, 0.4) 50%, 
+                transparent 100%);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+        .connection-line.active {
+            opacity: 0.6;
+            animation: flow 3s infinite linear;
+        }
+
+        @keyframes flow {
+            0% { background-position: -100% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        #emotional-currency {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 300px;
+            height: 150px;
+            background: rgba(42, 46, 58, 0.3);
+            border: 1px solid rgba(141, 164, 199, 0.2);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .currency-pool {
+            position: relative;
+            width: 100%;
+            height: 60px;
+            background: rgba(10, 11, 14, 0.7);
+            border-radius: 30px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .emotional-liquid {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 70%;
+            height: 40%;
+            background: linear-gradient(90deg, 
+                rgba(228, 196, 161, 0.6) 0%, 
+                rgba(228, 196, 161, 0.8) 50%,
+                rgba(164, 194, 212, 0.6) 100%);
+            border-radius: 0 0 30px 30px;
+            animation: liquid-flow 4s infinite ease-in-out;
+            filter: blur(1px);
+        }
+
+        @keyframes liquid-flow {
+            0%, 100% { transform: translateX(0) scaleY(1); }
+            25% { transform: translateX(5px) scaleY(1.1); }
+            50% { transform: translateX(-3px) scaleY(0.95); }
+            75% { transform: translateX(2px) scaleY(1.05); }
+        }
+
+        .currency-label {
+            font-size: 14px;
+            color: var(--fragment-glow);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.7;
+        }
+
+        .currency-value {
+            font-size: 24px;
+            color: var(--emotional-flow);
+            font-weight: 300;
+            margin-top: 5px;
+        }
+
+        #auction-panel {
+            position: absolute;
+            right: 40px;
+            top: 40px;
+            width: 350px;
+            background: rgba(42, 46, 58, 0.2);
+            border: 1px solid rgba(141, 164, 199, 0.2);
+            backdrop-filter: blur(8px);
+            padding: 30px;
+        }
+
+        .auction-title {
+            font-size: 20px;
+            color: var(--preservation-blue);
+            margin-bottom: 20px;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .memory-listing {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(10, 11, 14, 0.5);
+            border-left: 2px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-listing::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(228, 196, 161, 0.1) 50%,
+                transparent 100%);
+            transition: left 0.5s;
+        }
+
+        .memory-listing:hover {
+            border-left-color: var(--emotional-flow);
+        }
+
+        .memory-listing:hover::before {
+            left: 100%;
+        }
+
+        .listing-title {
+            font-size: 16px;
+            color: var(--fragment-glow);
+            margin-bottom: 8px;
+        }
+
+        .listing-integrity {
+            font-size: 12px;
+            color: var(--glass-crack);
+            margin-bottom: 5px;
+        }
+
+        .listing-bid {
+            font-size: 14px;
+            color: var(--emotional-flow);
+            font-weight: 300;
+        }
+
+        .decay-indicator {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 50px;
+            height: 4px;
+            background: rgba(10, 11, 14, 0.7);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .decay-progress {
+            height: 100%;
+            background: linear-gradient(90deg, 
+                var(--decay-rust) 0%, 
+                rgba(125, 90, 79, 0.5) 100%);
+            animation: decay 20s linear infinite;
+        }
+
+        @keyframes decay {
+            0% { width: 100%; }
+            100% { width: 0%; }
+        }
+
+        .digital-dust {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--memory-dust);
+            opacity: 0.6;
+            animation: dust-fall 10s infinite linear;
+        }
+
+        @keyframes dust-fall {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(200px) translateX(20px);
+                opacity: 0;
+            }
+        }
+
+        .excavation-layer {
+            position: absolute;
+            inset: 0;
+            background: rgba(42, 46, 58, 0.6);
+            opacity: 1;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .excavation-layer.revealed {
+            opacity: 0;
+        }
+
+        #warning-text {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            font-size: 12px;
+            color: var(--glass-crack);
+            opacity: 0.5;
+            letter-spacing: 1px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="memory-void"></div>
+    
+    <div id="archaeological-brush"></div>
+
+    <div class="memory-fragment">
+        <div class="puzzle-container">
+            <div class="puzzle-piece" style="left: 0; top: 0;"></div>
+            <div class="puzzle-piece cracked" style="left: 70px; top: 0;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 0; top: 70px;"></div>
+            <div class="puzzle-piece missing" style="left: 70px; top: 70px;"></div>
+            <div class="puzzle-piece cracked" style="left: 140px; top: 70px;"></div>
+            <div class="puzzle-piece" style="left: 0; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 140px;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 140px;"></div>
+            <div class="excavation-layer"></div>
+        </div>
+        <div class="digital-dust" style="left: 20px; top: 10px;"></div>
+        <div class="digital-dust" style="left: 100px; top: 30px; animation-delay: 2s;"></div>
+    </div>
+
+    <div class="memory-fragment">
+        <div class="puzzle-container">
+            <div class="puzzle-piece missing" style="left: 0; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 0;"></div>
+            <div class="puzzle-piece cracked" style="left: 0; top: 70px;"></div>
+            <div class="puzzle-piece cracked" style="left: 70px; top: 70px;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 70px;"></div>
+            <div class="puzzle-piece" style="left: 0; top: 140px;"></div>
+            <div class="puzzle-piece missing" style="left: 70px; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 140px;"></div>
+            <div class="excavation-layer"></div>
+        </div>
+        <div class="digital-dust" style="left: 50px; top: 20px; animation-delay: 1s;"></div>
+    </div>
+
+    <div class="memory-fragment">
+        <div class="puzzle-container">
+            <div class="puzzle-piece" style="left: 0; top: 0;"></div>
+            <div class="puzzle-piece missing" style="left: 70px; top: 0;"></div>
+            <div class="puzzle-piece cracked" style="left: 140px; top: 0;"></div>
+            <div class="puzzle-piece missing" style="left: 0; top: 70px;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 70px;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 70px;"></div>
+            <div class="puzzle-piece cracked" style="left: 0; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 140px;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 140px;"></div>
+            <div class="excavation-layer"></div>
+        </div>
+        <div class="digital-dust" style="left: 80px; top: 5px; animation-delay: 3s;"></div>
+        <div class="digital-dust" style="left: 30px; top: 40px; animation-delay: 5s;"></div>
+    </div>
+
+    <div class="memory-fragment">
+        <div class="puzzle-container">
+            <div class="puzzle-piece cracked" style="left: 0; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 0;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 0; top: 70px;"></div>
+            <div class="puzzle-piece missing" style="left: 70px; top: 70px;"></div>
+            <div class="puzzle-piece cracked" style="left: 140px; top: 70px;"></div>
+            <div class="puzzle-piece missing" style="left: 0; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 140px;"></div>
+            <div class="excavation-layer"></div>
+        </div>
+    </div>
+
+    <div class="memory-fragment">
+        <div class="puzzle-container">
+            <div class="puzzle-piece" style="left: 0; top: 0;"></div>
+            <div class="puzzle-piece cracked" style="left: 70px; top: 0;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 0;"></div>
+            <div class="puzzle-piece missing" style="left: 0; top: 70px;"></div>
+            <div class="puzzle-piece" style="left: 70px; top: 70px;"></div>
+            <div class="puzzle-piece missing" style="left: 140px; top: 70px;"></div>
+            <div class="puzzle-piece cracked" style="left: 0; top: 140px;"></div>
+            <div class="puzzle-piece missing" style="left: 70px; top: 140px;"></div>
+            <div class="puzzle-piece" style="left: 140px; top: 140px;"></div>
+            <div class="excavation-layer"></div>
+        </div>
+        <div class="digital-dust" style="left: 60px; top: 15px; animation-delay: 4s;"></div>
+    </div>
+
+    <div class="connection-line active" style="left: 300px; top: 300px; width: 400px; transform: rotate(25deg);"></div>
+    <div class="connection-line active" style="left: 700px; top: 500px; width: 300px; transform: rotate(-15deg);"></div>
+    <div class="connection-line" style="left: 400px; top: 600px; width: 450px; transform: rotate(45deg);"></div>
+
+    <div class="memory-constellation" style="left: 350px; top: 250px;"></div>
+    <div class="memory-constellation" style="left: 700px; top: 450px; animation-delay: 1s;"></div>
+    <div class="memory-constellation" style="left: 1100px; top: 350px; animation-delay: 2s;"></div>
+    <div class="memory-constellation" style="left: 500px; top: 650px; animation-delay: 3s;"></div>
+
+    <div id="emotional-currency">
+        <div class="currency-label">Emotional Reserve</div>
+        <div class="currency-value">847 lumens</div>
+        <div class="currency-pool">
+            <div class="emotional-liquid"></div>
+        </div>
+    </div>
+
+    <div id="auction-panel">
+        <div class="auction-title">Active Memory Auctions</div>
+        
+        <div class="memory-listing">
+            <div class="listing-title">Summer afternoon, age 7</div>
+            <div class="listing-integrity">Integrity: 34% (severe fragmentation)</div>
+            <div class="listing-bid">Current bid: 120 lumens</div>
+            <div class="decay-indicator">
+                <div class="decay-progress" style="width: 34%;"></div>
+            </div>
+        </div>
+
+        <div class="memory-listing">
+            <div class="listing-title">Mother's voice, lullaby fragment</div>
+            <div class="listing-integrity">Integrity: 67% (moderate wear)</div>
+            <div class="listing-bid">Current bid: 385 lumens</div>
+            <div class="decay-indicator">
+                <div class="decay-progress" style="width: 67%;"></div>
+            </div>
+        </div>
+
+        <div class="memory-listing">
+            <div class="listing-title">First day, unknown location</div>
+            <div class="listing-integrity">Integrity: 12% (critical decay)</div>
+            <div class="listing-bid">Current bid: 45 lumens</div>
+            <div class="decay-indicator">
+                <div class="decay-progress" style="width: 12%;"></div>
+            </div>
+        </div>
+
+        <div class="memory-listing">
+            <div class="listing-title">Rain on window, night sounds</div>
+            <div class="listing-integrity">Integrity: 89% (well preserved)</div>
+            <div class="listing-bid">Current bid: 560 lumens</div>
+            <div class="decay-indicator">
+                <div class="decay-progress" style="width: 89%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="warning-text">memories accessed too frequently will fracture beyond repair</div>
+
+    <script>
+        const brush = document.getElementById('archaeological-brush');
+        const excavationLayers = document.querySelectorAll('.excavation-layer');
+        let mouseX = 0;
+        let mouseY = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            brush.style.left = mouseX + 'px';
+            brush.style.top = mouseY + 'px';
+
+            excavationLayers.forEach(layer => {
+                const rect = layer.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(mouseX - (rect.left + rect.width/2), 2) + 
+                    Math.pow(mouseY - (rect.top + rect.height/2), 2)
+                );
+                
+                if (distance < 100) {
+                    layer.classList.add('revealed');
+                }
+            });
+        });
+
+        const puzzlePieces = document.querySelectorAll('.puzzle-piece');
+        puzzlePieces.forEach(piece => {
+            piece.addEventListener('mouseenter', function() {
+                if (Math.random() > 0.7 && !this.classList.contains('cracked')) {
+                    this.classList.add('cracked');
+                }
+            });
+        });
+
+        const connectionLines = document.querySelectorAll('.connection-line');
+        setInterval(() => {
+            connectionLines.forEach(line => {
+                if (Math.random() > 0.5) {
+                    line.classList.toggle('active');
+                }
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

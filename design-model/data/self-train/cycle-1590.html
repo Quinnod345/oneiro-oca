@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Timeline Manager</title>
+    <style>
+        :root {
+            --bg-primary: #fefcf8;
+            --bg-secondary: #f8f4ee;
+            --text-primary: #2d2925;
+            --text-secondary: #6b635a;
+            --accent-orange: #e67e22;
+            --accent-green: #27ae60;
+            --accent-blue: #3498db;
+            --accent-purple: #9b59b6;
+            --border-light: #e8e2d7;
+            --border-medium: #d4c8b8;
+            --shadow-subtle: rgba(45, 41, 37, 0.08);
+            --shadow-medium: rgba(45, 41, 37, 0.12);
+            --ingredient-prep: #fff8e1;
+            --ingredient-protein: #ffe8e8;
+            --ingredient-veg: #e8f5e8;
+            --ingredient-spice: #f3e5f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 900px;
+        }
+
+        .timeline-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-light);
+            padding: 32px 24px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .recipe-header {
+            margin-bottom: 32px;
+        }
+
+        .recipe-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .recipe-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ingredients-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .ingredient-group {
+            margin-bottom: 20px;
+        }
+
+        .group-label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .ingredient-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 2px 8px var(--shadow-subtle);
+        }
+
+        .ingredient-prep { background: var(--ingredient-prep); }
+        .ingredient-protein { background: var(--ingredient-protein); }
+        .ingredient-veg { background: var(--ingredient-veg); }
+        .ingredient-spice { background: var(--ingredient-spice); }
+
+        .ingredient-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot-prep { background: var(--accent-orange); }
+        .dot-protein { background: #e74c3c; }
+        .dot-veg { background: var(--accent-green); }
+        .dot-spice { background: var(--accent-purple); }
+
+        .timeline-main {
+            flex: 1;
+            padding: 32px;
+            position: relative;
+            background: linear-gradient(to right, 
+                var(--bg-primary) 0%, 
+                var(--bg-primary) 100%);
+        }
+
+        .timeline-track {
+            position: relative;
+            height: calc(100vh - 64px);
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .timeline-flow {
+            display: flex;
+            align-items: flex-start;
+            gap: 80px;
+            min-width: 1400px;
+            height: 100%;
+            position: relative;
+        }
+
+        .step-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 240px;
+            position: relative;
+        }
+
+        .step-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin: 0 auto 12px;
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .step-time {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .ingredients-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 32px;
+            min-height: 200px;
+        }
+
+        .flowing-ingredient {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            position: relative;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px var(--shadow-subtle);
+            animation: fadeInUp 0.6s ease forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .flowing-ingredient:nth-child(1) { animation-delay: 0.1s; }
+        .flowing-ingredient:nth-child(2) { animation-delay: 0.2s; }
+        .flowing-ingredient:nth-child(3) { animation-delay: 0.3s; }
+        .flowing-ingredient:nth-child(4) { animation-delay: 0.4s; }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-action {
+            background: white;
+            border: 2px solid var(--border-medium);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 4px 16px var(--shadow-subtle);
+            position: relative;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .action-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .action-text {
+            font-size: 14px;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+
+        .connection-line {
+            position: absolute;
+            top: 50%;
+            right: -80px;
+            width: 60px;
+            height: 2px;
+            background: var(--border-medium);
+            z-index: 1;
+        }
+
+        .connection-arrow {
+            position: absolute;
+            right: -2px;
+            top: -3px;
+            width: 0;
+            height: 0;
+            border-left: 8px solid var(--border-medium);
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+        }
+
+        .final-dish {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent-orange), #f39c12);
+            color: white;
+            border-radius: 20px;
+            padding: 32px;
+            min-width: 200px;
+            min-height: 160px;
+            box-shadow: 0 8px 24px rgba(230, 126, 34, 0.3);
+            margin-top: 100px;
+        }
+
+        .dish-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .dish-name {
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        .flowing-paths {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ingredient-path {
+            position: absolute;
+            background: var(--border-light);
+            height: 1px;
+            opacity: 0.6;
+        }
+
+        .controls {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: none;
+            background: white;
+            box-shadow: 0 2px 12px var(--shadow-medium);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px var(--shadow-medium);
+        }
+
+        .progress-indicator {
+            position: absolute;
+            bottom: 32px;
+            left: 32px;
+            right: 32px;
+            height: 4px;
+            background: var(--border-light);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-green);
+            border-radius: 2px;
+            width: 65%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="timeline-container">
+        <div class="sidebar">
+            <div class="recipe-header">
+                <h1 class="recipe-title">Chicken Tikka Masala</h1>
+                <div class="recipe-meta">
+                    <div class="meta-item">
+                        <span>⏱️</span>
+                        <span>45 min</span>
+                    </div>
+                    <div class="meta-item">
+                        <span>👥</span>
+                        <span>4 servings</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ingredients-section">
+                <h2 class="section-title">Ingredients</h2>
+                
+                <div class="ingredient-group">
+                    <div class="group-label">Protein</div>
+                    <div class="ingredient-item ingredient-protein">
+                        <div class="ingredient-dot dot-protein"></div>
+                        <span>2 lbs chicken breast</span>
+                    </div>
+                    <div class="ingredient-item ingredient-protein">
+                        <div class="ingredient-dot dot-protein"></div>
+                        <span>1 cup Greek yogurt</span>
+                    </div>
+                </div>
+
+                <div class="ingredient-group">
+                    <div class="group-label">Vegetables</div>
+                    <div class="ingredient-item ingredient-veg">
+                        <div class="ingredient-dot dot-veg"></div>
+                        <span>1 large onion</span>
+                    </div>
+                    <div class="ingredient-item ingredient-veg">
+                        <div class="ingredient-dot dot-veg"></div>
+                        <span>4 cloves garlic</span>
+                    </div>
+                    <div class="ingredient-item ingredient-veg">
+                        <div class="ingredient-dot dot-veg"></div>
+                        <span>2 tbsp ginger</span>
+                    </div>
+                </div>
+
+                <div class="ingredient-group">
+                    <div class="group-label">Spices & Aromatics</div>
+                    <div class="ingredient-item ingredient-spice">
+                        <div class="ingredient-dot dot-spice"></div>
+                        <span>2 tsp garam masala</span>
+                    </div>
+                    <div class="ingredient-item ingredient-spice">
+                        <div class="ingredient-dot dot-spice"></div>
+                        <span>1 tsp cumin</span>
+                    </div>
+                    <div class="ingredient-item ingredient-spice">
+                        <div class="ingredient-dot dot-spice"></div>
+                        <span>1 tsp paprika</span>
+                    </div>
+                </div>
+
+                <div class="ingredient-group">
+                    <div class="group-label">Base & Liquid</div>
+                    <div class="ingredient-item ingredient-prep">
+                        <div class="ingredient-dot dot-prep"></div>
+                        <span>1 can crushed tomatoes</span>
+                    </div>
+                    <div class="ingredient-item ingredient-prep">
+                        <div class="ingredient-dot dot-prep"></div>
+                        <span>1 cup heavy cream</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="timeline-main">
+            <div class="controls">
+                <button class="control-btn">⏸️</button>
+                <button class="control-btn">🔄</button>
+                <button class="control-btn">⚙️</button>
+            </div>
+
+            <div class="timeline-track">
+                <div class="timeline-flow">
+                    <div class="step-column">
+                        <div class="step-header">
+                            <div class="step-number">1</div>
+                            <div class="step-title">Marinate</div>
+                            <div class="step-time">30 min</div>
+                        </div>
+                        
+                        <div class="ingredients-flow">
+                            <div class="flowing-ingredient ingredient-protein">Chicken breast</div>
+                            <div class="flowing-ingredient ingredient-protein">Greek yogurt</div>
+                            <div class="flowing-ingredient ingredient-spice">Garam masala</div>
+                        </div>
+
+                        <div class="step-action">
+                            <div class="action-icon">🥄</div>
+                            <div class="action-text">Combine chicken with yogurt and spices. Let marinate for 30 minutes</div>
+                            <div class="connection-line">
+                                <div class="connection-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-column">
+                        <div class="step-header">
+                            <div class="step-number">2</div>
+                            <div class="step-title">Sauté Base</div>
+                            <div class="step-time">8 min</div>
+                        </div>
+                        
+                        <div class="ingredients-flow">
+                            <div class="flowing-ingredient ingredient-veg">Onion</div>
+                            <div class="flowing-ingredient ingredient-veg">Garlic</div>
+                            <div class="flowing-ingredient ingredient-veg">Ginger</div>
+                            <div class="flowing-ingredient ingredient-spice">Cumin</div>
+                        </div>
+
+                        <div class="step-action">
+                            <div class="action-icon">🔥</div>
+                            <div class="action-text">Heat oil and sauté aromatics until fragrant and golden</div>
+                            <div class="connection-line">
+                                <div class="connection-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-column">
+                        <div class="step-header">
+                            <div class="step-number">3</div>
+                            <div class="step-title">Build Sauce</div>
+                            <div class="step-time">12 min</div>
+                        </div>
+                        
+                        <div class="ingredients-flow">
+                            <div class="flowing-ingredient ingredient-prep">Crushed tomatoes</div>
+                            <div class="flowing-ingredient ingredient-spice">Paprika</div>
+                            <div class="flowing-ingredient ingredient-prep">Heavy cream</div>
+                        </div>
+
+                        <div class="step-action">
+                            <div class="action-icon">🍲</div>
+                            <div class="action-text">Add tomatoes and spices. Simmer until thickened, then stir in cream</div>
+                            <div class="connection-line">
+                                <div class="connection-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-column">
+                        <div class="step-header">
+                            <div class="step-number">4</div>
+                            <div class="step-title">Cook Chicken</div>
+                            <div class="step-time">15 min</div>
+                        </div>
+                        
+                        <div class="ingredients-flow">
+                            <div class="flowing-ingredient ingredient-protein">Marinated chicken</div>
+                        </div>
+
+                        <div class="step-action">
+                            <div class="action-icon">🍳</div>
+                            <div class="action-text">Add chicken to sauce and simmer until cooked through</div>
+                            <div class="connection-line">
+                                <div class="connection-arrow"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="final-dish">
+                        <div class="dish-icon">🍛</div>
+                        <div class="dish-name">Chicken Tikka Masala</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="progress-indicator">
+                <div class="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

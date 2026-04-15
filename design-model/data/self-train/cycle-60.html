@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State - Menu Bar App</title>
+    <style>
+        :root {
+            --focus-deep: #1a1a2e;
+            --focus-medium: #16213e;
+            --focus-light: #0f3460;
+            --focus-glow: #533483;
+            --focus-bright: #7209b7;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --surface: #09090b;
+            --surface-elevated: #18181b;
+            --border: #27272a;
+            --glow-intensity: 0.6;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            background: var(--surface);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .menu-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 16px;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .focus-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: var(--focus-bright);
+            position: relative;
+            margin-left: 8px;
+            animation: breathe 4s ease-in-out infinite;
+            box-shadow: 
+                0 0 8px rgba(114, 9, 183, var(--glow-intensity)),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        
+        .focus-indicator::before {
+            content: '';
+            position: absolute;
+            inset: 2px;
+            border-radius: 1px;
+            background: radial-gradient(circle at 30% 30%, 
+                rgba(255, 255, 255, 0.3), 
+                transparent 50%);
+            animation: pulse-inner 6s ease-in-out infinite;
+        }
+        
+        @keyframes breathe {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 0.8;
+                box-shadow: 
+                    0 0 8px rgba(114, 9, 183, 0.4),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            }
+            50% { 
+                transform: scale(1.1);
+                opacity: 1;
+                box-shadow: 
+                    0 0 16px rgba(114, 9, 183, 0.8),
+                    0 0 32px rgba(114, 9, 183, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            }
+        }
+        
+        @keyframes pulse-inner {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.4; }
+        }
+        
+        .main-content {
+            position: absolute;
+            top: 24px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: 
+                radial-gradient(circle at 20% 80%, var(--focus-deep) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, var(--focus-medium) 0%, transparent 50%);
+        }
+        
+        .focus-state-display {
+            text-align: center;
+            position: relative;
+        }
+        
+        .state-title {
+            font-size: 48px;
+            font-weight: 300;
+            letter-spacing: -0.5px;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, 
+                var(--text-primary) 0%, 
+                var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .state-subtitle {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--text-muted);
+            margin-bottom: 48px;
+            letter-spacing: 0.2px;
+        }
+        
+        .ambient-orb {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, 
+                rgba(114, 9, 183, 0.3), 
+                rgba(83, 52, 131, 0.1), 
+                transparent 70%);
+            margin: 0 auto;
+            position: relative;
+            animation: float 8s ease-in-out infinite;
+        }
+        
+        .ambient-orb::before {
+            content: '';
+            position: absolute;
+            inset: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, 
+                rgba(114, 9, 183, 0.4), 
+                transparent 60%);
+            animation: rotate 20s linear infinite;
+        }
+        
+        .ambient-orb::after {
+            content: '';
+            position: absolute;
+            inset: 50px;
+            border-radius: 50%;
+            background: var(--focus-bright);
+            opacity: 0.6;
+            animation: pulse 3s ease-in-out infinite;
+            box-shadow: 0 0 40px rgba(114, 9, 183, 0.5);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            33% { transform: translateY(-10px) scale(1.02); }
+            66% { transform: translateY(5px) scale(0.98); }
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 0.4; 
+                transform: scale(0.9);
+            }
+            50% { 
+                opacity: 0.8; 
+                transform: scale(1.1);
+            }
+        }
+        
+        .focus-metrics {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 48px;
+            align-items: center;
+        }
+        
+        .metric {
+            text-align: center;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+        
+        .metric:hover {
+            opacity: 1;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .background-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            opacity: 0.1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--focus-bright);
+            border-radius: 50%;
+            animation: drift 15s linear infinite;
+        }
+        
+        .particle:nth-child(1) { top: 20%; left: 10%; animation-delay: 0s; }
+        .particle:nth-child(2) { top: 60%; left: 20%; animation-delay: -3s; }
+        .particle:nth-child(3) { top: 40%; left: 80%; animation-delay: -6s; }
+        .particle:nth-child(4) { top: 80%; left: 60%; animation-delay: -9s; }
+        .particle:nth-child(5) { top: 10%; left: 70%; animation-delay: -12s; }
+        
+        @keyframes drift {
+            0% { 
+                transform: translateY(0) translateX(0) scale(0); 
+                opacity: 0; 
+            }
+            10% { 
+                transform: translateY(-20px) translateX(10px) scale(1); 
+                opacity: 1; 
+            }
+            90% { 
+                transform: translateY(-40px) translateX(-10px) scale(1); 
+                opacity: 1; 
+            }
+            100% { 
+                transform: translateY(-60px) translateX(20px) scale(0); 
+                opacity: 0; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="focus-indicator"></div>
+    </div>
+    
+    <div class="background-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+    
+    <div class="main-content">
+        <div class="focus-state-display">
+            <h1 class="state-title">Deep Focus</h1>
+            <p class="state-subtitle">Ambient presence active</p>
+            <div class="ambient-orb"></div>
+        </div>
+        
+        <div class="focus-metrics">
+            <div class="metric">
+                <div class="metric-value">2.4</div>
+                <div class="metric-label">Depth</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">89%</div>
+                <div class="metric-label">Clarity</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value">Active</div>
+                <div class="metric-label">State</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

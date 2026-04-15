@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic - Color Harmony Generator</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0a;
+            --secondary-bg: #151515;
+            --accent-bg: #202020;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border-subtle: #2a2a2a;
+            --border-active: #404040;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --transition-fast: 0.15s ease-out;
+            --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-system);
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            user-select: none;
+            position: relative;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            grid-template-rows: 80px 1fr;
+            grid-template-areas: 
+                "header header header"
+                "sidebar canvas panel";
+            height: 100vh;
+            gap: 0;
+        }
+
+        .header {
+            grid-area: header;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            background: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .tempo-control {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-family: var(--font-mono);
+            font-size: 14px;
+        }
+
+        .bpm-display {
+            background: var(--accent-bg);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--secondary-bg);
+            border-right: 1px solid var(--border-subtle);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .harmony-modes {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .mode-btn {
+            background: var(--accent-bg);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 12px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .mode-btn:hover {
+            border-color: var(--border-active);
+            background: #252525;
+        }
+
+        .mode-btn.active {
+            background: #2563eb;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        .key-controls {
+            margin-bottom: 32px;
+        }
+
+        .octave-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .octave-btn {
+            flex: 1;
+            background: var(--accent-bg);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .octave-btn.active {
+            background: var(--text-primary);
+            color: var(--primary-bg);
+            border-color: var(--text-primary);
+        }
+
+        .canvas-area {
+            grid-area: canvas;
+            position: relative;
+            background: var(--primary-bg);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .piano-roll {
+            height: 120px;
+            background: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-subtle);
+            position: relative;
+            display: flex;
+        }
+
+        .piano-keys {
+            width: 80px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-subtle);
+        }
+
+        .piano-key {
+            flex: 1;
+            background: var(--accent-bg);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            position: relative;
+        }
+
+        .piano-key:hover {
+            background: #2a2a2a;
+        }
+
+        .piano-key.active {
+            background: var(--text-primary);
+            color: var(--primary-bg);
+        }
+
+        .color-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 2px;
+            padding: 24px;
+        }
+
+        .color-note {
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all var(--transition-smooth);
+            position: relative;
+            background: var(--accent-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .color-note:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .color-note.playing {
+            transform: scale(1.1);
+            border-color: var(--text-primary);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+
+        .color-note.in-chord {
+            border-color: #fbbf24;
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+        }
+
+        .panel {
+            grid-area: panel;
+            background: var(--secondary-bg);
+            border-left: 1px solid var(--border-subtle);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .current-chord {
+            margin-bottom: 32px;
+        }
+
+        .chord-display {
+            background: var(--primary-bg);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
+        }
+
+        .chord-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .chord-colors {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .chord-color {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: 2px solid var(--border-subtle);
+        }
+
+        .color-values {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .saved-palettes {
+            margin-bottom: 32px;
+        }
+
+        .palette-item {
+            background: var(--accent-bg);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 8px;
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .palette-item:hover {
+            border-color: var(--border-active);
+            background: #252525;
+        }
+
+        .palette-preview {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .palette-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .palette-name {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .export-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .export-btn {
+            flex: 1;
+            background: var(--accent-bg);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .export-btn:hover {
+            border-color: var(--border-active);
+            background: #2a2a2a;
+        }
+
+        .visualizer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(59, 130, 246, 0.6) 50%, 
+                transparent 100%);
+            opacity: 0;
+            transition: opacity var(--transition-smooth);
+        }
+
+        .visualizer.active {
+            opacity: 1;
+            animation: sweep 2s ease-in-out infinite;
+        }
+
+        @keyframes sweep {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100vw); }
+        }
+
+        .note-labels {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 2px;
+            padding: 0 24px 12px 24px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        .note-label {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="visualizer" id="visualizer"></div>
+    <div class="main-container">
+        <header class="header">
+            <div class="logo">Chromatic</div>
+            <div class="tempo-control">
+                <span>BPM</span>
+                <div class="bpm-display" id="bpmDisplay">120</div>
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <div class="harmony-modes">
+                <div class="section-title">Harmony Modes</div>
+                <div class="mode-grid">
+                    <button class="mode-btn active" data-mode="major">Major</button>
+                    <button class="mode-btn" data-mode="minor">Minor</button>
+                    <button class="mode-btn" data-mode="dorian">Dorian</button>
+                    <button class="mode-btn" data-mode="mixolydian">Mixolydian</button>
+                    <button class="mode-btn" data-mode="pentatonic">Pentatonic</button>
+                    <button class="mode-btn" data-mode="blues">Blues</button>
+                </div>
+            </div>
+
+            <div class="key-controls">
+                <div class="section-title">Octave Range</div>
+                <div class="octave-controls">
+                    <button class="octave-btn" data-octave="3">3</button>
+                    <button class="octave-btn active" data-octave="4">4</button>
+                    <button class="octave-btn" data-octave="5">5</button>
+                    <button class="octave-btn" data-octave="6">6</button>
+                </div>
+            </div>
+
+            <div class="key-controls">
+                <div class="section-title">Root Note</div>
+                <div class="mode-grid">
+                    <button class="mode-btn active" data-root="C">C</button>
+                    <button class="mode-btn" data-root="D">D</button>
+                    <button class="mode-btn" data-root="E">E</button>
+                    <button class="mode-btn" data-root="F">F</button>
+                    <button class="mode-btn" data-root="G">G</button>
+                    <button class="mode-btn" data-root="A">A</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="canvas-area">
+            <div class="note-labels">
+                <div class="note-label">C</div>
+                <div class="note-label">C#</div>
+                <div class="note-label">D</div>
+                <div class="note-label">D#</div>
+                <div class="note-label">E</div>
+                <div class="note-label">F</div>
+                <div class="note-label">F#</div>
+                <div class="note-label">G</div>
+                <div class="note-label">G#</div>
+                <div class="note-label">A</div>
+                <div class="note-label">A#</div>
+                <div class="note-label">B</div>
+            </div>
+            <div class="color-grid" id="colorGrid">
+                <!-- Color notes will be generated by JavaScript -->
+            </div>
+        </main>
+
+        <aside class="panel">
+            <div class="current-chord">
+                <div class="section-title">Current Harmony</div>
+                <div class="chord-display">
+                    <div class="chord-name" id="chordName">C Major Triad</div>
+                    <div class="chord-colors" id="chordColors">
+                        <div class="chord-color" style="background: hsl(0, 70%, 60%);"></div>
+                        <div class="chord-color" style="background: hsl(120, 70%, 60%);"></div>
+                        <div class="chord-color" style="background: hsl(240, 70%, 60%);"></div>
+                    </div>
+                    <div class="color-values" id="colorValues">
+                        #E85A4F<br>
+                        #52B788<br>
+                        #4361EE
+                    </div>
+                </div>
+            </div>
+
+            <div class="saved-palettes">
+                <div class="section-title">Saved Harmonies</div>
+                <div class="palette-item">
+                    <div class="palette-preview">
+                        <div class="palette-color" style="background: #E85A4F;"></div>
+                        <div class="palette-color" style="background: #52B788;"></div>
+                        <div class="palette-color" style="background: #4361EE;"></div>
+                        <div class="palette-color" style="background: #F1C21B;"></div>
+                    </div>
+                    <div class="palette-name">Sunset Major</div>
+                </div>
+                <div class="palette-item">
+                    <div class="palette-preview">
+                        <div class="palette-color" style="background: #2D3748;"></div>
+                        <div class="palette-color" style="background: #4A5568;"></div>
+                        <div class="palette-color" style="background: #718096;"></div>
+                        <div class="palette-color" style="background: #A0AEC0;"></div>
+                    </div>
+                    <div class="palette-name">Storm Minor</div>
+                </div>
+            </div>
+
+            <div class="export-section">
+                <div class="section-title">Export</div>
+                <div class="export-controls">
+                    <button class="export-btn">CSS</button>
+                    <button class="export-btn">JSON</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const modes = {
+            major: [0, 2, 4, 5, 7, 9, 11],
+            minor: [0, 2, 3, 5, 7, 8, 10],
+            dorian: [0, 2, 3, 5, 7, 9, 10],
+            mixolydian: [0, 2, 4, 5, 7, 9, 10],
+            pentatonic: [0, 2, 4, 7, 9],
+            blues: [0, 3, 5, 6, 7, 10]
+        };
+
+        let currentMode = 'major';
+        let currentRoot = 0; // C
+        let currentChord = [];
+        let playingNotes = new Set();
+
+        function initializeColorGrid() {
+            const grid = document.getElementById('colorGrid');
+            grid.innerHTML = '';
+            
+            for (let i = 0; i < 12; i++) {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'color-note';
+                noteDiv.dataset.note = i;
+                
+                const hue = (i * 30) % 360;
+                const sat = 70;
+                const light = 55;
+                noteDiv.style.background = `hsl(${hue}, ${sat}%, ${light}%)`;
+                noteDiv.textContent = notes[i];
+                
+                noteDiv.addEventListener('click', () => playNote(i));
+                noteDiv.addEventListener('mouseenter', () => {
+                    if (!playingNotes.has(i)) {
+                        noteDiv.style.transform = 'scale(1.05)';
+                    }
+                });
+                noteDiv.addEventListener('mouseleave', () => {
+                    if (!playingNotes.has(i)) {
+                        noteDiv.style.transform = 'scale(1)';
+                    }
+                });
+                
+                grid.appendChild(noteDiv);
+            }
+        }
+
+        function playNote(noteIndex) {
+            const noteElement = document.querySelector(`[data-note="${noteIndex}"]`);
+            
+            if (playingNotes.has(noteIndex)) {
+                playingNotes.delete(noteIndex);
+                noteElement.classList.remove('playing');
+            } else {
+                playingNotes.add(noteIndex);
+                noteElement.classList.add('playing');
+                
+                // Auto-release after 800ms
+                setTimeout(() => {
+                    playingNotes.delete(noteIndex);
+                    noteElement.classList.remove('playing');
+                    updateChordDisplay();
+                }, 800);
+            }
+            
+            updateChordDisplay();
+            updateVisualizer();
+        }
+
+        function updateChordDisplay() {
+            const chordArray = Array.from(playingNotes).sort((a, b) => a - b);
+            currentChord = chordArray;
+            
+            const chordName = getChordName(chordArray);
+            document.getElementById('chordName').textContent = chordName;
+            
+            const colorsContainer = document.getElementById('chordColors');
+            const valuesContainer = document.getElementById('colorValues');
+            
+            colorsContainer.innerHTML = '';
+            valuesContainer.innerHTML = '';
+            
+            chordArray.forEach((noteIndex, i) => {
+                const hue = (noteIndex * 30) % 360;
+                const color = `hsl(${hue}, 70%, 55%)`;
+                const hex = hslToHex(hue, 70, 55);
+                
+                const colorDiv = document.createElement('div');
+                colorDiv.className = 'chord-color';
+                colorDiv.style.background = color;
+                colorsContainer.appendChild(colorDiv);
+                
+                valuesContainer.innerHTML += hex + (i < chordArray.length - 1 ? '<br>' : '');
+            });
+
+            // Highlight chord tones
+            document.querySelectorAll('.color-note').forEach(note => {
+                note.classList.remove('in-chord');
+                const noteIndex = parseInt(note.dataset.note);
+                if (chordArray.includes(noteIndex) && !playingNotes.has(noteIndex)) {
+                    note.classList.add('in-chord');
+                }
+            });
+        }
+
+        function getChordName(notes) {
+            if (notes.length === 0) return 'No Harmony';
+            if (notes.length === 1) return `${notes[0]} Note`;
+            if (notes.length === 2) return `${notes[0]} Interval`;
+            if (notes.length === 3) return `${notes[0]} Triad`;
+            if (notes.length === 4) return `${notes[0]} Seventh`;
+            return `${notes[0]} Complex Harmony`;
+        }
+
+        function updateVisualizer() {
+            const visualizer = document.getElementById('visualizer');
+            if (playingNotes.size > 0) {
+                visualizer.classList.add('active');
+            } else {
+                visualizer.classList.remove('active');
+            }
+        }
+
+        function hslToHex(h, s, l) {
+            l /= 100;
+            const a = s * Math.min(l, 1 - l) / 100;
+            const f = n => {
+                const k = (n + h / 30) % 12;
+                const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+                return Math.round(255 * color).toString(16).padStart(2, '0');
+            };
+            return `#${f(0)}${f(8)}${f(4)}`;
+        }
+
+        // Event listeners for mode buttons
+        document.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+            });
+        });
+
+        // Event listeners for root note buttons
+        document.querySelectorAll('.mode-btn[data-root]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn[data-root]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentRoot = notes.indexOf(btn.dataset.root);
+            });
+        });
+
+        // Event listeners for octave buttons
+        document.querySelectorAll('.octave-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.octave-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            const keyMap = {
+                'KeyA': 0, 'KeyW': 1, 'KeyS': 2, 'KeyE': 3, 'KeyD': 4, 'KeyF': 5,
+                'KeyT': 6, 'KeyG': 7, 'KeyY': 8, 'KeyH': 9, 'KeyU': 10, 'KeyJ': 11
+            };
+            
+            if (keyMap[e.code] !== undefined) {
+                e.preventDefault();
+                playNote(keyMap[e.code]);
+            }
+        });
+
+        // Initialize
+        initializeColorGrid();
+    </script>
+</body>
+</html>

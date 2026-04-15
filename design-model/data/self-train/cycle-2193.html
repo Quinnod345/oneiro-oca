@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Constellation Contacts</title>
+    <style>
+        :root {
+            --bg-space: #0a0e1a;
+            --bg-panel: rgba(15, 23, 42, 0.8);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-bright: #3b82f6;
+            --accent-warm: #f59e0b;
+            --accent-cool: #06b6d4;
+            --interaction-glow: #22d3ee;
+            --border-subtle: rgba(148, 163, 184, 0.1);
+            --contact-close: #ef4444;
+            --contact-medium: var(--accent-bright);
+            --contact-distant: var(--text-muted);
+            --glow-recent: drop-shadow(0 0 8px var(--interaction-glow)) drop-shadow(0 0 16px rgba(34, 211, 238, 0.4));
+            --glow-frequent: drop-shadow(0 0 6px var(--accent-warm)) drop-shadow(0 0 12px rgba(245, 158, 11, 0.3));
+            --glow-regular: drop-shadow(0 0 4px var(--accent-bright)) drop-shadow(0 0 8px rgba(59, 130, 246, 0.2));
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-space);
+            color: var(--text-primary);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .constellation-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+                        var(--bg-space);
+        }
+
+        .sidebar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100%;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border-subtle);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 32px 24px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .sidebar-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .contact-list {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .contact-item:hover {
+            background: rgba(59, 130, 246, 0.05);
+            margin: 0 -12px;
+            padding-left: 12px;
+            padding-right: 12px;
+            border-radius: 8px;
+        }
+
+        .contact-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-bright);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 12px;
+            color: white;
+        }
+
+        .contact-info {
+            flex: 1;
+        }
+
+        .contact-name {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .contact-status {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .contact-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--contact-medium);
+        }
+
+        .constellation-view {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1120px;
+            height: 100%;
+        }
+
+        .constellation-node {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+
+        .node-avatar {
+            width: var(--size);
+            height: var(--size);
+            border-radius: 50%;
+            background: var(--color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            filter: var(--glow);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transform: translate(-50%, -50%);
+        }
+
+        .node-label {
+            position: absolute;
+            top: calc(var(--size) / 2 + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .constellation-node:hover .node-label {
+            opacity: 1;
+        }
+
+        .constellation-node:hover .node-avatar {
+            transform: translate(-50%, -50%) scale(1.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Close contacts - large, central */
+        .node-close {
+            --size: 64px;
+            --color: var(--contact-close);
+            --glow: var(--glow-recent);
+            font-size: 24px;
+        }
+
+        /* Medium contacts - medium size */
+        .node-medium {
+            --size: 48px;
+            --color: var(--contact-medium);
+            --glow: var(--glow-frequent);
+            font-size: 18px;
+        }
+
+        /* Distant contacts - small */
+        .node-distant {
+            --size: 36px;
+            --color: var(--contact-distant);
+            --glow: var(--glow-regular);
+            font-size: 14px;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.2) 20%, rgba(148, 163, 184, 0.2) 80%, transparent 100%);
+            transform-origin: left center;
+            z-index: -1;
+        }
+
+        .search-bar {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-bright);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .node-active {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="constellation-container">
+        <div class="constellation-view">
+            <!-- Close contacts (family, best friends) -->
+            <div class="constellation-node node-close" style="top: 280px; left: 400px;">
+                <div class="node-avatar">S</div>
+                <div class="node-label">Sarah Chen</div>
+            </div>
+            
+            <div class="constellation-node node-close" style="top: 350px; left: 520px;">
+                <div class="node-avatar">M</div>
+                <div class="node-label">Mom</div>
+            </div>
+
+            <div class="constellation-node node-close" style="top: 420px; left: 380px;">
+                <div class="node-avatar">J</div>
+                <div class="node-label">Jake Miller</div>
+            </div>
+
+            <!-- Medium contacts (good friends, regular colleagues) -->
+            <div class="constellation-node node-medium" style="top: 200px; left: 300px;">
+                <div class="node-avatar">A</div>
+                <div class="node-label">Alex Rodriguez</div>
+            </div>
+
+            <div class="constellation-node node-medium" style="top: 180px; left: 600px;">
+                <div class="node-avatar">E</div>
+                <div class="node-label">Emma Wilson</div>
+            </div>
+
+            <div class="constellation-node node-medium node-active" style="top: 320px; left: 680px;">
+                <div class="node-avatar">D</div>
+                <div class="node-label">David Kim</div>
+            </div>
+
+            <div class="constellation-node node-medium" style="top: 480px; left: 280px;">
+                <div class="node-avatar">L</div>
+                <div class="node-label">Lisa Park</div>
+            </div>
+
+            <div class="constellation-node node-medium" style="top: 520px; left: 450px;">
+                <div class="node-avatar">R</div>
+                <div class="node-label">Ryan Foster</div>
+            </div>
+
+            <!-- Distant contacts (acquaintances, occasional contacts) -->
+            <div class="constellation-node node-distant" style="top: 120px; left: 200px;">
+                <div class="node-avatar">C</div>
+                <div class="node-label">Chris Taylor</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 150px; left: 480px;">
+                <div class="node-avatar">N</div>
+                <div class="node-label">Nina Garcia</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 100px; left: 720px;">
+                <div class="node-avatar">T</div>
+                <div class="node-label">Tom Anderson</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 250px; left: 180px;">
+                <div class="node-avatar">K</div>
+                <div class="node-label">Kate Johnson</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 580px; left: 320px;">
+                <div class="node-avatar">B</div>
+                <div class="node-label">Ben Davis</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 600px; left: 580px;">
+                <div class="node-avatar">Z</div>
+                <div class="node-label">Zoe Martinez</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 420px; left: 750px;">
+                <div class="node-avatar">P</div>
+                <div class="node-label">Paul Wright</div>
+            </div>
+
+            <div class="constellation-node node-distant" style="top: 680px; left: 400px;">
+                <div class="node-avatar">H</div>
+                <div class="node-label">Hannah Lee</div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="sidebar-title">Constellation</h1>
+                <p class="sidebar-subtitle">Your social universe mapped by connection and interaction</p>
+            </div>
+
+            <div class="contact-list">
+                <div class="search-bar">
+                    <input type="text" class="search-input" placeholder="Search contacts...">
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-close);">S</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Sarah Chen</div>
+                        <div class="contact-status">Texted 2 hours ago</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--interaction-glow);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-close);">M</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Mom</div>
+                        <div class="contact-status">Called yesterday</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--accent-warm);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-medium);">D</div>
+                    <div class="contact-info">
+                        <div class="contact-name">David Kim</div>
+                        <div class="contact-status">Active now</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--interaction-glow);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-close);">J</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Jake Miller</div>
+                        <div class="contact-status">Shared photo</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--accent-bright);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-medium);">E</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Emma Wilson</div>
+                        <div class="contact-status">Meeting tomorrow</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--accent-bright);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-medium);">A</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Alex Rodriguez</div>
+                        <div class="contact-status">Last week</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--contact-medium);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-medium);">L</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Lisa Park</div>
+                        <div class="contact-status">Work chat</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--contact-medium);"></div>
+                </div>
+
+                <div class="contact-item">
+                    <div class="contact-avatar" style="background: var(--contact-distant);">T</div>
+                    <div class="contact-info">
+                        <div class="contact-name">Tom Anderson</div>
+                        <div class="contact-status">Last month</div>
+                    </div>
+                    <div class="contact-indicator" style="background: var(--contact-distant);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

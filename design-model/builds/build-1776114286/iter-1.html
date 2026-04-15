@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus</title>
+    <style>
+        :root {
+            --charcoal: #2a2a2a;
+            --charcoal-light: #3a3a3a;
+            --charcoal-dark: #1a1a1a;
+            --ice-blue: #64B5F6;
+            --ice-blue-dim: #42A5F5;
+            --ice-blue-glow: rgba(100, 181, 246, 0.2);
+            --text-primary: #f5f5f5;
+            --text-secondary: #999999;
+            --text-muted: #666666;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--charcoal) 0%, var(--charcoal-dark) 100%);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            padding: 40px 20px;
+        }
+
+        .timer-container {
+            background: var(--charcoal-light);
+            border-radius: 32px;
+            padding: 100px 80px;
+            text-align: center;
+            box-shadow: 
+                0 32px 64px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            position: relative;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .session-type {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 70px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .timer-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 80px;
+        }
+
+        .progress-circle {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .progress-circle svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+            filter: drop-shadow(0 0 20px rgba(100, 181, 246, 0.3));
+        }
+
+        .progress-circle .progress-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 3;
+        }
+
+        .progress-circle .progress-fill {
+            fill: none;
+            stroke: var(--ice-blue);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-dasharray: 0 1000;
+            transition: stroke-dasharray 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .time-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .digit {
+            display: inline-block;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .digit.flip {
+            transform: scaleY(0.8);
+        }
+
+        .timer-container.active .time-display {
+            color: var(--ice-blue);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 80px;
+        }
+
+        .btn {
+            background: transparent;
+            border: 2px solid var(--text-secondary);
+            color: var(--text-secondary);
+            border-radius: 50px;
+            padding: 18px 36px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        .btn.primary {
+            background: var(--ice-blue);
+            border-color: var(--ice-blue);
+            color: var(--charcoal-dark);
+            box-shadow: 0 8px 32px var(--ice-blue-glow);
+        }
+
+        .btn.primary:hover {
+            background: var(--ice-blue-dim);
+            border-color: var(--ice-blue-dim);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px var(--ice-blue-glow);
+        }
+
+        .btn.primary.running {
+            background: transparent;
+            border-color: var(--ice-blue);
+            color: var(--ice-blue);
+            box-shadow: none;
+        }
+
+        .session-selector {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .session-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-secondary);
+            border-radius: 16px;
+            padding: 16px 28px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+            min-width: 100px;
+        }
+
+        .session-btn.active {
+            background: rgba(100, 181, 246, 0.12);
+            border-color: var(--ice-blue);
+            color: var(--ice-blue);
+            box-shadow: 0 4px 16px rgba(100, 181, 246, 0.15);
+        }
+
+        .session-btn:hover:not(.active) {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .timer-container {
+                padding: 80px 60px;
+            }
+            
+            .progress-circle {
+                width: 240px;
+                height: 240px;
+            }
+            
+            .time-display {
+                font-size: 40px;
+            }
+            
+            .controls {
+                gap: 30px;
+            }
+            
+            .btn {
+                padding: 16px 32px;
+                min-width: 100px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .timer-container {
+                padding: 60px 40px;
+            }
+            
+            .progress-circle {
+                width: 200px;
+                height: 200px;
+            }
+            
+            .time-display {
+                font-size: 36px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .session-selector {
+                flex-direction: column;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer-container" id="timerContainer">
+        <div class="session-type" id="sessionType">Focus Session</div>
+        
+        <div class="timer-wrapper">
+            <div class="progress-circle">
+                <svg>
+                    <circle class="progress-bg" cx="140" cy="140" r="135"></circle>
+                    <circle class="progress-fill" cx="140" cy="140" r="135" id="progressFill"></circle>
+                </svg>
+                <div class="time-display" id="timeDisplay">
+                    <span class="digit">2</span><span class="digit">5</span><span class="colon">:</span><span class="digit">0</span><span class="digit">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn primary" id="startBtn">Start</button>
+            <button class="btn" id="resetBtn">Reset</button>
+        </div>
+        
+        <div class="session-selector">
+            <button class="session-btn active" data-minutes="25" data-type="Focus Session">Focus</button>
+            <button class="session-btn" data-minutes="5" data-type="Short Break">Short Break</button>
+            <button class="session-btn" data-minutes="15" data-type="Long Break">Long Break</button>
+        </div>
+    </div>
+
+    <script>
+        let timer = null;
+        let timeLeft = 25 * 60; // 25 minutes in seconds
+        let totalTime = 25 * 60;
+        let isRunning = false;
+
+        const timerContainer = document.getElementById('timerContainer');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const sessionType = document.getElementById('sessionType');
+        const progressFill = document.getElementById('progressFill');
+        const sessionBtns = document.querySelectorAll('.session-btn');
+
+        // Calculate circle circumference for progress
+        const radius = 135;
+        const circumference = 2 * Math.PI * radius;
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return {
+                minutes: mins.toString().padStart(2, '0'),
+                seconds: secs.toString().padStart(2, '0')
+            };
+        }
+
+        function updateDisplay() {
+            const time = formatTime(timeLeft);
+            const newTime = `${time.minutes}:${time.seconds}`;
+            
+            // Get current digits and new digits
+            const digits = timeDisplay.querySelectorAll('.digit');
+            const newDigits = [time.minutes[0], time.minutes[1], time.seconds[0], time.seconds[1]];
+            
+            // Animate changed digits
+            newDigits.forEach((newDigit, index) => {
+                if (digits[index] && digits[index].textContent !== newDigit) {
+                    digits[index].classList.add('flip');
+                    setTimeout(() => {
+                        digits[index].textContent = newDigit;
+                        digits[index].classList.remove('flip');
+                    }, 100);
+                }
+            });
+            
+            // Update progress circle
+            const progress = (totalTime - timeLeft) / totalTime;
+            const dashArray = circumference * progress;
+            progressFill.style.strokeDasharray = `${dashArray} ${circumference}`;
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                startBtn.textContent = 'Pause';
+                startBtn.classList.add('running');
+                timerContainer.classList.add('active');
+                
+                timer = setInterval(() => {
+                    timeLeft--;
+                    updateDisplay();
+                    
+                    if (timeLeft <= 0) {
+                        stopTimer();
+                        // Could add completion notification here
+                    }
+                }, 1000);
+            } else {
+                pauseTimer();
+            }
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            startBtn.textContent = 'Resume';
+            startBtn.classList.remove('running');
+            timerContainer.classList.remove('active');
+            clearInterval(timer);
+        }
+
+        function stopTimer() {
+            isRunning = false;
+            startBtn.textContent = 'Start';
+            startBtn.classList.remove('running');
+            timerContainer.classList.remove('active');
+            clearInterval(timer);
+        }
+
+        function resetTimer() {
+            stopTimer();
+            timeLeft = totalTime;
+            updateDisplay();
+        }
+
+        function setSession(minutes, type) {
+            stopTimer();
+            totalTime = minutes * 60;
+            timeLeft = totalTime;
+            sessionType.textContent = type;
+            updateDisplay();
+            
+            // Update active session button
+            sessionBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startTimer);
+        resetBtn.addEventListener('click', resetTimer);
+
+        sessionBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const minutes = parseInt(e.target.dataset.minutes);
+                const type = e.target.dataset.type;
+                setSession(minutes, type);
+            });
+        });
+
+        // Initialize display
+        updateDisplay();
+    </script>
+</body>
+</html>

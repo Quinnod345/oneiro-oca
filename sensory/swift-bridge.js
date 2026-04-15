@@ -15,6 +15,31 @@ const BINARY_PATH_DEBUG = join(__dirname, 'swift/.build/debug/oneiro-sensory');
 const BINARY_PATH = existsSync(BINARY_PATH_RELEASE) ? BINARY_PATH_RELEASE : BINARY_PATH_DEBUG;
 const SOCKET_PATH = '/tmp/oneiro-sensory.sock';
 
+/** After socket close or child exit, OCA used to always respawn sensory in 5s — killing the PID never stuck. */
+function isSensoryAutorestartEnabled() {
+  const ar = process.env.OCA_SENSORY_AUTORESTART;
+  if (ar != null && String(ar).trim() !== '') {
+    const v = String(ar).trim().toLowerCase();
+    if (['0', 'false', 'no', 'off'].includes(v)) return false;
+    if (['1', 'true', 'yes', 'on'].includes(v)) return true;
+  }
+  const cap = process.env.ONEIRO_DISABLE_SCREEN_CAPTURE;
+  if (cap == null || String(cap).trim() === '') {
+    return false;
+  }
+  const capV = String(cap).trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(capV)) return true;
+  return false;
+}
+
+function scheduleSensoryReconnect() {
+  if (!isSensoryAutorestartEnabled()) {
+    console.log('[sensory-bridge] not respawning sensory (set ONEIRO_DISABLE_SCREEN_CAPTURE=0 or OCA_SENSORY_AUTORESTART=1 to auto-restart after exit)');
+    return;
+  }
+  setTimeout(() => start().catch(console.error), 5000);
+}
+
 let childProcess = null;
 let socketClient = null;
 let lastHIDMetrics = {};
@@ -60,9 +85,10 @@ async function trySocketConnect() {
       });
       socket.on('error', () => {});
       socket.on('close', () => {
-        console.log('[sensory-bridge] socket closed, will reconnect');
+        console.log('[sensory-bridge] socket closed');
         mode = 'disconnected';
-        setTimeout(() => start().catch(console.error), 5000);
+        socketClient = null;
+        scheduleSensoryReconnect();
       });
       socketClient = socket;
       resolve(true);
@@ -74,7 +100,10 @@ async function trySocketConnect() {
 
 function startAsChild() {
   try {
-    childProcess = spawn(BINARY_PATH, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    // Inherit process.env (../.env via npm start).
+    // Screen capture: ONEIRO_DISABLE_SCREEN_CAPTURE=1 for DRM without SCStream.
+    // Microphone: off by default; ONEIRO_ENABLE_MIC_CAPTURE=1 in .env to enable (avoids speaker crackle; LaunchAgent uses run-sensory.sh).
+    childProcess = spawn(BINARY_PATH, [], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env } });
     mode = 'child';
 
     const rl = createInterface({ input: childProcess.stdout });
@@ -90,10 +119,11 @@ function startAsChild() {
       console.error('[sensory-swift]', data.toString().trim());
     });
 
-    childProcess.on('exit', (code) => {
-      console.log(`[sensory-swift] exited with code ${code}`);
+    childProcess.on('exit', (code, signal) => {
+      console.log(`[sensory-swift] exited with code ${code}, signal ${signal}`);
       mode = 'disconnected';
-      setTimeout(() => start().catch(console.error), 5000);
+      childProcess = null;
+      scheduleSensoryReconnect();
     });
 
     console.log('[sensory-bridge] started as child process, PID:', childProcess.pid);

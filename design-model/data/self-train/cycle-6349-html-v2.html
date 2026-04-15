@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440, height=900">
+<title>Dream Logic Navigator</title>
+<style>
+:root {
+  --ink: #0a0908;
+  --ash: #49473e;
+  --bone: #f2f0e6;
+  --pulse: #ff6b35;
+  --dream: #004643;
+  --whisper: #abd1c6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 1440px;
+  height: 900px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bone);
+  position: relative;
+}
+
+#dilemma-portal {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  text-align: center;
+  z-index: 10;
+}
+
+#dilemma-input {
+  width: 100%;
+  padding: 24px 32px;
+  font-size: 24px;
+  font-weight: 300;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid var(--ash);
+  color: var(--ink);
+  transition: border-color 0.3s;
+  text-align: center;
+}
+
+#dilemma-input:focus {
+  outline: none;
+  border-color: var(--dream);
+}
+
+#dilemma-input::placeholder {
+  color: var(--ash);
+  opacity: 0.6;
+}
+
+#prompt-whisper {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--ash);
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+}
+
+#neural-field {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 240px 120px 120px 120px;
+  gap: 40px;
+}
+
+.thought-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 30px;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--bone);
+  border: 2px solid transparent;
+  border-radius: 40px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.thought-node.visible {
+  opacity: 0.7;
+  transform: scale(1);
+}
+
+.thought-node:hover {
+  opacity: 1;
+  transform: scale(1.05);
+  border-color: var(--dream);
+  background: rgba(249, 247, 243, 0.8);
+  box-shadow: 0 8px 24px rgba(0, 70, 67, 0.15);
+}
+
+.thought-node.selected {
+  opacity: 1;
+  border-color: var(--pulse);
+  background: var(--whisper);
+  transform: scale(1.1);
+}
+
+#heat-trail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.heat-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--pulse);
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: heatFade 2s forwards;
+}
+
+@keyframes heatFade {
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+#revelation-canvas {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--ash);
+  border-radius: 8px;
+  padding: 40px;
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+
+#revelation-canvas.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#answer-text {
+  font-size: 28px;
+  color: var(--dream);
+  line-height: 1.5;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+}
+
+.fade-in {
+  animation: fadeIn 0.8s forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
+</head>
+<body>
+<div id="dilemma-portal">
+  <input type="text" id="dilemma-input" placeholder="whisper your dilemma" autocomplete="off">
+  <div id="prompt-whisper">hover over thoughts to find your path</div>
+</div>
+
+<div id="neural-field"></div>
+<div id="heat-trail"></div>
+
+<div id="revelation-canvas">
+  <div id="answer-text"></div>
+</div>
+
+<script>
+const thoughts = [
+  "follow intuition",
+  "embrace change",
+  "trust the process",
+  "seek clarity",
+  "find balance",
+  "accept uncertainty",
+  "choose growth",
+  "release control",
+  "listen deeply",
+  "be present",
+  "honor feelings",
+  "take action"
+];
+
+const revelations = [
+  "The answer emerges from stillness",
+  "Your path reveals itself through patience",
+  "What you seek is already within",
+  "The journey itself is the destination",
+  "Trust your inner compass",
+  "Clarity comes from acceptance",
+  "Your intuition knows the way"
+];
+
+let thoughtNodes = [];
+let isNavigating = false;
+let selectedCount = 0;
+let lastMousePos = { x: 0, y: 0 };
+
+const neuralField = document.getElementById('neural-field');
+const heatTrail = document.getElementById('heat-trail');
+const revelationCanvas = document.getElementById('revelation-canvas');
+const answerText = document.getElementById('answer-text');
+const dilemmaInput = document.getElementById('dilemma-input');
+
+// Initialize thought nodes
+thoughts.forEach((thought, index) => {
+  const node = document.createElement('div');
+  node.className = 'thought-node';
+  node.textContent = thought;
+  node.dataset.index = index;
+  neuralField.appendChild(node);
+  thoughtNodes.push(node);
+});
+
+// Handle dilemma input
+dilemmaInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter' && dilemmaInput.value.trim()) {
+    isNavigating = true;
+    dilemmaInput.blur();
+    revealThoughts();
+  }
+});
+
+// Reveal thoughts with staggered animation
+function revealThoughts() {
+  thoughtNodes.forEach((node, index) => {
+    setTimeout(() => {
+      node.classList.add('visible');
+    }, index * 100);
+  });
+}
+
+// Track mouse movement for heat trail
+document.addEventListener('mousemove', (e) => {
+  if (!isNavigating) return;
+  
+  const distance = Math.sqrt(
+    Math.pow(e.clientX - lastMousePos.x, 2) + 
+    Math.pow(e.clientY - lastMousePos.y, 2)
+  );
+  
+  if (distance > 20) {
+    createHeatDot(e.clientX, e.clientY);
+    lastMousePos = { x: e.clientX, y: e.clientY };
+  }
+});
+
+// Create heat trail dots
+function createHeatDot(x, y) {
+  const dot = document.createElement('div');
+  dot.className = 'heat-dot';
+  dot.style.left = x - 3 + 'px';
+  dot.style.top = y - 3 + 'px';
+  heatTrail.appendChild(dot);
+  
+  setTimeout(() => dot.remove(), 2000);
+}
+
+// Handle thought selection
+thoughtNodes.forEach(node => {
+  node.addEventListener('click', () => {
+    if (!isNavigating) return;
+    
+    node.classList.add('selected');
+    selectedCount++;
+    
+    if (selectedCount >= 3) {
+      setTimeout(() => revealAnswer(), 500);
+    }
+  });
+});
+
+// Reveal answer
+function revealAnswer() {
+  const revelation = revelations[Math.floor(Math.random() * revelations.length)];
+  answerText.textContent = revelation;
+  revelationCanvas.classList.add('active');
+  
+  setTimeout(() => {
+    resetExperience();
+  }, 5000);
+}
+
+// Reset experience
+function resetExperience() {
+  isNavigating = false;
+  selectedCount = 0;
+  dilemmaInput.value = '';
+  revelationCanvas.classList.remove('active');
+  
+  thoughtNodes.forEach(node => {
+    node.classList.remove('visible', 'selected');
+  });
+  
+  heatTrail.innerHTML = '';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linguistic Decay Chamber</title>
+    <style>
+        :root {
+            --void: #0a0909;
+            --substrate: #2a2420;
+            --decay: #8b6531;
+            --ash: #9e9691;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--void);
+            color: var(--ash);
+            font-family: Georgia, serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #input-zone {
+            position: sticky;
+            top: 0;
+            background: linear-gradient(to bottom, var(--void), transparent);
+            padding: 3rem 2rem;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        #message-input {
+            width: min(90%, 600px);
+            padding: 1rem 1.5rem;
+            background: rgba(42, 36, 32, 0.8);
+            border: 1px solid rgba(158, 150, 145, 0.2);
+            color: #f4f0e8;
+            font-size: 1.25rem;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #message-input:focus {
+            border-color: rgba(158, 150, 145, 0.5);
+        }
+
+        button {
+            padding: 0.75rem 2rem;
+            background: transparent;
+            border: 1px solid rgba(158, 150, 145, 0.3);
+            color: var(--ash);
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: rgba(42, 36, 32, 0.5);
+            border-color: var(--ash);
+        }
+
+        #decay-chamber {
+            flex: 1;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .decay-stage {
+            opacity: 0;
+            animation: reveal 1s forwards;
+            animation-delay: var(--delay);
+        }
+
+        @keyframes reveal {
+            to { opacity: 1; }
+        }
+
+        #stage-original {
+            font-size: 1.5rem;
+            color: #f4f0e8;
+            text-align: center;
+            padding: 2rem;
+            background: radial-gradient(circle, rgba(42, 36, 32, 0.3), transparent);
+            --delay: 0s;
+        }
+
+        #stage-erosion {
+            font-size: 1.25rem;
+            color: var(--decay);
+            text-align: center;
+            letter-spacing: 0.1em;
+            word-spacing: 0.3em;
+            filter: blur(0.5px);
+            --delay: 0.5s;
+        }
+
+        #stage-fragments {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem 2rem;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px;
+            --delay: 1s;
+        }
+
+        .fragment {
+            color: var(--ash);
+            font-size: 1rem;
+            opacity: 0.7;
+            transform: rotate(var(--rot));
+            animation: drift 6s infinite ease-in-out;
+            animation-delay: var(--drift-delay);
+        }
+
+        @keyframes drift {
+            0%, 100% { transform: rotate(var(--rot)) translateX(0); }
+            50% { transform: rotate(var(--rot)) translateX(var(--drift)); }
+        }
+
+        .stage-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            opacity: 0.5;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            #message-input {
+                font-size: 1rem;
+            }
+            
+            #stage-original {
+                font-size: 1.25rem;
+            }
+            
+            #stage-erosion {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="input-zone">
+        <textarea id="message-input" rows="3" placeholder="Enter text to decay..."></textarea>
+        <button id="begin-decay">Begin Decay</button>
+    </div>
+
+    <div id="decay-chamber"></div>
+
+    <script>
+        const input = document.getElementById('message-input');
+        const button = document.getElementById('begin-decay');
+        const chamber = document.getElementById('decay-chamber');
+
+        button.addEventListener('click', () => {
+            const text = input.value.trim();
+            if (!text) return;
+
+            chamber.innerHTML = '';
+
+            // Original stage
+            const original = document.createElement('div');
+            original.id = 'stage-original';
+            original.className = 'decay-stage';
+            original.innerHTML = `<div class="stage-label">Origin</div>${text}`;
+            chamber.appendChild(original);
+
+            // Erosion stage
+            const eroded = document.createElement('div');
+            eroded.id = 'stage-erosion';
+            eroded.className = 'decay-stage';
+            const erodedText = text
+                .replace(/[aeiou]/gi, match => Math.random() > 0.5 ? match : '_')
+                .split(' ')
+                .map(word => Math.random() > 0.7 ? word.split('').reverse().join('') : word)
+                .join(' ');
+            eroded.innerHTML = `<div class="stage-label">Erosion</div>${erodedText}`;
+            chamber.appendChild(eroded);
+
+            // Fragments stage
+            const fragments = document.createElement('div');
+            fragments.id = 'stage-fragments';
+            fragments.className = 'decay-stage';
+            fragments.innerHTML = '<div class="stage-label" style="width: 100%;">Fragments</div>';
+            
+            text.split(' ').forEach((word, i) => {
+                if (Math.random() > 0.3) {
+                    const fragment = document.createElement('span');
+                    fragment.className = 'fragment';
+                    fragment.textContent = word.slice(Math.random() * word.length | 0);
+                    fragment.style.setProperty('--rot', `${(Math.random() - 0.5) * 20}deg`);
+                    fragment.style.setProperty('--drift', `${(Math.random() - 0.5) * 50}px`);
+                    fragment.style.setProperty('--drift-delay', `${i * 0.3}s`);
+                    fragments.appendChild(fragment);
+                }
+            });
+            
+            chamber.appendChild(fragments);
+        });
+    </script>
+</body>
+</html>

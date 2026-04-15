@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Pressure Cooking</title>
+    <style>
+        :root {
+            --shelf-oak: #3e2a1f;
+            --jar-glass: rgba(248, 244, 236, 0.08);
+            --fresh-thought: #e8f4f1;
+            --fermenting: #d4a574;
+            --crystallized: #6b4c7a;
+            --steam-wisp: rgba(255, 251, 240, 0.4);
+            --kitchen-warm: #2b1f17;
+            --copper-accent: #b87333;
+            --shadow-soft: rgba(20, 12, 8, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 20% 30%, #3a2820 0%, var(--kitchen-warm) 40%, #1a0f0a 100%);
+            font-family: Georgia, serif;
+            position: relative;
+            cursor: default;
+        }
+
+        .kitchen-light {
+            position: absolute;
+            top: -50px;
+            left: 35%;
+            width: 400px;
+            height: 300px;
+            background: radial-gradient(ellipse, rgba(255, 230, 180, 0.15) 0%, transparent 70%);
+            filter: blur(40px);
+            pointer-events: none;
+        }
+
+        .shelves {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            perspective: 800px;
+        }
+
+        .shelf {
+            position: absolute;
+            width: 85%;
+            height: 24px;
+            background: linear-gradient(to bottom, var(--shelf-oak) 0%, #2a1c14 100%);
+            left: 7.5%;
+            transform-style: preserve-3d;
+            box-shadow: 0 12px 24px var(--shadow-soft);
+        }
+
+        .shelf::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(90deg, 
+                transparent, 
+                transparent 80px, 
+                rgba(0,0,0,0.1) 80px, 
+                rgba(0,0,0,0.1) 82px
+            );
+        }
+
+        .shelf::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            width: 100%;
+            height: 8px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
+        }
+
+        .shelf:nth-child(1) { top: 180px; transform: rotateX(-2deg); }
+        .shelf:nth-child(2) { top: 380px; transform: rotateX(-1.5deg); }
+        .shelf:nth-child(3) { top: 580px; transform: rotateX(-1deg); }
+
+        .thought-area {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .instruction {
+            font-size: 14px;
+            color: var(--steam-wisp);
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .ephemeral-thought {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+            border-radius: 4px;
+            color: var(--fresh-thought);
+            font-size: 18px;
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            user-select: none;
+        }
+
+        .ephemeral-thought::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .ephemeral-thought:hover::before {
+            opacity: 1;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(200%) rotate(45deg); }
+        }
+
+        .ephemeral-thought:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .mason-jar {
+            position: absolute;
+            width: 120px;
+            height: 160px;
+            cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .jar-glass {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--jar-glass);
+            border-radius: 8px 8px 20px 20px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+
+        .jar-lid {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 110px;
+            height: 24px;
+            background: linear-gradient(to bottom, var(--copper-accent) 0%, #96582f 100%);
+            border-radius: 4px 4px 0 0;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+        }
+
+        .jar-contents {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 0%;
+            transition: height 2s ease-out;
+            overflow: hidden;
+        }
+
+        .liquid-memory {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, var(--fresh-thought) 0%, transparent 100%);
+            opacity: 0.3;
+            animation: swirl 8s infinite ease-in-out;
+        }
+
+        @keyframes swirl {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            25% { transform: translateX(-5px) rotate(2deg); }
+            75% { transform: translateX(5px) rotate(-2deg); }
+        }
+
+        .bubble {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+            bottom: 10px;
+            animation: rise 4s infinite ease-in;
+        }
+
+        .bubble:nth-child(2) { left: 30%; animation-delay: 1s; }
+        .bubble:nth-child(3) { left: 50%; animation-delay: 2s; }
+        .bubble:nth-child(4) { left: 70%; animation-delay: 3s; }
+
+        @keyframes rise {
+            0% { 
+                transform: translateY(0) scale(1);
+                opacity: 0.8;
+            }
+            100% { 
+                transform: translateY(-100px) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        .crystal-formation {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 3s;
+        }
+
+        .crystal {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            opacity: 0.4;
+        }
+
+        .crystal:nth-child(1) {
+            bottom: 20px;
+            left: 20px;
+            border-width: 0 8px 16px 8px;
+            border-color: transparent transparent var(--crystallized) transparent;
+            transform: rotate(15deg);
+        }
+
+        .crystal:nth-child(2) {
+            bottom: 40px;
+            right: 25px;
+            border-width: 0 6px 12px 6px;
+            border-color: transparent transparent var(--crystallized) transparent;
+            transform: rotate(-25deg);
+        }
+
+        .memory-text {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: var(--fresh-thought);
+            opacity: 0.7;
+            text-align: center;
+            padding: 0 10px;
+            max-width: 100px;
+            line-height: 1.4;
+        }
+
+        .steam-release {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .steam-wisp {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to top, var(--steam-wisp) 0%, transparent 100%);
+            transform-origin: bottom center;
+            animation: steam-float 3s ease-out forwards;
+        }
+
+        @keyframes steam-float {
+            0% {
+                transform: translateX(-50%) scaleY(0) rotate(0deg);
+                opacity: 0;
+            }
+            30% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-50%) translateY(-40px) scaleY(1.5) rotate(10deg);
+                opacity: 0;
+            }
+        }
+
+        .jar-shadow {
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 16px;
+            background: radial-gradient(ellipse, var(--shadow-soft) 0%, transparent 70%);
+            transition: all 0.3s;
+        }
+
+        .mason-jar:hover {
+            transform: translateY(-4px);
+        }
+
+        .mason-jar:hover .jar-shadow {
+            transform: translateX(-50%) scale(1.1);
+            opacity: 0.8;
+        }
+
+        .mason-jar.shaking {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            20% { transform: rotate(-8deg); }
+            40% { transform: rotate(8deg); }
+            60% { transform: rotate(-5deg); }
+            80% { transform: rotate(5deg); }
+        }
+
+        .jar1 { left: 120px; bottom: 200px; }
+        .jar2 { left: 280px; bottom: 200px; }
+        .jar3 { left: 440px; bottom: 200px; }
+        .jar4 { left: 600px; bottom: 200px; }
+        .jar5 { left: 760px; bottom: 200px; }
+        .jar6 { left: 920px; bottom: 200px; }
+        .jar7 { left: 1080px; bottom: 200px; }
+        
+        .jar8 { left: 200px; bottom: 400px; }
+        .jar9 { left: 360px; bottom: 400px; }
+        .jar10 { left: 520px; bottom: 400px; }
+        .jar11 { left: 680px; bottom: 400px; }
+        .jar12 { left: 840px; bottom: 400px; }
+        .jar13 { left: 1000px; bottom: 400px; }
+
+        .fermented .jar-contents {
+            background: linear-gradient(to top, var(--fermenting) 0%, transparent 100%);
+        }
+
+        .crystallized .jar-contents {
+            background: linear-gradient(to top, var(--crystallized) 0%, transparent 100%);
+        }
+
+        .crystallized .crystal-formation {
+            opacity: 1;
+        }
+
+        .drop-zone {
+            position: absolute;
+            inset: -20px;
+            border: 2px dashed transparent;
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .drop-zone.active {
+            border-color: var(--copper-accent);
+            background: rgba(184, 115, 51, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="kitchen-light"></div>
+    
+    <div class="thought-area">
+        <p class="instruction">drag thoughts into jars before they evaporate</p>
+        <div class="ephemeral-thought" draggable="true">the way sunlight catches dust</div>
+    </div>
+
+    <div class="shelves">
+        <div class="shelf"></div>
+        <div class="shelf"></div>
+        <div class="shelf"></div>
+    </div>
+
+    <div class="mason-jar jar1">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 70%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="bubble"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">forgotten birthday</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar2 fermented">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 85%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">mother's voice</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar3 crystallized">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 95%;">
+                <div class="liquid-memory"></div>
+                <div class="crystal-formation">
+                    <div class="crystal"></div>
+                    <div class="crystal"></div>
+                </div>
+                <div class="memory-text">first snow</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar4">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents">
+                <div class="liquid-memory"></div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar5">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 40%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">coffee smell</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar6 fermented">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 60%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">childhood fear</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar7">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents">
+                <div class="liquid-memory"></div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar8">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 30%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">ocean salt</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar9 crystallized">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 90%;">
+                <div class="liquid-memory"></div>
+                <div class="crystal-formation">
+                    <div class="crystal"></div>
+                    <div class="crystal"></div>
+                </div>
+                <div class="memory-text">grandfather's hands</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar10">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents">
+                <div class="liquid-memory"></div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar11">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 50%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">summer rain</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar12">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents">
+                <div class="liquid-memory"></div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="mason-jar jar13 fermented">
+        <div class="drop-zone"></div>
+        <div class="jar-glass">
+            <div class="jar-contents" style="height: 75%;">
+                <div class="liquid-memory"></div>
+                <div class="bubble"></div>
+                <div class="bubble"></div>
+                <div class="memory-text">lost friend</div>
+            </div>
+        </div>
+        <div class="jar-lid"></div>
+        <div class="jar-shadow"></div>
+        <div class="steam-release">
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <script>
+        const thoughts = [
+            "the way sunlight catches dust",
+            "grandmother's perfume",
+            "sound of old floorboards",
+            "taste of childhood candy",
+            "feeling before a storm",
+            "smell of old books",
+            "warmth of held hands",
+            "echo in empty rooms",
+            "texture of worn fabric",
+            "silence after goodbye"
+        ];
+
+        let currentThoughtIndex = 0;
+        let draggedElement = null;
+
+        document.querySelector('.ephemeral-thought').addEventListener('dragstart', function(e) {
+            draggedElement = e.target;
+            e.target.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', e.target.innerHTML);
+        });
+
+        document.querySelector('.ephemeral-thought').addEventListener('dragend', function(e) {
+            e.target.style.opacity = '';
+        });
+
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            zone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('active');
+            });
+
+            zone.addEventListener('dragleave', function(e) {
+                this.classList.remove('active');
+            });
+
+            zone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('active');
+                
+                const jar = this.closest('.mason-jar');
+                const contents = jar.querySelector('.jar-contents');
+                const currentHeight = parseInt(contents.style.height) || 0;
+                
+                if (currentHeight < 100) {
+                    contents.style.height = Math.min(currentHeight + 25, 100) + '%';
+                    
+                    const memoryText = jar.querySelector('.memory-text');
+                    memoryText.textContent = draggedElement.textContent;
+                    
+                    // Add pneumatic sealing animation
+                    jar.classList.add('shaking');
+                    setTimeout(() => jar.classList.remove('shaking'), 500);
+                    
+                    // Create new thought
+                    currentThoughtIndex = (currentThoughtIndex + 1) % thoughts.length;
+                    draggedElement.textContent = thoughts[currentThoughtIndex];
+                    draggedElement.style.animation = 'none';
+                    setTimeout(() => {
+                        draggedElement.style.animation = '';
+                    }, 10);
+                }
+            });
+        });
+
+        // Jar interactions
+        document.querySelectorAll('.mason-jar').forEach(jar => {
+            jar.addEventListener('click', function(e) {
+                if (e.detail === 1) {
+                    // Single click - release steam
+                    const steam = this.querySelector('.steam-release');
+                    steam.style.opacity = '1';
+                    const wisp = steam.querySelector('.steam-wisp');
+                    wisp.style.animation = 'none';
+                    setTimeout(() => {
+                        wisp.style.animation = 'steam-float 3s ease-out forwards';
+                    }, 10);
+                    setTimeout(() => {
+                        steam.style.opacity = '0';
+                    }, 3000);
+                }
+            });
+
+            jar.addEventListener('dblclick', function(e) {
+                // Double click - vigorous shake
+                this.classList.add('shaking');
+                setTimeout(() => this.classList.remove('shaking'), 500);
+                
+                // Randomize fermentation state
+                const states = ['', 'fermented', 'crystallized'];
+                const randomState = states[Math.floor(Math.random() * states.length)];
+                this.className = this.className.replace(/\s*(fermented|crystallized)/g, '');
+                if (randomState) this.classList.add(randomState);
+            });
+        });
+
+        // Subtle shelf creaking
+        let lastCreak = 0;
+        document.addEventListener('mousemove', function(e) {
+            const now = Date.now();
+            if (now - lastCreak > 5000) {
+                const shelf = document.querySelectorAll('.shelf')[Math.floor(Math.random() * 3)];
+                shelf.style.transform = `rotateX(${-2 + Math.random() * 0.2}deg)`;
+                lastCreak = now;
+            }
+        });
+
+        // Thought evaporation timer
+        setInterval(() => {
+            const thought = document.querySelector('.ephemeral-thought');
+            if (thought) {
+                thought.style.opacity = (parseFloat(thought.style.opacity || 1) - 0.01).toString();
+                if (parseFloat(thought.style.opacity) <= 0.3) {
+                    currentThoughtIndex = (currentThoughtIndex + 1) % thoughts.length;
+                    thought.textContent = thoughts[currentThoughtIndex];
+                    thought.style.opacity = '1';
+                }
+            }
+        }, 200);
+    </script>
+</body>
+</html>

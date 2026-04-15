@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Thought Archive</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --text-primary: #ffffff;
+            --text-secondary: #a3a3a3;
+            --accent: #3b82f6;
+            --surface: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            gap: 40px;
+            height: calc(100% - 180px);
+        }
+
+        .input-panel {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .thought-input {
+            width: 100%;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.2s;
+        }
+
+        .thought-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .thought-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .add-button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            align-self: flex-start;
+        }
+
+        .add-button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .add-button:active {
+            transform: translateY(0);
+        }
+
+        .archive-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .archive-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .archive-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .filter-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .thoughts-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .thoughts-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .thoughts-grid::-webkit-scrollbar-track {
+            background: var(--surface);
+            border-radius: 4px;
+        }
+
+        .thoughts-grid::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .thought-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            height: fit-content;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .thought-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .thought-content {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .thought-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .thought-date {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .thought-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .action-button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        .action-button:hover {
+            color: var(--text-primary);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Thought Archive</h1>
+        <p class="subtitle">Capture and organize your ideas</p>
+    </div>
+
+    <div class="main-container">
+        <div class="input-panel">
+            <label class="input-label">New Thought</label>
+            <textarea class="thought-input" placeholder="What's on your mind?"></textarea>
+            <button class="add-button">Add to Archive</button>
+        </div>
+
+        <div class="archive-panel">
+            <div class="archive-header">
+                <h2 class="archive-title">Your Archive</h2>
+                <div class="filter-tabs">
+                    <div class="filter-tab active">All</div>
+                    <div class="filter-tab">Recent</div>
+                    <div class="filter-tab">Starred</div>
+                </div>
+            </div>
+            
+            <div class="thoughts-grid">
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <p class="empty-text">Your archive is empty. Start adding thoughts!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const thoughtInput = document.querySelector('.thought-input');
+        const addButton = document.querySelector('.add-button');
+        const thoughtsGrid = document.querySelector('.thoughts-grid');
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        let thoughts = [];
+
+        addButton.addEventListener('click', () => {
+            const content = thoughtInput.value.trim();
+            if (content) {
+                const thought = {
+                    id: Date.now(),
+                    content,
+                    date: new Date(),
+                    starred: false
+                };
+                thoughts.unshift(thought);
+                thoughtInput.value = '';
+                renderThoughts();
+            }
+        });
+
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                filterTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderThoughts(tab.textContent);
+            });
+        });
+
+        function renderThoughts(filter = 'All') {
+            thoughtsGrid.innerHTML = '';
+            
+            let filteredThoughts = thoughts;
+            if (filter === 'Recent') {
+                filteredThoughts = thoughts.slice(0, 5);
+            } else if (filter === 'Starred') {
+                filteredThoughts = thoughts.filter(t => t.starred);
+            }
+
+            if (filteredThoughts.length === 0) {
+                thoughtsGrid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📝</div>
+                        <p class="empty-text">${filter === 'Starred' ? 'No starred thoughts yet' : 'Your archive is empty. Start adding thoughts!'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filteredThoughts.forEach(thought => {
+                const card = document.createElement('div');
+                card.className = 'thought-card';
+                card.innerHTML = `
+                    <div class="thought-content">${thought.content}</div>
+                    <div class="thought-meta">
+                        <div class="thought-date">
+                            <span>${formatDate(thought.date)}</span>
+                        </div>
+                        <div class="thought-actions">
+                            <button class="action-button" onclick="toggleStar(${thought.id})">
+                                ${thought.starred ? '⭐' : '☆'}
+                            </button>
+                            <button class="action-button" onclick="deleteThought(${thought.id})">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+                thoughtsGrid.appendChild(card);
+            });
+        }
+
+        function formatDate(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function toggleStar(id) {
+            const thought = thoughts.find(t => t.id === id);
+            if (thought) {
+                thought.starred = !thought.starred;
+                renderThoughts(document.querySelector('.filter-tab.active').textContent);
+            }
+        }
+
+        function deleteThought(id) {
+            thoughts = thoughts.filter(t => t.id !== id);
+            renderThoughts(document.querySelector('.filter-tab.active').textContent);
+        }
+    </script>
+</body>
+</html>

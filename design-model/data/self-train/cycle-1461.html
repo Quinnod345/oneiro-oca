@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial File Organizer</title>
+    <style>
+        :root {
+            --canvas-bg: #fafbfc;
+            --topic-core: #2563eb;
+            --topic-design: #dc2626;
+            --topic-research: #059669;
+            --topic-strategy: #7c2d12;
+            --topic-finance: #9333ea;
+            --document-bg: #ffffff;
+            --document-shadow: rgba(0, 0, 0, 0.08);
+            --document-shadow-hover: rgba(0, 0, 0, 0.16);
+            --connection-line: rgba(37, 99, 235, 0.2);
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --text-tertiary: #94a3b8;
+            --border-subtle: #e2e8f0;
+            --toolbar-bg: rgba(255, 255, 255, 0.95);
+            --backdrop-blur: blur(8px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--canvas-bg);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        .canvas {
+            position: relative;
+            width: 1440px;
+            height: 900px;
+            background: 
+                radial-gradient(circle at 300px 200px, rgba(37, 99, 235, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 1100px 300px, rgba(220, 38, 38, 0.02) 0%, transparent 40%),
+                radial-gradient(circle at 800px 600px, rgba(5, 150, 105, 0.025) 0%, transparent 40%);
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: var(--connection-line);
+            transform-origin: left center;
+            z-index: 1;
+        }
+
+        .connection-1 { top: 180px; left: 320px; width: 180px; transform: rotate(15deg); }
+        .connection-2 { top: 280px; left: 450px; width: 140px; transform: rotate(-8deg); }
+        .connection-3 { top: 420px; left: 380px; width: 200px; transform: rotate(25deg); }
+        .connection-4 { top: 350px; left: 720px; width: 120px; transform: rotate(-12deg); }
+        .connection-5 { top: 520px; left: 650px; width: 160px; transform: rotate(18deg); }
+        .connection-6 { top: 380px; left: 980px; width: 180px; transform: rotate(-22deg); }
+
+        .topic-cluster {
+            position: absolute;
+            z-index: 2;
+        }
+
+        .topic-label {
+            position: absolute;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            z-index: 3;
+        }
+
+        .document {
+            position: absolute;
+            background: var(--document-bg);
+            border-radius: 8px;
+            box-shadow: 
+                0 1px 3px var(--document-shadow),
+                0 0 0 1px var(--border-subtle);
+            cursor: grab;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 14px;
+            min-width: 120px;
+            backdrop-filter: var(--backdrop-blur);
+        }
+
+        .document:hover {
+            box-shadow: 
+                0 4px 12px var(--document-shadow-hover),
+                0 0 0 1px var(--border-subtle);
+            transform: translateY(-1px);
+        }
+
+        .document:active {
+            cursor: grabbing;
+            transform: translateY(0);
+        }
+
+        .document-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .document-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .document-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .document-meta {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+        }
+
+        /* Core Engineering Cluster */
+        .cluster-core {
+            top: 120px;
+            left: 240px;
+        }
+
+        .cluster-core .topic-label {
+            top: -25px;
+            left: 0;
+            color: var(--topic-core);
+        }
+
+        .cluster-core .document-icon {
+            background: var(--topic-core);
+        }
+
+        .doc-api-spec { top: 0; left: 0; }
+        .doc-database-schema { top: 50px; left: 80px; }
+        .doc-auth-flow { top: 100px; left: -20px; }
+        .doc-deployment { top: 140px; left: 100px; }
+
+        /* Design System Cluster */
+        .cluster-design {
+            top: 200px;
+            left: 580px;
+        }
+
+        .cluster-design .topic-label {
+            top: -25px;
+            left: 0;
+            color: var(--topic-design);
+        }
+
+        .cluster-design .document-icon {
+            background: var(--topic-design);
+        }
+
+        .doc-design-tokens { top: 0; left: 0; }
+        .doc-component-lib { top: -30px; left: 80px; }
+        .doc-brand-guide { top: 60px; left: 40px; }
+
+        /* Research Cluster */
+        .cluster-research {
+            top: 380px;
+            left: 350px;
+        }
+
+        .cluster-research .topic-label {
+            top: -25px;
+            left: 0;
+            color: var(--topic-research);
+        }
+
+        .cluster-research .document-icon {
+            background: var(--topic-research);
+        }
+
+        .doc-user-interviews { top: 0; left: 0; }
+        .doc-usability-test { top: 50px; left: 120px; }
+        .doc-survey-results { top: -40px; left: 60px; }
+        .doc-persona-map { top: 80px; left: -30px; }
+
+        /* Strategy Cluster */
+        .cluster-strategy {
+            top: 320px;
+            left: 820px;
+        }
+
+        .cluster-strategy .topic-label {
+            top: -25px;
+            left: 0;
+            color: var(--topic-strategy);
+        }
+
+        .cluster-strategy .document-icon {
+            background: var(--topic-strategy);
+        }
+
+        .doc-roadmap { top: 0; left: 0; }
+        .doc-requirements { top: 40px; left: 80px; }
+        .doc-competitive { top: -30px; left: 100px; }
+
+        /* Finance Cluster */
+        .cluster-finance {
+            top: 540px;
+            left: 680px;
+        }
+
+        .cluster-finance .topic-label {
+            top: -25px;
+            left: 0;
+            color: var(--topic-finance);
+        }
+
+        .cluster-finance .document-icon {
+            background: var(--topic-finance);
+        }
+
+        .doc-budget { top: 0; left: 0; }
+        .doc-forecast { top: 50px; left: 80px; }
+        .doc-metrics { top: -20px; left: 120px; }
+
+        /* Standalone Documents */
+        .doc-meeting-notes {
+            top: 150px;
+            left: 1000px;
+        }
+
+        .doc-meeting-notes .document-icon {
+            background: var(--text-secondary);
+        }
+
+        .doc-project-brief {
+            top: 650px;
+            left: 300px;
+        }
+
+        .doc-project-brief .document-icon {
+            background: var(--text-secondary);
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            background: var(--toolbar-bg);
+            backdrop-filter: var(--backdrop-blur);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .toolbar-button {
+            background: none;
+            border: none;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+        }
+
+        .toolbar-button:hover {
+            background: var(--border-subtle);
+            color: var(--text-primary);
+        }
+
+        .zoom-indicator {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            padding: 0 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas">
+        <!-- Connection Lines -->
+        <div class="connection-line connection-1"></div>
+        <div class="connection-line connection-2"></div>
+        <div class="connection-line connection-3"></div>
+        <div class="connection-line connection-4"></div>
+        <div class="connection-line connection-5"></div>
+        <div class="connection-line connection-6"></div>
+
+        <!-- Core Engineering Cluster -->
+        <div class="topic-cluster cluster-core">
+            <div class="topic-label">Core Engineering</div>
+            <div class="document doc-api-spec">
+                <div class="document-icon">API</div>
+                <div class="document-content">
+                    <div class="document-title">API Specification</div>
+                    <div class="document-meta">2 hours ago</div>
+                </div>
+            </div>
+            <div class="document doc-database-schema">
+                <div class="document-icon">DB</div>
+                <div class="document-content">
+                    <div class="document-title">Database Schema</div>
+                    <div class="document-meta">Yesterday</div>
+                </div>
+            </div>
+            <div class="document doc-auth-flow">
+                <div class="document-icon">🔐</div>
+                <div class="document-content">
+                    <div class="document-title">Authentication Flow</div>
+                    <div class="document-meta">3 days ago</div>
+                </div>
+            </div>
+            <div class="document doc-deployment">
+                <div class="document-icon">⚙️</div>
+                <div class="document-content">
+                    <div class="document-title">Deployment Guide</div>
+                    <div class="document-meta">1 week ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design System Cluster -->
+        <div class="topic-cluster cluster-design">
+            <div class="topic-label">Design System</div>
+            <div class="document doc-design-tokens">
+                <div class="document-icon">🎨</div>
+                <div class="document-content">
+                    <div class="document-title">Design Tokens</div>
+                    <div class="document-meta">5 hours ago</div>
+                </div>
+            </div>
+            <div class="document doc-component-lib">
+                <div class="document-icon">📚</div>
+                <div class="document-content">
+                    <div class="document-title">Component Library</div>
+                    <div class="document-meta">1 day ago</div>
+                </div>
+            </div>
+            <div class="document doc-brand-guide">
+                <div class="document-icon">✨</div>
+                <div class="document-content">
+                    <div class="document-title">Brand Guidelines</div>
+                    <div class="document-meta">2 weeks ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Research Cluster -->
+        <div class="topic-cluster cluster-research">
+            <div class="topic-label">User Research</div>
+            <div class="document doc-user-interviews">
+                <div class="document-icon">👥</div>
+                <div class="document-content">
+                    <div class="document-title">User Interviews Q3</div>
+                    <div class="document-meta">4 hours ago</div>
+                </div>
+            </div>
+            <div class="document doc-usability-test">
+                <div class="document-icon">🧪</div>
+                <div class="document-content">
+                    <div class="document-title">Usability Testing</div>
+                    <div class="document-meta">2 days ago</div>
+                </div>
+            </div>
+            <div class="document doc-survey-results">
+                <div class="document-icon">📊</div>
+                <div class="document-content">
+                    <div class="document-title">Survey Results</div>
+                    <div class="document-meta">1 week ago</div>
+                </div>
+            </div>
+            <div class="document doc-persona-map">
+                <div class="document-icon">🎭</div>
+                <div class="document-content">
+                    <div class="document-title">Persona Mapping</div>
+                    <div class="document-meta">3 weeks ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Cluster -->
+        <div class="topic-cluster cluster-strategy">
+            <div class="topic-label">Strategy</div>
+            <div class="document doc-roadmap">
+                <div class="document-icon">🗺️</div>
+                <div class="document-content">
+                    <div class="document-title">Product Roadmap</div>
+                    <div class="document-meta">6 hours ago</div>
+                </div>
+            </div>
+            <div class="document doc-requirements">
+                <div class="document-icon">📋</div>
+                <div class="document-content">
+                    <div class="document-title">Requirements Doc</div>
+                    <div class="document-meta">3 days ago</div>
+                </div>
+            </div>
+            <div class="document doc-competitive">
+                <div class="document-icon">⚔️</div>
+                <div class="document-content">
+                    <div class="document-title">Competitive Analysis</div>
+                    <div class="document-meta">1 week ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Finance Cluster -->
+        <div class="topic-cluster cluster-finance">
+            <div class="topic-label">Finance</div>
+            <div class="document doc-budget">
+                <div class="document-icon">💰</div>
+                <div class="document-content">
+                    <div class="document-title">Q4 Budget</div>
+                    <div class="document-meta">1 day ago</div>
+                </div>
+            </div>
+            <div class="document doc-forecast">
+                <div class="document-icon">📈</div>
+                <div class="document-content">
+                    <div class="document-title">Revenue Forecast</div>
+                    <div class="document-meta">4 days ago</div>
+                </div>
+            </div>
+            <div class="document doc-metrics">
+                <div class="document-icon">📊</div>
+                <div class="document-content">
+                    <div class="document-title">KPI Metrics</div>
+                    <div class="document-meta">1 week ago</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standalone Documents -->
+        <div class="document doc-meeting-notes">
+            <div class="document-icon">📝</div>
+            <div class="document-content">
+                <div class="document-title">All Hands Notes</div>
+                <div class="document-meta">30 min ago</div>
+            </div>
+        </div>
+
+        <div class="document doc-project-brief">
+            <div class="document-icon">🎯</div>
+            <div class="document-content">
+                <div class="document-title">Project Brief</div>
+                <div class="document-meta">2 days ago</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="toolbar-button">Reset View</button>
+        <button class="toolbar-button">−</button>
+        <span class="zoom-indicator">100%</span>
+        <button class="toolbar-button">+</button>
+        <button class="toolbar-button">Auto-organize</button>
+    </div>
+
+    <script>
+        // Make documents draggable
+        document.querySelectorAll('.document').forEach(doc => {
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+
+            doc.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = doc.offsetLeft;
+                initialY = doc.offsetTop;
+                doc.style.zIndex = '100';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                doc.style.left = (initialX + deltaX) + 'px';
+                doc.style.top = (initialY + deltaY) + 'px';
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    doc.style.zIndex = '4';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

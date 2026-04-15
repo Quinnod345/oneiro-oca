@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Degradation Archive</title>
+    <style>
+        :root {
+            --ink-fresh: #1a1a1a;
+            --ink-fading: #4a4a4a;
+            --paper-cream: #faf8f3;
+            --paper-aged: #f4e8d8;
+            --paper-decay: #e8d4b8;
+            --ash-grey: #9a8c7c;
+            --water-stain: rgba(180, 160, 140, 0.2);
+            --burn-edge: #6a5242;
+            --time-0: 0;
+            --time-1: 0.15;
+            --time-2: 0.35;
+            --time-3: 0.6;
+            --time-4: 0.85;
+            --time-5: 1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, #f5f3ee 0%, #e8e0d4 50%, #d4c8b8 100%);
+            font-family: Georgia, 'Times New Roman', serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .archive-desk {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            perspective: 1200px;
+        }
+
+        .desk-surface {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 30% 40%, var(--water-stain) 0%, transparent 40%),
+                radial-gradient(ellipse at 70% 60%, var(--water-stain) 0%, transparent 30%),
+                linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.05) 100%);
+        }
+
+        .header-area {
+            position: absolute;
+            top: 3rem;
+            left: 4rem;
+            z-index: 100;
+        }
+
+        .archive-title {
+            font-size: 2.25rem;
+            font-weight: 400;
+            color: var(--ink-fading);
+            letter-spacing: 0.02em;
+            margin-bottom: 0.5rem;
+            font-style: italic;
+        }
+
+        .archive-subtitle {
+            font-size: 0.875rem;
+            color: var(--ash-grey);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .thought-input {
+            position: absolute;
+            bottom: 3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            z-index: 100;
+        }
+
+        .input-wrapper {
+            position: relative;
+            background: var(--paper-cream);
+            padding: 2rem;
+            border-radius: 2px;
+            box-shadow: 
+                0 2px 4px rgba(0,0,0,0.1),
+                0 4px 8px rgba(0,0,0,0.05);
+            transform: rotateX(5deg);
+        }
+
+        .input-wrapper::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, transparent, var(--burn-edge), transparent);
+            opacity: 0.1;
+            z-index: -1;
+        }
+
+        .thought-textarea {
+            width: 100%;
+            min-height: 120px;
+            background: transparent;
+            border: none;
+            resize: none;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--ink-fresh);
+            outline: none;
+        }
+
+        .thought-textarea::placeholder {
+            color: var(--ash-grey);
+            font-style: italic;
+        }
+
+        .submit-thought {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            background: none;
+            border: 1px solid var(--ink-fading);
+            padding: 0.5rem 1.5rem;
+            font-family: inherit;
+            font-size: 0.875rem;
+            color: var(--ink-fading);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.05em;
+        }
+
+        .submit-thought:hover {
+            background: var(--ink-fresh);
+            color: var(--paper-cream);
+        }
+
+        .memory-field {
+            position: absolute;
+            inset: 0;
+            padding: 8rem 4rem 12rem;
+            overflow: hidden;
+        }
+
+        .memory-note {
+            position: absolute;
+            background: var(--paper-aged);
+            padding: 1.5rem;
+            width: 280px;
+            min-height: 200px;
+            box-shadow: 
+                0 1px 3px rgba(0,0,0,0.12),
+                0 1px 2px rgba(0,0,0,0.24);
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center center;
+        }
+
+        .memory-note::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 30%, transparent 0%, var(--water-stain) 100%),
+                linear-gradient(135deg, transparent 0%, rgba(0,0,0,0.02) 100%);
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .note-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            color: var(--ink-fresh);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            transition: all 0.6s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .note-timestamp {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            font-size: 0.625rem;
+            color: var(--ash-grey);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            opacity: 0.6;
+        }
+
+        /* Degradation stages */
+        .memory-note[data-age="0"] {
+            filter: blur(0px);
+            opacity: 1;
+            transform: rotate(0deg);
+        }
+
+        .memory-note[data-age="1"] {
+            filter: blur(0.5px);
+            opacity: 0.9;
+            background: var(--paper-aged);
+            transform: rotate(-1deg);
+        }
+
+        .memory-note[data-age="1"] .note-content {
+            color: var(--ink-fading);
+        }
+
+        .memory-note[data-age="2"] {
+            filter: blur(1px);
+            opacity: 0.7;
+            background: var(--paper-decay);
+            transform: rotate(2deg);
+        }
+
+        .memory-note[data-age="2"]::before {
+            opacity: 0.3;
+        }
+
+        .memory-note[data-age="2"] .note-content {
+            color: var(--ash-grey);
+            text-shadow: 0 0 2px rgba(0,0,0,0.1);
+        }
+
+        .memory-note[data-age="3"] {
+            filter: blur(2px);
+            opacity: 0.5;
+            background: linear-gradient(135deg, var(--paper-decay), transparent);
+            transform: rotate(-3deg) scale(0.95);
+        }
+
+        .memory-note[data-age="3"]::before {
+            opacity: 0.6;
+        }
+
+        .memory-note[data-age="3"] .note-content {
+            color: var(--ash-grey);
+            opacity: 0.6;
+            text-shadow: 0 0 4px rgba(0,0,0,0.2);
+        }
+
+        .memory-note[data-age="4"] {
+            filter: blur(4px);
+            opacity: 0.3;
+            background: transparent;
+            transform: rotate(4deg) scale(0.9);
+        }
+
+        .memory-note[data-age="4"]::before {
+            opacity: 1;
+            background: 
+                radial-gradient(circle at 40% 50%, var(--burn-edge) 0%, transparent 30%),
+                radial-gradient(circle at 60% 70%, var(--water-stain) 0%, transparent 40%);
+        }
+
+        .memory-note[data-age="4"] .note-content {
+            opacity: 0.3;
+            color: var(--burn-edge);
+            text-shadow: 0 0 8px rgba(0,0,0,0.3);
+        }
+
+        .memory-note[data-age="5"] {
+            filter: blur(8px);
+            opacity: 0.15;
+            transform: rotate(-5deg) scale(0.85);
+        }
+
+        .memory-note[data-age="5"]::before {
+            opacity: 1;
+            background: 
+                radial-gradient(circle at random, var(--burn-edge) 0%, transparent 20%),
+                radial-gradient(circle at random, var(--ash-grey) 0%, transparent 30%);
+        }
+
+        .memory-note[data-age="5"] .note-content {
+            opacity: 0.1;
+            color: var(--burn-edge);
+            text-shadow: 0 0 12px rgba(0,0,0,0.5);
+        }
+
+        /* Hover restoration */
+        .memory-note:hover {
+            filter: blur(0px) !important;
+            opacity: 1 !important;
+            transform: rotate(0deg) scale(1) !important;
+            z-index: 50;
+            background: var(--paper-cream) !important;
+        }
+
+        .memory-note:hover::before {
+            opacity: 0 !important;
+        }
+
+        .memory-note:hover .note-content {
+            color: var(--ink-fresh) !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+        }
+
+        /* Fragments for oldest memories */
+        .memory-fragment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--ash-grey) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(6px);
+            opacity: 0.2;
+            pointer-events: none;
+            animation: drift 20s infinite ease-in-out;
+        }
+
+        @keyframes drift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(20px, -10px) rotate(120deg); }
+            66% { transform: translate(-15px, 15px) rotate(240deg); }
+        }
+
+        .decay-indicator {
+            position: absolute;
+            bottom: 3rem;
+            right: 3rem;
+            width: 200px;
+            z-index: 100;
+        }
+
+        .decay-label {
+            font-size: 0.75rem;
+            color: var(--ash-grey);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .decay-scale {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                var(--ink-fresh) 0%, 
+                var(--ink-fading) 20%, 
+                var(--ash-grey) 40%, 
+                var(--burn-edge) 70%, 
+                transparent 100%);
+            border-radius: 2px;
+            position: relative;
+        }
+
+        .decay-marker {
+            position: absolute;
+            top: -8px;
+            width: 1px;
+            height: 20px;
+            background: var(--ash-grey);
+            opacity: 0.3;
+        }
+
+        .decay-marker:nth-child(1) { left: 0%; }
+        .decay-marker:nth-child(2) { left: 20%; }
+        .decay-marker:nth-child(3) { left: 40%; }
+        .decay-marker:nth-child(4) { left: 60%; }
+        .decay-marker:nth-child(5) { left: 80%; }
+        .decay-marker:nth-child(6) { left: 100%; }
+    </style>
+</head>
+<body>
+    <div class="archive-desk">
+        <div class="desk-surface"></div>
+        
+        <div class="header-area">
+            <h1 class="archive-title">Memory Degradation Archive</h1>
+            <p class="archive-subtitle">Where thoughts dissolve into time</p>
+        </div>
+
+        <div class="memory-field" id="memoryField">
+            <!-- Sample memories at different degradation stages -->
+            <div class="memory-note" data-age="0" style="left: 200px; top: 100px; transform: rotate(-2deg);">
+                <div class="note-content">The way morning light catches dust particles floating through the kitchen window - each speck a tiny world, drifting purposeless yet perfect.</div>
+                <span class="note-timestamp">just now</span>
+            </div>
+
+            <div class="memory-note" data-age="1" style="left: 500px; top: 180px; transform: rotate(3deg);">
+                <div class="note-content">Remembered the sound of rain on my childhood bedroom window. Metal roof. Each drop a small percussion in an endless symphony.</div>
+                <span class="note-timestamp">2 hours ago</span>
+            </div>
+
+            <div class="memory-note" data-age="2" style="left: 800px; top: 120px; transform: rotate(-4deg);">
+                <div class="note-content">That peculiar sadness of finishing a good book. Like saying goodbye to friends who never knew you existed.</div>
+                <span class="note-timestamp">yesterday</span>
+            </div>
+
+            <div class="memory-note" data-age="3" style="left: 300px; top: 350px; transform: rotate(2deg);">
+                <div class="note-content">Coffee tastes different in paper cups. Something about the texture against your lips changes everything.</div>
+                <span class="note-timestamp">3 days ago</span>
+            </div>
+
+            <div class="memory-note" data-age="4" style="left: 650px; top: 400px; transform: rotate(-3deg);">
+                <div class="note-content">Walking through empty parking lots at night... sodium lights... shadows longer than memory...</div>
+                <span class="note-timestamp">1 week ago</span>
+            </div>
+
+            <div class="memory-note" data-age="5" style="left: 900px; top: 320px; transform: rotate(5deg);">
+                <div class="note-content">...something about... the color blue... or was it green... fading...</div>
+                <span class="note-timestamp">1 month ago</span>
+            </div>
+
+            <!-- Memory fragments -->
+            <div class="memory-fragment" style="left: 400px; top: 250px;"></div>
+            <div class="memory-fragment" style="left: 750px; top: 450px;"></div>
+            <div class="memory-fragment" style="left: 150px; top: 400px;"></div>
+        </div>
+
+        <div class="thought-input">
+            <div class="input-wrapper">
+                <textarea class="thought-textarea" placeholder="Document a fleeting thought before it fades..."></textarea>
+                <button class="submit-thought">Archive</button>
+            </div>
+        </div>
+
+        <div class="decay-indicator">
+            <div class="decay-label">Temporal Decay</div>
+            <div class="decay-scale">
+                <div class="decay-marker"></div>
+                <div class="decay-marker"></div>
+                <div class="decay-marker"></div>
+                <div class="decay-marker"></div>
+                <div class="decay-marker"></div>
+                <div class="decay-marker"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const memoryField = document.getElementById('memoryField');
+        const thoughtTextarea = document.querySelector('.thought-textarea');
+        const submitButton = document.querySelector('.submit-thought');
+
+        function createMemoryNote(text) {
+            const note = document.createElement('div');
+            note.className = 'memory-note';
+            note.setAttribute('data-age', '0');
+            
+            const positions = [
+                { left: 100 + Math.random() * 900, top: 50 + Math.random() * 300 },
+            ];
+            const pos = positions[0];
+            const rotation = -5 + Math.random() * 10;
+            
+            note.style.left = pos.left + 'px';
+            note.style.top = pos.top + 'px';
+            note.style.transform = `rotate(${rotation}deg)`;
+            
+            note.innerHTML = `
+                <div class="note-content">${text}</div>
+                <span class="note-timestamp">just now</span>
+            `;
+            
+            memoryField.appendChild(note);
+            
+            // Start degradation cycle
+            setTimeout(() => degradeMemory(note), 10000);
+        }
+
+        function degradeMemory(note) {
+            const currentAge = parseInt(note.getAttribute('data-age'));
+            if (currentAge < 5) {
+                note.setAttribute('data-age', currentAge + 1);
+                updateTimestamp(note, currentAge + 1);
+                setTimeout(() => degradeMemory(note), 15000 + Math.random() * 10000);
+            } else {
+                // Create fragment and remove note
+                createFragment(note);
+                setTimeout(() => note.remove(), 3000);
+            }
+        }
+
+        function updateTimestamp(note, age) {
+            const timestamps = ['just now', '2 hours ago', 'yesterday', '3 days ago', '1 week ago', '1 month ago'];
+            const timestampEl = note.querySelector('.note-timestamp');
+            if (timestampEl) {
+                timestampEl.textContent = timestamps[age] || 'long ago';
+            }
+        }
+
+        function createFragment(note) {
+            const rect = note.getBoundingClientRect();
+            const fragment = document.createElement('div');
+            fragment.className = 'memory-fragment';
+            fragment.style.left = rect.left + 'px';
+            fragment.style.top = rect.top + 'px';
+            memoryField.appendChild(fragment);
+            
+            setTimeout(() => fragment.remove(), 30000);
+        }
+
+        submitButton.addEventListener('click', () => {
+            const text = thoughtTextarea.value.trim();
+            if (text) {
+                createMemoryNote(text);
+                thoughtTextarea.value = '';
+            }
+        });
+
+        thoughtTextarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                submitButton.click();
+            }
+        });
+    </script>
+</body>
+</html>

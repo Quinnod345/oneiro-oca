@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --memory-cream: #faf6f0;
+            --parchment: #f0e6d2;
+            --burnt-sugar: #d4a574;
+            --rosemary-shadow: #7a8471;
+            --paprika-dust: #c65d44;
+            --vanilla-ghost: rgba(255, 248, 234, 0.4);
+            --ink-blur: #3a3532;
+            --taste-violet: #9b7aa8;
+            --salt-white: #fdfbf7;
+            --time-patina: #8b7355;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--memory-cream);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .recipe-fragments {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.15;
+            font-family: 'Courier', monospace;
+            color: var(--ink-blur);
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 60px;
+            white-space: pre-wrap;
+            transform: rotate(-2deg);
+        }
+
+        .main-interface {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            padding: 40px;
+            gap: 50px;
+        }
+
+        .memory-bank {
+            width: 320px;
+            background: var(--vanilla-ghost);
+            border-radius: 20px 8px 20px 8px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .memory-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .memory-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--time-patina);
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .memory-tokens {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .memory-token {
+            background: var(--salt-white);
+            border: 1px solid var(--parchment);
+            border-radius: 30px;
+            padding: 8px 16px;
+            font-size: 13px;
+            color: var(--ink-blur);
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            user-select: none;
+        }
+
+        .memory-token:hover {
+            transform: translateY(-2px) rotate(1deg);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: var(--burnt-sugar);
+        }
+
+        .memory-token.texture { border-left: 3px solid var(--rosemary-shadow); }
+        .memory-token.aroma { border-left: 3px solid var(--paprika-dust); }
+        .memory-token.emotion { border-left: 3px solid var(--taste-violet); }
+
+        .memory-token.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .reconstruction-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .taste-wheel-container {
+            width: 600px;
+            height: 600px;
+            position: relative;
+        }
+
+        .taste-wheel {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-origin: center;
+            animation: subtle-rotate 60s linear infinite;
+        }
+
+        @keyframes subtle-rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .wheel-segments {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            border-radius: 50%;
+        }
+
+        .segment {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            transform-origin: 100% 100%;
+            opacity: 0.3;
+            transition: opacity 0.8s ease;
+        }
+
+        .segment:nth-child(1) { transform: rotate(0deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--burnt-sugar) 100%); }
+        .segment:nth-child(2) { transform: rotate(45deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--rosemary-shadow) 100%); }
+        .segment:nth-child(3) { transform: rotate(90deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--paprika-dust) 100%); }
+        .segment:nth-child(4) { transform: rotate(135deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--taste-violet) 100%); }
+        .segment:nth-child(5) { transform: rotate(180deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--time-patina) 100%); }
+        .segment:nth-child(6) { transform: rotate(225deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--burnt-sugar) 100%); }
+        .segment:nth-child(7) { transform: rotate(270deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--rosemary-shadow) 100%); }
+        .segment:nth-child(8) { transform: rotate(315deg); background: radial-gradient(circle at 100% 100%, transparent 40%, var(--paprika-dust) 100%); }
+
+        .composition-circle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 280px;
+            height: 280px;
+            transform: translate(-50%, -50%);
+            border: 2px dashed var(--time-patina);
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--vanilla-ghost) 0%, transparent 70%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--time-patina);
+            text-align: center;
+            transition: all 0.5s ease;
+        }
+
+        .composition-circle.active {
+            border-style: solid;
+            border-color: var(--burnt-sugar);
+            background: radial-gradient(circle, var(--salt-white) 0%, var(--vanilla-ghost) 70%);
+        }
+
+        .ingredient-petals {
+            position: absolute;
+            inset: -50px;
+            pointer-events: none;
+        }
+
+        .petal {
+            position: absolute;
+            width: 120px;
+            height: 180px;
+            background: radial-gradient(ellipse at center bottom, var(--paprika-dust) 0%, transparent 70%);
+            border-radius: 50% 50% 50% 0;
+            transform-origin: bottom center;
+            opacity: 0;
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            mix-blend-mode: multiply;
+        }
+
+        .petal.bloomed {
+            opacity: 0.4;
+        }
+
+        .petal:nth-child(1) { transform: rotate(0deg) translateY(-80px); }
+        .petal:nth-child(2) { transform: rotate(45deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--rosemary-shadow) 0%, transparent 70%); }
+        .petal:nth-child(3) { transform: rotate(90deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--burnt-sugar) 0%, transparent 70%); }
+        .petal:nth-child(4) { transform: rotate(135deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--taste-violet) 0%, transparent 70%); }
+        .petal:nth-child(5) { transform: rotate(180deg) translateY(-80px); }
+        .petal:nth-child(6) { transform: rotate(225deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--time-patina) 0%, transparent 70%); }
+        .petal:nth-child(7) { transform: rotate(270deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--rosemary-shadow) 0%, transparent 70%); }
+        .petal:nth-child(8) { transform: rotate(315deg) translateY(-80px); background: radial-gradient(ellipse at center bottom, var(--burnt-sugar) 0%, transparent 70%); }
+
+        .ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100px;
+            height: 100px;
+            border: 2px solid var(--burnt-sugar);
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .ripple.active {
+            animation: ripple-out 1.5s ease-out forwards;
+        }
+
+        @keyframes ripple-out {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(6);
+                opacity: 0;
+            }
+        }
+
+        .recipe-card {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 280px;
+            background: var(--salt-white);
+            border-radius: 12px 4px 12px 4px;
+            padding: 25px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .recipe-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .recipe-title {
+            font-size: 18px;
+            color: var(--ink-blur);
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .probability-meter {
+            height: 4px;
+            background: var(--parchment);
+            border-radius: 2px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .probability-fill {
+            height: 100%;
+            background: var(--burnt-sugar);
+            width: 0%;
+            transition: width 1s ease;
+        }
+
+        .ingredient-list {
+            font-size: 13px;
+            color: var(--time-patina);
+            line-height: 1.8;
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateX(-10px);
+            animation: fade-in-slide 0.5s ease forwards;
+        }
+
+        .ingredient-item:nth-child(1) { animation-delay: 0.1s; }
+        .ingredient-item:nth-child(2) { animation-delay: 0.2s; }
+        .ingredient-item:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes fade-in-slide {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .confidence-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--rosemary-shadow);
+            border-radius: 50%;
+            opacity: 0.5;
+        }
+
+        .header-text {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: var(--ink-blur);
+        }
+
+        .header-text h1 {
+            font-size: 24px;
+            font-weight: 400;
+            margin-bottom: 5px;
+        }
+
+        .header-text p {
+            font-size: 13px;
+            color: var(--time-patina);
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-fragments">
+        2 cups flour...grandmother's handwriting fades here...
+        ...brown butter until fragrant...
+        ...always added a pinch of...memory unclear...
+        ...kneaded on the marble counter by the window...
+        ...the smell of cardamom and...
+        ...sugar dusted like first snow...
+        ...never wrote it down, she just knew...
+    </div>
+
+    <div class="header-text">
+        <h1>Temporal Recipe Reconstructor</h1>
+        <p>Drag memories to rebuild what was lost</p>
+    </div>
+
+    <div class="main-interface">
+        <div class="memory-bank">
+            <div class="memory-section">
+                <div class="memory-label">Textures</div>
+                <div class="memory-tokens">
+                    <div class="memory-token texture" draggable="true">Crumbly</div>
+                    <div class="memory-token texture" draggable="true">Silky</div>
+                    <div class="memory-token texture" draggable="true">Flaky</div>
+                    <div class="memory-token texture" draggable="true">Dense</div>
+                    <div class="memory-token texture" draggable="true">Airy</div>
+                </div>
+            </div>
+
+            <div class="memory-section">
+                <div class="memory-label">Aromas</div>
+                <div class="memory-tokens">
+                    <div class="memory-token aroma" draggable="true">Vanilla</div>
+                    <div class="memory-token aroma" draggable="true">Cinnamon</div>
+                    <div class="memory-token aroma" draggable="true">Citrus</div>
+                    <div class="memory-token aroma" draggable="true">Nutty</div>
+                    <div class="memory-token aroma" draggable="true">Caramel</div>
+                    <div class="memory-token aroma" draggable="true">Rose</div>
+                </div>
+            </div>
+
+            <div class="memory-section">
+                <div class="memory-label">Emotions</div>
+                <div class="memory-tokens">
+                    <div class="memory-token emotion" draggable="true">Sunday mornings</div>
+                    <div class="memory-token emotion" draggable="true">Holiday warmth</div>
+                    <div class="memory-token emotion" draggable="true">Kitchen laughter</div>
+                    <div class="memory-token emotion" draggable="true">Quiet comfort</div>
+                    <div class="memory-token emotion" draggable="true">Celebration</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="reconstruction-area">
+            <div class="taste-wheel-container">
+                <div class="taste-wheel">
+                    <div class="wheel-segments">
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                        <div class="segment"></div>
+                    </div>
+                    <div class="composition-circle">
+                        Drop memories here
+                    </div>
+                    <div class="ingredient-petals">
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                    </div>
+                    <div class="ripple"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recipe-card">
+            <div class="recipe-title">Reconstructing...</div>
+            <div class="probability-meter">
+                <div class="probability-fill"></div>
+            </div>
+            <div class="ingredient-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const tokens = document.querySelectorAll('.memory-token');
+        const compositionCircle = document.querySelector('.composition-circle');
+        const petals = document.querySelectorAll('.petal');
+        const ripple = document.querySelector('.ripple');
+        const recipeCard = document.querySelector('.recipe-card');
+        const probabilityFill = document.querySelector('.probability-fill');
+        const ingredientList = document.querySelector('.ingredient-list');
+        const fragments = document.querySelector('.recipe-fragments');
+        
+        let draggedToken = null;
+        let droppedTokens = [];
+
+        const ingredientMap = {
+            'Crumbly': ['flour', 'butter', 'sugar'],
+            'Silky': ['cream', 'eggs', 'milk'],
+            'Flaky': ['butter', 'flour', 'salt'],
+            'Dense': ['chocolate', 'cocoa', 'flour'],
+            'Airy': ['eggs', 'sugar', 'vanilla'],
+            'Vanilla': ['vanilla extract', 'sugar'],
+            'Cinnamon': ['cinnamon', 'nutmeg', 'cloves'],
+            'Citrus': ['lemon zest', 'orange peel'],
+            'Nutty': ['almonds', 'walnuts', 'hazelnuts'],
+            'Caramel': ['brown sugar', 'butter', 'cream'],
+            'Rose': ['rose water', 'cardamom'],
+            'Sunday mornings': ['warmth', 'patience', 'love'],
+            'Holiday warmth': ['tradition', 'gathering'],
+            'Kitchen laughter': ['joy', 'togetherness'],
+            'Quiet comfort': ['familiarity', 'peace'],
+            'Celebration': ['abundance', 'sharing']
+        };
+
+        tokens.forEach(token => {
+            token.addEventListener('dragstart', (e) => {
+                draggedToken = token;
+                token.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            token.addEventListener('dragend', () => {
+                token.classList.remove('dragging');
+            });
+        });
+
+        compositionCircle.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            compositionCircle.classList.add('active');
+        });
+
+        compositionCircle.addEventListener('dragleave', () => {
+            compositionCircle.classList.remove('active');
+        });
+
+        compositionCircle.addEventListener('drop', (e) => {
+            e.preventDefault();
+            compositionCircle.classList.remove('active');
+            
+            if (draggedToken && !droppedTokens.includes(draggedToken.textContent)) {
+                droppedTokens.push(draggedToken.textContent);
+                triggerReconstruction();
+            }
+        });
+
+        function triggerReconstruction() {
+            // Trigger ripple
+            ripple.classList.remove('active');
+            void ripple.offsetWidth;
+            ripple.classList.add('active');
+
+            // Bloom petals
+            const petalCount = Math.min(droppedTokens.length * 2, petals.length);
+            for (let i = 0; i < petalCount; i++) {
+                setTimeout(() => {
+                    petals[i].classList.add('bloomed');
+                }, i * 150);
+            }
+
+            // Update recipe card
+            if (droppedTokens.length > 0) {
+                recipeCard.classList.add('visible');
+                probabilityFill.style.width = `${Math.min(droppedTokens.length * 25, 100)}%`;
+                
+                // Generate ingredients
+                ingredientList.innerHTML = '';
+                const allIngredients = new Set();
+                droppedTokens.forEach(token => {
+                    if (ingredientMap[token]) {
+                        ingredientMap[token].forEach(ing => allIngredients.add(ing));
+                    }
+                });
+
+                Array.from(allIngredients).slice(0, 5).forEach((ing, i) => {
+                    const item = document.createElement('div');
+                    item.className = 'ingredient-item';
+                    item.style.animationDelay = `${i * 0.1}s`;
+                    item.innerHTML = `<span class="confidence-indicator"></span>${ing}`;
+                    ingredientList.appendChild(item);
+                });
+
+                // Reveal fragments
+                fragments.style.opacity = '0.25';
+            }
+
+            // Update composition circle text
+            if (droppedTokens.length >= 3) {
+                compositionCircle.textContent = 'Pattern emerging...';
+            } else if (droppedTokens.length >= 5) {
+                compositionCircle.textContent = 'Memory crystallizing...';
+            }
+        }
+    </script>
+</body>
+</html>

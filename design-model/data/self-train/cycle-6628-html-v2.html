@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Archive</title>
+    <style>
+        :root {
+            --ink-fresh: #2c2c2c;
+            --ink-aged: #5a5a5a;
+            --paper-light: #fdfbf7;
+            --paper-aged: #f7f0e6;
+            --accent: #8b7355;
+            --shadow: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(to bottom, var(--paper-light), var(--paper-aged));
+            font-family: Georgia, serif;
+            color: var(--ink-fresh);
+            display: flex;
+            flex-direction: column;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .archive-title {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
+        }
+
+        .archive-subtitle {
+            font-size: clamp(0.75rem, 2vw, 0.875rem);
+            color: var(--ink-aged);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .memory-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+            overflow-y: auto;
+            max-height: calc(100vh - 300px);
+            padding: 1rem;
+        }
+
+        .memory-note {
+            background: var(--paper-light);
+            padding: 2rem;
+            border-radius: 2px;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            opacity: 1;
+        }
+
+        .memory-note:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .memory-note[data-age="1"] { opacity: 0.9; }
+        .memory-note[data-age="2"] { opacity: 0.8; }
+        .memory-note[data-age="3"] { opacity: 0.7; color: var(--ink-aged); }
+        .memory-note[data-age="4"] { opacity: 0.6; color: var(--ink-aged); }
+        .memory-note[data-age="5"] { opacity: 0.5; color: var(--ink-aged); }
+
+        .memory-timestamp {
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .memory-text {
+            font-size: 1rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .input-section {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background: var(--paper-light);
+            padding: 2rem;
+            border-radius: 2px;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+
+        .thought-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            background: transparent;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 2px;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--ink-fresh);
+            transition: border-color 0.2s;
+        }
+
+        .thought-textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .thought-textarea::placeholder {
+            color: var(--ink-aged);
+            font-style: italic;
+        }
+
+        .submit-thought {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.75rem 2rem;
+            background: var(--ink-fresh);
+            color: var(--paper-light);
+            border: none;
+            border-radius: 2px;
+            font-family: inherit;
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .submit-thought:hover {
+            background: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .submit-thought:active {
+            transform: translateY(0);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            
+            .memory-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .input-section {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1 class="archive-title">Memory Archive</h1>
+        <p class="archive-subtitle">Thoughts fade with time</p>
+    </header>
+
+    <main class="memory-grid" id="memoryGrid">
+        <div class="memory-note" data-age="1">
+            <div class="memory-timestamp">2 hours ago</div>
+            <div class="memory-text">The morning light through old windows creates patterns I've never noticed before.</div>
+        </div>
+        <div class="memory-note" data-age="2">
+            <div class="memory-timestamp">Yesterday</div>
+            <div class="memory-text">Coffee tastes different when you're truly present. Each sip becomes a small ceremony.</div>
+        </div>
+        <div class="memory-note" data-age="3">
+            <div class="memory-timestamp">3 days ago</div>
+            <div class="memory-text">I wonder if memories choose to fade, or if we choose to let them.</div>
+        </div>
+        <div class="memory-note" data-age="4">
+            <div class="memory-timestamp">Last week</div>
+            <div class="memory-text">The sound of rain on pavement... something about childhood.</div>
+        </div>
+        <div class="memory-note" data-age="5">
+            <div class="memory-timestamp">2 weeks ago</div>
+            <div class="memory-text">There was something important I wanted to remember...</div>
+        </div>
+    </main>
+
+    <section class="input-section">
+        <textarea 
+            class="thought-textarea" 
+            placeholder="What's worth remembering today?"
+            id="thoughtInput"
+        ></textarea>
+        <button class="submit-thought" id="submitButton">Archive This Memory</button>
+    </section>
+
+    <script>
+        const memoryGrid = document.getElementById('memoryGrid');
+        const thoughtInput = document.getElementById('thoughtInput');
+        const submitButton = document.getElementById('submitButton');
+
+        function addMemory() {
+            const text = thoughtInput.value.trim();
+            if (!text) return;
+
+            const memories = memoryGrid.querySelectorAll('.memory-note');
+            memories.forEach(memory => {
+                const currentAge = parseInt(memory.dataset.age);
+                if (currentAge < 5) {
+                    memory.dataset.age = currentAge + 1;
+                } else {
+                    memory.style.opacity = '0';
+                    setTimeout(() => memory.remove(), 300);
+                }
+            });
+
+            const newMemory = document.createElement('div');
+            newMemory.className = 'memory-note';
+            newMemory.dataset.age = '0';
+            newMemory.innerHTML = `
+                <div class="memory-timestamp">Just now</div>
+                <div class="memory-text">${text}</div>
+            `;
+            
+            memoryGrid.insertBefore(newMemory, memoryGrid.firstChild);
+            thoughtInput.value = '';
+            
+            setTimeout(() => {
+                newMemory.dataset.age = '1';
+            }, 100);
+        }
+
+        submitButton.addEventListener('click', addMemory);
+        thoughtInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                addMemory();
+            }
+        });
+    </script>
+</body>
+</html>

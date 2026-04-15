@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Flow</title>
+    <style>
+        :root {
+            --bg-primary: #fdfcfb;
+            --bg-secondary: #f8f6f4;
+            --text-primary: #2c2926;
+            --text-secondary: #6b6660;
+            --text-tertiary: #9b9188;
+            --accent-orange: #e67e22;
+            --accent-green: #27ae60;
+            --accent-blue: #3498db;
+            --accent-purple: #8e44ad;
+            --accent-red: #e74c3c;
+            --border-light: #ede8e2;
+            --border-medium: #d4cdc2;
+            --shadow-subtle: 0 2px 8px rgba(44, 41, 38, 0.06);
+            --shadow-medium: 0 4px 16px rgba(44, 41, 38, 0.08);
+            --shadow-strong: 0 8px 32px rgba(44, 41, 38, 0.12);
+            --flow-orange: #ff8c42;
+            --flow-yellow: #ffd23f;
+            --flow-green: #06ffa5;
+            --flow-blue: #4ecdc4;
+            --flow-purple: #a8e6cf;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .recipe-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            gap: 24px;
+            padding: 24px;
+        }
+
+        .ingredients-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .timeline-flow {
+            position: relative;
+            background: var(--bg-primary);
+            overflow: hidden;
+            border-radius: 16px;
+            border: 1px solid var(--border-light);
+        }
+
+        .recipe-info {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            transition: all 0.2s ease;
+            cursor: grab;
+        }
+
+        .ingredient-item:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .ingredient-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .ingredient-dot.protein { background: var(--accent-red); }
+        .ingredient-dot.vegetable { background: var(--accent-green); }
+        .ingredient-dot.grain { background: var(--accent-orange); }
+        .ingredient-dot.dairy { background: var(--accent-blue); }
+        .ingredient-dot.spice { background: var(--accent-purple); }
+
+        .ingredient-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .ingredient-amount {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            font-weight: 500;
+        }
+
+        .timeline-svg {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .flow-path {
+            fill: none;
+            stroke-width: 3;
+            opacity: 0;
+            animation: flowReveal 2s ease forwards;
+        }
+
+        .flow-path.path1 { 
+            stroke: var(--flow-orange); 
+            animation-delay: 0.2s;
+        }
+        .flow-path.path2 { 
+            stroke: var(--flow-yellow); 
+            animation-delay: 0.4s;
+        }
+        .flow-path.path3 { 
+            stroke: var(--flow-green); 
+            animation-delay: 0.6s;
+        }
+        .flow-path.path4 { 
+            stroke: var(--flow-blue); 
+            animation-delay: 0.8s;
+        }
+        .flow-path.path5 { 
+            stroke: var(--flow-purple); 
+            animation-delay: 1s;
+        }
+
+        @keyframes flowReveal {
+            to {
+                opacity: 1;
+                stroke-dasharray: 2000;
+                stroke-dashoffset: 0;
+            }
+            from {
+                opacity: 0.6;
+                stroke-dasharray: 2000;
+                stroke-dashoffset: 2000;
+            }
+        }
+
+        .step-node {
+            position: absolute;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-medium);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow-medium);
+            min-width: 180px;
+            transition: all 0.3s ease;
+        }
+
+        .step-node:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-strong);
+        }
+
+        .step-node.step1 { top: 80px; left: 60px; }
+        .step-node.step2 { top: 160px; left: 280px; }
+        .step-node.step3 { top: 80px; right: 280px; }
+        .step-node.step4 { top: 280px; left: 180px; }
+        .step-node.final { bottom: 80px; left: 50%; transform: translateX(-50%); }
+
+        .step-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .step-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .step-time {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-weight: 500;
+            background: var(--bg-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .recipe-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .recipe-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .recipe-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .recipe-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            background: var(--bg-primary);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-light);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-orange);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+            text-transform: uppercase;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .recipe-notes {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .notes-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .note-item {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 8px;
+            position: relative;
+            padding-left: 16px;
+        }
+
+        .note-item::before {
+            content: "•";
+            color: var(--accent-orange);
+            position: absolute;
+            left: 0;
+        }
+
+        .flow-particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            opacity: 0;
+        }
+
+        .particle1 {
+            background: var(--flow-orange);
+            animation: particle1Flow 4s ease-in-out infinite;
+        }
+
+        .particle2 {
+            background: var(--flow-blue);
+            animation: particle2Flow 5s ease-in-out infinite 1s;
+        }
+
+        .particle3 {
+            background: var(--flow-green);
+            animation: particle3Flow 6s ease-in-out infinite 2s;
+        }
+
+        @keyframes particle1Flow {
+            0%, 100% { opacity: 0; top: 80px; left: 60px; }
+            25% { opacity: 1; top: 160px; left: 200px; }
+            50% { opacity: 0.8; top: 280px; left: 180px; }
+            75% { opacity: 1; bottom: 120px; left: 50%; }
+        }
+
+        @keyframes particle2Flow {
+            0%, 100% { opacity: 0; top: 160px; left: 280px; }
+            25% { opacity: 1; top: 120px; right: 300px; }
+            50% { opacity: 0.8; top: 300px; left: 200px; }
+            75% { opacity: 1; bottom: 120px; left: 52%; }
+        }
+
+        @keyframes particle3Flow {
+            0%, 100% { opacity: 0; top: 80px; right: 280px; }
+            25% { opacity: 1; top: 200px; right: 200px; }
+            50% { opacity: 0.8; top: 280px; left: 220px; }
+            75% { opacity: 1; bottom: 120px; left: 48%; }
+        }
+
+        .final-dish {
+            background: linear-gradient(135deg, var(--flow-orange) 0%, var(--flow-yellow) 50%, var(--flow-green) 100%);
+            border: 3px solid var(--accent-orange);
+        }
+
+        .final-dish .step-title {
+            color: var(--bg-primary);
+            font-size: 16px;
+        }
+
+        .final-dish .step-description {
+            color: var(--bg-primary);
+            opacity: 0.9;
+        }
+
+        .final-dish .step-time {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--bg-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-container">
+        <div class="ingredients-panel">
+            <h2 class="panel-title">Ingredients</h2>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot protein"></div>
+                <span class="ingredient-name">Chicken Thighs</span>
+                <span class="ingredient-amount">1.5 lbs</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot vegetable"></div>
+                <span class="ingredient-name">Bell Peppers</span>
+                <span class="ingredient-amount">2 large</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot vegetable"></div>
+                <span class="ingredient-name">Yellow Onion</span>
+                <span class="ingredient-amount">1 medium</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot grain"></div>
+                <span class="ingredient-name">Jasmine Rice</span>
+                <span class="ingredient-amount">1.5 cups</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot vegetable"></div>
+                <span class="ingredient-name">Garlic</span>
+                <span class="ingredient-amount">4 cloves</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot spice"></div>
+                <span class="ingredient-name">Saffron</span>
+                <span class="ingredient-amount">1/2 tsp</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot protein"></div>
+                <span class="ingredient-name">Chicken Stock</span>
+                <span class="ingredient-amount">3 cups</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot spice"></div>
+                <span class="ingredient-name">Paprika</span>
+                <span class="ingredient-amount">1 tbsp</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-dot dairy"></div>
+                <span class="ingredient-name">Olive Oil</span>
+                <span class="ingredient-amount">3 tbsp</span>
+            </div>
+        </div>
+
+        <div class="timeline-flow">
+            <svg class="timeline-svg" viewBox="0 0 840 852">
+                <path class="flow-path path1" d="M60 100 Q200 120 280 180 Q300 200 280 220 L200 300" />
+                <path class="flow-path path2" d="M280 180 Q400 160 600 100 Q650 120 620 140 L500 200" />
+                <path class="flow-path path3" d="M620 100 Q580 180 500 200 Q450 220 400 260" />
+                <path class="flow-path path4" d="M200 300 Q300 320 400 300 Q450 290 420 330" />
+                <path class="flow-path path5" d="M400 300 Q420 500 420 650 Q420 700 420 720" />
+            </svg>
+            
+            <div class="step-node step1">
+                <div class="step-title">Prepare Base</div>
+                <div class="step-description">Heat oil, sauté onions and garlic until fragrant</div>
+                <div class="step-time">5 mins</div>
+            </div>
+            
+            <div class="step-node step2">
+                <div class="step-title">Season Chicken</div>
+                <div class="step-description">Season thighs with paprika and brown all sides</div>
+                <div class="step-time">8 mins</div>
+            </div>
+            
+            <div class="step-node step3">
+                <div class="step-title">Prep Vegetables</div>
+                <div class="step-description">Slice peppers, bloom saffron in warm stock</div>
+                <div class="step-time">6 mins</div>
+            </div>
+            
+            <div class="step-node step4">
+                <div class="step-title">Combine & Simmer</div>
+                <div class="step-description">Add rice, stock, and vegetables. Bring to boil</div>
+                <div class="step-time">3 mins</div>
+            </div>
+            
+            <div class="step-node final final-dish">
+                <div class="step-title">Spanish Paella</div>
+                <div class="step-description">Cover and cook until rice is tender and liquid absorbed</div>
+                <div class="step-time">25 mins</div>
+            </div>
+            
+            <div class="flow-particle particle1"></div>
+            <div class="flow-particle particle2"></div>
+            <div class="flow-particle particle3"></div>
+        </div>
+
+        <div class="recipe-info">
+            <div class="recipe-header">
+                <h1 class="recipe-title">Classic Paella</h1>
+                <p class="recipe-subtitle">Traditional Spanish Rice Dish</p>
+            </div>
+            
+            <div class="recipe-stats">
+                <div class="stat-item">
+                    <div class="stat-value">45</div>
+                    <div class="stat-label">Minutes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">6</div>
+                    <div class="stat-label">Servings</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">★★★</div>
+                    <div class="stat-label">Difficulty</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">485</div>
+                    <div class="stat-label">Calories</div>
+                </div>
+            </div>
+            
+            <div class="recipe-notes">
+                <h3 class="notes-title">Chef's Notes</h3>
+                <div class="note-item">Use bomba rice if available for authentic texture</div>
+                <div class="note-item">Don't stir once rice is added - this creates the socarrat</div>
+                <div class="note-item">Let rest 5 minutes before serving</div>
+                <div class="note-item">Garnish with lemon wedges and fresh parsley</div>
+                <div class="note-item">Pairs beautifully with Spanish Tempranillo wine</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

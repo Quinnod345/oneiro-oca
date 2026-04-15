@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geological Spending Tracker</title>
+    <style>
+        :root {
+            --color-bedrock: #2c1810;
+            --color-core: #4a2c1a;
+            --color-mantle: #6b3e23;
+            --color-crust: #8b5a3c;
+            --color-sediment: #a67c52;
+            --color-topsoil: #c9a876;
+            --color-surface: #e8d5b7;
+            --color-atmosphere: #f5f0e8;
+            --color-text-primary: #1a1a1a;
+            --color-text-secondary: #4a4a4a;
+            --color-text-muted: #8a8a8a;
+            --color-accent: #d4722b;
+            --color-success: #2d5f3f;
+            --color-warning: #b8860b;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-xxl: 48px;
+            --border-radius: 8px;
+            --font-family-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            --font-family-mono: 'SF Mono', Monaco, 'Consolas', monospace;
+            --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --shadow-elevated: 0 3px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family-primary);
+            background: linear-gradient(180deg, var(--color-atmosphere) 0%, var(--color-surface) 100%);
+            color: var(--color-text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            gap: var(--spacing-lg);
+            padding: var(--spacing-lg);
+        }
+
+        .geological-layers {
+            position: relative;
+            background: linear-gradient(
+                180deg,
+                var(--color-atmosphere) 0%,
+                var(--color-surface) 8%,
+                var(--color-topsoil) 16%,
+                var(--color-sediment) 32%,
+                var(--color-crust) 48%,
+                var(--color-mantle) 68%,
+                var(--color-core) 85%,
+                var(--color-bedrock) 100%
+            );
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-elevated);
+        }
+
+        .layer {
+            position: relative;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .layer:hover {
+            backdrop-filter: blur(4px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .layer.active {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+        }
+
+        .layer-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .layer-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .layer-description {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 400;
+        }
+
+        .layer-amount {
+            font-family: var(--font-family-mono);
+            font-size: 18px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .main-content {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-elevated);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .content-header {
+            padding: var(--spacing-xl);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .content-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-text-primary);
+        }
+
+        .content-subtitle {
+            font-size: 16px;
+            color: var(--color-text-secondary);
+            font-weight: 400;
+        }
+
+        .expense-form {
+            padding: var(--spacing-xl);
+            display: grid;
+            grid-template-columns: 1fr 120px 100px;
+            gap: var(--spacing-md);
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+        }
+
+        .form-input {
+            padding: 12px var(--spacing-md);
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            font-family: var(--font-family-primary);
+            background: rgba(255, 255, 255, 0.9);
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--color-accent);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        .add-button {
+            background: var(--color-accent);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 12px var(--spacing-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .add-button:hover {
+            background: #b8611f;
+            transform: translateY(-1px);
+        }
+
+        .expense-list {
+            flex: 1;
+            padding: 0 var(--spacing-xl) var(--spacing-xl);
+            overflow-y: auto;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .expense-details {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .expense-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .expense-category {
+            font-size: 12px;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .expense-amount {
+            font-family: var(--font-family-mono);
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .stats-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-elevated);
+        }
+
+        .stats-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            color: var(--color-text-primary);
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-item:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        .stat-value {
+            font-family: var(--font-family-mono);
+            font-weight: 600;
+            color: var(--color-text-primary);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: var(--spacing-xs);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--color-accent);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="geological-layers">
+            <div class="layer active" data-layer="discretionary">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Surface Layer</div>
+                    <div class="layer-description">Entertainment, dining, shopping</div>
+                </div>
+                <div class="layer-amount">$1,240</div>
+            </div>
+            
+            <div class="layer" data-layer="lifestyle">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Topsoil</div>
+                    <div class="layer-description">Subscriptions, hobbies, fitness</div>
+                </div>
+                <div class="layer-amount">$420</div>
+            </div>
+            
+            <div class="layer" data-layer="transportation">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Sediment</div>
+                    <div class="layer-description">Car, gas, public transport</div>
+                </div>
+                <div class="layer-amount">$680</div>
+            </div>
+            
+            <div class="layer" data-layer="food">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Crust</div>
+                    <div class="layer-description">Groceries, meal planning</div>
+                </div>
+                <div class="layer-amount">$540</div>
+            </div>
+            
+            <div class="layer" data-layer="utilities">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Mantle</div>
+                    <div class="layer-description">Power, water, internet, phone</div>
+                </div>
+                <div class="layer-amount">$320</div>
+            </div>
+            
+            <div class="layer" data-layer="housing">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Core</div>
+                    <div class="layer-description">Rent, mortgage, insurance</div>
+                </div>
+                <div class="layer-amount">$2,100</div>
+            </div>
+            
+            <div class="layer" data-layer="savings">
+                <div class="depth-indicator"></div>
+                <div class="layer-info">
+                    <div class="layer-name">Bedrock</div>
+                    <div class="layer-description">Emergency fund, investments</div>
+                </div>
+                <div class="layer-amount">$800</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="content-header">
+                <h1 class="content-title">Surface Layer Spending</h1>
+                <p class="content-subtitle">Entertainment, dining, and discretionary purchases</p>
+            </div>
+
+            <div class="expense-form">
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" placeholder="What did you spend on?" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="number" class="form-input" placeholder="0.00" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="add-button">Add Expense</button>
+                </div>
+            </div>
+
+            <div class="expense-list">
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Movie tickets</div>
+                        <div class="expense-category">Entertainment</div>
+                    </div>
+                    <div class="expense-amount">$24.00</div>
+                </div>
+
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Dinner at Osteria</div>
+                        <div class="expense-category">Dining</div>
+                    </div>
+                    <div class="expense-amount">$89.50</div>
+                </div>
+
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Coffee & pastry</div>
+                        <div class="expense-category">Dining</div>
+                    </div>
+                    <div class="expense-amount">$12.75</div>
+                </div>
+
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">New wireless headphones</div>
+                        <div class="expense-category">Shopping</div>
+                    </div>
+                    <div class="expense-amount">$199.99</div>
+                </div>
+
+                <div class="expense-item">
+                    <div class="expense-details">
+                        <div class="expense-name">Weekend farmers market</div>
+                        <div class="expense-category">Shopping</div>
+                    </div>
+                    <div class="expense-amount">$47.25</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="stats-card">
+                <h3 class="stats-title">Monthly Overview</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Total Spending</span>
+                    <span class="stat-value">$6,100</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Budget Remaining</span>
+                    <span class="stat-value">$1,400</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Days Left</span>
+                    <span class="stat-value">12</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 81%"></div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <h3 class="stats-title">Depth Analysis</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Surface (Discretionary)</span>
+                    <span class="stat-value">20.3%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Shallow (Lifestyle)</span>
+                    <span class="stat-value">6.9%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Mid-level (Transport)</span>
+                    <span class="stat-value">11.1%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Deep (Necessities)</span>
+                    <span class="stat-value">48.6%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Bedrock (Savings)</span>
+                    <span class="stat-value">13.1%</span>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <h3 class="stats-title">Pressure Points</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Surface stress</span>
+                    <span class="stat-value" style="color: var(--color-warning);">High</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Foundation stability</span>
+                    <span class="stat-value" style="color: var(--color-success);">Strong</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

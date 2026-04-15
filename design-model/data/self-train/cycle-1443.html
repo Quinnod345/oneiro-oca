@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Schedule</title>
+    <style>
+        :root {
+            --river-blue: #2563eb;
+            --river-light: #3b82f6;
+            --river-dark: #1d4ed8;
+            --water-foam: #dbeafe;
+            --bridge-stone: #374151;
+            --bridge-wood: #92400e;
+            --bridge-shadow: #1f2937;
+            --sky-light: #f8fafc;
+            --sky-medium: #e2e8f0;
+            --text-dark: #0f172a;
+            --text-medium: #475569;
+            --text-light: #64748b;
+            --accent-emerald: #059669;
+            --accent-amber: #d97706;
+            --accent-rose: #e11d48;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: linear-gradient(180deg, var(--sky-light) 0%, var(--water-foam) 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: rgba(248, 250, 252, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--sky-medium);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo::before {
+            content: "🌊";
+            font-size: 28px;
+        }
+
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 8px 16px;
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.1);
+        }
+
+        .date-nav button {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .date-nav button:hover {
+            background: var(--water-foam);
+        }
+
+        .current-date {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-dark);
+            padding: 0 16px;
+        }
+
+        .river-container {
+            position: absolute;
+            top: 120px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+        }
+
+        .time-axis {
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px 0;
+        }
+
+        .time-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-medium);
+            text-align: right;
+            padding-right: 12px;
+            position: relative;
+        }
+
+        .time-label::after {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 2px;
+            background: var(--text-light);
+            border-radius: 1px;
+        }
+
+        .river {
+            position: absolute;
+            left: 120px;
+            top: 40px;
+            bottom: 40px;
+            right: 40px;
+            background: linear-gradient(90deg, 
+                var(--river-blue) 0%, 
+                var(--river-light) 25%, 
+                var(--river-blue) 50%, 
+                var(--river-light) 75%, 
+                var(--river-blue) 100%);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 8px 32px rgba(37, 99, 235, 0.3),
+                inset 0 4px 16px rgba(59, 130, 246, 0.2);
+        }
+
+        .water-flow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                repeating-linear-gradient(90deg,
+                    transparent 0px,
+                    rgba(255, 255, 255, 0.1) 20px,
+                    transparent 40px,
+                    rgba(255, 255, 255, 0.05) 60px
+                );
+            animation: flow 8s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { transform: translateX(-80px); }
+            100% { transform: translateX(0); }
+        }
+
+        .water-ripples {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.1) 2px, transparent 3px),
+                radial-gradient(circle at 60% 70%, rgba(255, 255, 255, 0.08) 1px, transparent 2px),
+                radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.06) 1.5px, transparent 2.5px);
+            animation: ripple 6s ease-in-out infinite;
+        }
+
+        @keyframes ripple {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        .bridge {
+            position: absolute;
+            background: var(--bridge-stone);
+            border-radius: 8px;
+            box-shadow: 
+                0 6px 20px rgba(31, 41, 55, 0.4),
+                inset 0 2px 4px rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .bridge::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                var(--bridge-wood) 0%, 
+                #b45309 50%, 
+                var(--bridge-wood) 100%);
+        }
+
+        .bridge::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--bridge-shadow);
+        }
+
+        .bridge:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 8px 25px rgba(31, 41, 55, 0.5),
+                inset 0 2px 4px rgba(255, 255, 255, 0.15);
+        }
+
+        .bridge-content {
+            padding: 12px 16px;
+            color: white;
+            position: relative;
+            z-index: 2;
+        }
+
+        .meeting-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .meeting-time {
+            font-size: 12px;
+            opacity: 0.8;
+            font-weight: 500;
+        }
+
+        .meeting-participants {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        /* Meeting Type Colors */
+        .bridge.urgent {
+            background: var(--accent-rose);
+        }
+
+        .bridge.important {
+            background: var(--accent-amber);
+        }
+
+        .bridge.routine {
+            background: var(--accent-emerald);
+        }
+
+        .add-meeting-btn {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            background: var(--river-blue);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            transition: all 0.3s ease;
+            z-index: 50;
+        }
+
+        .add-meeting-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5);
+        }
+
+        .current-time-indicator {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--accent-rose) 20%, 
+                var(--accent-rose) 80%, 
+                transparent 100%);
+            border-radius: 2px;
+            box-shadow: 0 0 10px rgba(225, 29, 72, 0.6);
+            animation: pulse 2s ease-in-out infinite;
+            z-index: 10;
+            top: 25%; /* 10 AM */
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .legend {
+            position: absolute;
+            top: 120px;
+            right: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            font-size: 12px;
+            color: var(--text-medium);
+            z-index: 20;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 8px;
+            border-radius: 4px;
+        }
+
+        .legend-color.urgent { background: var(--accent-rose); }
+        .legend-color.important { background: var(--accent-amber); }
+        .legend-color.routine { background: var(--accent-emerald); }
+        .legend-color.available { background: var(--river-blue); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            River Schedule
+        </div>
+        <nav class="date-nav">
+            <button>‹</button>
+            <div class="current-date">Monday, December 18, 2023</div>
+            <button>›</button>
+        </nav>
+    </header>
+
+    <div class="river-container">
+        <div class="time-axis">
+            <div class="time-label">8:00</div>
+            <div class="time-label">9:00</div>
+            <div class="time-label">10:00</div>
+            <div class="time-label">11:00</div>
+            <div class="time-label">12:00</div>
+            <div class="time-label">1:00</div>
+            <div class="time-label">2:00</div>
+            <div class="time-label">3:00</div>
+            <div class="time-label">4:00</div>
+            <div class="time-label">5:00</div>
+            <div class="time-label">6:00</div>
+        </div>
+
+        <div class="river">
+            <div class="water-flow"></div>
+            <div class="water-ripples"></div>
+            <div class="current-time-indicator"></div>
+
+            <!-- Morning Bridge -->
+            <div class="bridge routine" style="top: 18%; left: 8%; width: 20%; height: 8%;">
+                <div class="bridge-content">
+                    <div class="meeting-title">Team Standup</div>
+                    <div class="meeting-time">9:15 - 9:45 AM</div>
+                    <div class="meeting-participants">Engineering Team</div>
+                </div>
+            </div>
+
+            <!-- Midday Bridge -->
+            <div class="bridge urgent" style="top: 45%; left: 25%; width: 25%; height: 12%;">
+                <div class="bridge-content">
+                    <div class="meeting-title">Client Presentation</div>
+                    <div class="meeting-time">1:00 - 2:30 PM</div>
+                    <div class="meeting-participants">Sarah, Mike, Lisa</div>
+                </div>
+            </div>
+
+            <!-- Afternoon Bridge -->
+            <div class="bridge important" style="top: 68%; left: 55%; width: 18%; height: 6%;">
+                <div class="bridge-content">
+                    <div class="meeting-title">Design Review</div>
+                    <div class="meeting-time">3:30 - 4:00 PM</div>
+                    <div class="meeting-participants">Design Team</div>
+                </div>
+            </div>
+
+            <!-- Late Afternoon Bridge -->
+            <div class="bridge routine" style="top: 82%; left: 10%; width: 22%; height: 8%;">
+                <div class="bridge-content">
+                    <div class="meeting-title">Weekly Retro</div>
+                    <div class="meeting-time">4:45 - 5:30 PM</div>
+                    <div class="meeting-participants">Full Team</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color urgent"></div>
+                <span>Urgent</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color important"></div>
+                <span>Important</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color routine"></div>
+                <span>Routine</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color available"></div>
+                <span>Available</span>
+            </div>
+        </div>
+    </div>
+
+    <button class="add-meeting-btn">+</button>
+</body>
+</html>

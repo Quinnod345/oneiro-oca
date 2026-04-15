@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consciousness Mediator</title>
+    <style>
+        :root {
+            --primary: #1a1a1a;
+            --secondary: #f0f0f0;
+            --accent: #0066ff;
+            --surface: #ffffff;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--secondary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .mediator-container {
+            max-width: 1200px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 48px;
+            align-items: start;
+        }
+
+        .state-card {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 24px var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .state-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .state-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .state-value {
+            font-size: 36px;
+            font-weight: 300;
+            margin-bottom: 24px;
+            transition: color 0.3s ease;
+        }
+
+        .state-card.active .state-value {
+            color: var(--accent);
+        }
+
+        .state-indicator {
+            width: 100%;
+            height: 4px;
+            background: var(--secondary);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .state-indicator-fill {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .central-mediator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 48px;
+        }
+
+        .consciousness-core {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .core-circle {
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .core-circle::before {
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border: 1px solid var(--primary);
+            border-radius: 50%;
+            opacity: 0.2;
+        }
+
+        .core-active {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: var(--accent);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .control-panel {
+            width: 100%;
+            max-width: 400px;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 24px var(--shadow);
+        }
+
+        .control-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .control-group {
+            margin-bottom: 24px;
+        }
+
+        .control-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .control-slider {
+            width: 100%;
+            height: 40px;
+            background: var(--secondary);
+            border-radius: 20px;
+            padding: 4px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s ease;
+        }
+
+        .control-slider:hover {
+            background: #e0e0e0;
+        }
+
+        .slider-handle {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 50%;
+            position: absolute;
+            top: 4px;
+            transition: left 0.2s ease;
+            cursor: grab;
+        }
+
+        .slider-handle:active {
+            cursor: grabbing;
+        }
+
+        .action-button {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-button:hover {
+            background: #333;
+            transform: translateY(-2px);
+        }
+
+        .action-button:active {
+            transform: translateY(0);
+        }
+
+        .meta-info {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-top: 48px;
+        }
+
+        .meta-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .meta-value {
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        @media (max-width: 768px) {
+            .mediator-container {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+
+            .consciousness-core {
+                width: 160px;
+                height: 160px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="mediator-container">
+        <div class="state-card" id="input-state">
+            <div class="state-label">Input State</div>
+            <div class="state-value">72%</div>
+            <div class="state-indicator">
+                <div class="state-indicator-fill" style="width: 72%"></div>
+            </div>
+        </div>
+
+        <div class="central-mediator">
+            <div class="consciousness-core">
+                <div class="core-circle"></div>
+                <div class="core-active" style="top: 40%; left: 60%;"></div>
+            </div>
+
+            <div class="control-panel">
+                <h2 class="control-title">Mediation Controls</h2>
+                
+                <div class="control-group">
+                    <label class="control-label">Balance Threshold</label>
+                    <div class="control-slider" data-value="50">
+                        <div class="slider-handle" style="left: calc(50% - 16px);"></div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">Response Intensity</label>
+                    <div class="control-slider" data-value="30">
+                        <div class="slider-handle" style="left: calc(30% - 16px);"></div>
+                    </div>
+                </div>
+
+                <button class="action-button">Synchronize States</button>
+            </div>
+        </div>
+
+        <div class="state-card active" id="output-state">
+            <div class="state-label">Output State</div>
+            <div class="state-value">68%</div>
+            <div class="state-indicator">
+                <div class="state-indicator-fill" style="width: 68%"></div>
+            </div>
+        </div>
+
+        <div class="meta-info">
+            <div class="meta-label">System Coherence</div>
+            <div class="meta-value">0.94</div>
+        </div>
+    </div>
+
+    <script>
+        const sliders = document.querySelectorAll('.control-slider');
+        const coreActive = document.querySelector('.core-active');
+        const stateCards = document.querySelectorAll('.state-card');
+        const actionButton = document.querySelector('.action-button');
+
+        sliders.forEach(slider => {
+            const handle = slider.querySelector('.slider-handle');
+            let isDragging = false;
+
+            const updatePosition = (clientX) => {
+                const rect = slider.getBoundingClientRect();
+                const x = clientX - rect.left;
+                const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                handle.style.left = `calc(${percentage}% - 16px)`;
+                slider.dataset.value = Math.round(percentage);
+                updateCore();
+            };
+
+            slider.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                updatePosition(e.clientX);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) updatePosition(e.clientX);
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        });
+
+        function updateCore() {
+            const balance = parseInt(sliders[0].dataset.value);
+            const intensity = parseInt(sliders[1].dataset.value);
+            
+            const x = 50 + (balance - 50) * 0.3;
+            const y = 50 - (intensity - 50) * 0.3;
+            
+            coreActive.style.left = `${x}%`;
+            coreActive.style.top = `${y}%`;
+        }
+
+        actionButton.addEventListener('click', () => {
+            stateCards.forEach(card => {
+                card.classList.add('active');
+                setTimeout(() => card.classList.remove('active'), 300);
+            });
+            
+            const inputFill = document.querySelector('#input-state .state-indicator-fill');
+            const outputFill = document.querySelector('#output-state .state-indicator-fill');
+            const avgValue = 70;
+            
+            inputFill.style.width = `${avgValue}%`;
+            outputFill.style.width = `${avgValue}%`;
+            
+            document.querySelector('#input-state .state-value').textContent = `${avgValue}%`;
+            document.querySelector('#output-state .state-value').textContent = `${avgValue}%`;
+        });
+
+        stateCards.forEach(card => {
+            card.addEventListener('click', () => {
+                card.classList.toggle('active');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Transformation Timeline</title>
+    <style>
+        :root {
+            --color-canvas: #fefefe;
+            --color-surface: #ffffff;
+            --color-surface-raised: #f8f9fb;
+            --color-border: #e5e8ec;
+            --color-border-strong: #c8cdd4;
+            --color-text-primary: #1a1d21;
+            --color-text-secondary: #5c6670;
+            --color-text-tertiary: #8b949e;
+            --color-accent: #0066cc;
+            --color-accent-light: #e6f1ff;
+            --color-success: #1a7f37;
+            --color-success-light: #dcffe4;
+            --color-warning: #cf5c00;
+            --color-warning-light: #fff4e6;
+            --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(16, 24, 40, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(16, 24, 40, 0.1);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-size-xs: 12px;
+            --font-size-sm: 14px;
+            --font-size-base: 16px;
+            --font-size-lg: 18px;
+            --font-size-xl: 24px;
+            --font-size-2xl: 32px;
+            --line-height-tight: 1.25;
+            --line-height-normal: 1.5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: var(--color-canvas);
+            color: var(--color-text-primary);
+            font-size: var(--font-size-base);
+            line-height: var(--line-height-normal);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .recipe-timeline {
+            display: grid;
+            grid-template-columns: 240px 1fr 280px;
+            height: 100vh;
+            gap: 0;
+        }
+
+        .ingredients-panel {
+            background: var(--color-surface-raised);
+            border-right: 1px solid var(--color-border);
+            padding: var(--spacing-lg);
+            overflow-y: auto;
+        }
+
+        .timeline-main {
+            position: relative;
+            background: var(--color-surface);
+            overflow: hidden;
+            padding: var(--spacing-xl);
+        }
+
+        .output-panel {
+            background: var(--color-surface-raised);
+            border-left: 1px solid var(--color-border);
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--spacing-lg);
+            letter-spacing: -0.025em;
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            cursor: grab;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .ingredient-item:hover {
+            box-shadow: var(--shadow-sm);
+            border-color: var(--color-border-strong);
+            transform: translateY(-1px);
+        }
+
+        .ingredient-item:active {
+            cursor: grabbing;
+            transform: translateY(0);
+        }
+
+        .ingredient-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: var(--radius-sm);
+            flex-shrink: 0;
+        }
+
+        .ingredient-icon.protein { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); }
+        .ingredient-icon.vegetable { background: linear-gradient(135deg, #51cf66 0%, #40c057 100%); }
+        .ingredient-icon.grain { background: linear-gradient(135deg, #ffd43b 0%, #fab005 100%); }
+        .ingredient-icon.dairy { background: linear-gradient(135deg, #74c0fc 0%, #339af0 100%); }
+        .ingredient-icon.spice { background: linear-gradient(135deg, #ff8cc8 0%, #e64980 100%); }
+        .ingredient-icon.liquid { background: linear-gradient(135deg, #91a7ff 0%, #5c7cfa 100%); }
+
+        .ingredient-name {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .ingredient-amount {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-secondary);
+            font-weight: 500;
+        }
+
+        .timeline-flow {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+
+        .flow-step {
+            position: absolute;
+            background: var(--color-surface);
+            border: 2px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            min-width: 200px;
+            box-shadow: var(--shadow-md);
+            transition: all 0.2s ease;
+        }
+
+        .flow-step:hover {
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-accent);
+        }
+
+        .flow-step.active {
+            border-color: var(--color-accent);
+            background: var(--color-accent-light);
+        }
+
+        .step-1 { top: 50px; left: 50px; }
+        .step-2 { top: 180px; left: 280px; }
+        .step-3 { top: 100px; left: 520px; }
+        .step-4 { top: 250px; left: 720px; }
+
+        .step-title {
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-text-primary);
+        }
+
+        .step-description {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .step-time {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            font-size: var(--font-size-xs);
+            color: var(--color-text-tertiary);
+            background: var(--color-surface-raised);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+        }
+
+        .step-ingredients {
+            margin-top: var(--spacing-md);
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-xs);
+        }
+
+        .step-ingredient-tag {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: var(--color-success-light);
+            border: 1px solid var(--color-success);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-xs);
+            font-weight: 500;
+            color: var(--color-success);
+        }
+
+        .flow-connection {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .flow-line {
+            stroke: var(--color-border-strong);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 0;
+            animation: flow 3s ease-in-out infinite;
+        }
+
+        .flow-line.active {
+            stroke: var(--color-accent);
+            stroke-width: 3;
+            stroke-dasharray: 8 4;
+        }
+
+        @keyframes flow {
+            0%, 100% { stroke-dashoffset: 0; }
+            50% { stroke-dashoffset: 12; }
+        }
+
+        .flow-arrow {
+            fill: var(--color-border-strong);
+            transition: fill 0.2s ease;
+        }
+
+        .flow-connection.active .flow-arrow {
+            fill: var(--color-accent);
+        }
+
+        .final-dish {
+            text-align: center;
+            max-width: 220px;
+        }
+
+        .dish-image {
+            width: 160px;
+            height: 160px;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(135deg, #ffd43b 0%, #ff6b6b 30%, #51cf66 60%, #339af0 100%);
+            margin-bottom: var(--spacing-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--font-size-2xl);
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dish-image::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 0%, transparent 50%);
+        }
+
+        .dish-name {
+            font-size: var(--font-size-xl);
+            font-weight: 700;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-text-primary);
+            letter-spacing: -0.025em;
+        }
+
+        .dish-stats {
+            display: grid;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-lg);
+        }
+
+        .dish-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-sm);
+        }
+
+        .stat-label {
+            color: var(--color-text-secondary);
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: var(--color-text-primary);
+            font-weight: 600;
+        }
+
+        .progress-indicator {
+            position: absolute;
+            top: var(--spacing-lg);
+            right: var(--spacing-lg);
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        .progress-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-border);
+            transition: background-color 0.3s ease;
+        }
+
+        .progress-dot.active {
+            background: var(--color-accent);
+        }
+
+        .progress-dot.complete {
+            background: var(--color-success);
+        }
+
+        .timeline-controls {
+            position: absolute;
+            bottom: var(--spacing-lg);
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .control-btn {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .control-btn:hover {
+            background: var(--color-accent-light);
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+        }
+
+        .control-btn.active {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+            color: white;
+        }
+
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-timeline">
+        <div class="ingredients-panel">
+            <h2 class="panel-title">Ingredients</h2>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon protein"></div>
+                <span class="ingredient-name">Chicken Breast</span>
+                <span class="ingredient-amount">2 lbs</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon vegetable"></div>
+                <span class="ingredient-name">Bell Peppers</span>
+                <span class="ingredient-amount">3 pcs</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon vegetable"></div>
+                <span class="ingredient-name">Onion</span>
+                <span class="ingredient-amount">1 large</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon grain"></div>
+                <span class="ingredient-name">Jasmine Rice</span>
+                <span class="ingredient-amount">2 cups</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon spice"></div>
+                <span class="ingredient-name">Garlic</span>
+                <span class="ingredient-amount">4 cloves</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon spice"></div>
+                <span class="ingredient-name">Ginger</span>
+                <span class="ingredient-amount">1 inch</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon liquid"></div>
+                <span class="ingredient-name">Soy Sauce</span>
+                <span class="ingredient-amount">3 tbsp</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon liquid"></div>
+                <span class="ingredient-name">Sesame Oil</span>
+                <span class="ingredient-amount">2 tbsp</span>
+            </div>
+            
+            <div class="ingredient-item">
+                <div class="ingredient-icon liquid"></div>
+                <span class="ingredient-name">Chicken Stock</span>
+                <span class="ingredient-amount">3 cups</span>
+            </div>
+        </div>
+
+        <div class="timeline-main">
+            <div class="progress-indicator">
+                <div class="progress-dot complete"></div>
+                <div class="progress-dot complete"></div>
+                <div class="progress-dot active"></div>
+                <div class="progress-dot"></div>
+            </div>
+
+            <svg width="100%" height="100%">
+                <path class="flow-line active" d="M 250 130 Q 265 130 280 150" marker-end="url(#arrowhead)"/>
+                <path class="flow-line active" d="M 480 250 Q 520 240 520 200"/>
+                <path class="flow-line" d="M 720 180 Q 750 180 780 220"/>
+                <path class="flow-line" d="M 480 280 Q 600 300 720 300"/>
+                
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                        <polygon class="flow-arrow" points="0 0, 10 3.5, 0 7" />
+                    </marker>
+                </defs>
+            </svg>
+
+            <div class="timeline-flow">
+                <div class="flow-step step-1 active">
+                    <div class="step-title">Prep Ingredients</div>
+                    <div class="step-description">Cut chicken, dice vegetables, mince aromatics</div>
+                    <div class="step-time">⏱ 15 min</div>
+                    <div class="step-ingredients">
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon protein" style="width: 12px; height: 12px;"></div>
+                            Chicken
+                        </div>
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon vegetable" style="width: 12px; height: 12px;"></div>
+                            Peppers
+                        </div>
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon vegetable" style="width: 12px; height: 12px;"></div>
+                            Onion
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-2 active">
+                    <div class="step-title">Cook Rice</div>
+                    <div class="step-description">Steam jasmine rice with chicken stock</div>
+                    <div class="step-time">⏱ 18 min</div>
+                    <div class="step-ingredients">
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon grain" style="width: 12px; height: 12px;"></div>
+                            Rice
+                        </div>
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon liquid" style="width: 12px; height: 12px;"></div>
+                            Stock
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-3">
+                    <div class="step-title">Stir Fry</div>
+                    <div class="step-description">High heat wok cooking with aromatics</div>
+                    <div class="step-time">⏱ 8 min</div>
+                    <div class="step-ingredients">
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon spice" style="width: 12px; height: 12px;"></div>
+                            Garlic
+                        </div>
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon spice" style="width: 12px; height: 12px;"></div>
+                            Ginger
+                        </div>
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon liquid" style="width: 12px; height: 12px;"></div>
+                            Oils
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-4">
+                    <div class="step-title">Combine & Finish</div>
+                    <div class="step-description">Toss everything together, season and serve</div>
+                    <div class="step-time">⏱ 3 min</div>
+                    <div class="step-ingredients">
+                        <div class="step-ingredient-tag">
+                            <div class="ingredient-icon liquid" style="width: 12px; height: 12px;"></div>
+                            Soy Sauce
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-controls">
+                <button class="control-btn">Reset</button>
+                <button class="control-btn">Previous</button>
+                <button class="control-btn active">Play</button>
+                <button class="control-btn">Next</button>
+                <button class="control-btn">Complete</button>
+            </div>
+        </div>
+
+        <div class="output-panel">
+            <div class="final-dish">
+                <div class="dish-image">🍚</div>
+                <div class="dish-name">Asian Chicken Stir Fry</div>
+                
+                <div class="dish-stats">
+                    <div class="dish-stat">
+                        <span class="stat-label">Total Time</span>
+                        <span class="stat-value">44 min</span>
+                    </div>
+                    <div class="dish-stat">
+                        <span class="stat-label">Difficulty</span>
+                        <span class="stat-value">Medium</span>
+                    </div>
+                    <div class="dish-stat">
+                        <span class="stat-label">Servings</span>
+                        <span class="stat-value">4 people</span>
+                    </div>
+                    <div class="dish-stat">
+                        <span class="stat-label">Calories</span>
+                        <span class="stat-value">420 kcal</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

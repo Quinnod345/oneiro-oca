@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromaKeys - Musical Color Palette Generator</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --surface-low: #252525;
+            --surface-mid: #333333;
+            --surface-high: #404040;
+            --text-primary: #ffffff;
+            --text-secondary: #b8b8b8;
+            --text-tertiary: #808080;
+            --accent-primary: #ff6b6b;
+            --accent-secondary: #4ecdc4;
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-strong: rgba(255, 255, 255, 0.2);
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-hard: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --spacing-xs: 8px;
+            --spacing-sm: 16px;
+            --spacing-md: 24px;
+            --spacing-lg: 32px;
+            --spacing-xl: 48px;
+            
+            --current-hue: 240;
+            --current-saturation: 70;
+            --current-lightness: 50;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+        }
+
+        .sidebar-left {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            border: 1px solid var(--border-subtle);
+            overflow-y: auto;
+        }
+
+        .main-stage {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .sidebar-right {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: var(--spacing-xs);
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .keyboard-container {
+            flex: 1;
+            background: var(--surface-low);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-subtle);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .keyboard {
+            display: flex;
+            gap: 2px;
+            transform: scale(1.2);
+        }
+
+        .key {
+            cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            position: relative;
+            user-select: none;
+        }
+
+        .key.white {
+            width: 48px;
+            height: 200px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            z-index: 1;
+        }
+
+        .key.black {
+            width: 32px;
+            height: 120px;
+            background: #212529;
+            border: 1px solid #495057;
+            margin-left: -17px;
+            margin-right: -17px;
+            z-index: 2;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+        }
+
+        .key:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .key:active {
+            transform: translateY(2px);
+        }
+
+        .key.playing {
+            transform: translateY(4px);
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .harmony-display {
+            background: var(--surface-mid);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            min-height: 300px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .harmony-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+
+        .harmony-note {
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .harmony-note:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .harmony-note::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: inherit;
+            filter: brightness(1.2);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .harmony-note:hover::before {
+            opacity: 0.3;
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--surface-mid);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .chord-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-sm);
+        }
+
+        .chord-btn {
+            padding: var(--spacing-sm);
+            background: var(--surface-mid);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .chord-btn:hover {
+            background: var(--surface-high);
+            border-color: var(--border-strong);
+        }
+
+        .chord-btn.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .palette-export {
+            margin-top: auto;
+        }
+
+        .export-colors {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .color-export-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .color-export-item:hover {
+            background: var(--surface-low);
+        }
+
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .color-value {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .export-btn {
+            width: 100%;
+            padding: var(--spacing-md);
+            background: var(--accent-secondary);
+            color: var(--text-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .export-btn:hover {
+            background: #45b7b8;
+            transform: translateY(-1px);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-primary);
+        }
+
+        .visual-feedback {
+            position: absolute;
+            top: var(--spacing-md);
+            right: var(--spacing-md);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: hsl(var(--current-hue), calc(var(--current-saturation) * 1%), calc(var(--current-lightness) * 1%));
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .note-label {
+            position: absolute;
+            bottom: var(--spacing-sm);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: 600;
+            opacity: 0.7;
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .key.ripple::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: currentColor;
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar-left">
+            <div class="header">
+                <h1>ChromaKeys</h1>
+                <p>Play colors like music. Strike keys to generate harmonious palettes, hold chords to lock color relationships.</p>
+            </div>
+            
+            <div class="control-panel">
+                <div class="control-group">
+                    <label>Base Saturation</label>
+                    <input type="range" class="slider" id="saturation" min="20" max="100" value="70">
+                </div>
+                
+                <div class="control-group">
+                    <label>Base Lightness</label>
+                    <input type="range" class="slider" id="lightness" min="20" max="80" value="50">
+                </div>
+                
+                <div class="control-group">
+                    <label>Harmony Mode</label>
+                    <div class="chord-buttons">
+                        <button class="chord-btn active" data-chord="major">Major</button>
+                        <button class="chord-btn" data-chord="minor">Minor</button>
+                        <button class="chord-btn" data-chord="diminished">Dim</button>
+                        <button class="chord-btn" data-chord="augmented">Aug</button>
+                        <button class="chord-btn" data-chord="seventh">7th</button>
+                        <button class="chord-btn" data-chord="suspended">Sus</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Octave Spread</label>
+                    <input type="range" class="slider" id="spread" min="1" max="5" value="3">
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-stage">
+            <div class="keyboard-container">
+                <div class="visual-feedback"></div>
+                <div class="keyboard" id="keyboard">
+                    <!-- Keys will be generated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="harmony-display">
+                <h3 class="section-title">Current Harmony</h3>
+                <div class="harmony-grid" id="harmonyGrid">
+                    <!-- Harmony notes will be displayed here -->
+                </div>
+            </div>
+        </main>
+
+        <aside class="sidebar-right">
+            <div>
+                <h3 class="section-title">Color Palette</h3>
+                <div class="export-colors" id="paletteColors">
+                    <!-- Palette colors will be displayed here -->
+                </div>
+            </div>
+            
+            <div class="palette-export">
+                <button class="export-btn" onclick="exportPalette()">Export Palette</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const chordPatterns = {
+            major: [0, 4, 7],
+            minor: [0, 3, 7],
+            diminished: [0, 3, 6],
+            augmented: [0, 4, 8],
+            seventh: [0, 4, 7, 10],
+            suspended: [0, 5, 7]
+        };
+        
+        let currentChord = 'major';
+        let activeNotes = new Set();
+        let currentPalette = [];
+
+        function init() {
+            createKeyboard();
+            setupEventListeners();
+            updateHarmony();
+        }
+
+        function createKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            const keyPattern = [
+                { note: 'C', type: 'white', hue: 0 },
+                { note: 'C#', type: 'black', hue: 30 },
+                { note: 'D', type: 'white', hue: 60 },
+                { note: 'D#', type: 'black', hue: 90 },
+                { note: 'E', type: 'white', hue: 120 },
+                { note: 'F', type: 'white', hue: 150 },
+                { note: 'F#', type: 'black', hue: 180 },
+                { note: 'G', type: 'white', hue: 210 },
+                { note: 'G#', type: 'black', hue: 240 },
+                { note: 'A', type: 'white', hue: 270 },
+                { note: 'A#', type: 'black', hue: 300 },
+                { note: 'B', type: 'white', hue: 330 }
+            ];
+
+            keyboard.innerHTML = '';
+            keyPattern.forEach((key, index) => {
+                const keyElement = document.createElement('div');
+                keyElement.className = `key ${key.type}`;
+                keyElement.dataset.note = key.note;
+                keyElement.dataset.hue = key.hue;
+                keyElement.dataset.index = index;
+                
+                const label = document.createElement('span');
+                label.className = 'note-label';
+                label.textContent = key.note;
+                keyElement.appendChild(label);
+
+                keyElement.addEventListener('mousedown', () => playNote(keyElement));
+                keyElement.addEventListener('mouseup', () => stopNote(keyElement));
+                keyElement.addEventListener('mouseleave', () => stopNote(keyElement));
+                
+                keyboard.appendChild(keyElement);
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('saturation').addEventListener('input', updateHarmony);
+            document.getElementById('lightness').addEventListener('input', updateHarmony);
+            document.getElementById('spread').addEventListener('input', updateHarmony);
+
+            document.querySelectorAll('.chord-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelector('.chord-btn.active').classList.remove('active');
+                    btn.classList.add('active');
+                    currentChord = btn.dataset.chord;
+                    updateHarmony();
+                });
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                const keyMap = {
+                    'a': 0, 'w': 1, 's': 2, 'e': 3, 'd': 4, 'f': 5,
+                    't': 6, 'g': 7, 'y': 8, 'h': 9, 'u': 10, 'j': 11
+                };
+                
+                if (keyMap.hasOwnProperty(e.key.toLowerCase())) {
+                    const keyElement = document.querySelector(`[data-index="${keyMap[e.key.toLowerCase()]}"]`);
+                    if (keyElement && !activeNotes.has(keyElement.dataset.index)) {
+                        playNote(keyElement);
+                    }
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                const keyMap = {
+                    'a': 0, 'w': 1, 's': 2, 'e': 3, 'd': 4, 'f': 5,
+                    't': 6, 'g': 7, 'y': 8, 'h': 9, 'u': 10, 'j': 11
+                };
+                
+                if (keyMap.hasOwnProperty(e.key.toLowerCase())) {
+                    const keyElement = document.querySelector(`[data-index="${keyMap[e.key.toLowerCase()]}"]`);
+                    if (keyElement) {
+                        stopNote(keyElement);
+                    }
+                }
+            });
+        }
+
+        function playNote(keyElement) {
+            if (activeNotes.has(keyElement.dataset.index)) return;
+            
+            activeNotes.add(keyElement.dataset.index);
+            keyElement.classList.add('playing');
+            keyElement.classList.add('ripple');
+            
+            const hue = parseInt(keyElement.dataset.hue);
+            updateVisualFeedback(hue);
+            updateHarmony();
+            
+            setTimeout(() => {
+                keyElement.classList.remove('ripple');
+            }, 600);
+        }
+
+        function stopNote(keyElement) {
+            activeNotes.delete(keyElement.dataset.index);
+            keyElement.classList.remove('playing');
+            updateHarmony();
+        }
+
+        function updateVisualFeedback(hue) {
+            const feedback = document.querySelector('.visual-feedback');
+            const saturation = document.getElementById('saturation').value;
+            const lightness = document.getElementById('lightness').value;
+            
+            feedback.style.background = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            feedback.style.transform = 'scale(1.2)';
+            
+            setTimeout(() => {
+                feedback.style.transform = 'scale(1)';
+            }, 200);
+        }
+
+        function updateHarmony() {
+            const harmonyGrid = document.getElementById('harmonyGrid');
+            const saturation = document.getElementById('saturation').value;
+            const lightness = document.getElementById('lightness').value;
+            const spread = document.getElementById('spread').value;
+            
+            harmonyGrid.innerHTML = '';
+            currentPalette = [];
+
+            if (activeNotes.size === 0) {
+                // Show default harmony
+                const baseHue = 240;
+                const pattern = chordPatterns[currentChord];
+                
+                pattern.forEach((interval, index) => {
+                    const hue = (baseHue + (interval * parseInt(spread) * 5)) % 360;
+                    const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                    createHarmonyNote(notes[interval % 12], color, index === 0);
+                    currentPalette.push({ note: notes[interval % 12], color, hue, saturation: parseInt(saturation), lightness: parseInt(lightness) });
+                });
+            } else {
+                // Generate harmony from active notes
+                const activeHues = Array.from(activeNotes).map(index => {
+                    const keyElement = document.querySelector(`[data-index="${index}"]`);
+                    return {
+                        hue: parseInt(keyElement.dataset.hue),
+                        note: keyElement.dataset.note
+                    };
+                });
+
+                activeHues.forEach(({ hue, note }, index) => {
+                    const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                    createHarmonyNote(note, color, index === 0);
+                    currentPalette.push({ note, color, hue, saturation: parseInt(saturation), lightness: parseInt(lightness) });
+
+                    // Add harmonics
+                    if (activeHues.length === 1) {
+                        const pattern = chordPatterns[currentChord].slice(1);
+                        pattern.forEach(interval => {
+                            const harmonicHue = (hue + (interval * parseInt(spread) * 5)) % 360;
+                            const harmonicColor = `hsl(${harmonicHue}, ${saturation}%, ${lightness}%)`;
+                            const harmonicNote = notes[interval % 12];
+                            createHarmonyNote(harmonicNote, harmonicColor, false);
+                            currentPalette.push({ note: harmonicNote, color: harmonicColor, hue: harmonicHue, saturation: parseInt(saturation), lightness: parseInt(lightness) });
+                        });
+                    }
+                });
+            }
+
+            updatePaletteDisplay();
+        }
+
+        function createHarmonyNote(note, color, isPrimary = false) {
+            const harmonyGrid = document.getElementById('harmonyGrid');
+            const noteElement = document.createElement('div');
+            noteElement.className = 'harmony-note';
+            noteElement.style.background = color;
+            noteElement.style.color = getContrastColor(color);
+            noteElement.textContent = note;
+            
+            if (isPrimary) {
+                noteElement.style.border = '3px solid rgba(255, 255, 255, 0.8)';
+                noteElement.style.transform = 'scale(1.1)';
+            }
+            
+            noteElement.addEventListener('click', () => {
+                copyToClipboard(color);
+            });
+            
+            harmonyGrid.appendChild(noteElement);
+        }
+
+        function updatePaletteDisplay() {
+            const paletteColors = document.getElementById('paletteColors');
+            paletteColors.innerHTML = '';
+            
+            currentPalette.forEach(({ color, note }) => {
+                const colorItem = document.createElement('div');
+                colorItem.className = 'color-export-item';
+                colorItem.innerHTML = `
+                    <div class="color-swatch" style="background: ${color};"></div>
+                    <span class="color-value">${color}</span>
+                `;
+                colorItem.addEventListener('click', () => copyToClipboard(color));
+                paletteColors.appendChild(colorItem);
+            });
+        }
+
+        function getContrastColor(hslColor) {
+            const lightness = parseInt(hslColor.match(/(\d+)%\)$/)[1]);
+            return lightness > 50 ? '#000000' : '#ffffff';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback for copy
+                const feedback = document.querySelector('.visual-feedback');
+                feedback.style.borderColor = 'rgba(76, 237, 196, 0.8)';
+                setTimeout(() => {
+                    feedback.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                }, 500);
+            });
+        }
+
+        function exportPalette() {
+            const paletteData = {
+                colors: currentPalette,
+                chord: currentChord,
+                timestamp: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(paletteData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `chromakeys-palette-${Date.now()}.json`;
+            link.click();
+        }
+
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>

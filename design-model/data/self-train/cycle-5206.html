@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Notes</title>
+    <style>
+        :root {
+            --bg-deep: #0a0b0f;
+            --bg-mid: #1a1d26;
+            --note-primary: #2d3748;
+            --note-secondary: #4a5568;
+            --note-accent: #667eea;
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --thread-active: #764ba2;
+            --thread-weak: rgba(118, 75, 162, 0.3);
+            --glow-soft: rgba(102, 126, 234, 0.15);
+            --shadow-deep: rgba(0, 0, 0, 0.8);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            perspective: 2000px;
+            cursor: grab;
+        }
+
+        body:active {
+            cursor: grabbing;
+        }
+
+        .space-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: gentle-drift 120s infinite linear;
+        }
+
+        @keyframes gentle-drift {
+            0% { transform: rotateY(0deg) rotateX(5deg); }
+            25% { transform: rotateY(90deg) rotateX(-2deg); }
+            50% { transform: rotateY(180deg) rotateX(3deg); }
+            75% { transform: rotateY(270deg) rotateX(-4deg); }
+            100% { transform: rotateY(360deg) rotateX(5deg); }
+        }
+
+        .note {
+            position: absolute;
+            background: var(--note-primary);
+            border: 1px solid var(--note-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 
+                0 8px 32px var(--shadow-deep),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .note:hover {
+            transform: translateZ(30px) scale(1.05);
+            box-shadow: 
+                0 16px 64px var(--shadow-deep),
+                0 0 40px var(--glow-soft),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border-color: var(--note-accent);
+        }
+
+        .note-recent {
+            width: 280px;
+            font-size: 16px;
+            z-index: 100;
+        }
+
+        .note-medium {
+            width: 240px;
+            font-size: 14px;
+            opacity: 0.85;
+            z-index: 50;
+        }
+
+        .note-distant {
+            width: 200px;
+            font-size: 12px;
+            opacity: 0.6;
+            z-index: 25;
+        }
+
+        .note-ancient {
+            width: 160px;
+            font-size: 11px;
+            opacity: 0.35;
+            z-index: 10;
+        }
+
+        .note-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+
+        .note-content {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .note-meta {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-tags {
+            display: flex;
+            gap: 6px;
+        }
+
+        .tag {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.4);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 0.8em;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                var(--thread-active) 0%, 
+                var(--thread-weak) 50%, 
+                transparent 100%);
+            transform-origin: left center;
+            z-index: 1;
+            opacity: 0.7;
+        }
+
+        .connection-thread::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 0;
+            right: 0;
+            bottom: -1px;
+            background: inherit;
+            filter: blur(1px);
+            opacity: 0.5;
+        }
+
+        .stars {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: twinkle 3s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .ui-overlay {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            z-index: 1000;
+            background: rgba(26, 29, 38, 0.9);
+            border: 1px solid var(--note-secondary);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px var(--shadow-deep);
+        }
+
+        .ui-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .ui-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .stat-line {
+            display: flex;
+            justify-content: space-between;
+            min-width: 180px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            color: var(--note-accent);
+            font-weight: 600;
+        }
+
+        .depth-indicator {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            z-index: 1000;
+            background: rgba(26, 29, 38, 0.9);
+            border: 1px solid var(--note-secondary);
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px var(--shadow-deep);
+        }
+
+        .depth-rings {
+            position: relative;
+            width: 40px;
+            height: 40px;
+        }
+
+        .depth-ring {
+            position: absolute;
+            border: 2px solid var(--thread-weak);
+            border-radius: 50%;
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+
+        .depth-ring:nth-child(1) { width: 100%; height: 100%; animation-delay: 0s; }
+        .depth-ring:nth-child(2) { width: 70%; height: 70%; top: 15%; left: 15%; animation-delay: 0.7s; }
+        .depth-ring:nth-child(3) { width: 40%; height: 40%; top: 30%; left: 30%; animation-delay: 1.4s; }
+
+        @keyframes pulse-ring {
+            0% { border-color: var(--thread-weak); transform: scale(1); }
+            50% { border-color: var(--thread-active); transform: scale(1.1); }
+            100% { border-color: var(--thread-weak); transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars">
+        <div class="star" style="left: 10%; top: 20%; width: 2px; height: 2px; animation-delay: 0s;"></div>
+        <div class="star" style="left: 25%; top: 60%; width: 1px; height: 1px; animation-delay: 1s;"></div>
+        <div class="star" style="left: 40%; top: 30%; width: 2px; height: 2px; animation-delay: 2s;"></div>
+        <div class="star" style="left: 60%; top: 80%; width: 1px; height: 1px; animation-delay: 1.5s;"></div>
+        <div class="star" style="left: 80%; top: 15%; width: 2px; height: 2px; animation-delay: 0.5s;"></div>
+        <div class="star" style="left: 90%; top: 50%; width: 1px; height: 1px; animation-delay: 2.5s;"></div>
+    </div>
+
+    <div class="space-container">
+        <!-- Recent Notes (Close) -->
+        <div class="note note-recent" style="left: 600px; top: 200px; transform: translateZ(100px);">
+            <div class="note-title">Product Roadmap Q1 2024</div>
+            <div class="note-content">Focus on spatial interfaces and immersive note-taking experiences. Key milestones include 3D visualization and connection mapping.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">roadmap</span>
+                    <span class="tag">product</span>
+                </div>
+                <span>2 min ago</span>
+            </div>
+        </div>
+
+        <div class="note note-recent" style="left: 200px; top: 400px; transform: translateZ(80px) rotateY(15deg);">
+            <div class="note-title">Meeting Notes: Design Review</div>
+            <div class="note-content">Discussed the spatial note-taking concept. Team excited about the 3D approach. Need to refine connection threading.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">meeting</span>
+                    <span class="tag">design</span>
+                </div>
+                <span>5 min ago</span>
+            </div>
+        </div>
+
+        <!-- Medium Distance Notes -->
+        <div class="note note-medium" style="left: 900px; top: 150px; transform: translateZ(-50px) rotateY(-20deg);">
+            <div class="note-title">Research: Spatial Computing</div>
+            <div class="note-content">Explored current state of spatial interfaces. Apple Vision Pro paradigms could inform our approach.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">research</span>
+                </div>
+                <span>1 hour ago</span>
+            </div>
+        </div>
+
+        <div class="note note-medium" style="left: 100px; top: 100px; transform: translateZ(-80px) rotateX(10deg);">
+            <div class="note-title">Inspiration: Knowledge Graphs</div>
+            <div class="note-content">Visual representation of connected ideas could work well in 3D space.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">inspiration</span>
+                </div>
+                <span>3 hours ago</span>
+            </div>
+        </div>
+
+        <!-- Distant Notes -->
+        <div class="note note-distant" style="left: 1100px; top: 500px; transform: translateZ(-200px) rotateY(35deg);">
+            <div class="note-title">Technical Architecture</div>
+            <div class="note-content">WebGL or CSS 3D transforms for the spatial interface?</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">tech</span>
+                </div>
+                <span>Yesterday</span>
+            </div>
+        </div>
+
+        <div class="note note-distant" style="left: 50px; top: 600px; transform: translateZ(-180px) rotateX(-15deg);">
+            <div class="note-title">User Experience Goals</div>
+            <div class="note-content">Intuitive navigation through note clusters.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">ux</span>
+                </div>
+                <span>2 days ago</span>
+            </div>
+        </div>
+
+        <!-- Ancient Notes -->
+        <div class="note note-ancient" style="left: 800px; top: 700px; transform: translateZ(-400px) rotateY(60deg);">
+            <div class="note-title">Initial Concept</div>
+            <div class="note-content">What if notes existed in 3D space?</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">idea</span>
+                </div>
+                <span>Last week</span>
+            </div>
+        </div>
+
+        <div class="note note-ancient" style="left: 400px; top: 50px; transform: translateZ(-350px) rotateX(25deg);">
+            <div class="note-title">First Sketches</div>
+            <div class="note-content">Rough wireframes of spatial interface.</div>
+            <div class="note-meta">
+                <div class="note-tags">
+                    <span class="tag">sketch</span>
+                </div>
+                <span>Last week</span>
+            </div>
+        </div>
+
+        <!-- Connection Threads -->
+        <div class="connection-thread" style="left: 680px; top: 250px; width: 180px; transform: translateZ(50px) rotateZ(35deg);"></div>
+        <div class="connection-thread" style="left: 300px; top: 180px; width: 320px; transform: translateZ(20px) rotateZ(-15deg);"></div>
+        <div class="connection-thread" style="left: 550px; top: 380px; width: 240px; transform: translateZ(-20px) rotateZ(45deg);"></div>
+        <div class="connection-thread" style="left: 150px; top: 300px; width: 160px; transform: translateZ(-100px) rotateZ(-35deg);"></div>
+        <div class="connection-thread" style="left: 900px; top: 400px; width: 280px; transform: translateZ(-150px) rotateZ(25deg);"></div>
+    </div>
+
+    <div class="ui-overlay">
+        <div class="ui-title">Spatial Notes</div>
+        <div class="ui-stats">
+            <div class="stat-line">
+                <span class="stat-label">Total Notes</span>
+                <span class="stat-value">8</span>
+            </div>
+            <div class="stat-line">
+                <span class="stat-label">Connections</span>
+                <span class="stat-value">5</span>
+            </div>
+            <div class="stat-line">
+                <span class="stat-label">Recent</span>
+                <span class="stat-value">2</span>
+            </div>
+            <div class="stat-line">
+                <span class="stat-label">Focus Depth</span>
+                <span class="stat-value">3D</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="depth-indicator">
+        <div class="depth-rings">
+            <div class="depth-ring"></div>
+            <div class="depth-ring"></div>
+            <div class="depth-ring"></div>
+        </div>
+    </div>
+
+    <script>
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let currentRotationX = 0, currentRotationY = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2) / window.innerWidth;
+            mouseY = (e.clientY - window.innerHeight / 2) / window.innerHeight;
+            
+            targetRotationY = mouseX * 10;
+            targetRotationX = -mouseY * 10;
+        });
+
+        function animate() {
+            currentRotationX += (targetRotationX - currentRotationX) * 0.05;
+            currentRotationY += (targetRotationY - currentRotationY) * 0.05;
+            
+            document.querySelector('.space-container').style.transform = 
+                `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`;
+            
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

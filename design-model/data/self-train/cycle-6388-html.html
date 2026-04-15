@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --void-black: #000000;
+            --memory-dust: #1a1611;
+            --polaroid-white: #fffef8;
+            --nostalgia-gold: #d4af37;
+            --forget-gray: #3d3d3d;
+            --static-silver: #898989;
+            --auction-red: #c41e3a;
+            --fragment-blue: #4169e1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void-black);
+            font-family: Garamond, serif;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        #auction-floor {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(212, 175, 55, 0.03) 0%, transparent 40%),
+                radial-gradient(ellipse at 80% 70%, rgba(65, 105, 225, 0.02) 0%, transparent 40%),
+                linear-gradient(180deg, var(--void-black) 0%, var(--memory-dust) 100%);
+        }
+
+        .memory-polaroid {
+            position: absolute;
+            width: 180px;
+            height: 210px;
+            background: var(--polaroid-white);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transform-origin: center;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+        }
+
+        .memory-image {
+            width: 160px;
+            height: 160px;
+            margin: 10px;
+            background: var(--forget-gray);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-static {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(255, 255, 255, 0.05),
+                    rgba(255, 255, 255, 0.05) 1px,
+                    transparent 1px,
+                    transparent 2px
+                );
+            opacity: 0;
+            animation: staticNoise 0.2s infinite;
+        }
+
+        @keyframes staticNoise {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(2px); }
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            filter: blur(8px) saturate(0.3);
+            opacity: 0.3;
+        }
+
+        .memory-polaroid:hover .memory-fragment {
+            filter: blur(2px) saturate(0.7);
+            opacity: 0.7;
+        }
+
+        .memory-caption {
+            text-align: center;
+            font-size: 11px;
+            color: var(--forget-gray);
+            margin-top: 5px;
+            font-style: italic;
+            opacity: 0.6;
+        }
+
+        .bid-indicator {
+            position: absolute;
+            top: -25px;
+            right: -10px;
+            background: var(--auction-red);
+            color: var(--polaroid-white);
+            padding: 4px 8px;
+            font-size: 10px;
+            border-radius: 2px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .memory-phase {
+            animation: phaseInOut 8s infinite;
+        }
+
+        @keyframes phaseInOut {
+            0%, 100% { opacity: 0.3; transform: scale(0.95) rotate(var(--rotation)); }
+            50% { opacity: 1; transform: scale(1) rotate(var(--rotation)); }
+        }
+
+        #nostalgia-counter {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            color: var(--nostalgia-gold);
+            font-size: 24px;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .counter-label {
+            font-size: 12px;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 5px;
+        }
+
+        #ai-forgetter {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            color: var(--static-silver);
+            font-size: 18px;
+            text-align: right;
+        }
+
+        .ai-status {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        #film-strip {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.8) 100%);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            overflow: hidden;
+        }
+
+        .film-frame {
+            width: 60px;
+            height: 60px;
+            background: var(--memory-dust);
+            margin: 0 10px;
+            flex-shrink: 0;
+            position: relative;
+            border: 2px solid var(--forget-gray);
+            transition: all 0.3s ease;
+        }
+
+        .film-frame.decaying {
+            background: 
+                repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(255, 255, 255, 0.1) 2px,
+                    rgba(255, 255, 255, 0.1) 4px
+                );
+            opacity: 0.5;
+            border-color: var(--auction-red);
+        }
+
+        .bankruptcy-meter {
+            position: fixed;
+            bottom: 100px;
+            right: 40px;
+            width: 200px;
+            height: 8px;
+            background: var(--forget-gray);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .bankruptcy-fill {
+            height: 100%;
+            width: 65%;
+            background: linear-gradient(90deg, var(--nostalgia-gold) 0%, var(--auction-red) 100%);
+            transition: width 0.5s ease;
+        }
+
+        .bankruptcy-label {
+            position: absolute;
+            top: -20px;
+            right: 0;
+            color: var(--static-silver);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.7;
+        }
+
+        .memory-particles {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--nostalgia-gold);
+            pointer-events: none;
+            animation: float-away 4s linear infinite;
+        }
+
+        @keyframes float-away {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-200px) translateX(var(--drift));
+                opacity: 0;
+            }
+        }
+
+        .bid-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: var(--nostalgia-gold);
+            color: var(--void-black);
+            border: none;
+            padding: 4px 12px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .memory-polaroid:hover .bid-button {
+            opacity: 1;
+        }
+
+        .bid-button:hover {
+            background: var(--auction-red);
+            color: var(--polaroid-white);
+        }
+
+        #void-message {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--static-silver);
+            font-size: 14px;
+            opacity: 0.5;
+            font-style: italic;
+            text-align: center;
+        }
+
+        .memory-timestamp {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            font-size: 9px;
+            color: var(--forget-gray);
+            opacity: 0.4;
+            font-family: Courier, monospace;
+        }
+
+        .memory-locked {
+            filter: blur(12px) saturate(0);
+            pointer-events: none;
+        }
+
+        .memory-locked::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="auction-floor"></div>
+    
+    <div id="nostalgia-counter">
+        <div>847</div>
+        <div class="counter-label">Nostalgia Points</div>
+    </div>
+    
+    <div id="ai-forgetter">
+        <div>The Void Claims</div>
+        <div class="ai-status">Erasing 3 memories/min</div>
+    </div>
+    
+    <div class="memory-polaroid memory-phase" style="left: 120px; top: 150px; --rotation: -5deg; animation-delay: 0s;">
+        <div class="bid-indicator">125 pts</div>
+        <div class="memory-timestamp">1998.07.14</div>
+        <div class="memory-image">
+            <div class="memory-fragment" style="background-image: linear-gradient(45deg, #8b7355 0%, #d2b48c 100%);"></div>
+            <div class="memory-static"></div>
+        </div>
+        <div class="memory-caption">summer lake house</div>
+        <button class="bid-button">Bid +50</button>
+    </div>
+    
+    <div class="memory-polaroid memory-phase" style="left: 400px; top: 280px; --rotation: 8deg; animation-delay: 2s;">
+        <div class="bid-indicator">89 pts</div>
+        <div class="memory-timestamp">2003.12.25</div>
+        <div class="memory-image">
+            <div class="memory-fragment" style="background-image: linear-gradient(135deg, #4169e1 0%, #1e3a8a 100%);"></div>
+            <div class="memory-static"></div>
+        </div>
+        <div class="memory-caption">first snow together</div>
+        <button class="bid-button">Bid +50</button>
+    </div>
+    
+    <div class="memory-polaroid memory-phase" style="left: 680px; top: 180px; --rotation: -12deg; animation-delay: 4s;">
+        <div class="bid-indicator">203 pts</div>
+        <div class="memory-timestamp">1991.09.02</div>
+        <div class="memory-image">
+            <div class="memory-fragment" style="background-image: linear-gradient(90deg, #228b22 0%, #90ee90 100%);"></div>
+            <div class="memory-static"></div>
+        </div>
+        <div class="memory-caption">kindergarten stairs</div>
+        <button class="bid-button">Bid +50</button>
+    </div>
+    
+    <div class="memory-polaroid memory-phase" style="left: 950px; top: 320px; --rotation: 3deg; animation-delay: 1s;">
+        <div class="bid-indicator">156 pts</div>
+        <div class="memory-timestamp">2007.06.18</div>
+        <div class="memory-image">
+            <div class="memory-fragment" style="background-image: linear-gradient(180deg, #ff6347 0%, #ff8c00 100%);"></div>
+            <div class="memory-static"></div>
+        </div>
+        <div class="memory-caption">graduation sunset</div>
+        <button class="bid-button">Bid +50</button>
+    </div>
+    
+    <div class="memory-polaroid memory-phase" style="left: 1200px; top: 200px; --rotation: -7deg; animation-delay: 3s;">
+        <div class="bid-indicator">412 pts</div>
+        <div class="memory-timestamp">1987.11.30</div>
+        <div class="memory-image">
+            <div class="memory-fragment" style="background-image: linear-gradient(45deg, #dda0dd 0%, #da70d6 100%);"></div>
+            <div class="memory-static"></div>
+        </div>
+        <div class="memory-caption">mom's perfume</div>
+        <button class="bid-button">Bid +50</button>
+    </div>
+    
+    <div class="memory-polaroid memory-locked" style="left: 320px; top: 480px; --rotation: 15deg;">
+        <div class="memory-image">
+            <div class="memory-fragment"></div>
+            <div class="memory-static" style="opacity: 1;"></div>
+        </div>
+        <div class="memory-caption">[dissolved]</div>
+    </div>
+    
+    <div class="memory-polaroid memory-locked" style="left: 760px; top: 440px; --rotation: -10deg;">
+        <div class="memory-image">
+            <div class="memory-fragment"></div>
+            <div class="memory-static" style="opacity: 1;"></div>
+        </div>
+        <div class="memory-caption">[dissolved]</div>
+    </div>
+    
+    <div id="film-strip">
+        <div class="film-frame"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame"></div>
+        <div class="film-frame decaying"></div>
+        <div class="film-frame"></div>
+    </div>
+    
+    <div class="bankruptcy-meter">
+        <div class="bankruptcy-label">Memory Bankruptcy Risk</div>
+        <div class="bankruptcy-fill"></div>
+    </div>
+    
+    <div id="void-message">
+        "Each bid delays the inevitable by mere moments"
+    </div>
+    
+    <script>
+        // Particle generation
+        setInterval(() => {
+            const particle = document.createElement('div');
+            particle.className = 'memory-particles';
+            particle.style.left = Math.random() * window.innerWidth + 'px';
+            particle.style.top = Math.random() * 600 + 'px';
+            particle.style.setProperty('--drift', (Math.random() - 0.5) * 100 + 'px');
+            document.body.appendChild(particle);
+            setTimeout(() => particle.remove(), 4000);
+        }, 500);
+        
+        // Nostalgia counter decay
+        let nostalgia = 847;
+        setInterval(() => {
+            nostalgia = Math.max(0, nostalgia - Math.floor(Math.random() * 3));
+            document.querySelector('#nostalgia-counter div').textContent = nostalgia;
+        }, 3000);
+        
+        // Static animation on hover
+        document.querySelectorAll('.memory-polaroid:not(.memory-locked)').forEach(polaroid => {
+            polaroid.addEventListener('mouseenter', () => {
+                const static = polaroid.querySelector('.memory-static');
+                static.style.opacity = Math.random() * 0.3;
+            });
+            
+            polaroid.addEventListener('mouseleave', () => {
+                const static = polaroid.querySelector('.memory-static');
+                static.style.opacity = 0;
+            });
+        });
+    </script>
+</body>
+</html>

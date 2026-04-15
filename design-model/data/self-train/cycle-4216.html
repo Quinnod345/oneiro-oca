@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromatic Harmonizer</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --accent-warm: #ff6b35;
+            --accent-cool: #4ecdc4;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --shadow-key: 0 4px 20px rgba(0, 0, 0, 0.5);
+            --shadow-active: 0 2px 8px rgba(255, 107, 53, 0.3);
+            --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --border-radius: 12px;
+            --spacing-unit: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .app-container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: 80px 1fr 240px;
+            background: radial-gradient(ellipse at 30% 20%, rgba(78, 205, 196, 0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(255, 107, 53, 0.1) 0%, transparent 50%),
+                        var(--bg-primary);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 calc(var(--spacing-unit) * 6);
+            border-bottom: 1px solid var(--border-subtle);
+            backdrop-filter: blur(20px);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-cool), var(--accent-warm));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls {
+            display: flex;
+            gap: calc(var(--spacing-unit) * 3);
+            align-items: center;
+        }
+
+        .harmony-selector {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius);
+            padding: calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 3);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all var(--transition-fast);
+        }
+
+        .harmony-selector:hover {
+            border-color: var(--accent-cool);
+        }
+
+        .main-area {
+            display: grid;
+            grid-template-columns: 300px 1fr 320px;
+            gap: calc(var(--spacing-unit) * 4);
+            padding: calc(var(--spacing-unit) * 4);
+            overflow: hidden;
+        }
+
+        .palette-display {
+            background: var(--bg-secondary);
+            border-radius: calc(var(--border-radius) * 2);
+            padding: calc(var(--spacing-unit) * 4);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .palette-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: calc(var(--spacing-unit) * 3);
+            color: var(--text-primary);
+        }
+
+        .color-swatch {
+            height: 60px;
+            border-radius: var(--border-radius);
+            margin-bottom: calc(var(--spacing-unit) * 2);
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all var(--transition-smooth);
+            overflow: hidden;
+        }
+
+        .color-swatch::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+
+        .color-swatch:hover::after {
+            opacity: 1;
+        }
+
+        .color-info {
+            position: absolute;
+            bottom: calc(var(--spacing-unit) * 1);
+            left: calc(var(--spacing-unit) * 2);
+            font-size: 12px;
+            font-weight: 500;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+            color: white;
+        }
+
+        .canvas-area {
+            position: relative;
+            background: var(--bg-secondary);
+            border-radius: calc(var(--border-radius) * 2);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+        }
+
+        .color-wheel {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: conic-gradient(from 0deg, 
+                hsl(0, 70%, 60%), hsl(30, 70%, 60%), hsl(60, 70%, 60%), 
+                hsl(90, 70%, 60%), hsl(120, 70%, 60%), hsl(150, 70%, 60%), 
+                hsl(180, 70%, 60%), hsl(210, 70%, 60%), hsl(240, 70%, 60%), 
+                hsl(270, 70%, 60%), hsl(300, 70%, 60%), hsl(330, 70%, 60%), 
+                hsl(360, 70%, 60%));
+            border-radius: 50%;
+            margin: 60px auto;
+            width: calc(100% - 120px);
+            height: calc(100% - 120px);
+        }
+
+        .color-picker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: var(--shadow-key);
+            transition: all var(--transition-fast);
+            z-index: 10;
+        }
+
+        .color-picker:hover {
+            transform: scale(1.2);
+            box-shadow: var(--shadow-active);
+        }
+
+        .chord-indicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 3);
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .property-panel {
+            background: var(--bg-secondary);
+            border-radius: calc(var(--border-radius) * 2);
+            padding: calc(var(--spacing-unit) * 4);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .panel-section {
+            margin-bottom: calc(var(--spacing-unit) * 4);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: calc(var(--spacing-unit) * 2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .color-value {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-subtle);
+            border-radius: calc(var(--border-radius) / 2);
+            padding: calc(var(--spacing-unit) * 2);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 13px;
+            margin-bottom: calc(var(--spacing-unit) * 1);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .color-value:hover {
+            border-color: var(--accent-cool);
+            background: rgba(78, 205, 196, 0.05);
+        }
+
+        .keyboard {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-subtle);
+            padding: calc(var(--spacing-unit) * 4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .keys-container {
+            display: flex;
+            gap: calc(var(--spacing-unit) / 2);
+            padding: calc(var(--spacing-unit) * 3);
+            background: var(--bg-primary);
+            border-radius: calc(var(--border-radius) * 2);
+            border: 1px solid var(--border-subtle);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .key {
+            width: 60px;
+            height: 120px;
+            background: linear-gradient(180deg, #f8f8f8 0%, #e8e8e8 100%);
+            border: 1px solid #ccc;
+            border-radius: 0 0 8px 8px;
+            cursor: pointer;
+            position: relative;
+            transition: all var(--transition-fast);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .key:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .key.black {
+            width: 36px;
+            height: 75px;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            border: 1px solid #000;
+            margin: 0 -18px;
+            z-index: 2;
+            border-radius: 0 0 6px 6px;
+        }
+
+        .key.active {
+            background: linear-gradient(180deg, var(--accent-warm) 0%, #e55a2b 100%);
+            transform: translateY(2px);
+        }
+
+        .key.black.active {
+            background: linear-gradient(180deg, var(--accent-cool) 0%, #3db3ac 100%);
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: calc(var(--spacing-unit) * 2);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 500;
+            color: #666;
+            pointer-events: none;
+        }
+
+        .key.black .key-label {
+            color: #aaa;
+        }
+
+        .harmony-display {
+            display: flex;
+            gap: calc(var(--spacing-unit) * 2);
+            margin-top: calc(var(--spacing-unit) * 2);
+            justify-content: center;
+        }
+
+        .harmony-indicator {
+            padding: calc(var(--spacing-unit) * 1) calc(var(--spacing-unit) * 2);
+            background: rgba(78, 205, 196, 0.1);
+            border: 1px solid var(--accent-cool);
+            border-radius: calc(var(--border-radius) / 2);
+            font-size: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">Chromatic Harmonizer</div>
+            <div class="controls">
+                <select class="harmony-selector">
+                    <option>Triadic</option>
+                    <option>Complementary</option>
+                    <option>Analogous</option>
+                    <option>Split-Complementary</option>
+                    <option>Tetradic</option>
+                </select>
+            </div>
+        </header>
+
+        <main class="main-area">
+            <aside class="palette-display">
+                <h2 class="palette-title">Current Palette</h2>
+                <div class="color-swatch" style="background: hsl(15, 75%, 60%);">
+                    <div class="color-info">#E55A2B</div>
+                </div>
+                <div class="color-swatch" style="background: hsl(135, 75%, 60%);">
+                    <div class="color-info">#2BE55A</div>
+                </div>
+                <div class="color-swatch" style="background: hsl(255, 75%, 60%);">
+                    <div class="color-info">#5A2BE5</div>
+                </div>
+                <div class="color-swatch" style="background: hsl(195, 75%, 60%);">
+                    <div class="color-info">#2BE5E5</div>
+                </div>
+            </aside>
+
+            <section class="canvas-area">
+                <div class="chord-indicator">C Major Triad</div>
+                <div class="color-wheel">
+                    <div class="color-picker" style="background: hsl(15, 75%, 60%); top: 30%; right: 20%;"></div>
+                    <div class="color-picker" style="background: hsl(135, 75%, 60%); bottom: 40%; right: 15%;"></div>
+                    <div class="color-picker" style="background: hsl(255, 75%, 60%); bottom: 20%; left: 25%;"></div>
+                </div>
+            </section>
+
+            <aside class="property-panel">
+                <div class="panel-section">
+                    <div class="section-title">Selected Color</div>
+                    <div class="color-value">#E55A2B</div>
+                    <div class="color-value">rgb(229, 90, 43)</div>
+                    <div class="color-value">hsl(15, 75%, 60%)</div>
+                </div>
+                <div class="panel-section">
+                    <div class="section-title">Harmony Type</div>
+                    <div class="color-value">Triadic</div>
+                </div>
+                <div class="panel-section">
+                    <div class="section-title">Export</div>
+                    <div class="color-value">Copy CSS</div>
+                    <div class="color-value">Copy JSON</div>
+                    <div class="color-value">Save PNG</div>
+                </div>
+            </aside>
+        </main>
+
+        <footer class="keyboard">
+            <div class="keys-container">
+                <div class="key">
+                    <div class="key-label">C</div>
+                </div>
+                <div class="key black">
+                    <div class="key-label">C#</div>
+                </div>
+                <div class="key active">
+                    <div class="key-label">D</div>
+                </div>
+                <div class="key black">
+                    <div class="key-label">D#</div>
+                </div>
+                <div class="key">
+                    <div class="key-label">E</div>
+                </div>
+                <div class="key">
+                    <div class="key-label">F</div>
+                </div>
+                <div class="key black active">
+                    <div class="key-label">F#</div>
+                </div>
+                <div class="key">
+                    <div class="key-label">G</div>
+                </div>
+                <div class="key black">
+                    <div class="key-label">G#</div>
+                </div>
+                <div class="key active">
+                    <div class="key-label">A</div>
+                </div>
+                <div class="key black">
+                    <div class="key-label">A#</div>
+                </div>
+                <div class="key">
+                    <div class="key-label">B</div>
+                </div>
+            </div>
+            <div class="harmony-display">
+                <div class="harmony-indicator">D Major</div>
+                <div class="harmony-indicator">F# Minor</div>
+                <div class="harmony-indicator">A Major</div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Architecture Studio</title>
+    <style>
+        :root {
+            --primary-dark: #0a0a0f;
+            --primary-light: #ffffff;
+            --accent-blue: #4a7fff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --surface-glass: rgba(255, 255, 255, 0.06);
+            --border-subtle: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--primary-dark);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .background-gradient {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 40%, rgba(74, 127, 255, 0.08) 0%, transparent 40%);
+            pointer-events: none;
+        }
+
+        .main-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            padding: 60px;
+            gap: 60px;
+        }
+
+        .sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+        }
+
+        .header {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 300;
+            color: var(--primary-light);
+            letter-spacing: 0.02em;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .tools-section {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+
+        .tool-card {
+            width: 100%;
+            padding: 24px;
+            background: var(--surface-glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-blue);
+            transform: translateX(4px);
+        }
+
+        .tool-card h3 {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--primary-light);
+            margin-bottom: 8px;
+        }
+
+        .tool-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .workspace-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .workspace-title {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--primary-light);
+        }
+
+        .workspace-actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        .action-button {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-button:hover {
+            background: var(--surface-glass);
+            border-color: var(--accent-blue);
+            color: var(--primary-light);
+        }
+
+        .action-button.primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: var(--primary-light);
+        }
+
+        .action-button.primary:hover {
+            background: #5a87ff;
+        }
+
+        .canvas-area {
+            flex: 1;
+            background: var(--surface-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .canvas-placeholder {
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .canvas-placeholder svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .canvas-placeholder p {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .canvas-placeholder span {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.3);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 24px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-gradient"></div>
+    
+    <div class="main-container">
+        <aside class="sidebar">
+            <header class="header">
+                <h1>Dream Studio</h1>
+                <p>Architecture Design Platform</p>
+            </header>
+            
+            <section class="tools-section">
+                <h2 class="section-title">Design Tools</h2>
+                
+                <div class="tool-card">
+                    <h3>Space Generator</h3>
+                    <p>Create immersive 3D environments with AI-powered spatial design</p>
+                </div>
+                
+                <div class="tool-card">
+                    <h3>Material Library</h3>
+                    <p>Access curated materials and textures for realistic visualizations</p>
+                </div>
+                
+                <div class="tool-card">
+                    <h3>Light Simulator</h3>
+                    <p>Analyze natural and artificial lighting in real-time</p>
+                </div>
+                
+                <div class="tool-card">
+                    <h3>Structure Analysis</h3>
+                    <p>Validate structural integrity with advanced engineering tools</p>
+                </div>
+            </section>
+        </aside>
+        
+        <main class="workspace">
+            <div class="workspace-header">
+                <h2 class="workspace-title">New Project</h2>
+                <div class="workspace-actions">
+                    <button class="action-button">View</button>
+                    <button class="action-button">Share</button>
+                    <button class="action-button primary">Export</button>
+                </div>
+            </div>
+            
+            <div class="canvas-area">
+                <div class="canvas-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
+                        <path d="M2 17L12 22L22 17"/>
+                        <path d="M2 12L12 17L22 12"/>
+                    </svg>
+                    <p>Start your design</p>
+                    <span>Drag tools or click to begin</span>
+                </div>
+                
+                <div class="status-bar">
+                    <div class="status-item">
+                        <div class="status-dot"></div>
+                        <span>Ready</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Grid: 10m</span>
+                    </div>
+                    <div class="status-item">
+                        <span>Scale: 1:100</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

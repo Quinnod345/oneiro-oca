@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Schedule</title>
+    <style>
+        :root {
+            --river-blue: #2563eb;
+            --river-light: #60a5fa;
+            --river-dark: #1d4ed8;
+            --bridge-wood: #92400e;
+            --bridge-shadow: #451a03;
+            --foam-white: #f8fafc;
+            --stone-gray: #64748b;
+            --deep-water: #1e40af;
+            --ripple-speed: 8s;
+            --current-speed: 12s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #0ea5e9 0%, var(--river-blue) 30%, var(--deep-water) 100%);
+            position: relative;
+        }
+
+        .river-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .river-surface {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse 400px 100px at 20% 60%, rgba(255,255,255,0.1) 0%, transparent 70%),
+                radial-gradient(ellipse 300px 80px at 70% 40%, rgba(255,255,255,0.08) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 120px at 90% 80%, rgba(255,255,255,0.06) 0%, transparent 70%);
+            animation: riverFlow var(--current-speed) linear infinite;
+        }
+
+        @keyframes riverFlow {
+            0% { transform: translateX(0) translateY(0); }
+            25% { transform: translateX(-20px) translateY(10px); }
+            50% { transform: translateX(-40px) translateY(0); }
+            75% { transform: translateX(-20px) translateY(-10px); }
+            100% { transform: translateX(0) translateY(0); }
+        }
+
+        .ripples {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 120%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 15% 25%, rgba(255,255,255,0.03) 1px, transparent 2px),
+                radial-gradient(circle at 45% 75%, rgba(255,255,255,0.04) 1px, transparent 2px),
+                radial-gradient(circle at 75% 45%, rgba(255,255,255,0.02) 1px, transparent 2px),
+                radial-gradient(circle at 85% 85%, rgba(255,255,255,0.03) 1px, transparent 2px);
+            background-size: 200px 150px, 180px 120px, 220px 160px, 160px 100px;
+            animation: rippleMove var(--ripple-speed) ease-in-out infinite;
+        }
+
+        @keyframes rippleMove {
+            0%, 100% { transform: translateX(-100px) scale(1); opacity: 0.8; }
+            50% { transform: translateX(-200px) scale(1.1); opacity: 0.4; }
+        }
+
+        .schedule-header {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            z-index: 100;
+            color: var(--foam-white);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .schedule-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .schedule-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .time-river {
+            position: absolute;
+            top: 180px;
+            left: 80px;
+            right: 80px;
+            height: 560px;
+        }
+
+        .hour-marker {
+            position: absolute;
+            left: 0;
+            width: 80px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--foam-white);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            z-index: 50;
+        }
+
+        .river-section {
+            position: absolute;
+            left: 90px;
+            right: 0;
+            height: 60px;
+            border-radius: 30px;
+            overflow: hidden;
+        }
+
+        .free-water {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                rgba(255,255,255,0.15) 0%, 
+                rgba(255,255,255,0.08) 50%, 
+                rgba(255,255,255,0.12) 100%);
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .free-water::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(255,255,255,0.1) 50%, 
+                transparent 100%);
+            animation: waterShimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes waterShimmer {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(300%); }
+        }
+
+        .meeting-bridge {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(135deg, #d97706 0%, var(--bridge-wood) 50%, #92400e 100%);
+            border-radius: 8px;
+            border: 2px solid var(--bridge-shadow);
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.3),
+                inset 0 2px 0 rgba(255,255,255,0.2),
+                inset 0 -2px 0 rgba(0,0,0,0.2);
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .meeting-bridge:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 12px 24px rgba(0,0,0,0.4),
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.2);
+        }
+
+        .meeting-bridge::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: 8px;
+            height: 3px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 1px;
+        }
+
+        .meeting-bridge::after {
+            content: '';
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            right: 8px;
+            height: 2px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 1px;
+        }
+
+        .bridge-content {
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        .bridge-time {
+            color: rgba(255,255,255,0.8);
+            font-size: 0.75rem;
+            font-weight: 400;
+            margin-left: auto;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+
+        .add-meeting {
+            position: absolute;
+            bottom: 60px;
+            right: 60px;
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+            z-index: 100;
+        }
+
+        .add-meeting:hover {
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+        }
+
+        .water-plants {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 120px;
+            background: 
+                radial-gradient(ellipse 60px 40px at 10% 100%, rgba(34, 197, 94, 0.3) 0%, transparent 70%),
+                radial-gradient(ellipse 80px 50px at 30% 100%, rgba(34, 197, 94, 0.2) 0%, transparent 70%),
+                radial-gradient(ellipse 70px 45px at 60% 100%, rgba(34, 197, 94, 0.25) 0%, transparent 70%),
+                radial-gradient(ellipse 90px 55px at 85% 100%, rgba(34, 197, 94, 0.2) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .time-indicator {
+            position: absolute;
+            left: 90px;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ef4444, #f97316, #eab308);
+            border-radius: 2px;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+            z-index: 70;
+            animation: currentPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes currentPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+            50% { opacity: 0.7; box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+        }
+    </style>
+</head>
+<body>
+    <div class="river-container">
+        <div class="river-surface"></div>
+        <div class="ripples"></div>
+        
+        <div class="schedule-header">
+            <h1>River Schedule</h1>
+            <p>Where time flows like water, and meetings span like bridges</p>
+        </div>
+
+        <div class="time-river">
+            <!-- 9 AM -->
+            <div style="top: 0px;">
+                <div class="hour-marker">9 AM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                </div>
+            </div>
+
+            <!-- 10 AM -->
+            <div style="top: 70px;">
+                <div class="hour-marker">10 AM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                    <div class="meeting-bridge" style="left: 200px; width: 280px;">
+                        <div class="bridge-content">Design Review</div>
+                        <div class="bridge-time">10:30</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 11 AM -->
+            <div style="top: 140px;">
+                <div class="hour-marker">11 AM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                    <div class="meeting-bridge" style="left: 120px; width: 320px;">
+                        <div class="bridge-content">Team Standup</div>
+                        <div class="bridge-time">11:00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 12 PM -->
+            <div style="top: 210px;">
+                <div class="hour-marker">12 PM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                </div>
+                <div class="time-indicator" style="top: 235px;"></div>
+            </div>
+
+            <!-- 1 PM -->
+            <div style="top: 280px;">
+                <div class="hour-marker">1 PM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                    <div class="meeting-bridge" style="left: 300px; width: 200px;">
+                        <div class="bridge-content">Lunch Meeting</div>
+                        <div class="bridge-time">1:15</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2 PM -->
+            <div style="top: 350px;">
+                <div class="hour-marker">2 PM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                </div>
+            </div>
+
+            <!-- 3 PM -->
+            <div style="top: 420px;">
+                <div class="hour-marker">3 PM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                    <div class="meeting-bridge" style="left: 150px; width: 400px;">
+                        <div class="bridge-content">Product Planning Session</div>
+                        <div class="bridge-time">3:00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4 PM -->
+            <div style="top: 490px;">
+                <div class="hour-marker">4 PM</div>
+                <div class="river-section">
+                    <div class="free-water"></div>
+                </div>
+            </div>
+        </div>
+
+        <button class="add-meeting">+</button>
+        
+        <div class="water-plants"></div>
+    </div>
+</body>
+</html>

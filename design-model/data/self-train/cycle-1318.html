@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Calendar</title>
+    <style>
+        :root {
+            --primary-bg: #0a0f1a;
+            --secondary-bg: #1a2332;
+            --surface: #243244;
+            --surface-elevated: #2d3f56;
+            --accent-warm: #ff6b47;
+            --accent-cool: #4dabf7;
+            --text-primary: #ffffff;
+            --text-secondary: #8da4c7;
+            --text-muted: #5c7299;
+            --energy-high: #51cf66;
+            --energy-mid: #ffd43b;
+            --energy-low: #ff8787;
+            --energy-valley: #339af0;
+            --border: rgba(255, 255, 255, 0.08);
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            height: 100vh;
+            gap: 32px;
+            padding: 32px;
+        }
+
+        .sidebar {
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--accent-warm), var(--accent-cool));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .energy-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .legend-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .legend-item:hover {
+            background: var(--surface);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .legend-dot.high { background: var(--energy-high); }
+        .legend-dot.mid { background: var(--energy-mid); }
+        .legend-dot.low { background: var(--energy-low); }
+        .legend-dot.valley { background: var(--energy-valley); }
+
+        .legend-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .stats {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .stat-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .calendar-container {
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 32px;
+            overflow: hidden;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .month-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            background: var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .day-header {
+            background: var(--surface-elevated);
+            padding: 16px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .day-cell {
+            background: var(--surface);
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .day-cell:hover {
+            background: var(--surface-elevated);
+            transform: scale(1.02);
+            z-index: 2;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .day-number {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            z-index: 1;
+        }
+
+        .energy-terrain {
+            flex: 1;
+            display: flex;
+            align-items: end;
+            padding: 8px;
+            gap: 1px;
+        }
+
+        .energy-bar {
+            flex: 1;
+            background: var(--energy-high);
+            border-radius: 1px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .energy-bar.morning {
+            height: 80%;
+            background: var(--energy-high);
+        }
+
+        .energy-bar.late-morning {
+            height: 70%;
+            background: var(--energy-mid);
+        }
+
+        .energy-bar.noon {
+            height: 60%;
+            background: var(--energy-mid);
+        }
+
+        .energy-bar.post-lunch {
+            height: 25%;
+            background: var(--energy-valley);
+        }
+
+        .energy-bar.afternoon {
+            height: 45%;
+            background: var(--energy-low);
+        }
+
+        .energy-bar.evening {
+            height: 55%;
+            background: var(--energy-mid);
+        }
+
+        .energy-bar.night {
+            height: 30%;
+            background: var(--energy-low);
+        }
+
+        .energy-bar.late-night {
+            height: 15%;
+            background: var(--energy-valley);
+        }
+
+        .day-cell.today {
+            background: linear-gradient(135deg, var(--accent-warm), var(--accent-cool));
+            background-size: 200% 200%;
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        .day-cell.today .day-number {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .day-cell.other-month {
+            opacity: 0.3;
+        }
+
+        .day-cell.other-month .energy-bar {
+            opacity: 0.5;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: var(--primary-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .day-cell:hover .tooltip {
+            opacity: 1;
+            transform: translateY(-4px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>Energy Calendar</h1>
+                <p>Track your daily energy patterns and optimize your schedule around natural rhythms</p>
+            </div>
+            
+            <div class="energy-legend">
+                <div class="legend-title">Energy Levels</div>
+                <div class="legend-item">
+                    <div class="legend-dot high"></div>
+                    <div class="legend-text">High Energy (Morning)</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot mid"></div>
+                    <div class="legend-text">Medium Energy</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot low"></div>
+                    <div class="legend-text">Low Energy</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot valley"></div>
+                    <div class="legend-text">Energy Valley (Post-lunch)</div>
+                </div>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Peak Hours</span>
+                    <span class="stat-value">8-10 AM</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Valley Hours</span>
+                    <span class="stat-value">2-3 PM</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Average Energy</span>
+                    <span class="stat-value">67%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Best Day Type</span>
+                    <span class="stat-value">Tuesday</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="calendar-container">
+            <div class="calendar-header">
+                <h2 class="month-title">November 2024</h2>
+            </div>
+            
+            <div class="calendar-grid">
+                <div class="day-header">Sun</div>
+                <div class="day-header">Mon</div>
+                <div class="day-header">Tue</div>
+                <div class="day-header">Wed</div>
+                <div class="day-header">Thu</div>
+                <div class="day-header">Fri</div>
+                <div class="day-header">Sat</div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">27</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">28</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">29</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">30</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">31</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">1</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                    <div class="tooltip">Energy: High morning, valley at 2PM</div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">2</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">3</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">4</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">5</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">6</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">7</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">8</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">9</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">10</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">11</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">12</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell today">
+                    <div class="day-number">13</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                    <div class="tooltip">Today - Peak at 9AM, valley at 2PM</div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">14</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">15</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">16</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">17</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">18</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">19</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">20</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">21</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">22</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">23</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">24</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">25</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">26</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">27</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">28</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">29</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell">
+                    <div class="day-number">30</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+                
+                <div class="day-cell other-month">
+                    <div class="day-number">1</div>
+                    <div class="energy-terrain">
+                        <div class="energy-bar morning"></div>
+                        <div class="energy-bar late-morning"></div>
+                        <div class="energy-bar noon"></div>
+                        <div class="energy-bar post-lunch"></div>
+                        <div class="energy-bar afternoon"></div>
+                        <div class="energy-bar evening"></div>
+                        <div class="energy-bar night"></div>
+                        <div class="energy-bar late-night"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

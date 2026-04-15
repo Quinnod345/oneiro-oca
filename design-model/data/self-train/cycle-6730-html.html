@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Debt Cathedral</title>
+    <style>
+        :root {
+            --parchment: #f7f3e9;
+            --shadow: #1a1612;
+            --gold-repair: #d4af37;
+            --torn-edge: #8b7355;
+            --moonlight: #e8e5df;
+            --starlight: rgba(255, 255, 255, 0.9);
+            --deep-sleep: #2c2416;
+            --rem-sleep: #4a3d2a;
+            --light-sleep: #6b5d4f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at top, #0a0908 0%, #22201e 50%, #0a0908 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            color: var(--parchment);
+            position: relative;
+        }
+
+        .cosmos {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--starlight);
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.9; }
+        }
+
+        .cathedral-viewport {
+            position: absolute;
+            width: 800px;
+            height: 600px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            perspective: 1200px;
+        }
+
+        .cathedral {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-5deg) rotateY(15deg);
+            transition: transform 0.6s ease;
+        }
+
+        .foundation {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 120px;
+            background: linear-gradient(to top, var(--deep-sleep) 0%, transparent 100%);
+            transform: rotateX(90deg) translateZ(-60px);
+            opacity: 0.9;
+        }
+
+        .foundation::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 20px,
+                rgba(212, 175, 55, 0.1) 20px,
+                rgba(212, 175, 55, 0.1) 22px
+            );
+        }
+
+        .wall {
+            position: absolute;
+            background: var(--parchment);
+            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.1);
+        }
+
+        .wall-front {
+            width: 400px;
+            height: 450px;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%) translateZ(200px);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        }
+
+        .wall-left {
+            width: 300px;
+            height: 400px;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-100%) rotateY(90deg) translateZ(150px);
+            clip-path: polygon(0% 0%, 0% 100%, 100% 100%, 100% 20%);
+        }
+
+        .wall-right {
+            width: 300px;
+            height: 400px;
+            bottom: 0;
+            right: 50%;
+            transform: translateX(100%) rotateY(-90deg) translateZ(150px);
+            clip-path: polygon(0% 20%, 0% 100%, 100% 100%, 100% 0%);
+        }
+
+        .tear {
+            position: absolute;
+            background: var(--shadow);
+            clip-path: polygon(
+                20% 0%, 40% 15%, 35% 40%, 50% 60%, 45% 85%, 60% 100%,
+                55% 85%, 48% 60%, 38% 40%, 43% 15%, 25% 0%
+            );
+            opacity: 0.8;
+            animation: flutter 4s ease-in-out infinite;
+        }
+
+        @keyframes flutter {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            50% { transform: translateX(5px) rotate(2deg); }
+        }
+
+        .buttress {
+            position: absolute;
+            width: 80px;
+            height: 200px;
+            background: linear-gradient(135deg, var(--rem-sleep) 0%, transparent 60%);
+            bottom: 100px;
+            transform-origin: bottom;
+            opacity: 0.7;
+        }
+
+        .buttress-left-1 {
+            left: 20%;
+            transform: rotateZ(-30deg) rotateY(20deg);
+        }
+
+        .buttress-left-2 {
+            left: 35%;
+            transform: rotateZ(-25deg) rotateY(15deg);
+        }
+
+        .buttress-right-1 {
+            right: 20%;
+            transform: rotateZ(30deg) rotateY(-20deg);
+        }
+
+        .buttress-right-2 {
+            right: 35%;
+            transform: rotateZ(25deg) rotateY(-15deg);
+        }
+
+        .window {
+            position: absolute;
+            width: 60px;
+            height: 120px;
+            background: radial-gradient(ellipse at center, var(--light-sleep) 0%, transparent 70%);
+            border: 2px solid var(--parchment);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            opacity: 0.6;
+        }
+
+        .spire {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 40px solid transparent;
+            border-right: 40px solid transparent;
+            border-bottom: 180px solid var(--parchment);
+            top: -150px;
+            left: 50%;
+            transform: translateX(-50%);
+            filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.3));
+        }
+
+        .spire::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 60px;
+            background: var(--gold-repair);
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0.7;
+            clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 20% 100%);
+        }
+
+        .kintsugi-vein {
+            position: absolute;
+            background: var(--gold-repair);
+            opacity: 0;
+            animation: gold-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes gold-pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        .interface {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 320px;
+            z-index: 10;
+        }
+
+        .sleep-input {
+            background: rgba(247, 243, 233, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(247, 243, 233, 0.2);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .input-label {
+            font-size: 14px;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+
+        .hours-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .hour-btn {
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: 1px solid rgba(247, 243, 233, 0.3);
+            color: var(--parchment);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .hour-btn:hover {
+            background: rgba(247, 243, 233, 0.1);
+            border-color: var(--gold-repair);
+        }
+
+        .hour-btn.selected {
+            background: var(--gold-repair);
+            color: var(--shadow);
+            border-color: var(--gold-repair);
+        }
+
+        .sleep-debt-display {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            text-align: right;
+            z-index: 10;
+        }
+
+        .debt-label {
+            font-size: 12px;
+            opacity: 0.6;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .debt-hours {
+            font-size: 48px;
+            font-weight: 100;
+            letter-spacing: -0.02em;
+        }
+
+        .debt-suffix {
+            font-size: 14px;
+            opacity: 0.7;
+            margin-left: 8px;
+        }
+
+        .repair-animation {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .gold-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--gold-repair);
+            border-radius: 50%;
+            opacity: 0;
+            animation: float-up 3s ease-out;
+        }
+
+        @keyframes float-up {
+            0% { 
+                opacity: 0;
+                transform: translateY(50px) scale(0);
+            }
+            50% {
+                opacity: 1;
+                transform: translateY(-20px) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(0.5);
+            }
+        }
+
+        .cathedral:hover {
+            transform: rotateX(-8deg) rotateY(25deg);
+        }
+
+        .moon {
+            position: absolute;
+            top: 100px;
+            right: 200px;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle at 70% 70%, var(--moonlight) 0%, rgba(232, 229, 223, 0.6) 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 40px rgba(232, 229, 223, 0.4);
+        }
+
+        .sleep-quality {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            display: flex;
+            gap: 24px;
+            z-index: 10;
+        }
+
+        .quality-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0.7;
+        }
+
+        .quality-indicator {
+            width: 24px;
+            height: 24px;
+            background: var(--parchment);
+            opacity: 0.3;
+        }
+
+        .quality-deep { background: var(--deep-sleep); }
+        .quality-rem { background: var(--rem-sleep); }
+        .quality-light { background: var(--light-sleep); }
+
+        .quality-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmos">
+        <div class="star" style="top: 10%; left: 15%; animation-delay: 0s;"></div>
+        <div class="star" style="top: 20%; left: 80%; animation-delay: 0.5s;"></div>
+        <div class="star" style="top: 60%; left: 25%; animation-delay: 1s;"></div>
+        <div class="star" style="top: 75%; left: 90%; animation-delay: 1.5s;"></div>
+        <div class="star" style="top: 40%; left: 60%; animation-delay: 2s;"></div>
+        <div class="star" style="top: 85%; left: 45%; animation-delay: 2.5s;"></div>
+    </div>
+
+    <div class="moon"></div>
+
+    <div class="interface">
+        <div class="sleep-input">
+            <div class="input-label">LAST NIGHT'S SLEEP</div>
+            <div class="hours-grid">
+                <button class="hour-btn">1</button>
+                <button class="hour-btn">2</button>
+                <button class="hour-btn">3</button>
+                <button class="hour-btn">4</button>
+                <button class="hour-btn">5</button>
+                <button class="hour-btn">6</button>
+                <button class="hour-btn selected">7</button>
+                <button class="hour-btn">8</button>
+            </div>
+            <div class="input-label" style="margin-top: 16px;">SLEEP QUALITY</div>
+        </div>
+    </div>
+
+    <div class="sleep-debt-display">
+        <div class="debt-label">Accumulated Debt</div>
+        <div class="debt-hours">14<span class="debt-suffix">hours</span></div>
+    </div>
+
+    <div class="cathedral-viewport">
+        <div class="cathedral">
+            <div class="foundation"></div>
+            
+            <div class="wall wall-front">
+                <div class="tear" style="width: 30px; height: 80px; top: 120px; left: 40%;"></div>
+                <div class="tear" style="width: 20px; height: 60px; top: 200px; right: 30%;"></div>
+                <div class="window" style="top: 150px; left: 50%; transform: translateX(-50%);"></div>
+            </div>
+            
+            <div class="wall wall-left">
+                <div class="tear" style="width: 25px; height: 70px; top: 100px; left: 30%;"></div>
+                <div class="window" style="top: 120px; left: 40%;"></div>
+            </div>
+            
+            <div class="wall wall-right">
+                <div class="tear" style="width: 35px; height: 90px; top: 80px; right: 25%;"></div>
+                <div class="window" style="top: 140px; right: 35%;"></div>
+            </div>
+            
+            <div class="buttress buttress-left-1">
+                <div class="kintsugi-vein" style="width: 3px; height: 80px; top: 40px; left: 50%;"></div>
+            </div>
+            <div class="buttress buttress-left-2"></div>
+            <div class="buttress buttress-right-1">
+                <div class="kintsugi-vein" style="width: 2px; height: 60px; top: 60px; right: 40%;"></div>
+            </div>
+            <div class="buttress buttress-right-2"></div>
+            
+            <div class="spire"></div>
+            
+            <div class="repair-animation">
+                <div class="gold-particle" style="left: 45%; bottom: 200px;"></div>
+                <div class="gold-particle" style="left: 55%; bottom: 250px; animation-delay: 0.5s;"></div>
+                <div class="gold-particle" style="left: 50%; bottom: 300px; animation-delay: 1s;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sleep-quality">
+        <div class="quality-item">
+            <div class="quality-indicator quality-deep"></div>
+            <span class="quality-label">Deep</span>
+        </div>
+        <div class="quality-item">
+            <div class="quality-indicator quality-rem"></div>
+            <span class="quality-label">REM</span>
+        </div>
+        <div class="quality-item">
+            <div class="quality-indicator quality-light"></div>
+            <span class="quality-label">Light</span>
+        </div>
+    </div>
+
+    <script>
+        const hourButtons = document.querySelectorAll('.hour-btn');
+        const cathedral = document.querySelector('.cathedral');
+        const debtDisplay = document.querySelector('.debt-hours');
+        
+        let totalDebt = 14;
+        let selectedHours = 7;
+        
+        hourButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                hourButtons.forEach(b => b.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedHours = parseInt(this.textContent);
+                
+                updateDebt();
+                animateRepair();
+            });
+        });
+        
+        function updateDebt() {
+            const deficit = 8 - selectedHours;
+            totalDebt = Math.max(0, totalDebt + deficit);
+            debtDisplay.innerHTML = `${totalDebt}<span class="debt-suffix">hours</span>`;
+            
+            // Adjust cathedral damage based on debt
+            const damage = Math.min(totalDebt / 20, 1);
+            document.querySelectorAll('.tear').forEach((tear, i) => {
+                tear.style.opacity = 0.3 + (damage * 0.5);
+            });
+            
+            document.querySelectorAll('.kintsugi-vein').forEach((vein, i) => {
+                vein.style.opacity = selectedHours >= 8 ? 0.8 : 0.3;
+            });
+        }
+        
+        function animateRepair() {
+            if (selectedHours >= 8) {
+                const particles = document.querySelectorAll('.gold-particle');
+                particles.forEach((p, i) => {
+                    setTimeout(() => {
+                        p.style.animation = 'none';
+                        void p.offsetWidth;
+                        p.style.animation = 'float-up 3s ease-out';
+                    }, i * 200);
+                });
+            }
+        }
+        
+        // Create more stars
+        const cosmos = document.querySelector('.cosmos');
+        for (let i = 0; i < 50; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.width = Math.random() * 2 + 1 + 'px';
+            star.style.height = star.style.width;
+            cosmos.appendChild(star);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silent Auction of Unspoken Words</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: #fafafa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .void-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #fafafa;
+        }
+
+        .input-vessel {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .word-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #0a0a0a;
+            padding: 12px 0;
+            font-size: 1.125rem;
+            color: #0a0a0a;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .word-input::placeholder {
+            color: #999;
+        }
+
+        .release {
+            background: none;
+            border: none;
+            font-size: 0.875rem;
+            color: #0a0a0a;
+            cursor: pointer;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 12px 24px;
+        }
+
+        .floating-word {
+            position: absolute;
+            font-size: 1.25rem;
+            color: #0a0a0a;
+            white-space: nowrap;
+            user-select: none;
+            cursor: default;
+            animation: drift-and-fade var(--duration) linear forwards;
+            opacity: 0;
+        }
+
+        @keyframes drift-and-fade {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0);
+            }
+            10% {
+                opacity: 0.8;
+            }
+            90% {
+                opacity: 0.8;
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--drift-x), var(--drift-y));
+            }
+        }
+
+        .auction-title {
+            position: absolute;
+            top: 60px;
+            left: 60px;
+            font-size: 0.75rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: #0a0a0a;
+        }
+    </style>
+</head>
+<body>
+    <div class="void-canvas">
+        <h1 class="auction-title">Silent Auction of Unspoken Words</h1>
+        
+        <div class="input-vessel">
+            <input type="text" class="word-input" placeholder="What remains unspoken..." id="wordInput">
+            <button class="release" id="releaseBtn">Release</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.querySelector('.void-canvas');
+        const input = document.getElementById('wordInput');
+        const releaseBtn = document.getElementById('releaseBtn');
+
+        function releaseWord() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            const words = text.split(' ');
+            words.forEach((word, index) => {
+                setTimeout(() => {
+                    createFloatingWord(word);
+                }, index * 200);
+            });
+
+            input.value = '';
+        }
+
+        function createFloatingWord(text) {
+            const word = document.createElement('div');
+            word.className = 'floating-word';
+            word.textContent = text;
+
+            const startX = Math.random() * (window.innerWidth - 200) + 100;
+            const startY = window.innerHeight - 200;
+
+            word.style.left = startX + 'px';
+            word.style.top = startY + 'px';
+
+            const driftX = (Math.random() - 0.5) * 300;
+            const driftY = -Math.random() * 400 - 300;
+            const duration = Math.random() * 10 + 15;
+
+            word.style.setProperty('--drift-x', driftX + 'px');
+            word.style.setProperty('--drift-y', driftY + 'px');
+            word.style.setProperty('--duration', duration + 's');
+
+            canvas.appendChild(word);
+
+            setTimeout(() => {
+                word.remove();
+            }, duration * 1000);
+        }
+
+        releaseBtn.addEventListener('click', releaseWord);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                releaseWord();
+            }
+        });
+
+        // Initial floating words
+        const initialWords = ['never', 'forgotten', 'whispered', 'silence', 'remains', 'echoes'];
+        initialWords.forEach((word, index) => {
+            setTimeout(() => {
+                createFloatingWord(word);
+            }, index * 1000 + 500);
+        });
+    </script>
+</body>
+</html>

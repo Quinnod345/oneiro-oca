@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus State - Menu Bar App</title>
+    <style>
+        :root {
+            --focus-primary: #007AFF;
+            --focus-secondary: #5AC8FA;
+            --focus-tertiary: #AF52DE;
+            --bg-primary: rgba(0, 0, 0, 0.9);
+            --bg-secondary: rgba(255, 255, 255, 0.1);
+            --text-primary: rgba(255, 255, 255, 0.9);
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --border-subtle: rgba(255, 255, 255, 0.12);
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --blur-amount: blur(20px);
+            --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 50%, #1a1a1a 100%);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: var(--bg-primary);
+            backdrop-filter: var(--blur-amount);
+            border-bottom: 1px solid var(--border-subtle);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 16px;
+        }
+        
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            margin: 0 2px;
+            border-radius: 4px;
+            transition: all 0.2s var(--transition-smooth);
+            cursor: pointer;
+        }
+        
+        .menu-item:hover {
+            background: var(--bg-secondary);
+        }
+        
+        .focus-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .focus-core {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--focus-primary);
+            position: relative;
+            animation: pulse 4s ease-in-out infinite;
+        }
+        
+        .focus-ring {
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border: 1px solid var(--focus-primary);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: expand 3s ease-out infinite;
+        }
+        
+        .focus-ring:nth-child(2) {
+            animation-delay: 1s;
+        }
+        
+        .focus-ring:nth-child(3) {
+            animation-delay: 2s;
+        }
+        
+        .main-content {
+            margin-top: 28px;
+            height: calc(100vh - 28px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .ambient-display {
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .focus-state-title {
+            font-size: 48px;
+            font-weight: 300;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+        
+        .focus-state-subtitle {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+        }
+        
+        .ambient-visualization {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 48px;
+        }
+        
+        .breathing-circle {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, 
+                var(--focus-primary) 0%, 
+                var(--focus-secondary) 50%, 
+                transparent 100%);
+            opacity: 0.6;
+            animation: breathe 6s ease-in-out infinite;
+            position: absolute;
+        }
+        
+        .breathing-circle:nth-child(2) {
+            animation-delay: 2s;
+            background: radial-gradient(circle at center, 
+                var(--focus-secondary) 0%, 
+                var(--focus-tertiary) 50%, 
+                transparent 100%);
+        }
+        
+        .breathing-circle:nth-child(3) {
+            animation-delay: 4s;
+            background: radial-gradient(circle at center, 
+                var(--focus-tertiary) 0%, 
+                var(--focus-primary) 50%, 
+                transparent 100%);
+        }
+        
+        .focus-metrics {
+            display: flex;
+            gap: 48px;
+            align-items: center;
+        }
+        
+        .metric {
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 200;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .ambient-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--focus-primary);
+            border-radius: 50%;
+            opacity: 0;
+            animation: float 15s linear infinite;
+        }
+        
+        .particle:nth-child(odd) {
+            background: var(--focus-secondary);
+        }
+        
+        .particle:nth-child(3n) {
+            background: var(--focus-tertiary);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+        
+        @keyframes expand {
+            0% {
+                transform: scale(1);
+                opacity: 0.3;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 0.1;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes breathe {
+            0%, 100% {
+                transform: scale(0.8);
+                opacity: 0.4;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) translateX(200px);
+                opacity: 0;
+            }
+        }
+        
+        .particle:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 20%; animation-delay: 2s; }
+        .particle:nth-child(3) { left: 30%; animation-delay: 4s; }
+        .particle:nth-child(4) { left: 40%; animation-delay: 6s; }
+        .particle:nth-child(5) { left: 50%; animation-delay: 8s; }
+        .particle:nth-child(6) { left: 60%; animation-delay: 10s; }
+        .particle:nth-child(7) { left: 70%; animation-delay: 12s; }
+        .particle:nth-child(8) { left: 80%; animation-delay: 14s; }
+        .particle:nth-child(9) { left: 90%; animation-delay: 16s; }
+        .particle:nth-child(10) { left: 25%; animation-delay: 18s; }
+        .particle:nth-child(11) { left: 75%; animation-delay: 20s; }
+        .particle:nth-child(12) { left: 15%; animation-delay: 22s; }
+    </style>
+</head>
+<body>
+    <div class="menu-bar">
+        <div class="menu-item">
+            <div class="focus-indicator">
+                <div class="focus-core"></div>
+                <div class="focus-ring"></div>
+                <div class="focus-ring"></div>
+                <div class="focus-ring"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="ambient-display">
+            <h1 class="focus-state-title">Deep Focus</h1>
+            <p class="focus-state-subtitle">Your mind is clear and present</p>
+            
+            <div class="ambient-visualization">
+                <div class="breathing-circle"></div>
+                <div class="breathing-circle"></div>
+                <div class="breathing-circle"></div>
+            </div>
+            
+            <div class="focus-metrics">
+                <div class="metric">
+                    <div class="metric-value">92%</div>
+                    <div class="metric-label">Clarity</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">∞</div>
+                    <div class="metric-label">Flow</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">7.2</div>
+                    <div class="metric-label">Depth</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ambient-particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+    </div>
+</body>
+</html>

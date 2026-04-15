@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Timeline</title>
+    <style>
+        :root {
+            --color-primary: #2d5016;
+            --color-primary-light: #4a7c29;
+            --color-secondary: #d4742c;
+            --color-accent: #f4e5d3;
+            --color-surface: #fefefe;
+            --color-surface-alt: #f8f6f3;
+            --color-text: #1a1a1a;
+            --color-text-muted: #666666;
+            --color-border: #e0ddd7;
+            --color-flow: #8bb359;
+            --shadow-soft: 0 2px 8px rgba(45, 80, 22, 0.08);
+            --shadow-medium: 0 4px 16px rgba(45, 80, 22, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-alt) 100%);
+            color: var(--color-text);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            padding: 32px;
+            gap: 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 8px;
+        }
+
+        .recipe-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--color-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .recipe-meta {
+            display: flex;
+            gap: 24px;
+            color: var(--color-text-muted);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .timeline-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            gap: 40px;
+            height: 100%;
+            position: relative;
+        }
+
+        .ingredients-panel {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--color-border);
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--color-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            background: var(--color-surface-alt);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .ingredient-item:hover {
+            border-color: var(--color-flow);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .ingredient-name {
+            font-weight: 500;
+            color: var(--color-text);
+            font-size: 14px;
+        }
+
+        .ingredient-amount {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-text-muted);
+            background: var(--color-accent);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+        }
+
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            padding: 20px 0;
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, var(--color-flow) 0%, var(--color-secondary) 100%);
+            border-radius: 2px;
+            transform: translateX(-50%);
+        }
+
+        .step {
+            position: relative;
+            background: var(--color-surface);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: var(--shadow-medium);
+            border: 2px solid var(--color-border);
+            margin: 0 20px;
+            transition: all 0.3s ease;
+        }
+
+        .step:hover {
+            border-color: var(--color-flow);
+            transform: scale(1.02);
+        }
+
+        .step::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: -15px;
+            width: 24px;
+            height: 24px;
+            background: var(--color-secondary);
+            border-radius: 50%;
+            transform: translateX(-50%);
+            border: 4px solid var(--color-surface);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .step-number {
+            position: absolute;
+            top: -8px;
+            left: 16px;
+            background: var(--color-primary);
+            color: var(--color-surface);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .step-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--color-primary);
+            margin-bottom: 8px;
+            padding-left: 8px;
+        }
+
+        .step-description {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--color-text);
+            margin-bottom: 12px;
+        }
+
+        .step-ingredients {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .step-ingredient {
+            background: var(--color-accent);
+            color: var(--color-primary);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid var(--color-flow);
+        }
+
+        .step-time {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-secondary);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .final-dish {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .dish-image {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+            border-radius: 50%;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            box-shadow: var(--shadow-medium);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dish-image::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .dish-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--color-primary);
+            margin-bottom: 8px;
+        }
+
+        .dish-description {
+            font-size: 14px;
+            color: var(--color-text-muted);
+            line-height: 1.4;
+            margin-bottom: 16px;
+        }
+
+        .dish-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 12px;
+            background: var(--color-surface-alt);
+            border-radius: var(--radius-sm);
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--color-secondary);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        .flow-line {
+            position: absolute;
+            height: 2px;
+            background: var(--color-flow);
+            border-radius: 1px;
+            opacity: 0;
+            animation: flow 2s ease-in-out infinite;
+        }
+
+        @keyframes flow {
+            0%, 100% { opacity: 0; transform: scaleX(0); }
+            50% { opacity: 1; transform: scaleX(1); }
+        }
+
+        .flow-line.left {
+            left: 280px;
+            width: 100px;
+            top: 50%;
+            animation-delay: 0s;
+        }
+
+        .flow-line.right {
+            right: 280px;
+            width: 100px;
+            top: 50%;
+            animation-delay: 1s;
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="recipe-title">Mushroom Risotto</h1>
+            <div class="recipe-meta">
+                <span>⏱ Total: 45 min</span>
+                <span>👥 Serves: 4</span>
+                <span>🔥 Difficulty: Medium</span>
+            </div>
+        </header>
+
+        <div class="timeline-container">
+            <div class="ingredients-panel">
+                <h2 class="panel-title">
+                    <span>🥘</span>
+                    Ingredients
+                </h2>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Arborio Rice</span>
+                    <span class="ingredient-amount">1 cup</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Mixed Mushrooms</span>
+                    <span class="ingredient-amount">8 oz</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Vegetable Broth</span>
+                    <span class="ingredient-amount">4 cups</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">White Wine</span>
+                    <span class="ingredient-amount">½ cup</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Onion</span>
+                    <span class="ingredient-amount">1 medium</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Garlic</span>
+                    <span class="ingredient-amount">3 cloves</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Parmesan</span>
+                    <span class="ingredient-amount">½ cup</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Butter</span>
+                    <span class="ingredient-amount">3 tbsp</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Olive Oil</span>
+                    <span class="ingredient-amount">2 tbsp</span>
+                </div>
+                <div class="ingredient-item">
+                    <span class="ingredient-name">Fresh Thyme</span>
+                    <span class="ingredient-amount">1 tsp</span>
+                </div>
+            </div>
+
+            <div class="timeline">
+                <div class="flow-line left"></div>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Prepare Base</h3>
+                    <p class="step-description">Warm broth in a separate pot. Dice onion finely and mince garlic.</p>
+                    <div class="step-ingredients">
+                        <span class="step-ingredient">Broth</span>
+                        <span class="step-ingredient">Onion</span>
+                        <span class="step-ingredient">Garlic</span>
+                    </div>
+                    <div class="step-time">⏱ 5 min</div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Sauté Mushrooms</h3>
+                    <p class="step-description">Heat oil in large pan. Cook sliced mushrooms until golden and moisture evaporates.</p>
+                    <div class="step-ingredients">
+                        <span class="step-ingredient">Mushrooms</span>
+                        <span class="step-ingredient">Oil</span>
+                        <span class="step-ingredient">Thyme</span>
+                    </div>
+                    <div class="step-time">⏱ 8 min</div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Toast Rice</h3>
+                    <p class="step-description">Add butter, onion, and garlic. Cook until fragrant. Add rice and toast for 2 minutes.</p>
+                    <div class="step-ingredients">
+                        <span class="step-ingredient">Rice</span>
+                        <span class="step-ingredient">Butter</span>
+                        <span class="step-ingredient">Onion Mix</span>
+                    </div>
+                    <div class="step-time">⏱ 5 min</div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3 class="step-title">Deglaze & Simmer</h3>
+                    <p class="step-description">Add wine and stir until absorbed. Gradually add warm broth, stirring constantly.</p>
+                    <div class="step-ingredients">
+                        <span class="step-ingredient">Wine</span>
+                        <span class="step-ingredient">Warm Broth</span>
+                    </div>
+                    <div class="step-time">⏱ 20 min</div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <h3 class="step-title">Finish & Combine</h3>
+                    <p class="step-description">Fold in sautéed mushrooms and grated Parmesan. Adjust seasoning and consistency.</p>
+                    <div class="step-ingredients">
+                        <span class="step-ingredient">Mushrooms</span>
+                        <span class="step-ingredient">Parmesan</span>
+                        <span class="step-ingredient">Butter</span>
+                    </div>
+                    <div class="step-time">⏱ 7 min</div>
+                </div>
+
+                <div class="flow-line right"></div>
+            </div>
+
+            <div class="final-dish">
+                <div class="dish-image">🍚</div>
+                <h2 class="dish-name">Creamy Mushroom Risotto</h2>
+                <p class="dish-description">Rich, creamy arborio rice with earthy mushrooms, finished with Parmesan and fresh herbs.</p>
+                
+                <div class="dish-stats">
+                    <div class="stat">
+                        <span class="stat-value">320</span>
+                        <span class="stat-label">Calories</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">12g</span>
+                        <span class="stat-label">Protein</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">45min</span>
+                        <span class="stat-label">Cook Time</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">4.8★</span>
+                        <span class="stat-label">Rating</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
