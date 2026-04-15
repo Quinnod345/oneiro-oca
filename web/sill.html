@@ -345,6 +345,31 @@ section.panel h2 {
   </section>
 
   <section class="panel">
+    <h2>phase 5 · critique embeddings</h2>
+    <div class="stats" style="grid-template-columns: 1fr 1fr;">
+      <div class="stat">
+        <div class="label">captured</div>
+        <div class="value" id="critiques-captured">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">embedded</div>
+        <div class="value" id="critiques-embedded">—</div>
+      </div>
+    </div>
+    <div class="stats" style="grid-template-columns: 1fr; margin-top: 12px;">
+      <div class="stat">
+        <div class="label">self-train workers</div>
+        <div class="value small" id="worker-pool">—</div>
+      </div>
+    </div>
+    <div class="sparkline">
+      <div class="axis-label">
+        <span>last embed: <span id="critiques-last-embed">never</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
     <h2>self_train engine</h2>
     <div class="stats" style="grid-template-columns: 1fr 1fr;">
       <div class="stat">
@@ -432,6 +457,20 @@ function renderStats(selfTrain, iters) {
     const refs = iters.references || { seeded: 0, auto: 0, total: 0 };
     document.getElementById('refs-seeded').textContent = refs.seeded ?? 0;
     document.getElementById('refs-auto').textContent = refs.auto ?? 0;
+
+    // Phase 5 critique stats
+    const critiques = iters.critiques || { captured: 0, embedded: 0, last_embed: null };
+    document.getElementById('critiques-captured').textContent = critiques.captured ?? 0;
+    document.getElementById('critiques-embedded').textContent = critiques.embedded ?? 0;
+    document.getElementById('critiques-last-embed').textContent = critiques.last_embed
+      ? new Date(critiques.last_embed).toLocaleString()
+      : 'never';
+
+    // Self-train worker pool
+    const st = iters.self_train || { worker_pool_size: 1 };
+    const poolSize = st.worker_pool_size ?? 1;
+    document.getElementById('worker-pool').textContent =
+      `${poolSize} ${poolSize === 1 ? 'worker' : 'workers'} (parallel)`;
 
     // recent iters list
     const listEl = document.getElementById('iter-list');
