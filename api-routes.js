@@ -1460,6 +1460,35 @@ ocaRouter.get('/oca/design/active-project/iterations', async (req, res) => {
       } catch {}
     }
 
+    // Count Phase 5 critiques — captured records on disk + embedded count
+    // from the state file. Gives the dashboard a progress signal toward
+    // the critique-embedding training dataset target.
+    const critiquesDir = join(here, 'design-model', 'data', 'critiques');
+    let critiques_captured = 0;
+    if (existsSync(critiquesDir)) {
+      try {
+        critiques_captured = readdirSync(critiquesDir)
+          .filter(n => n.startsWith('cycle-') && n.endsWith('.json'))
+          .length;
+      } catch {}
+    }
+    let critiques_embedded = 0;
+    let critiques_last_embed = null;
+    const critiquesStatePath = join(here, 'design-model', 'data', 'critique_embeddings_state.json');
+    if (existsSync(critiquesStatePath)) {
+      try {
+        const cst = JSON.parse(readFileSync(critiquesStatePath, 'utf-8'));
+        critiques_embedded = (cst.embedded_cycles || []).length;
+        critiques_last_embed = cst.last_embed_at || null;
+      } catch {}
+    }
+
+    // Self-train worker pool size (from env, matches cognitive-loop.js)
+    const workerPoolSize = Math.max(
+      1,
+      Math.min(4, parseInt(process.env.OCA_SELF_TRAIN_WORKERS || '2', 10))
+    );
+
     res.json({
       present: true,
       project: name,
@@ -1470,6 +1499,14 @@ ocaRouter.get('/oca/design/active-project/iterations', async (req, res) => {
         ? compiledCount / iterations.length
         : 0,
       references: { seeded: refs_seeded, auto: refs_auto, total: refs_seeded + refs_auto },
+      critiques: {
+        captured: critiques_captured,
+        embedded: critiques_embedded,
+        last_embed: critiques_last_embed,
+      },
+      self_train: {
+        worker_pool_size: workerPoolSize,
+      },
       recent,
     });
   } catch (e) {

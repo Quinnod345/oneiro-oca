@@ -1865,31 +1865,50 @@ function startConsolidationSchedule() {
 }
 
 // ═══════════════════════════════════════════════════
-// SELF-TRAIN DAEMON
-// Runs `self_train.py --forever` as a supervised subprocess. Sonnet/Opus
-// generate → render (html/swiftui/react) → Opus grades → MLX retrains the
-// design head every 10 cycles. This is the REAL engine per VISION.md;
-// `flywheel.js` is superseded. We spawn once at boot, capture stdout,
-// auto-restart on crash (exp-backoff capped at 10 min), and pause with
-// SIGSTOP / resume with SIGCONT during alert mode so the gateway isn't
-// contended while Quinn is actively at the keyboard.
+// SELF-TRAIN DAEMON POOL (parallel workers)
+//
+// Runs N parallel `self_train.py --forever --worker-id K --num-workers N`
+// subprocesses. Each worker independently generates samples via the
+// Anthropic API; cycle numbers are claimed atomically via a file lock
+// on self-train-state.json, and retrain runs under a non-blocking
+// try-lock so only one worker retrains at a time (others skip without
+// blocking).
+//
+// Default pool size: 2 workers.  On an M4 Max with typical API quotas
+// this roughly doubles the sample-production rate over a single worker
+// without blowing rate limits.  Override via OCA_SELF_TRAIN_WORKERS
+// env var.
+//
+// Alert-mode pausing: when Quinn is at the keyboard (mode=alert), all
+// workers get SIGSTOP so the gateway isn't contended; SIGCONT on idle.
+// Each worker has its own exp-backoff restart state; crashes in one
+// don't take down the others.
 // ═══════════════════════════════════════════════════
 
 const SELF_TRAIN_RESTART_BASE_MS = 10_000;   // 10s base delay on crash
 const SELF_TRAIN_RESTART_MAX_MS = 10 * 60_000; // cap at 10 min
 const SELF_TRAIN_ALERT_POLL_MS = 30_000;     // re-check mode every 30s while paused
+const SELF_TRAIN_NUM_WORKERS = Math.max(
+  1,
+  Math.min(4, parseInt(process.env.OCA_SELF_TRAIN_WORKERS || '2', 10))
+);
 
-let selfTrainProcess = null;
-let selfTrainPaused = false;
-let selfTrainRestartAttempt = 0;
-let selfTrainLastStart = 0;
-let selfTrainDesired = false;             // user/startup intent — should it be running?
-let selfTrainMilestoneCycle = 0;          // log every 50 cycles
+// Pool state — one entry per worker slot
+const selfTrainWorkers = Array.from({ length: SELF_TRAIN_NUM_WORKERS }, (_, id) => ({
+  id,
+  process: null,
+  paused: false,
+  restartAttempt: 0,
+  lastStart: 0,
+}));
+let selfTrainDesired = false;             // pool intent — should workers be running?
+let selfTrainMilestoneCycle = 0;          // log every 50 global cycles
 
 function parseSelfTrainLine(line) {
-  // Expected structured line: "[self-train] cycle N: <lang> <type> score=X.XX ..."
-  // Self_train.py emits other lines too; we pass them through verbatim.
-  const m = line.match(/^\[self-train\]\s+cycle\s+(\d+):\s+(\w+)\s+(\S+)\s+score=([\d.]+)/);
+  // Accept both worker-prefixed and unprefixed lines:
+  //   "[W0/2] [self-train] cycle 6820: swiftui brief score=0.520"
+  //   "[self-train] cycle 6820: swiftui brief score=0.520"
+  const m = line.match(/\[self-train\]\s+cycle\s+(\d+):\s+(\w+)\s+(\S+)\s+score=([\d.]+)/);
   if (!m) return null;
   return {
     cycle: parseInt(m[1], 10),
@@ -1899,19 +1918,28 @@ function parseSelfTrainLine(line) {
   };
 }
 
-async function spawnSelfTrain() {
+async function spawnSelfTrainWorker(worker) {
   const { spawn } = await import('child_process');
   const selfTrainScript = join(__dirname, 'design-model', 'self_train.py');
-  const child = spawn('python3', [selfTrainScript, '--forever'], {
+  const args = [
+    selfTrainScript,
+    '--forever',
+    '--worker-id', String(worker.id),
+    '--num-workers', String(SELF_TRAIN_NUM_WORKERS),
+  ];
+  const child = spawn('python3', args, {
     cwd: join(__dirname, 'design-model'),
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONDONTWRITEBYTECODE: '1' },
     detached: false, // stay in our process group so SIGTERM propagates
   });
 
-  selfTrainProcess = child;
-  selfTrainLastStart = Date.now();
-  console.log(`[oca] 🎨 self-train daemon started pid=${child.pid}`);
+  worker.process = child;
+  worker.lastStart = Date.now();
+  worker.paused = false;
+  console.log(`[oca] 🎨 self-train W${worker.id}/${SELF_TRAIN_NUM_WORKERS} started pid=${child.pid}`);
+
+  const tag = SELF_TRAIN_NUM_WORKERS > 1 ? `W${worker.id} ` : '';
 
   const handleLine = (stream) => (buf) => {
     const text = buf.toString();
@@ -1922,23 +1950,24 @@ async function spawnSelfTrain() {
       const parsed = parseSelfTrainLine(line);
       if (parsed) {
         console.log(
-          `[oca] 🎨 self-train #${parsed.cycle} ${parsed.language}/${parsed.kind} → ${parsed.score.toFixed(3)}`
+          `[oca] 🎨 ${tag}self-train #${parsed.cycle} ${parsed.language}/${parsed.kind} → ${parsed.score.toFixed(3)}`
         );
         // Emotion feedback on strong samples
         if (parsed.score >= 0.8) {
           try { oca.layers.emotion.processSuccess?.('self_train_strong'); } catch {}
         }
-        // Milestone log every 50 cycles
+        // Milestone log every 50 global cycles (shared across workers)
         if (parsed.cycle >= selfTrainMilestoneCycle + 50) {
           selfTrainMilestoneCycle = parsed.cycle;
-          console.log(`[oca] 🎨 self-train milestone: ${parsed.cycle} cycles`);
+          console.log(`[oca] 🎨 self-train milestone: ${parsed.cycle} total cycles`);
         }
-      } else if (line.startsWith('[retrain]') || /val_loss/.test(line)) {
-        console.log(`[oca] 🎨 self-train ${line}`);
+      } else if (line.startsWith('[retrain]') || /val_loss/.test(line) ||
+                 /\[refs\] (auto-injected|✨)/.test(line)) {
+        console.log(`[oca] 🎨 ${tag}self-train ${line}`);
       } else if (stream === 'stderr' && line.length > 0) {
         // Suppress noisy warnings but keep real errors
         if (!/DeprecationWarning|FutureWarning|UserWarning/.test(line)) {
-          console.log(`[oca] 🎨 self-train stderr: ${line.slice(0, 200)}`);
+          console.log(`[oca] 🎨 ${tag}self-train stderr: ${line.slice(0, 200)}`);
         }
       }
       // Silently drop other stdout (tqdm bars, progress lines, etc.)
@@ -1949,38 +1978,44 @@ async function spawnSelfTrain() {
   child.stderr.on('data', handleLine('stderr'));
 
   child.on('exit', (code, signal) => {
-    const ageMs = Date.now() - selfTrainLastStart;
+    const ageMs = Date.now() - worker.lastStart;
     console.log(
-      `[oca] 🎨 self-train exited code=${code} signal=${signal} after ${Math.round(ageMs / 1000)}s`
+      `[oca] 🎨 self-train W${worker.id} exited code=${code} signal=${signal} after ${Math.round(ageMs / 1000)}s`
     );
-    selfTrainProcess = null;
-    selfTrainPaused = false;
+    worker.process = null;
+    worker.paused = false;
 
     // Reset backoff if it ran successfully for > 2 min (healthy exit)
-    if (ageMs > 120_000) selfTrainRestartAttempt = 0;
+    if (ageMs > 120_000) worker.restartAttempt = 0;
 
     if (!selfTrainDesired) return; // intentional shutdown
 
     // Exponential backoff on repeated failures
     const delay = Math.min(
-      SELF_TRAIN_RESTART_BASE_MS * Math.pow(2, selfTrainRestartAttempt),
+      SELF_TRAIN_RESTART_BASE_MS * Math.pow(2, worker.restartAttempt),
       SELF_TRAIN_RESTART_MAX_MS
     );
-    selfTrainRestartAttempt++;
-    console.log(`[oca] 🎨 self-train restart scheduled in ${Math.round(delay / 1000)}s (attempt ${selfTrainRestartAttempt})`);
-    setTimeout(() => { if (selfTrainDesired) spawnSelfTrain().catch(e => console.error('[oca] 🎨 self-train respawn error:', e.message)); }, delay);
+    worker.restartAttempt++;
+    console.log(`[oca] 🎨 self-train W${worker.id} restart scheduled in ${Math.round(delay / 1000)}s (attempt ${worker.restartAttempt})`);
+    setTimeout(() => {
+      if (selfTrainDesired && !worker.process) {
+        spawnSelfTrainWorker(worker).catch(e =>
+          console.error(`[oca] 🎨 self-train W${worker.id} respawn error:`, e.message)
+        );
+      }
+    }, delay);
   });
 
   child.on('error', (err) => {
-    console.error('[oca] 🎨 self-train spawn error:', err.message);
+    console.error(`[oca] 🎨 self-train W${worker.id} spawn error:`, err.message);
   });
 }
 
 function startSelfTrainSchedule() {
   selfTrainDesired = true;
 
-  // Monitor alert mode and pause/resume the daemon so it doesn't contend for
-  // the Anthropic gateway while Quinn is actively working.
+  // Monitor alert mode and pause/resume ALL workers together so they don't
+  // contend for the Anthropic gateway while Quinn is actively working.
   const modeMonitor = () => {
     if (!selfTrainDesired) return;
     const mode = oca.layers.executive.determineMode?.(
@@ -1990,46 +2025,64 @@ function startSelfTrainSchedule() {
     );
     const shouldPause = mode === 'alert';
 
-    if (selfTrainProcess && shouldPause && !selfTrainPaused) {
-      try {
-        process.kill(selfTrainProcess.pid, 'SIGSTOP');
-        selfTrainPaused = true;
-        console.log('[oca] 🎨 self-train paused (alert mode)');
-      } catch (e) {
-        console.warn('[oca] 🎨 self-train SIGSTOP failed:', e.message);
+    for (const worker of selfTrainWorkers) {
+      if (!worker.process) continue;
+      if (shouldPause && !worker.paused) {
+        try {
+          process.kill(worker.process.pid, 'SIGSTOP');
+          worker.paused = true;
+        } catch (e) {
+          console.warn(`[oca] 🎨 self-train W${worker.id} SIGSTOP failed:`, e.message);
+        }
+      } else if (!shouldPause && worker.paused) {
+        try {
+          process.kill(worker.process.pid, 'SIGCONT');
+          worker.paused = false;
+        } catch (e) {
+          console.warn(`[oca] 🎨 self-train W${worker.id} SIGCONT failed:`, e.message);
+        }
       }
-    } else if (selfTrainProcess && !shouldPause && selfTrainPaused) {
-      try {
-        process.kill(selfTrainProcess.pid, 'SIGCONT');
-        selfTrainPaused = false;
-        console.log('[oca] 🎨 self-train resumed (idle)');
-      } catch (e) {
-        console.warn('[oca] 🎨 self-train SIGCONT failed:', e.message);
-      }
+    }
+    // Single log line summarizing pool pause state
+    const pausedCount = selfTrainWorkers.filter(w => w.paused).length;
+    if (shouldPause && pausedCount > 0 && pausedCount === selfTrainWorkers.filter(w => w.process).length) {
+      // (no-op — avoid spam; one-shot log would be nicer but this function is polled)
     }
 
     setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
   };
 
-  // First spawn after a short delay so consolidation and init settle
+  // First spawn after a short delay so consolidation and init settle.
+  // Stagger worker boots by 5s so they don't all hit the API at once.
   setTimeout(() => {
-    spawnSelfTrain().catch(e => console.error('[oca] 🎨 self-train initial spawn error:', e.message));
+    for (let i = 0; i < SELF_TRAIN_NUM_WORKERS; i++) {
+      const worker = selfTrainWorkers[i];
+      setTimeout(() => {
+        spawnSelfTrainWorker(worker).catch(e =>
+          console.error(`[oca] 🎨 self-train W${worker.id} initial spawn error:`, e.message)
+        );
+      }, i * 5_000);
+    }
     setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
   }, 60_000);
 
-  console.log('[oca] 🎨 self-train schedule armed (daemon boots in 60s)');
+  console.log(
+    `[oca] 🎨 self-train schedule armed (${SELF_TRAIN_NUM_WORKERS} workers boot in 60s, staggered 5s)`
+  );
 }
 
-// Called from gracefulShutdown so the Python subprocess dies cleanly with us.
+// Called from gracefulShutdown so all subprocesses die cleanly with us.
 function stopSelfTrain() {
   selfTrainDesired = false;
-  if (!selfTrainProcess) return;
-  try {
-    if (selfTrainPaused) {
-      try { process.kill(selfTrainProcess.pid, 'SIGCONT'); } catch {}
-    }
-    process.kill(selfTrainProcess.pid, 'SIGTERM');
-  } catch {}
+  for (const worker of selfTrainWorkers) {
+    if (!worker.process) continue;
+    try {
+      if (worker.paused) {
+        try { process.kill(worker.process.pid, 'SIGCONT'); } catch {}
+      }
+      process.kill(worker.process.pid, 'SIGTERM');
+    } catch {}
+  }
 }
 
 // ═══════════════════════════════════════════════════

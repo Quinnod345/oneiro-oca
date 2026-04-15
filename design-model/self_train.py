@@ -16,6 +16,8 @@ Usage:
 """
 
 import argparse
+import copy
+import fcntl
 import json
 import os
 import random
@@ -23,6 +25,7 @@ import re
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import anthropic
@@ -201,6 +204,57 @@ def load_state():
 def save_state(state):
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
+
+# ═══════════════════════════════════════════════════
+# PARALLEL-WORKER COORDINATION
+# Multiple self_train processes run concurrently (spawned by
+# cognitive-loop.js).  State updates need atomic read-modify-write so
+# counters don't get clobbered; retrain needs a try-lock so only one
+# worker retrains at a time.
+# ═══════════════════════════════════════════════════
+
+STATE_LOCK_PATH = DATA_DIR / "self-train-state.lock"
+RETRAIN_LOCK_PATH = DATA_DIR / "self-train-retrain.lock"
+
+
+@contextmanager
+def locked_state():
+    """Exclusive file lock around state read-modify-write.
+
+    Usage:
+        with locked_state() as state:
+            state["totalCycles"] += 1
+            cycle_num = state["totalCycles"]
+        # state is auto-saved on exit
+    """
+    with open(STATE_LOCK_PATH, "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            state = load_state()
+            yield state
+            save_state(state)
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
+@contextmanager
+def try_retrain_lock():
+    """Non-blocking retrain lock.  If another worker holds it, `acquired`
+    is False and the caller should skip retraining."""
+    lf = open(RETRAIN_LOCK_PATH, "w")
+    acquired = False
+    try:
+        try:
+            fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = True
+        except (IOError, BlockingIOError):
+            acquired = False
+        yield acquired
+    finally:
+        if acquired:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+        lf.close()
+
 def retrain():
     mlx_dir = Path(__file__).parent / "mlx"
     print("[retrain] extracting features...")
@@ -214,6 +268,71 @@ def retrain():
         if "best val loss" in line:
             print(f"[retrain] {line.strip()}")
             break
+
+
+CRITIQUES_DIR = DATA_DIR / "critiques"
+CRITIQUES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_critique_for_training(
+    cycle_num: int,
+    language: str,
+    brief: str,
+    code: str,
+    scores: dict,
+    overall: float,
+    innovation: float,
+    critique: str,
+    fixes: list,
+    has_screenshot: bool,
+    code_path: str,
+    png_path: str | None,
+) -> None:
+    """Write a per-cycle critique record for Phase 5 embedding training.
+
+    The Phase 5 model architecture (per VISION.md:211) adds an auxiliary
+    head that learns to predict Opus's critique text as an embedding
+    from the code's feature vector.  Scores alone teach WHAT, critiques
+    teach WHY — "great typography but clashes with the palette" carries
+    structural information that per-dimension scores can't capture.
+
+    We save ONE JSON file per cycle so:
+      • embed_critiques.py can batch them through OpenAI text-embedding-3
+        without re-running LLM generation
+      • each record is self-contained (scores + critique + code reference)
+      • records are append-only (safe for parallel workers)
+
+    Without a critique, we still emit a record (with critique="") so the
+    file inventory stays in lockstep with cycle numbers.
+    """
+    if not critique:
+        # Still write a stub so the filesystem matches the state counter;
+        # embed_critiques.py will skip empty critiques.
+        pass
+
+    record = {
+        "cycle": cycle_num,
+        "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "language": language,
+        "brief": (brief or "")[:500],
+        "scores": {k: round(float(v), 4) for k, v in (scores or {}).items()},
+        "overall": round(float(overall), 4),
+        "innovation": round(float(innovation), 4),
+        "critique": critique or "",
+        "fixes": list(fixes or [])[:10],
+        "compiled": bool(has_screenshot),
+        "code_path": code_path,
+        "png_path": png_path,
+        # Code snippet so reviewers can read the critique in context
+        # without opening another file. Capped to keep files lean.
+        "code_snippet": (code or "")[:3000],
+    }
+
+    out_path = CRITIQUES_DIR / f"cycle-{cycle_num:06d}.json"
+    try:
+        out_path.write_text(json.dumps(record, indent=2))
+    except Exception as e:
+        print(f"  [critique] write failed: {e}")
 
 
 def maybe_inject_target_reference(
@@ -538,6 +657,30 @@ def run_cycle(cycle_num: int, state: dict, language: str | None = None) -> dict 
     except Exception as e:
         print(f"  [refs] auto-inject failed: {str(e)[:120]}")
 
+    # ── 6c. PHASE 5 CRITIQUE CAPTURE ──
+    # Save a structured per-cycle critique record to data/critiques/ so the
+    # Phase 5 critique-embedding training pipeline can batch-embed them
+    # later.  Each file contains the full critique text (not truncated),
+    # per-dimension scores, fixes, and a code reference.  embed_critiques.py
+    # consumes these and produces a .npz of embedding vectors.
+    try:
+        save_critique_for_training(
+            cycle_num=cycle_num,
+            language=language,
+            brief=brief,
+            code=code,
+            scores=result["scores"],
+            overall=overall,
+            innovation=innovation,
+            critique=critique,
+            fixes=fixes,
+            has_screenshot=has_screenshot,
+            code_path=code_path,
+            png_path=png_path if has_screenshot else None,
+        )
+    except Exception as e:
+        print(f"  [critique] capture failed: {str(e)[:120]}")
+
     # ── 7. UPDATE STATE ──
     if critique and overall < 0.5:
         state.setdefault("past_critiques", []).append(critique[:150])
@@ -558,45 +701,115 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cycles", type=int, default=10)
     parser.add_argument("--forever", action="store_true")
+    parser.add_argument(
+        "--worker-id", type=int, default=0,
+        help="Worker index (0-based) for parallel workers",
+    )
+    parser.add_argument(
+        "--num-workers", type=int, default=1,
+        help="Total number of workers running in parallel",
+    )
+    parser.add_argument(
+        "--language-bias",
+        choices=["html", "swiftui", "react", "auto"],
+        default="auto",
+        help="Force a specific language for this worker (default: random rotation)",
+    )
     args = parser.parse_args()
 
     total = float("inf") if args.forever else args.cycles
+    prefix = f"[W{args.worker_id}/{args.num_workers}] " if args.num_workers > 1 else ""
+    forced_lang = None if args.language_bias == "auto" else args.language_bias
 
     print(f"\n{'═' * 55}")
-    print("SELF-TRAINING LOOP v2")
-    print("Opus generates → Opus grades → learns from failures → repeat")
-    print(f"Cycles: {'forever' if args.forever else args.cycles}")
+    print(f"{prefix}SELF-TRAINING LOOP v2")
+    print(f"{prefix}Opus generates → Opus grades → learns from failures → repeat")
+    print(f"{prefix}Cycles: {'forever' if args.forever else args.cycles}")
+    if args.num_workers > 1:
+        print(f"{prefix}Parallel mode: worker {args.worker_id} of {args.num_workers}")
+    if forced_lang:
+        print(f"{prefix}Language bias: {forced_lang}")
     print("═" * 55)
+    sys.stdout.flush()
 
-    state = load_state()
-    cycle_scores = []
     i = 0
+    cycle_scores = []
 
     while i < total:
-        cycle_num = state["totalCycles"] + i + 1
+        # ── Atomically claim the next global cycle number ──
+        with locked_state() as state:
+            state["totalCycles"] += 1
+            cycle_num = state["totalCycles"]
+            # Snapshot state for run_cycle context reads (past_critiques,
+            # best_by_lang, etc.). Mutations made by run_cycle to the
+            # snapshot are merged back in the post-cycle locked block.
+            state_snapshot = copy.deepcopy(state)
 
-        result = run_cycle(cycle_num, state)
+        result = run_cycle(cycle_num, state_snapshot, language=forced_lang)
+
         if result:
             cycle_scores.append(result["overall"])
-            state["totalSamples"] += 1
 
-        if len(cycle_scores) > 0 and len(cycle_scores) % 10 == 0:
-            retrain()
-            state["retrains"] += 1
+            # ── Merge-back state deltas atomically ──
+            with locked_state() as state:
+                state["totalSamples"] += 1
+                state.setdefault("scores", []).append(result["overall"])
+                state["scores"] = state["scores"][-20:]
 
-        state["totalCycles"] = cycle_num
-        if cycle_scores:
-            state["scores"] = cycle_scores[-20:]
-        save_state(state)
+                # Merge past_critiques (additive, deduped, capped at 20)
+                snap_crits = state_snapshot.get("past_critiques", []) or []
+                if snap_crits:
+                    existing = state.get("past_critiques", []) or []
+                    merged = existing + [c for c in snap_crits if c not in existing]
+                    state["past_critiques"] = merged[-20:]
+
+                # Merge best_by_lang (per-language last-3)
+                snap_best = state_snapshot.get("best_by_lang", {}) or {}
+                if snap_best:
+                    state.setdefault("best_by_lang", {})
+                    for lang, items in snap_best.items():
+                        existing = state["best_by_lang"].get(lang, []) or []
+                        for item in items:
+                            if item not in existing:
+                                existing.append(item)
+                        state["best_by_lang"][lang] = existing[-3:]
+
+                current_samples = state["totalSamples"]
+
+            # Emit structured line for cognitive-loop.js log capture
+            print(
+                f"{prefix}[self-train] cycle {cycle_num}: {result['language']} "
+                f"{result.get('brief', '')[:30]} score={result['overall']:.3f}"
+            )
+            sys.stdout.flush()
+
+            # ── Retrain every 10 global samples (try-lock so only one
+            # worker retrains at a time). ──
+            if current_samples % 10 == 0:
+                with try_retrain_lock() as acquired:
+                    if acquired:
+                        print(f"{prefix}[retrain] starting at sample {current_samples}")
+                        sys.stdout.flush()
+                        try:
+                            retrain()
+                            with locked_state() as state:
+                                state["retrains"] += 1
+                                state["lastRetrain"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                        except Exception as e:
+                            print(f"{prefix}[retrain] error: {e}")
+                            sys.stdout.flush()
+                    else:
+                        print(f"{prefix}[retrain] skipped — another worker is retraining")
+                        sys.stdout.flush()
+
         i += 1
 
     print(f"\n{'═' * 55}")
-    print("COMPLETE")
-    print(f"Cycles: {i}")
-    print(f"Samples: {state['totalSamples']}")
+    print(f"{prefix}COMPLETE")
+    print(f"{prefix}Local cycles: {i}")
     if cycle_scores:
-        print(f"Avg: {sum(cycle_scores)/len(cycle_scores):.3f}")
-        print(f"Best: {max(cycle_scores):.3f}")
+        print(f"{prefix}Avg: {sum(cycle_scores)/len(cycle_scores):.3f}")
+        print(f"{prefix}Best: {max(cycle_scores):.3f}")
     print("═" * 55)
 
 
