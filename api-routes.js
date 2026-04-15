@@ -1389,6 +1389,48 @@ ocaRouter.get('/oca/design/target-project', async (req, res) => {
   }
 });
 
+// Active project score trajectory — reads active-project/<name>/history.jsonl
+// (one JSON line per completed build) and returns the last 200 records
+// for dashboard charting.  Grows append-only; we tail the file so old
+// builds don't bloat the response.
+ocaRouter.get('/oca/design/active-project/trajectory', async (req, res) => {
+  try {
+    const { readFileSync, existsSync } = await import('fs');
+    const { dirname, join } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const here = dirname(fileURLToPath(import.meta.url));
+
+    const targetPath = join(here, 'design-model', 'target-project.json');
+    if (!existsSync(targetPath)) return res.json({ present: false });
+    const target = JSON.parse(readFileSync(targetPath, 'utf-8'));
+    const name = target?.name;
+    if (!name) return res.json({ present: false });
+
+    const historyPath = join(here, 'design-model', 'active-project', name, 'history.jsonl');
+    if (!existsSync(historyPath)) {
+      return res.json({ present: true, project: name, records: [], count: 0 });
+    }
+
+    const raw = readFileSync(historyPath, 'utf-8');
+    const lines = raw.split('\n').filter(l => l.trim().length > 0);
+    const MAX_RECORDS = 200;
+    const tail = lines.slice(-MAX_RECORDS);
+    const records = [];
+    for (const line of tail) {
+      try { records.push(JSON.parse(line)); } catch {}
+    }
+    res.json({
+      present: true,
+      project: name,
+      records,
+      count: lines.length,
+      returned: records.length,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Active project iteration stats — filesystem-scanned summary of what
 // the builder has accreted into active-project/<name>/iterations/.
 // Used by web/sill.html to show compile success rate and latest iters.

@@ -107,16 +107,33 @@ const HYPOTHESIS_SLA_MINUTES = 25;
 const HYPOTHESIS_SLA_BATCH = 4;
 const HYPOTHESIS_SLA_CYCLES = 3;
 
-// Timeout wrapper for LLM calls in the tick — prevents indefinite hangs
-// (observed: c92 stalled 7,263s, c93 stalled 2,483s due to unguarded await)
-const LLM_TICK_TIMEOUT_MS = 120_000; // 2 minutes max per LLM call
+// Soft watchdog for LLM calls in the tick.  Previous behavior was a
+// hard Promise.race reject that fired `tick-timeout: {label} exceeded
+// {ms}ms` after 120s — which didn't actually cancel the underlying
+// call (it kept running in the background), just lied to the caller
+// and polluted error logs with fake failures.  New behavior: when
+// `ms` elapses without the promise resolving, we log ONE warning line
+// and let the original promise run to completion.  The caller's
+// `await` continues to block on it, but other work (timers, HTTP
+// handlers, worker spawns) is already free to run because this whole
+// function is async — the `await` releases the event loop.
+//
+// If you need actual cancellation, pass an AbortController and the
+// underlying call must handle the abort signal.  For LLM calls in
+// llm.js, the network timeout + CLI timeout inside the gateway
+// already bound the call duration; no hard parent timeout needed.
+const LLM_TICK_TIMEOUT_MS = 120_000; // advisory only — logged, not enforced
 function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`tick-timeout: ${label} exceeded ${ms}ms`)), ms)
-    ),
-  ]);
+  let settled = false;
+  const watchdog = setTimeout(() => {
+    if (!settled) {
+      console.warn(`[oca] ⚠️ ${label} is slow (>${Math.round(ms/1000)}s — still running, not killed)`);
+    }
+  }, ms);
+  return promise.finally(() => {
+    settled = true;
+    clearTimeout(watchdog);
+  });
 }
 
 function parseHypothesisPayload(rawText) {
@@ -2052,22 +2069,29 @@ function startSelfTrainSchedule() {
     setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
   };
 
-  // First spawn after a short delay so consolidation and init settle.
-  // Stagger worker boots by 5s so they don't all hit the API at once.
-  setTimeout(() => {
+  // First spawn after initial delay so consolidation + init settle.
+  // Sequential sequential-await pattern (instead of N parallel setTimeouts)
+  // so W0 spawning can't starve W1's spawn via event-loop weirdness.  Each
+  // worker's spawn is awaited independently — a failure in one doesn't
+  // block the next.  The 3s inter-worker delay is a micro-stagger so they
+  // don't all hit the API at the same millisecond.
+  setTimeout(async () => {
     for (let i = 0; i < SELF_TRAIN_NUM_WORKERS; i++) {
       const worker = selfTrainWorkers[i];
-      setTimeout(() => {
-        spawnSelfTrainWorker(worker).catch(e =>
-          console.error(`[oca] 🎨 self-train W${worker.id} initial spawn error:`, e.message)
-        );
-      }, i * 5_000);
+      try {
+        await spawnSelfTrainWorker(worker);
+      } catch (e) {
+        console.error(`[oca] 🎨 self-train W${worker.id} initial spawn error:`, e.message);
+      }
+      if (i < SELF_TRAIN_NUM_WORKERS - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
     }
     setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
-  }, 60_000);
+  }, 90_000);
 
   console.log(
-    `[oca] 🎨 self-train schedule armed (${SELF_TRAIN_NUM_WORKERS} workers boot in 60s, staggered 5s)`
+    `[oca] 🎨 self-train schedule armed (${SELF_TRAIN_NUM_WORKERS} workers boot in 90s, sequential-await with 3s stagger)`
   );
 }
 

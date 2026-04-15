@@ -48,6 +48,13 @@ try:
 except ImportError:
     HAS_V3 = False
 
+# Try to import Phase 5 head with auxiliary critique-embedding branch
+try:
+    from train_v5 import DesignHeadV5
+    HAS_V5 = True
+except ImportError:
+    HAS_V5 = False
+
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
 SOCKET_PATH = "/tmp/design-model-v2.sock"
 PID_PATH = "/tmp/design-model-v2.pid"
@@ -97,8 +104,24 @@ class MobileNetExtractor:
 
 
 def load_design_model():
-    """Load the best available model (Phase 3 > Phase 2b)."""
-    # Try Phase 3 expert model first
+    """Load the best available model (Phase 5 > Phase 3 > Phase 2b).
+
+    Phase 5 shares the main-head architecture with Phase 2b; the auxiliary
+    critique-embedding branch only exists on the training side.  At
+    inference we just do the main forward pass, so either DesignHead
+    (v2) or DesignHeadV5 (v5) works with the same call signature.
+    """
+    # Try Phase 5 head first (has auxiliary critique signal baked into gradients)
+    v5_path = WEIGHTS_DIR / "design-head-v5.safetensors"
+    if HAS_V5 and v5_path.exists():
+        model = DesignHeadV5(dropout=0.0)
+        model.load_weights(str(v5_path))
+        total = sum(p.size for _, p in tree_flatten(model.parameters()))
+        print(f"[server] loaded Phase 5 head: {v5_path.name} ({total:,} params, main + aux)")
+        model.eval()
+        return model, "phase_5"
+
+    # Try Phase 3 expert model
     v3_path = WEIGHTS_DIR / "design-expert-v3.safetensors"
     if HAS_V3 and v3_path.exists():
         model = DesignExpertNetwork(dropout=0.0)

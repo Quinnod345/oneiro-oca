@@ -7,8 +7,110 @@ import llm from './llm.js';
 import oca, { design as designModel } from './index.js';
 import motor from './motor/engine.js';
 import diag from './diagnostic-log.js';
-import { execSync, execFileSync } from 'child_process';
+import { execSync, execFileSync, spawn } from 'child_process';
 import { existsSync, writeFileSync, readFileSync, readdirSync } from 'fs';
+
+// ═══════════════════════════════════════════════════
+// ASYNC SPAWN HELPER
+//
+// Replaces execSync/execFileSync on thinker hot paths. The underlying
+// problem with the Sync variants: they block the entire Node.js event
+// loop for the duration of the child process. A 10-minute builder run
+// means 10 minutes where no setTimeouts fire, no HTTP requests get
+// served, and worker pool spawns get starved. `runAsync` uses `spawn()`
+// under a Promise wrapper so `await runAsync(...)` yields the event
+// loop to other work while the child runs.
+//
+// NO HARD TIMEOUTS. If a build is slow, the build is slow.  The only
+// protection is an optional `silentWatchdogMs`: if stdout has been
+// quiet for that long, we SIGTERM the child (indicating a true hang
+// rather than slow but productive work). This is cancellation of the
+// subprocess, not a blocking timeout in Node.
+// ═══════════════════════════════════════════════════
+async function runAsync(cmd, args = [], options = {}) {
+  const {
+    cwd,
+    env = process.env,
+    shell = false,             // false = direct argv (safer); true = /bin/sh -c
+    silentWatchdogMs = null,   // null = never kill for silence
+    maxBuffer = 32 * 1024 * 1024, // 32MB
+    onStdoutLine = null,
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { cwd, env, shell, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      reject(new Error(`spawn failed: ${e.message}`));
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let totalStdout = 0;
+    let totalStderr = 0;
+    let lastStdoutAt = Date.now();
+    let watchdog = null;
+
+    const armWatchdog = () => {
+      if (!silentWatchdogMs) return;
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        const silentMs = Date.now() - lastStdoutAt;
+        if (silentMs >= silentWatchdogMs) {
+          // Child has been silent past the threshold — SIGTERM it.
+          try { child.kill('SIGTERM'); } catch {}
+          // Give it 5s to clean up, then SIGKILL
+          setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 5000);
+        } else {
+          // Activity since last check — re-arm
+          armWatchdog();
+        }
+      }, silentWatchdogMs);
+    };
+    armWatchdog();
+
+    child.stdout.on('data', (buf) => {
+      lastStdoutAt = Date.now();
+      const chunk = buf.toString();
+      totalStdout += chunk.length;
+      if (totalStdout <= maxBuffer) stdout += chunk;
+      if (onStdoutLine) {
+        // Best-effort line splitter for streaming consumers
+        for (const line of chunk.split(/\r?\n/)) {
+          if (line) {
+            try { onStdoutLine(line); } catch {}
+          }
+        }
+      }
+    });
+
+    child.stderr.on('data', (buf) => {
+      const chunk = buf.toString();
+      totalStderr += chunk.length;
+      if (totalStderr <= maxBuffer) stderr += chunk;
+    });
+
+    child.on('error', (e) => {
+      if (watchdog) clearTimeout(watchdog);
+      reject(new Error(`spawn error: ${e.message}`));
+    });
+
+    child.on('exit', (code, signal) => {
+      if (watchdog) clearTimeout(watchdog);
+      resolve({ stdout, stderr, code, signal });
+    });
+  });
+}
+
+// Module-level gate: only one build can run at a time per target project.
+// Builder.py's _next_iter_num() reads the filesystem directly and isn't
+// atomic across parallel invocations, and the thinker's build action
+// isn't robust to racing itself anyway. If the thinker fires `build`
+// while a previous build is still running, we log and skip — the next
+// tick will try again.
+let buildInProgress = false;
 
 const CLAUDE_CLI = (() => {
   const home = process.env.HOME || '/tmp';
@@ -327,13 +429,19 @@ async function dispatchThought(thought) {
         }
       }
 
-      // Direct shell execution (most commands)
-      const output = execSync(cmd, {
-        encoding: 'utf8',
-        timeout: 30000,
-        cwd: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core'
-      }).trim();
+      // Direct shell execution (most commands) — async so the event loop
+      // is NOT blocked for the duration of the command. No hard timeout;
+      // the silent-stdout watchdog kills hung subprocesses after 2 min.
+      const shellResult = await runAsync(cmd, [], {
+        cwd: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core',
+        shell: '/bin/bash',
+        silentWatchdogMs: 2 * 60 * 1000,
+      });
+      const output = (shellResult.stdout || '').trim();
       if (output) console.log(`[thinker] shell output: ${output.slice(0, 200)}`);
+      if (shellResult.code !== 0 && shellResult.stderr) {
+        console.log(`[thinker] shell stderr: ${shellResult.stderr.slice(0, 200)}`);
+      }
       await oca.experience('shell_action', `Ran: ${cmd}\nOutput: ${output.slice(0, 500)}`, {
         importanceScore: 0.6
       });
@@ -405,11 +513,23 @@ async function dispatchThought(thought) {
         return;
       }
 
+      // Concurrency gate — only one build at a time per target project.
+      // builder.py's _next_iter_num() reads the filesystem and isn't
+      // atomic across parallel runs. Next thinker cycle will try again.
+      if (buildInProgress) {
+        console.log(`[thinker] build deferred — previous build still running`);
+        diag.info('thinker', 'build deferred (previous still running)', { goal: goal.slice(0, 120) });
+        return;
+      }
+      buildInProgress = true;
+
       console.log(`[thinker] building ${target.name}/${language}: ${goal.slice(0, 60)}`);
 
-      // Argv-style exec (not shell) — goal strings contain apostrophes, parens,
-      // quotes etc. that would break `/bin/sh -c`. execFileSync passes argv directly
-      // to python3 without any shell interpretation.
+      // Argv-style spawn (NOT shell, NOT blocking). execFileSync would
+      // wedge the Node event loop for up to 10 minutes, starving
+      // setTimeout callbacks (including self_train worker spawns) and
+      // HTTP handlers. runAsync awaits a Promise over spawn(), so other
+      // work continues while the child runs.
       const builderArgs = [
         `${PROJECT_ROOT}/cognitive/design-model/builder.py`,
         goal,
@@ -420,13 +540,23 @@ async function dispatchThought(thought) {
       if (constraints.length) builderArgs.push('--constraints', ...constraints);
       builderArgs.push('--iterations', '4');
 
-      const buildResult = execFileSync('python3', builderArgs, {
-        encoding: 'utf-8',
-        timeout: 600000, // 10 min max
-        cwd: PROJECT_ROOT,
-        env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      let buildResult;
+      try {
+        const result = await runAsync('python3', builderArgs, {
+          cwd: PROJECT_ROOT,
+          env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+          // Silent watchdog: if builder.py produces NO stdout for 10 min
+          // it's hung (not just slow). Kill the child subprocess but do
+          // NOT throw a hard timeout error — the outer cycle continues.
+          silentWatchdogMs: 10 * 60 * 1000,
+        });
+        if (result.code !== 0 && !result.stdout.includes('Overall:')) {
+          throw new Error(`builder exit ${result.code}: ${(result.stderr || '').slice(0, 200)}`);
+        }
+        buildResult = result.stdout;
+      } finally {
+        buildInProgress = false;
+      }
 
       // Parse the output for scores
       const overallMatch = buildResult.match(/Overall:\s*([\d.]+)/);
@@ -531,21 +661,27 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Web search via agent-browser
+  // Web search via agent-browser — async spawn, no hard timeouts
   if (thought.web_search) {
     try {
       const query = thought.web_search.query;
       console.log(`[thinker] web_search: ${query}`);
       const encoded = encodeURIComponent(query);
       const BROWSER_PROFILE = `${PROJECT_ROOT}/private/browser-profile`;
-      execSync(`agent-browser open "https://www.google.com/search?q=${encoded}" --session oca --profile "${BROWSER_PROFILE}"`, {
-        encoding: 'utf-8', timeout: 15000,
-      });
+      await runAsync('agent-browser', [
+        'open',
+        `https://www.google.com/search?q=${encoded}`,
+        '--session', 'oca',
+        '--profile', BROWSER_PROFILE,
+      ], { silentWatchdogMs: 90 * 1000 });
       // Grab visible text from results
       try {
-        const snap = execSync(`agent-browser snapshot -c --session oca --profile "${BROWSER_PROFILE}"`, {
-          encoding: 'utf-8', timeout: 10000,
-        }).trim();
+        const snapResult = await runAsync('agent-browser', [
+          'snapshot', '-c',
+          '--session', 'oca',
+          '--profile', BROWSER_PROFILE,
+        ], { silentWatchdogMs: 60 * 1000 });
+        const snap = (snapResult.stdout || '').trim();
         const preview = snap.slice(0, 600);
         console.log(`[thinker] search results: ${preview.slice(0, 200)}`);
         await oca.experience('web_search', `Searched: ${query}\nResults: ${preview}`, { importanceScore: 0.4 });
@@ -564,10 +700,12 @@ async function dispatchThought(thought) {
       if (d.investigation) {
         const investigateCmd = String(d.investigation).slice(0, 500);
         try {
-          const output = execSync(investigateCmd, {
-            encoding: 'utf8', timeout: 15000,
-            cwd: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core'
-          }).trim();
+          const result = await runAsync(investigateCmd, [], {
+            cwd: '/Users/quinnodonnell/.openclaw/workspace/oneiro-core',
+            shell: '/bin/bash',
+            silentWatchdogMs: 90 * 1000,
+          });
+          const output = (result.stdout || '').trim();
           console.log(`[thinker] diagnose output: ${output.slice(0, 300)}`);
           diag.info('thinker', `Diagnosis result: ${output.slice(0, 300)}`, { issue: d.issue });
         } catch (e) {
