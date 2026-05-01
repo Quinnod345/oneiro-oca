@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#root { width: 100vw; min-height: 100vh; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [ingredients, setIngredients] = React.useState([
+    { id: 1, name: 'Garlic', emoji: '🧄', x: 300, y: 180, temporalState: 0, baseColor: '#f4e4c1' },
+    { id: 2, name: 'Sugar', emoji: '🍯', x: 404, y: 240, temporalState: 0, baseColor: '#ffffff' },
+    { id: 3, name: 'Tomato', emoji: '🍅', x: 404, y: 360, temporalState: 0, baseColor: '#ff6347' },
+    { id: 4, name: 'Cream', emoji: '🥛', x: 300, y: 420, temporalState: 0, baseColor: '#fffdd0' },
+    { id: 5, name: 'Thyme', emoji: '🌿', x: 196, y: 360, temporalState: 0, baseColor: '#4a5d23' },
+    { id: 6, name: 'Salt', emoji: '🧂', x: 196, y: 240, temporalState: 0, baseColor: '#f8f8ff' }
+  ]);
+  
+  const [ringRotation, setRingRotation] = React.useState(0);
+  const [discoveredRecipe, setDiscoveredRecipe] = React.useState(null);
+  
+  const temporalStates = {
+    garlic: ['Raw', 'Crushed', 'Sautéed', 'Caramelized', 'Charred'],
+    sugar: ['Crystal', 'Dissolved', 'Syrup', 'Caramel', 'Carbon'],
+    tomato: ['Fresh', 'Bruised', 'Roasted', 'Sundried', 'Paste'],
+    cream: ['Fresh', 'Whipped', 'Cultured', 'Butter', 'Ghee'],
+    thyme: ['Fresh', 'Wilted', 'Dried', 'Infused', 'Ash'],
+    salt: ['Crystal', 'Dissolved', 'Cured', 'Flaked', 'Blackened']
+  };
+  
+  const recipes = [
+    { 
+      name: 'Temporal Umami Essence', 
+      alignment: { garlic: 3, sugar: 3, tomato: 2, cream: 2, thyme: 2, salt: 1 },
+      description: 'The caramelized convergence creates an otherworldly savory depth'
+    },
+    { 
+      name: 'Crystalline Garden Suspension', 
+      alignment: { garlic: 1, sugar: 0, tomato: 0, cream: 0, thyme: 0, salt: 0 },
+      description: 'Pure temporal stasis preserves the essence of beginning'
+    },
+    { 
+      name: 'Burnt Memory Tincture', 
+      alignment: { garlic: 4, sugar: 4, tomato: 3, cream: 3, thyme: 4, salt: 4 },
+      description: 'The edge of destruction reveals hidden bitter complexities'
+    }
+  ];
+  
+  React.useEffect(() => {
+    const newIngredients = ingredients.map((ing, i) => {
+      const newState = Math.floor((ringRotation + i * 60) / 72) % 5;
+      return { ...ing, temporalState: newState };
+    });
+    
+    setIngredients(newIngredients);
+    
+    const currentAlignment = {};
+    newIngredients.forEach(ing => {
+      currentAlignment[ing.name.toLowerCase()] = ing.temporalState;
+    });
+    
+    const discovered = recipes.find(recipe => {
+      return Object.entries(recipe.alignment).every(([key, value]) => 
+        currentAlignment[key] === value
+      );
+    });
+    
+    if (discovered && discovered.name !== discoveredRecipe?.name) {
+      setDiscoveredRecipe(discovered);
+      setTimeout(() => setDiscoveredRecipe(null), 5000);
+    }
+  }, [ringRotation]);
+  
+  const handleRingDrag = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    const handleMove = (event) => {
+      const x = event.clientX - rect.left - centerX;
+      const y = event.clientY - rect.top - centerY;
+      const angle = Math.atan2(y, x) * 180 / Math.PI + 90;
+      setRingRotation((angle + 360) % 360);
+    };
+    
+    const handleEnd = () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+    };
+    
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+  };
+  
+  const getTemporalColor = (baseColor, state) => {
+    const colors = {
+      '#f4e4c1': ['#f4e4c1', '#e8d4a0', '#d4b876', '#c19248', '#8b5a1a'],
+      '#ffffff': ['#ffffff', '#f0f0f0', '#e6d4a3', '#d4a76a', '#4a3c28'],
+      '#ff6347': ['#ff6347', '#e85d3d', '#cc4125', '#a0301c', '#5c1a10'],
+      '#fffdd0': ['#fffdd0', '#fff5ba', '#ffe49c', '#ffd270', '#cc9900'],
+      '#4a5d23': ['#4a5d23', '#5c7329', '#6b832f', '#556b2f', '#3a4a1f'],
+      '#f8f8ff': ['#f8f8ff', '#e8e8f0', '#d0d0d8', '#a8a8b0', '#303038']
+    };
+    return colors[baseColor]?.[state] || baseColor;
+  };
+  
+  const getConnections = () => {
+    const connections = [];
+    ingredients.forEach((ing, i) => {
+      const next = ingredients[(i + 1) % ingredients.length];
+      if (Math.abs(ing.temporalState - next.temporalState) <= 1 && ing.temporalState > 0) {
+        connections.push({
+          x1: ing.x,
+          y1: ing.y,
+          x2: next.x,
+          y2: next.y,
+          opacity: 0.3 + (0.2 * Math.min(ing.temporalState, next.temporalState))
+        });
+      }
+    });
+    return connections;
+  };
+  
+  const resetStates = () => {
+    setRingRotation(0);
+    setDiscoveredRecipe(null);
+  };
+  
+  return (
+    <div className="app">
+      {discoveredRecipe && (
+        <div className="recipe-notification">
+          <div className="recipe-name">{discoveredRecipe.name}</div>
+          <div className="recipe-desc">{discoveredRecipe.description}</div>
+        </div>
+      )}
+      
+      <div className="interface">
+        <svg className="connections" viewBox="0 0 600 600">
+          {getConnections().map((conn, i) => (
+            <line
+              key={i}
+              className="connection-line"
+              x1={conn.x1}
+              y1={conn.y1}
+              x2={conn.x2}
+              y2={conn.y2}
+              stroke="#8a2be2"
+              strokeWidth="2"
+              opacity={conn.opacity}
+            />
+          ))}
+        </svg>
+        
+        <div 
+          className="ring ring-main"
+          onMouseDown={handleRingDrag}
+          style={{ transform: `rotate(${ringRotation}deg)` }}
+        >
+          <div className="ring-indicator" />
+        </div>
+        
+        {ingredients.map((ingredient) => {
+          const color = getTemporalColor(ingredient.baseColor, ingredient.temporalState);
+          const isActive = ingredient.temporalState > 1;
+          
+          return (
+            <div
+              key={ingredient.id}
+              className="ingredient"
+              style={{
+                left: `${ingredient.x}px`,
+                top: `${ingredient.y}px`
+              }}
+            >
+              <div
+                className={`ingredient-circle ${isActive ? 'active' : ''}`}
+                style={{
+                  backgroundColor: color,
+                  color: ingredient.temporalState > 2 ? '#ffffff' : '#000000',
+                  boxShadow: `0 0 ${10 + ingredient.temporalState * 5}px ${color}`
+                }}
+              >
+                {ingredient.emoji}
+              </div>
+              <div className="ingredient-label">{ingredient.name}</div>
+              <div className="temporal-state">
+                {temporalStates[ingredient.name.toLowerCase()][ingredient.temporalState]}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      <div className="controls">
+        <div>
+          <div className="control-hint">Drag the ring to transform ingredients</div>
+        </div>
+        <button className="reset-btn" onClick={resetStates}>Reset</button>
+      </div>
+    </div>
+  );
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+// Try to find the main component — user should export default or define App
+if (typeof App !== 'undefined') {
+  root.render(React.createElement(App));
+} else {
+  root.render(React.createElement('div', {style: {padding: 20}}, 'No App component found'));
+}
+</script>
+</body>
+</html>

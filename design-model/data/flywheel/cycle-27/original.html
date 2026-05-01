@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface-2: #18181f;
+    --border: rgba(255,255,255,0.07);
+    --accent: #7c6ef5;
+    --accent-2: #a78bfa;
+    --accent-glow: rgba(124, 110, 245, 0.35);
+    --text-primary: #f0f0f5;
+    --text-secondary: #8b8b9e;
+    --text-muted: #5a5a6e;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  /* Ambient background elements */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .ambient-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.18;
+  }
+
+  .orb-1 {
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, #7c6ef5, transparent 70%);
+    top: -200px;
+    left: -100px;
+    animation: drift-1 18s ease-in-out infinite alternate;
+  }
+
+  .orb-2 {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, #a855f7, transparent 70%);
+    bottom: -150px;
+    right: -100px;
+    animation: drift-2 22s ease-in-out infinite alternate;
+  }
+
+  .orb-3 {
+    width: 350px;
+    height: 350px;
+    background: radial-gradient(circle, #3b82f6, transparent 70%);
+    top: 40%;
+    left: 55%;
+    animation: drift-3 15s ease-in-out infinite alternate;
+    opacity: 0.1;
+  }
+
+  @keyframes drift-1 {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(60px, 40px) scale(1.08); }
+  }
+  @keyframes drift-2 {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(-40px, -60px) scale(1.12); }
+  }
+  @keyframes drift-3 {
+    from { transform: translate(0, 0); }
+    to   { transform: translate(-30px, 30px); }
+  }
+
+  /* Subtle grid */
+  .grid-overlay {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Card */
+  .card {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 64px 56px 56px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.04),
+      0 32px 80px rgba(0,0,0,0.6),
+      0 8px 24px rgba(0,0,0,0.4);
+    animation: card-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(24px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Inner card shimmer border */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 28px;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(124,110,245,0.4), transparent 50%, rgba(168,139,250,0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* App icon */
+  .icon-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 36px;
+    animation: icon-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  @keyframes icon-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.85); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .app-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    background: linear-gradient(145deg, #8b7cf8, #6d55f0, #5941e0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.12),
+      0 20px 48px rgba(109, 85, 240, 0.5),
+      0 8px 16px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.2);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .app-icon::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -20%;
+    width: 80%;
+    height: 55%;
+    background: rgba(255,255,255,0.14);
+    border-radius: 50%;
+    filter: blur(8px);
+  }
+
+  .app-icon svg {
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  }
+
+  /* Text block */
+  .text-block {
+    text-align: center;
+    margin-bottom: 48px;
+    animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 14px;
+  }
+
+  .headline {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+  }
+
+  .headline span {
+    background: linear-gradient(120deg, #c4b5fd, #a78bfa, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtext {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  /* Features */
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 40px;
+    animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
+  }
+
+  .feature {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    cursor: default;
+  }
+
+  .feature:hover {
+    border-color: rgba(124, 110, 245, 0.3);
+    background: rgba(124, 110, 245, 0.06);
+    transform: translateX(2px);
+  }
+
+  .feature-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fi-1 { background: rgba(124, 110, 245, 0.18); }
+  .fi-2 { background: rgba(168, 85, 247, 0.16); }
+  .fi-3 { background: rgba(59, 130, 246, 0.16); }
+
+  .feature-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .feature-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    letter-spacing: -0.01em;
+  }
+
+  .feature-desc {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Chevron */
+  .feature-arrow {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+
+  .feature:hover .feature-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+    color: var(--accent-2);
+  }
+
+  /* CTA */
+  .cta-wrap {
+    animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.34s both;
+  }
+
+  .btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 17px 24px;
+    background: linear-gradient(135deg, #7c6ef5, #6d55f0);
+    border: none;
+    border-radius: 15px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.1) inset,
+      0 12px 32px rgba(109, 85, 240, 0.5),
+      0 4px 8px rgba(0,0,0,0.3);
+    transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    transition: left 0.5s;
+  }
+
+  .btn-primary:hover::before {
+    left: 100%;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #8b7cf8, #7c6ef5);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.12) inset,
+      0 16px 40px rgba(124, 110, 245, 0.6),
+      0 6px 12px rgba(0,0,0,0.3);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.08) inset,
+      0 6px 16px rgba(109, 85, 240, 0.4),
+      0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .btn-text {
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-arrow {
+    position: relative;
+    z-index: 1;
+    transition: transform 0.2s;
+  }
+
+  .btn-primary:hover .btn-arrow {
+    transform: translateX(3px);
+  }
+
+  .signin-link {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .signin-link a {
+    color: var(--accent-2);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+
+  .signin-link a:hover {
+    color: #c4b5fd;
+  }
+</style>
+</head>
+<body>
+
+<div class="ambient">
+  <div class="ambient-orb orb-1"></div>
+  <div class="ambient-orb orb-2"></div>
+  <div class="ambient-orb orb-3"></div>
+</div>
+<div class="grid-overlay"></div>
+
+<div class="card">
+
+  <div class="icon-wrap">
+    <div class="app-icon">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22 8C22 8 14 14 14 22C14 26.418 17.582 30 22 30C26.418 30 30 26.418 30 22C30 17.582 26.418 14 22 14" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="22" cy="22" r="4" fill="white" fill-opacity="0.9"/>
+        <path d="M22 8V5" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M34.6 12.4L36.7 10.3" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+        <path d="M36 22H39" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M9.4 12.4L7.3 10.3" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+        <path d="M8 22H5" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+        <path d="M17 35.5L15 38" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+        <path d="M27 35.5L29 38" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="text-block">
+    <div class="eyebrow">Welcome to Aura</div>
+    <h1 class="headline">Your ideas,<br><span>beautifully organized</span></h1>
+    <p class="subtext">A thoughtful workspace designed to help you think clearly, move faster, and create work you're proud of.</p>
+  </div>
+
+  <div class="features">
+
+    <div class="feature">
+      <div class="feature-icon fi-1">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M3 10C3 6.134 6.134 3 10 3s7 3.134 7 7-3.134 7-7 7-7-3.134-7-7z" stroke="#a78bfa" stroke-width="1.5"/>
+          <path d="M7 10l2 2 4-4" stroke="#a78bfa" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">Focus without friction</div>
+        <div class="feature-desc">Distraction-free writing with smart structure built in</div>
+      </div>
+      <div class="feature-arrow">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon fi-2">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="3" y="4" width="6" height="6" rx="1.5" stroke="#c084fc" stroke-width="1.5"/>
+          <rect x="11" y="4" width="6" height="6" rx="1.5" stroke="#c084fc" stroke-width="1.5"/>
+          <rect x="3" y="12" width="6" height="6" rx="1.5" stroke="#c084fc" stroke-width="1.5" opacity="0.5"/>
+          <rect x="11" y="12" width="6" height="6" rx="1.5" stroke="#c084fc" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">Everything connected</div>
+        <div class="feature-desc">Link thoughts across projects, notes, and timelines</div>
+      </div>
+      <div class="feature-arrow">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon fi-3">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 3v2M10 15v2M3 10h2M15 10h2" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="10" cy="10" r="3.5" stroke="#60a5fa" stroke-width="1.5"/>
+          <path d="M5.636 5.636l1.414 1.414M12.95 12.95l1.414 1.414M5.636 14.364l1.414-1.414M12.95 7.05l1.414-1.414" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">Intelligent suggestions</div>
+        <div class="feature-desc">Context-aware nudges that keep momentum going</div>
+      </div>
+      <div class="feature-arrow">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cta-wrap">
+    <button class="btn-primary">
+      <span class="btn-text">Get started — it's free</span>
+      <svg class="btn-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="signin-link">Already have an account? <a href="#">Sign in</a></div>
+  </div>
+
+</div>
+
+</body>
+</html>

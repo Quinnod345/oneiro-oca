@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Reconstruction Chamber</title>
+    <style>
+        :root {
+            --void-black: #0a0a0c;
+            --primary-blue: #4fc3f7;
+            --accent-white: #ffffff;
+            --glass-surface: rgba(79, 195, 247, 0.05);
+            --glass-edge: rgba(79, 195, 247, 0.2);
+            --glow-blue: rgba(79, 195, 247, 0.6);
+            --text-primary: #e1e8ed;
+            --text-ghost: rgba(225, 232, 237, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-black);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+            perspective: 1200px;
+        }
+
+        .neural-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(ellipse at center, transparent 0%, var(--void-black) 100%),
+                linear-gradient(rgba(79, 195, 247, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(79, 195, 247, 0.03) 1px, transparent 1px);
+            background-size: cover, 50px 50px, 50px 50px;
+            opacity: 0.5;
+        }
+
+        .chamber-container {
+            position: absolute;
+            width: 80vw;
+            height: 80vh;
+            max-width: 1200px;
+            max-height: 800px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transform-style: preserve-3d;
+        }
+
+        .central-core {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, var(--glow-blue) 0%, transparent 50%);
+            filter: blur(40px);
+            animation: core-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes core-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+
+        .memory-shard {
+            position: absolute;
+            width: 160px;
+            height: 200px;
+            background: var(--glass-surface);
+            border: 1px solid var(--glass-edge);
+            backdrop-filter: blur(10px);
+            transform-style: preserve-3d;
+            transition: all 0.8s cubic-bezier(0.4, 0.0, 0.2, 1);
+            cursor: grab;
+            clip-path: polygon(15% 0%, 100% 10%, 95% 100%, 0% 90%);
+        }
+
+        .memory-shard::before {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            background: linear-gradient(135deg, transparent 60%, var(--glow-blue) 100%);
+            opacity: 0;
+            transition: opacity 0.4s;
+            clip-path: inherit;
+        }
+
+        .memory-shard:hover {
+            transform: translateZ(20px) scale(1.05);
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 30px var(--glow-blue);
+        }
+
+        .memory-shard:hover::before {
+            opacity: 0.3;
+        }
+
+        .memory-shard:active {
+            cursor: grabbing;
+        }
+
+        .shard-1 {
+            top: 50%;
+            left: 50%;
+            transform: translate(-250%, -50%) rotateY(-25deg) rotateZ(-10deg);
+        }
+
+        .shard-2 {
+            top: 50%;
+            left: 50%;
+            transform: translate(-100%, -150%) rotateY(15deg) rotateZ(5deg);
+        }
+
+        .shard-3 {
+            top: 50%;
+            left: 50%;
+            transform: translate(50%, -50%) rotateY(-15deg) rotateZ(-5deg);
+        }
+
+        .shard-4 {
+            top: 50%;
+            left: 50%;
+            transform: translate(-150%, 80%) rotateY(20deg) rotateZ(10deg);
+        }
+
+        .shard-5 {
+            top: 50%;
+            left: 50%;
+            transform: translate(100%, 100%) rotateY(-20deg) rotateZ(-8deg);
+        }
+
+        .memory-content {
+            position: absolute;
+            inset: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0.7;
+            transition: opacity 0.6s;
+        }
+
+        .memory-shard:hover .memory-content {
+            opacity: 1;
+        }
+
+        .memory-fragment {
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-ghost);
+            text-align: center;
+            margin: 5px 0;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary-blue), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.6s;
+        }
+
+        .shard-connected {
+            animation: connect-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes connect-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        .reconstruction-status {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .status-title {
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-ghost);
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 35%;
+            background: var(--primary-blue);
+            box-shadow: 0 0 10px var(--glow-blue);
+            transition: width 1.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        .action-panel {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+
+        .action-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid var(--glass-edge);
+            color: var(--text-primary);
+            font-size: 14px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+
+        .action-btn:hover {
+            background: var(--glass-surface);
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 20px var(--glow-blue);
+            transform: translateY(-2px);
+        }
+
+        .pulse-indicator {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-ghost);
+            font-size: 12px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-blue);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .chamber-container {
+                width: 90vw;
+                height: 90vh;
+            }
+            
+            .memory-shard {
+                width: 120px;
+                height: 150px;
+            }
+            
+            .action-panel {
+                flex-direction: column;
+                gap: 10px;
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="neural-grid"></div>
+    
+    <div class="chamber-container">
+        <div class="central-core"></div>
+        
+        <div class="connection-line" style="width: 200px; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(0deg);"></div>
+        <div class="connection-line" style="width: 200px; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(72deg);"></div>
+        <div class="connection-line" style="width: 200px; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(144deg);"></div>
+        <div class="connection-line" style="width: 200px; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(216deg);"></div>
+        <div class="connection-line" style="width: 200px; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(288deg);"></div>
+        
+        <div class="memory-shard shard-1" draggable="true">
+            <div class="memory-content">
+                <p class="memory-fragment">Fragment A-7</p>
+                <p class="memory-fragment">2019.05.23</p>
+                <p class="memory-fragment">Lost connection</p>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-2" draggable="true">
+            <div class="memory-content">
+                <p class="memory-fragment">Fragment B-3</p>
+                <p class="memory-fragment">2021.11.07</p>
+                <p class="memory-fragment">Signal found</p>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-3" draggable="true">
+            <div class="memory-content">
+                <p class="memory-fragment">Fragment C-1</p>
+                <p class="memory-fragment">2020.08.15</p>
+                <p class="memory-fragment">Echo patterns</p>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-4" draggable="true">
+            <div class="memory-content">
+                <p class="memory-fragment">Fragment D-9</p>
+                <p class="memory-fragment">2022.03.22</p>
+                <p class="memory-fragment">Reconstructing</p>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-5" draggable="true">
+            <div class="memory-content">
+                <p class="memory-fragment">Fragment E-2</p>
+                <p class="memory-fragment">2021.06.30</p>
+                <p class="memory-fragment">Almost complete</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="reconstruction-status">
+        <div class="status-title">Memory Reconstruction</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+    </div>
+    
+    <div class="action-panel">
+        <button class="action-btn">Analyze Fragments</button>
+        <button class="action-btn">Connect Memories</button>
+        <button class="action-btn">Export Timeline</button>
+    </div>
+    
+    <div class="pulse-indicator">
+        <div class="pulse-dot"></div>
+        <span>Neural Activity Stable</span>
+    </div>
+
+    <script>
+        const shards = document.querySelectorAll('.memory-shard');
+        const connectionLines = document.querySelectorAll('.connection-line');
+        const progressFill = document.querySelector('.progress-fill');
+        let draggedShard = null;
+        let connectedShards = 0;
+
+        shards.forEach((shard, index) => {
+            shard.addEventListener('dragstart', (e) => {
+                draggedShard = shard;
+                shard.style.opacity = '0.5';
+            });
+
+            shard.addEventListener('dragend', (e) => {
+                shard.style.opacity = '1';
+            });
+
+            shard.addEventListener('click', () => {
+                shard.classList.toggle('shard-connected');
+                connectionLines[index].style.opacity = shard.classList.contains('shard-connected') ? '0.5' : '0';
+                
+                connectedShards = document.querySelectorAll('.shard-connected').length;
+                progressFill.style.width = `${(connectedShards / 5) * 100}%`;
+            });
+        });
+
+        document.querySelectorAll('.action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const ripple = document.createElement('span');
+                ripple.style.position = 'absolute';
+                ripple.style.width = '20px';
+                ripple.style.height = '20px';
+                ripple.style.background = 'var(--primary-blue)';
+                ripple.style.borderRadius = '50%';
+                ripple.style.transform = 'translate(-50%, -50%)';
+                ripple.style.pointerEvents = 'none';
+                ripple.style.animation = 'ripple 0.6s ease-out';
+                
+                const rect = btn.getBoundingClientRect();
+                ripple.style.left = `${e.clientX - rect.left}px`;
+                ripple.style.top = `${e.clientY - rect.top}px`;
+                
+                btn.style.position = 'relative';
+                btn.appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 600);
+            });
+        });
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: translate(-50%, -50%) scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

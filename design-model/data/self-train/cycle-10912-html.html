@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Simulator</title>
+    <style>
+        :root {
+            --neural-dark: #0a0a0f;
+            --synapse-glow: #2a3f5f;
+            --memory-active: #4a7c8c;
+            --decay-ash: #1a1a2e;
+            --ghost-trace: rgba(255, 255, 255, 0.03);
+            --pulse-rhythm: 3.2s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--neural-dark);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .cortex-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: radial-gradient(ellipse at 30% 70%, #0f0f1a 0%, var(--neural-dark) 50%);
+            animation: cortexPulse var(--pulse-rhythm) ease-in-out infinite;
+        }
+
+        @keyframes cortexPulse {
+            0%, 100% { filter: brightness(1) contrast(1); }
+            50% { filter: brightness(1.05) contrast(1.1); }
+        }
+
+        .memory-grid {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 600px;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 20px;
+            padding: 40px;
+        }
+
+        .fragment {
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+            transition: all 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            animation: fragmentDecay 20s ease-out forwards;
+            transform-origin: center;
+        }
+
+        .fragment::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: 
+                linear-gradient(45deg, transparent 30%, rgba(74, 124, 140, 0.2) 50%, transparent 70%),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="20" y="20" width="60" height="60" fill="rgba(255,255,255,0.03)" /></svg>');
+            background-size: 200% 200%, cover;
+            animation: memoryShimmer 8s linear infinite;
+            opacity: var(--decay-level, 1);
+        }
+
+        @keyframes fragmentDecay {
+            0% { 
+                opacity: 0.9; 
+                transform: scale(1) rotate(0deg);
+                filter: blur(0px);
+            }
+            100% { 
+                opacity: 0.1; 
+                transform: scale(0.95) rotate(var(--drift-angle, 2deg)) translate(var(--drift-x, 10px), var(--drift-y, 10px));
+                filter: blur(2px);
+            }
+        }
+
+        @keyframes memoryShimmer {
+            0% { background-position: -200% -200%, center; }
+            100% { background-position: 200% 200%, center; }
+        }
+
+        .fragment:nth-child(odd) { --drift-angle: -3deg; --drift-x: -15px; --drift-y: 8px; }
+        .fragment:nth-child(even) { --drift-angle: 2deg; --drift-x: 12px; --drift-y: -10px; }
+        .fragment:nth-child(3n) { --drift-angle: -1deg; --drift-x: -8px; --drift-y: 15px; }
+
+        .fragment.rehearsed {
+            animation-play-state: paused;
+            box-shadow: 0 0 40px rgba(74, 124, 140, 0.4);
+        }
+
+        .fragment.rehearsed::after {
+            content: '';
+            position: absolute;
+            inset: -20px;
+            background: radial-gradient(circle at center, transparent 30%, rgba(74, 124, 140, 0.2) 70%, transparent 100%);
+            animation: rehearseGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes rehearseGlow {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+
+        .neural-pathway {
+            position: absolute;
+            pointer-events: none;
+            filter: blur(1px);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .neural-pathway.active {
+            opacity: 1;
+            animation: synapseFlow 2s linear infinite;
+        }
+
+        @keyframes synapseFlow {
+            0% { filter: blur(1px) brightness(1); }
+            50% { filter: blur(0.5px) brightness(1.5); }
+            100% { filter: blur(1px) brightness(1); }
+        }
+
+        .ghost-afterimage {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            opacity: 0;
+            transition: opacity 0.8s;
+            pointer-events: none;
+        }
+
+        .fragment.forgotten .ghost-afterimage {
+            opacity: 1;
+            animation: ghostPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes ghostPulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.02); opacity: 0.5; }
+        }
+
+        .attention-field {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(74, 124, 140, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            mix-blend-mode: screen;
+        }
+
+        body:hover .attention-field {
+            opacity: 1;
+        }
+
+        .memory-trace {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(74, 124, 140, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: traceFloat 10s linear infinite;
+        }
+
+        @keyframes traceFloat {
+            0% { transform: translate(0, 0) scale(1); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translate(var(--trace-x, 50px), var(--trace-y, -50px)) scale(0.5); opacity: 0; }
+        }
+
+        .synaptic-bridge {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(74, 124, 140, 0.5), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .control-neural {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            line-height: 1.6;
+        }
+
+        .decay-indicator {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .decay-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--memory-active), var(--synapse-glow));
+            animation: decayProgress 60s linear forwards;
+            transform-origin: right;
+        }
+
+        @keyframes decayProgress {
+            0% { transform: scaleX(1); }
+            100% { transform: scaleX(0); }
+        }
+
+        .fragment:hover {
+            animation-play-state: paused;
+            transform: scale(1.02) !important;
+            filter: blur(0px) !important;
+            opacity: 1 !important;
+        }
+
+        .fragment:hover ~ .neural-pathway {
+            opacity: 0.5;
+        }
+
+        .circling-gesture {
+            position: fixed;
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(74, 124, 140, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+        }
+
+        body.circling .circling-gesture {
+            animation: circleGesture 0.5s ease-out;
+        }
+
+        @keyframes circleGesture {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        .tissue-veins {
+            position: absolute;
+            inset: 0;
+            opacity: 0.03;
+            background-image: 
+                radial-gradient(circle at 20% 30%, transparent 40%, rgba(74, 124, 140, 0.1) 41%, transparent 42%),
+                radial-gradient(circle at 70% 60%, transparent 35%, rgba(74, 124, 140, 0.1) 36%, transparent 37%),
+                radial-gradient(circle at 45% 80%, transparent 45%, rgba(74, 124, 140, 0.1) 46%, transparent 47%);
+            animation: veinsFlow 20s ease-in-out infinite;
+        }
+
+        @keyframes veinsFlow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .fragment.bridging {
+            box-shadow: 0 0 60px rgba(74, 124, 140, 0.6);
+            animation: none;
+            opacity: 0.8 !important;
+        }
+
+        .memory-spark {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: sparkFade 1s ease-out forwards;
+        }
+
+        @keyframes sparkFade {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0.5); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="cortex-canvas">
+        <div class="tissue-veins"></div>
+        <div class="memory-grid" id="memoryGrid"></div>
+        <div class="attention-field" id="attentionField"></div>
+        <div class="circling-gesture"></div>
+        
+        <div class="decay-indicator">
+            <div class="decay-progress"></div>
+        </div>
+        
+        <div class="control-neural">
+            HOVER to focus • CIRCLE to rehearse • CONNECT fading traces
+        </div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('memoryGrid');
+        const attentionField = document.getElementById('attentionField');
+        let fragments = [];
+        let mouseTrail = [];
+        let isCircling = false;
+
+        // Create memory fragments
+        for (let i = 0; i < 24; i++) {
+            const fragment = document.createElement('div');
+            fragment.className = 'fragment';
+            fragment.dataset.decay = Math.random();
+            fragment.style.animationDelay = `${Math.random() * 5}s`;
+            
+            const ghost = document.createElement('div');
+            ghost.className = 'ghost-afterimage';
+            fragment.appendChild(ghost);
+            
+            grid.appendChild(fragment);
+            fragments.push(fragment);
+        }
+
+        // Mouse tracking for attention field
+        document.addEventListener('mousemove', (e) => {
+            attentionField.style.left = e.clientX + 'px';
+            attentionField.style.top = e.clientY + 'px';
+            
+            // Track mouse trail for circle detection
+            mouseTrail.push({x: e.clientX, y: e.clientY, time: Date.now()});
+            mouseTrail = mouseTrail.filter(p => Date.now() - p.time < 500);
+            
+            if (detectCircle()) {
+                document.body.classList.add('circling');
+                rehearseNearbyFragments(e.clientX, e.clientY);
+                setTimeout(() => document.body.classList.remove('circling'), 500);
+            }
+            
+            // Create memory sparks occasionally
+            if (Math.random() < 0.02) {
+                createSpark(e.clientX, e.clientY);
+            }
+        });
+
+        function detectCircle() {
+            if (mouseTrail.length < 8) return false;
+            
+            const recent = mouseTrail.slice(-8);
+            const centerX = recent.reduce((sum, p) => sum + p.x, 0) / recent.length;
+            const centerY = recent.reduce((sum, p) => sum + p.y, 0) / recent.length;
+            
+            const distances = recent.map(p => 
+                Math.sqrt(Math.pow(p.x - centerX, 2) + Math.pow(p.y - centerY, 2))
+            );
+            
+            const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+            const variance = distances.reduce((sum, d) => sum + Math.pow(d - avgDistance, 2), 0) / distances.length;
+            
+            return variance < 100 && avgDistance > 30 && avgDistance < 150;
+        }
+
+        function rehearseNearbyFragments(x, y) {
+            fragments.forEach(fragment => {
+                const rect = fragment.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(rect.left + rect.width/2 - x, 2) + 
+                    Math.pow(rect.top + rect.height/2 - y, 2)
+                );
+                
+                if (distance < 150) {
+                    fragment.classList.add('rehearsed');
+                    fragment.style.animationPlayState = 'paused';
+                    setTimeout(() => {
+                        fragment.classList.remove('rehearsed');
+                        fragment.style.animationPlayState = 'running';
+                    }, 5000);
+                }
+            });
+        }
+
+        function createSpark(x, y) {
+            const spark = document.createElement('div');
+            spark.className = 'memory-spark';
+            spark.style.left = x + 'px';
+            spark.style.top = y + 'px';
+            document.body.appendChild(spark);
+            
+            setTimeout(() => spark.remove(), 1000);
+        }
+
+        // Create floating memory traces
+        setInterval(() => {
+            const trace = document.createElement('div');
+            trace.className = 'memory-trace';
+            trace.style.left = Math.random() * window.innerWidth + 'px';
+            trace.style.top = Math.random() * window.innerHeight + 'px';
+            trace.style.setProperty('--trace-x', (Math.random() - 0.5) * 100 + 'px');
+            trace.style.setProperty('--trace-y', (Math.random() - 0.5) * 100 + 'px');
+            trace.style.animationDelay = Math.random() * 5 + 's';
+            
+            document.body.appendChild(trace);
+            setTimeout(() => trace.remove(), 10000);
+        }, 2000);
+
+        // Synaptic bridging on drag
+        let bridgeStart = null;
+        let bridgeLine = null;
+
+        fragments.forEach(fragment => {
+            fragment.addEventListener('mousedown', (e) => {
+                if (parseFloat(getComputedStyle(fragment).opacity) < 0.3) {
+                    bridgeStart = fragment;
+                    fragment.classList.add('bridging');
+                    
+                    bridgeLine = document.createElement('div');
+                    bridgeLine.className = 'synaptic-bridge';
+                    document.body.appendChild(bridgeLine);
+                }
+            });
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (bridgeStart && bridgeLine) {
+                const startRect = bridgeStart.getBoundingClientRect();
+                const startX = startRect.left + startRect.width / 2;
+                const startY = startRect.top + startRect.height / 2;
+                
+                const angle = Math.atan2(e.clientY - startY, e.clientX - startX);
+                const distance = Math.sqrt(Math.pow(e.clientX - startX, 2) + Math.pow(e.clientY - startY, 2));
+                
+                bridgeLine.style.left = startX + 'px';
+                bridgeLine.style.top = startY + 'px';
+                bridgeLine.style.width = distance + 'px';
+                bridgeLine.style.transform = `rotate(${angle}rad)`;
+                bridgeLine.style.opacity = '1';
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (bridgeStart) {
+                const target = document.elementFromPoint(e.clientX, e.clientY);
+                if (target && target.classList.contains('fragment') && target !== bridgeStart) {
+                    if (parseFloat(getComputedStyle(target).opacity) > 0.5) {
+                        bridgeStart.style.opacity = '0.7';
+                        bridgeStart.style.animation = 'none';
+                        
+                        const pathway = document.createElement('div');
+                        pathway.className = 'neural-pathway active';
+                        const rect1 = bridgeStart.getBoundingClientRect();
+                        const rect2 = target.getBoundingClientRect();
+                        
+                        const svg = `<svg width="${window.innerWidth}" height="${window.innerHeight}" style="position: absolute; top: 0; left: 0;">
+                            <path d="M ${rect1.left + rect1.width/2} ${rect1.top + rect1.height/2} 
+                                     Q ${(rect1.left + rect2.left)/2} ${(rect1.top + rect2.top)/2 - 50}
+                                       ${rect2.left + rect2.width/2} ${rect2.top + rect2.height/2}"
+                                  stroke="rgba(74, 124, 140, 0.5)" stroke-width="2" fill="none"/>
+                        </svg>`;
+                        pathway.innerHTML = svg;
+                        document.body.appendChild(pathway);
+                    }
+                }
+                
+                bridgeStart.classList.remove('bridging');
+                bridgeStart = null;
+                if (bridgeLine) {
+                    bridgeLine.remove();
+                    bridgeLine = null;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

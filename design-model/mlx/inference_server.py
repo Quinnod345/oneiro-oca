@@ -39,25 +39,14 @@ from mlx.utils import tree_flatten
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from train_v2 import DesignHead, SCORE_NAMES, OUTPUT_DIM
-
-# Try to import Phase 3 expert model
-try:
-    from model_v3 import DesignExpertNetwork, create_expert_model, EXPERT_DIMS
-    HAS_V3 = True
-except ImportError:
-    HAS_V3 = False
-
-# Try to import Phase 5 head with auxiliary critique-embedding branch
-try:
-    from train_v5 import DesignHeadV5
-    HAS_V5 = True
-except ImportError:
-    HAS_V5 = False
+# Phase 5 ONLY. Earlier phases were purged 2026-04-28.
+from train_v5 import DesignHeadV5, SCORE_NAMES, OUTPUT_DIM
 
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
+WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v5.safetensors"
 SOCKET_PATH = "/tmp/design-model-v2.sock"
 PID_PATH = "/tmp/design-model-v2.pid"
+PHASE = "phase_5"
 
 # ═══════════════════════════════════════════════════
 # MOBILENET V2 FEATURE EXTRACTOR (PyTorch)
@@ -104,43 +93,23 @@ class MobileNetExtractor:
 
 
 def load_design_model():
-    """Load the best available model (Phase 5 > Phase 3 > Phase 2b).
+    """Load Phase 5 design head. Phase 5 is the only supported phase.
 
-    Phase 5 shares the main-head architecture with Phase 2b; the auxiliary
-    critique-embedding branch only exists on the training side.  At
-    inference we just do the main forward pass, so either DesignHead
-    (v2) or DesignHeadV5 (v5) works with the same call signature.
+    Errors out if the V5 weights file is missing — earlier-phase fallbacks
+    were intentionally removed so callers get a single, unambiguous model.
+    Re-train V5 (mlx/train_v5.py) to regenerate weights if they're lost.
     """
-    # Try Phase 5 head first (has auxiliary critique signal baked into gradients)
-    v5_path = WEIGHTS_DIR / "design-head-v5.safetensors"
-    if HAS_V5 and v5_path.exists():
-        model = DesignHeadV5(dropout=0.0)
-        model.load_weights(str(v5_path))
-        total = sum(p.size for _, p in tree_flatten(model.parameters()))
-        print(f"[server] loaded Phase 5 head: {v5_path.name} ({total:,} params, main + aux)")
-        model.eval()
-        return model, "phase_5"
-
-    # Try Phase 3 expert model
-    v3_path = WEIGHTS_DIR / "design-expert-v3.safetensors"
-    if HAS_V3 and v3_path.exists():
-        model = DesignExpertNetwork(dropout=0.0)
-        model.load_weights(str(v3_path))
-        total = sum(p.size for _, p in tree_flatten(model.parameters()))
-        print(f"[server] loaded Phase 3 expert model: {v3_path.name} ({total:,} params)")
-        model.eval()
-        return model, "phase_3_expert"
-
-    # Fall back to Phase 2b head
-    model = DesignHead(dropout=0.0)
-    weights_path = WEIGHTS_DIR / "design-head-v2.safetensors"
-    if weights_path.exists():
-        model.load_weights(str(weights_path))
-        print(f"[server] loaded Phase 2b head: {weights_path.name} ({sum(p.size for _, p in tree_flatten(model.parameters())):,} params)")
-    else:
-        print(f"[server] WARNING: no trained weights found")
+    if not WEIGHTS_PATH.exists():
+        raise FileNotFoundError(
+            f"Phase 5 weights not found at {WEIGHTS_PATH}. "
+            f"Earlier phases were purged; re-train via `python mlx/train_v5.py` to regenerate."
+        )
+    model = DesignHeadV5(dropout=0.0)
+    model.load_weights(str(WEIGHTS_PATH))
+    total = sum(p.size for _, p in tree_flatten(model.parameters()))
+    print(f"[server] loaded Phase 5 head: {WEIGHTS_PATH.name} ({total:,} params)")
     model.eval()
-    return model, "phase_2b"
+    return model, PHASE
 
 
 # ═══════════════════════════════════════════════════
@@ -241,7 +210,7 @@ class InferenceServer:
             "uptime_s": round(uptime, 1),
             "requests": self.request_count,
             "avg_inference_ms": round(avg_ms, 1),
-            "weights": str(WEIGHTS_DIR / "design-head-v2.safetensors"),
+            "weights": str(WEIGHTS_PATH),
             "socket": SOCKET_PATH,
             "device": str(mx.default_device()),
         }

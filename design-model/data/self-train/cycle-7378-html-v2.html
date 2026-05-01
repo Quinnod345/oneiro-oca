@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Palace Builder</title>
+    <style>
+        :root {
+            --depth: #0a0a0a;
+            --wall: #1a1a1a;
+            --floor: #242424;
+            --highlight: #ffffff;
+            --memory-glow: #ff6b35;
+            --memory-surface: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --interaction-time: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--depth);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .palace-container {
+            perspective: 1200px;
+        }
+
+        .isometric-room {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            transform: rotateX(-30deg) rotateY(-45deg);
+            transform-style: preserve-3d;
+        }
+
+        .floor {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            transform: rotateX(90deg) translateZ(-200px);
+            background: var(--floor);
+        }
+
+        .wall {
+            position: absolute;
+            background: var(--wall);
+        }
+
+        .wall-north {
+            width: 400px;
+            height: 400px;
+            transform: translateZ(200px);
+        }
+
+        .wall-east {
+            width: 400px;
+            height: 400px;
+            transform: rotateY(90deg) translateZ(200px);
+        }
+
+        .memory-pedestal {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: transform var(--interaction-time) ease-out;
+        }
+
+        .memory-pedestal:hover {
+            transform: translateY(-5px);
+        }
+
+        .pedestal-top {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: var(--memory-surface);
+            transform: rotateX(90deg) translateZ(40px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            border: 2px solid transparent;
+            transition: all var(--interaction-time) ease-out;
+        }
+
+        .pedestal-side {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: var(--memory-surface);
+        }
+
+        .pedestal-front {
+            transform: translateZ(40px);
+        }
+
+        .pedestal-back {
+            transform: translateZ(-40px) rotateY(180deg);
+        }
+
+        .pedestal-left {
+            transform: rotateY(-90deg) translateZ(40px);
+        }
+
+        .pedestal-right {
+            transform: rotateY(90deg) translateZ(40px);
+        }
+
+        .memory-pedestal.active .pedestal-top {
+            border-color: var(--memory-glow);
+            box-shadow: 0 0 20px var(--memory-glow);
+        }
+
+        .memory-pedestal.active .pedestal-side {
+            background: linear-gradient(to bottom, var(--memory-surface), #1a1a1a);
+        }
+
+        #pedestal-1 {
+            transform: translate3d(80px, 320px, 80px);
+        }
+
+        #pedestal-2 {
+            transform: translate3d(240px, 320px, 80px);
+        }
+
+        #pedestal-3 {
+            transform: translate3d(160px, 320px, 160px);
+        }
+
+        .memory-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity var(--interaction-time) ease-out;
+            white-space: nowrap;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .memory-pedestal:hover .memory-label {
+            opacity: 1;
+        }
+
+        .controls {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            z-index: 100;
+        }
+
+        .controls h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .controls p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .memory-counter {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .memory-counter span {
+            color: var(--memory-glow);
+            font-weight: 600;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .memory-pedestal.active::after {
+            content: '';
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--memory-glow) 0%, transparent 70%);
+            transform: rotateX(90deg) translateZ(-40px) translate(-20px, -20px);
+            opacity: 0.3;
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1>Memory Palace</h1>
+        <p>Click pedestals to store memories</p>
+    </div>
+
+    <div class="palace-container">
+        <div class="isometric-room">
+            <div class="floor"></div>
+            <div class="wall wall-north"></div>
+            <div class="wall wall-east"></div>
+            
+            <div class="memory-pedestal" id="pedestal-1">
+                <div class="pedestal-top">📚</div>
+                <div class="pedestal-side pedestal-front"></div>
+                <div class="pedestal-side pedestal-back"></div>
+                <div class="pedestal-side pedestal-left"></div>
+                <div class="pedestal-side pedestal-right"></div>
+                <span class="memory-label">Knowledge Base</span>
+            </div>
+            
+            <div class="memory-pedestal" id="pedestal-2">
+                <div class="pedestal-top">🎯</div>
+                <div class="pedestal-side pedestal-front"></div>
+                <div class="pedestal-side pedestal-back"></div>
+                <div class="pedestal-side pedestal-left"></div>
+                <div class="pedestal-side pedestal-right"></div>
+                <span class="memory-label">Goals & Tasks</span>
+            </div>
+            
+            <div class="memory-pedestal" id="pedestal-3">
+                <div class="pedestal-top">💡</div>
+                <div class="pedestal-side pedestal-front"></div>
+                <div class="pedestal-side pedestal-back"></div>
+                <div class="pedestal-side pedestal-left"></div>
+                <div class="pedestal-side pedestal-right"></div>
+                <span class="memory-label">Creative Ideas</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="memory-counter">
+        Active Memories: <span id="counter">0</span> / 3
+    </div>
+
+    <script>
+        const pedestals = document.querySelectorAll('.memory-pedestal');
+        const counter = document.getElementById('counter');
+        let activeCount = 0;
+
+        pedestals.forEach(pedestal => {
+            pedestal.addEventListener('click', () => {
+                if (pedestal.classList.contains('active')) {
+                    pedestal.classList.remove('active');
+                    activeCount--;
+                } else {
+                    pedestal.classList.add('active');
+                    activeCount++;
+                }
+                counter.textContent = activeCount;
+            });
+        });
+    </script>
+</body>
+</html>

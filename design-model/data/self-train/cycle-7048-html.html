@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotional Baggage Claim - Terminal 7</title>
+    <style>
+        :root {
+            --terrazzo: #e8d7c3;
+            --tungsten: #ffaa33;
+            --shadow-brown: #3a2f26;
+            --terminal-green: #00ff41;
+            --leather-worn: #8b6f3d;
+            --leather-dark: #4a3f2a;
+            --brass: #b87333;
+            --nicotine-yellow: #f4e4c1;
+            --carousel-metal: #4a5568;
+            --claim-red: #d32f2f;
+            --heal-gold: #ffd700;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--terrazzo);
+            height: 100vh;
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        .terminal {
+            height: 100vh;
+            display: grid;
+            grid-template-rows: 120px 1fr 160px;
+            position: relative;
+        }
+
+        .tungsten-glow {
+            position: fixed;
+            width: 120%;
+            height: 120%;
+            background: radial-gradient(ellipse at center top, rgba(255, 170, 51, 0.15) 0%, transparent 60%);
+            pointer-events: none;
+            animation: flicker 8s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 0.9; }
+            93% { opacity: 1; }
+        }
+
+        .departure-board {
+            background: var(--shadow-brown);
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            border-bottom: 4px solid var(--brass);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .flip-display {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+        }
+
+        .emotion-status {
+            background: #1a1a1a;
+            padding: 1rem 2rem;
+            border: 2px solid var(--brass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .flip-text {
+            font-family: 'Courier New', monospace;
+            font-size: 1.5rem;
+            color: var(--terminal-green);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .flip-text::after {
+            content: attr(data-hidden);
+            position: absolute;
+            top: 100%;
+            left: 0;
+            color: var(--tungsten);
+            font-size: 0.9rem;
+        }
+
+        .emotion-status:hover .flip-text {
+            transform: translateY(-100%);
+        }
+
+        .carousel-area {
+            position: relative;
+            background: linear-gradient(180deg, var(--terrazzo) 0%, #d4c3b0 100%);
+            overflow: hidden;
+        }
+
+        .terrazzo-pattern {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.3;
+            background-image: 
+                radial-gradient(circle at 20% 30%, var(--shadow-brown) 1px, transparent 1px),
+                radial-gradient(circle at 60% 70%, var(--leather-worn) 2px, transparent 2px),
+                radial-gradient(circle at 80% 20%, var(--brass) 1px, transparent 1px);
+            background-size: 50px 50px, 30px 30px, 40px 40px;
+        }
+
+        .carousel {
+            position: absolute;
+            width: 80%;
+            height: 300px;
+            left: 10%;
+            top: 50%;
+            transform: translateY(-50%);
+            transform-style: preserve-3d;
+        }
+
+        .carousel-belt {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--carousel-metal);
+            border-radius: 150px;
+            transform: rotateX(70deg);
+            box-shadow: 
+                inset 0 0 50px rgba(0,0,0,0.5),
+                0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .belt-segments {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .belt-segment {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            background: rgba(0,0,0,0.2);
+            transform-origin: center;
+        }
+
+        .belt-segment:nth-child(odd) {
+            transform: rotate(30deg);
+        }
+        .belt-segment:nth-child(even) {
+            transform: rotate(60deg);
+        }
+
+        .luggage-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: carouselRotate 30s linear infinite;
+        }
+
+        @keyframes carouselRotate {
+            from { transform: rotateY(0deg); }
+            to { transform: rotateY(-360deg); }
+        }
+
+        .suitcase {
+            position: absolute;
+            cursor: grab;
+            transform-style: preserve-3d;
+            transition: transform 0.3s;
+        }
+
+        .suitcase:active {
+            cursor: grabbing;
+        }
+
+        .suitcase.heavy {
+            width: 120px;
+            height: 80px;
+            transform: translateZ(200px) rotateY(0deg);
+        }
+
+        .suitcase.medium {
+            width: 100px;
+            height: 70px;
+            transform: translateZ(200px) rotateY(120deg);
+        }
+
+        .suitcase.light {
+            width: 80px;
+            height: 60px;
+            transform: translateZ(200px) rotateY(240deg);
+        }
+
+        .leather-texture {
+            width: 100%;
+            height: 100%;
+            background: var(--leather-worn);
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.4),
+                inset 0 0 20px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .leather-texture::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+        }
+
+        .cracks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.7;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 30 Q 40 35 50 50 T 80 70" stroke="rgba(0,0,0,0.3)" fill="none" stroke-width="0.5"/></svg>');
+            transition: opacity 2s;
+        }
+
+        .suitcase.healing .cracks {
+            opacity: 0.1;
+            filter: drop-shadow(0 0 3px var(--heal-gold));
+        }
+
+        .handle {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40%;
+            height: 12px;
+            background: var(--brass);
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .travel-stickers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .sticker {
+            position: absolute;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 3px;
+            transform: rotate(-15deg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .sticker.trauma {
+            background: var(--claim-red);
+            color: white;
+            top: 20%;
+            left: 60%;
+        }
+
+        .sticker.joy {
+            background: var(--tungsten);
+            color: var(--shadow-brown);
+            bottom: 30%;
+            right: 20%;
+            transform: rotate(10deg);
+        }
+
+        .sticker.memory {
+            background: var(--nicotine-yellow);
+            color: var(--shadow-brown);
+            top: 40%;
+            left: 20%;
+            transform: rotate(-5deg);
+        }
+
+        .weight-indicator {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: var(--shadow-brown);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .lost-found {
+            background: var(--shadow-brown);
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 3rem;
+            border-top: 4px solid var(--brass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .lost-found-sign {
+            background: var(--tungsten);
+            color: var(--shadow-brown);
+            padding: 1rem 2rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border: 3px solid var(--brass);
+            transform: rotate(-2deg);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .forgotten-items {
+            display: flex;
+            gap: 1.5rem;
+            flex: 1;
+            overflow-x: auto;
+            padding: 1rem 0;
+        }
+
+        .forgotten-item {
+            width: 80px;
+            height: 80px;
+            background: var(--leather-dark);
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+            opacity: 0.6;
+            flex-shrink: 0;
+        }
+
+        .forgotten-item:hover {
+            opacity: 1;
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .forgotten-item::after {
+            content: '?';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            color: var(--tungsten);
+            opacity: 0.5;
+        }
+
+        .pile-warning {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--claim-red);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            animation: blink 2s infinite;
+            box-shadow: 0 4px 10px rgba(211, 47, 47, 0.4);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .claim-ticket {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 200px;
+            background: var(--nicotine-yellow);
+            padding: 1.5rem;
+            border: 2px dashed var(--shadow-brown);
+            transform: rotate(3deg);
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .claim-ticket:hover {
+            transform: rotate(0deg) scale(1.05);
+        }
+
+        .ticket-number {
+            font-family: 'Courier New', monospace;
+            font-size: 1.5rem;
+            color: var(--claim-red);
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .ticket-text {
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            color: var(--shadow-brown);
+        }
+
+        @media (max-width: 768px) {
+            .carousel {
+                width: 90%;
+                left: 5%;
+            }
+            
+            .flip-display {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .claim-ticket {
+                bottom: 20px;
+                right: 20px;
+                width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tungsten-glow"></div>
+    
+    <div class="terminal">
+        <div class="departure-board">
+            <div class="flip-display">
+                <div class="emotion-status">
+                    <div class="flip-text" data-hidden="UNRESOLVED GRIEF">ANXIETY</div>
+                </div>
+                <div class="emotion-status">
+                    <div class="flip-text" data-hidden="CHILDHOOD TRAUMA">STRESS</div>
+                </div>
+                <div class="emotion-status">
+                    <div class="flip-text" data-hidden="FORGOTTEN JOY">FATIGUE</div>
+                </div>
+                <div class="emotion-status">
+                    <div class="flip-text" data-hidden="BURIED LOVE">NUMBNESS</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="carousel-area">
+            <div class="terrazzo-pattern"></div>
+            
+            <div class="pile-warning">BAGGAGE OVERFLOW - CLAIM IMMEDIATELY</div>
+            
+            <div class="carousel">
+                <div class="carousel-belt">
+                    <div class="belt-segments">
+                        <div class="belt-segment"></div>
+                        <div class="belt-segment"></div>
+                        <div class="belt-segment"></div>
+                        <div class="belt-segment"></div>
+                        <div class="belt-segment"></div>
+                        <div class="belt-segment"></div>
+                    </div>
+                </div>
+                
+                <div class="luggage-container">
+                    <div class="suitcase heavy" draggable="true">
+                        <div class="leather-texture">
+                            <div class="cracks"></div>
+                            <div class="handle"></div>
+                            <div class="travel-stickers">
+                                <div class="sticker trauma">LOSS</div>
+                                <div class="sticker memory">1997</div>
+                            </div>
+                        </div>
+                        <div class="weight-indicator">47.3 kg</div>
+                    </div>
+                    
+                    <div class="suitcase medium healing" draggable="true">
+                        <div class="leather-texture">
+                            <div class="cracks"></div>
+                            <div class="handle"></div>
+                            <div class="travel-stickers">
+                                <div class="sticker joy">FIRST LOVE</div>
+                                <div class="sticker memory">2003</div>
+                            </div>
+                        </div>
+                        <div class="weight-indicator">23.7 kg</div>
+                    </div>
+                    
+                    <div class="suitcase light" draggable="true">
+                        <div class="leather-texture">
+                            <div class="cracks"></div>
+                            <div class="handle"></div>
+                            <div class="travel-stickers">
+                                <div class="sticker joy">LAUGHTER</div>
+                                <div class="sticker memory">YESTERDAY</div>
+                            </div>
+                        </div>
+                        <div class="weight-indicator">8.2 kg</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lost-found">
+            <div class="lost-found-sign">LOST & FOUND</div>
+            <div class="forgotten-items">
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+                <div class="forgotten-item"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="claim-ticket">
+        <div class="ticket-number">A-7834</div>
+        <div class="ticket-text">EMOTIONAL CLAIM TICKET</div>
+    </div>
+
+    <script>
+        const suitcases = document.querySelectorAll('.suitcase');
+        let draggedElement = null;
+
+        suitcases.forEach(suitcase => {
+            suitcase.addEventListener('dragstart', (e) => {
+                draggedElement = suitcase;
+                suitcase.style.opacity = '0.5';
+            });
+
+            suitcase.addEventListener('dragend', (e) => {
+                suitcase.style.opacity = '1';
+                
+                // Simulate weight resistance
+                if (suitcase.classList.contains('heavy')) {
+                    suitcase.style.transition = 'transform 1s ease-out';
+                    suitcase.style.transform = `translateZ(200px) rotateY(${Math.random() * 360}deg) translateY(${Math.random() * 20}px)`;
+                }
+            });
+
+            suitcase.addEventListener('click', () => {
+                suitcase.classList.toggle('healing');
+            });
+        });
+
+        // Forgotten items reveal
+        document.querySelectorAll('.forgotten-item').forEach((item, index) => {
+            item.addEventListener('click', () => {
+                item.style.background = 'var(--heal-gold)';
+                item.style.opacity = '1';
+                item.innerHTML = '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 10px; text-align: center; color: var(--shadow-brown); font-weight: bold;">FOUND<br>JOY</div>';
+            });
+        });
+
+        // Flip display interactions
+        document.querySelectorAll('.flip-text').forEach(text => {
+            text.addEventListener('click', () => {
+                const hidden = text.getAttribute('data-hidden');
+                const current = text.textContent;
+                text.textContent = hidden;
+                text.setAttribute('data-hidden', current);
+            });
+        });
+    </script>
+</body>
+</html>

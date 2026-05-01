@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Simulator</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --memory-active: #4a7c8c;
+            --memory-inactive: #1a1a2e;
+            --memory-glow: #6ba3b8;
+            --text-primary: #e0e0e0;
+            --text-secondary: #808080;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--bg-primary);
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        .header {
+            position: absolute;
+            top: 60px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .memory-container {
+            width: min(90vw, 1200px);
+            height: min(70vh, 600px);
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 24px;
+            padding: 40px;
+        }
+
+        .memory-fragment {
+            aspect-ratio: 1;
+            background: var(--memory-inactive);
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.3;
+        }
+
+        .memory-fragment::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, transparent 0%, var(--memory-active) 100%);
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-fragment.active {
+            opacity: 1;
+            background: var(--memory-active);
+            transform: scale(1.05);
+        }
+
+        .memory-fragment.active::before {
+            opacity: 0.3;
+        }
+
+        .memory-fragment.decaying {
+            animation: decay 8s ease-out forwards;
+        }
+
+        @keyframes decay {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0.3;
+                transform: scale(0.95);
+            }
+        }
+
+        .memory-fragment:hover:not(.decaying) {
+            background: var(--memory-glow);
+            opacity: 1;
+            box-shadow: 0 0 20px rgba(107, 163, 184, 0.4);
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 60px;
+            display: flex;
+            gap: 40px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            font-weight: 300;
+            display: block;
+            margin-top: 0.25rem;
+        }
+
+        .control-hint {
+            position: absolute;
+            top: 120px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .memory-container {
+                grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+                gap: 16px;
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .stats {
+                gap: 20px;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Memory Decay Simulator</h1>
+        <p>Watch memories fade over time</p>
+    </div>
+
+    <p class="control-hint">Click memories to preserve them</p>
+
+    <div class="memory-container" id="memoryGrid"></div>
+
+    <div class="stats">
+        <div class="stat-item">
+            <div>Active Memories</div>
+            <span class="stat-value" id="activeCount">0</span>
+        </div>
+        <div class="stat-item">
+            <div>Decaying</div>
+            <span class="stat-value" id="decayingCount">0</span>
+        </div>
+        <div class="stat-item">
+            <div>Lost</div>
+            <span class="stat-value" id="lostCount">0</span>
+        </div>
+    </div>
+
+    <script>
+        const memoryGrid = document.getElementById('memoryGrid');
+        const activeCount = document.getElementById('activeCount');
+        const decayingCount = document.getElementById('decayingCount');
+        const lostCount = document.getElementById('lostCount');
+        
+        const MEMORY_COUNT = 24;
+        let memories = [];
+        let stats = { active: 0, decaying: 0, lost: 0 };
+
+        class Memory {
+            constructor(id) {
+                this.id = id;
+                this.element = document.createElement('div');
+                this.element.className = 'memory-fragment';
+                this.element.dataset.id = id;
+                this.state = 'inactive';
+                this.decayTimeout = null;
+                
+                this.element.addEventListener('click', () => this.preserve());
+                memoryGrid.appendChild(this.element);
+                
+                this.activate();
+            }
+
+            activate() {
+                this.element.classList.add('active');
+                this.state = 'active';
+                this.scheduleDecay();
+                updateStats();
+            }
+
+            scheduleDecay() {
+                if (this.decayTimeout) clearTimeout(this.decayTimeout);
+                this.decayTimeout = setTimeout(() => this.startDecay(), Math.random() * 3000 + 2000);
+            }
+
+            startDecay() {
+                if (this.state === 'active') {
+                    this.element.classList.remove('active');
+                    this.element.classList.add('decaying');
+                    this.state = 'decaying';
+                    
+                    setTimeout(() => {
+                        if (this.state === 'decaying') {
+                            this.state = 'lost';
+                            updateStats();
+                        }
+                    }, 8000);
+                    
+                    updateStats();
+                }
+            }
+
+            preserve() {
+                if (this.state === 'decaying' || this.state === 'lost') {
+                    this.element.classList.remove('decaying');
+                    this.activate();
+                } else if (this.state === 'active') {
+                    this.scheduleDecay();
+                }
+            }
+        }
+
+        function updateStats() {
+            stats = { active: 0, decaying: 0, lost: 0 };
+            memories.forEach(memory => {
+                stats[memory.state]++;
+            });
+            
+            activeCount.textContent = stats.active;
+            decayingCount.textContent = stats.decaying;
+            lostCount.textContent = stats.lost;
+        }
+
+        function initializeMemories() {
+            for (let i = 0; i < MEMORY_COUNT; i++) {
+                setTimeout(() => {
+                    memories.push(new Memory(i));
+                }, i * 100);
+            }
+        }
+
+        initializeMemories();
+
+        // Randomly reactivate lost memories
+        setInterval(() => {
+            const lostMemories = memories.filter(m => m.state === 'lost');
+            if (lostMemories.length > 0) {
+                const random = lostMemories[Math.floor(Math.random() * lostMemories.length)];
+                random.activate();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

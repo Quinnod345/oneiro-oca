@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Limb Piano</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --memory: #1a1a2e;
+            --neural: #16213e;
+            --phantom-glow: #4a5fc1;
+            --sensation: #7b8ff7;
+            --pulse: #a8b9ff;
+            --echo: rgba(123, 143, 247, 0.1);
+            --whisper: rgba(168, 185, 255, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--void);
+            color: var(--pulse);
+            overflow: hidden;
+            position: relative;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .neural-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, var(--echo) 0%, transparent 40%),
+                radial-gradient(ellipse at 80% 70%, var(--whisper) 0%, transparent 50%),
+                linear-gradient(180deg, var(--void) 0%, var(--memory) 50%, var(--neural) 100%);
+        }
+
+        .calibration-mode {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            z-index: 100;
+        }
+
+        .mode-indicator {
+            font-size: 14px;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            opacity: 0.5;
+            margin-bottom: 8px;
+        }
+
+        .mode-status {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--sensation);
+            transition: all 0.3s ease;
+        }
+
+        .mode-status.active {
+            color: var(--pulse);
+            text-shadow: 0 0 20px var(--phantom-glow);
+        }
+
+        .phantom-space {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 600px;
+            perspective: 1000px;
+        }
+
+        .hand-memory {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: rotateX(5deg) rotateY(-10deg) translateZ(0); }
+            50% { transform: rotateX(5deg) rotateY(10deg) translateZ(20px); }
+        }
+
+        .phantom-hand {
+            position: absolute;
+            width: 400px;
+            height: 500px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .finger-zone {
+            position: absolute;
+            background: transparent;
+            border: 1px dashed var(--echo);
+            border-radius: 50%;
+            transition: all 0.4s ease;
+            cursor: crosshair;
+        }
+
+        .finger-zone.thumb {
+            width: 80px;
+            height: 80px;
+            bottom: 120px;
+            left: 60px;
+        }
+
+        .finger-zone.index {
+            width: 60px;
+            height: 120px;
+            top: 80px;
+            left: 120px;
+            border-radius: 40% 60% 60% 40%;
+        }
+
+        .finger-zone.middle {
+            width: 60px;
+            height: 140px;
+            top: 50px;
+            left: 180px;
+            border-radius: 40% 60% 60% 40%;
+        }
+
+        .finger-zone.ring {
+            width: 60px;
+            height: 130px;
+            top: 70px;
+            left: 240px;
+            border-radius: 40% 60% 60% 40%;
+        }
+
+        .finger-zone.pinky {
+            width: 50px;
+            height: 100px;
+            top: 100px;
+            left: 290px;
+            border-radius: 40% 60% 60% 40%;
+        }
+
+        .finger-zone.calibrating {
+            border-color: var(--sensation);
+            background: var(--echo);
+            animation: calibrate-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes calibrate-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.1); opacity: 0.6; }
+        }
+
+        .finger-zone.active {
+            background: radial-gradient(ellipse at center, var(--sensation) 0%, transparent 70%);
+            border: none;
+            animation: phantom-pulse 0.8s ease-out;
+        }
+
+        @keyframes phantom-pulse {
+            0% { 
+                transform: scale(0.8); 
+                opacity: 0;
+                filter: blur(10px);
+            }
+            50% { 
+                transform: scale(1.2); 
+                opacity: 0.8;
+                filter: blur(0);
+            }
+            100% { 
+                transform: scale(1); 
+                opacity: 0.3;
+                filter: blur(5px);
+            }
+        }
+
+        .sensation-trail {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--pulse);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: trail-fade 2s ease-out forwards;
+        }
+
+        @keyframes trail-fade {
+            0% { 
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            100% { 
+                opacity: 0;
+                transform: scale(0.2);
+            }
+        }
+
+        .frequency-map {
+            position: absolute;
+            bottom: 60px;
+            left: 60px;
+            width: 300px;
+            height: 120px;
+            background: var(--memory);
+            border: 1px solid var(--neural);
+            border-radius: 4px;
+            padding: 20px;
+            opacity: 0.8;
+        }
+
+        .frequency-label {
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.5;
+            margin-bottom: 10px;
+        }
+
+        .frequency-bars {
+            display: flex;
+            align-items: flex-end;
+            height: 60px;
+            gap: 4px;
+        }
+
+        .freq-bar {
+            flex: 1;
+            background: var(--phantom-glow);
+            min-height: 2px;
+            transition: height 0.2s ease;
+            opacity: 0.6;
+        }
+
+        .memory-controls {
+            position: absolute;
+            bottom: 60px;
+            right: 60px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: 1px solid var(--neural);
+            color: var(--sensation);
+            padding: 12px 24px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.1em;
+        }
+
+        .control-btn:hover {
+            border-color: var(--sensation);
+            background: var(--echo);
+            transform: translateY(-2px);
+        }
+
+        .control-btn.active {
+            background: var(--phantom-glow);
+            color: var(--void);
+            border-color: var(--phantom-glow);
+        }
+
+        .sensation-indicator {
+            position: absolute;
+            top: 40px;
+            right: 60px;
+            width: 200px;
+            text-align: right;
+        }
+
+        .sensation-level {
+            font-size: 48px;
+            font-weight: 100;
+            color: var(--sensation);
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .sensation-label {
+            font-size: 12px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            opacity: 0.5;
+        }
+
+        .neural-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--pulse);
+            border-radius: 50%;
+            animation: drift 20s linear infinite;
+        }
+
+        @keyframes drift {
+            0% {
+                transform: translateY(100vh) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.4;
+            }
+            90% {
+                opacity: 0.4;
+            }
+            100% {
+                transform: translateY(-100px) translateX(100px);
+                opacity: 0;
+            }
+        }
+
+        .instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            max-width: 600px;
+            opacity: 0;
+            animation: fade-in 2s ease-out 1s forwards;
+        }
+
+        @keyframes fade-in {
+            to { opacity: 0.7; }
+        }
+
+        .instructions h2 {
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 20px;
+            color: var(--sensation);
+        }
+
+        .instructions p {
+            font-size: 16px;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
+        .phantom-echo {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, transparent 40%, var(--echo) 60%, transparent 70%);
+            animation: echo-expand 3s ease-out infinite;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        @keyframes echo-expand {
+            0% {
+                transform: scale(0.5);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+
+        .calibration-progress {
+            position: absolute;
+            top: 120px;
+            left: 60px;
+            width: 300px;
+        }
+
+        .progress-track {
+            height: 2px;
+            background: var(--neural);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--sensation);
+            width: 0%;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 10px var(--phantom-glow);
+        }
+
+        .sound-wave {
+            position: absolute;
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 100px;
+            opacity: 0.3;
+        }
+
+        .wave-line {
+            stroke: var(--sensation);
+            fill: none;
+            stroke-width: 2;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="neural-field"></div>
+    
+    <div class="neural-particles">
+        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 30%; animation-delay: 3s;"></div>
+        <div class="particle" style="left: 50%; animation-delay: 6s;"></div>
+        <div class="particle" style="left: 70%; animation-delay: 9s;"></div>
+        <div class="particle" style="left: 90%; animation-delay: 12s;"></div>
+    </div>
+
+    <div class="calibration-mode">
+        <div class="mode-indicator">Current Mode</div>
+        <div class="mode-status">Calibration</div>
+    </div>
+
+    <div class="calibration-progress">
+        <div class="progress-track">
+            <div class="progress-fill" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <div class="sensation-indicator">
+        <div class="sensation-level">0.0</div>
+        <div class="sensation-label">Neural Response</div>
+    </div>
+
+    <div class="phantom-space">
+        <div class="hand-memory">
+            <div class="phantom-hand">
+                <div class="finger-zone thumb" data-note="C3"></div>
+                <div class="finger-zone index" data-note="E3"></div>
+                <div class="finger-zone middle" data-note="G3"></div>
+                <div class="finger-zone ring" data-note="B3"></div>
+                <div class="finger-zone pinky" data-note="D4"></div>
+                <div class="phantom-echo"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <h2>Begin Phantom Calibration</h2>
+        <p>Focus on the sensation of your missing fingers. When you feel a tingle, phantom movement, or memory of touch, click the corresponding zone. Your neural patterns will create unique musical frequencies.</p>
+    </div>
+
+    <div class="frequency-map">
+        <div class="frequency-label">Sensation Frequency Map</div>
+        <div class="frequency-bars">
+            <div class="freq-bar" style="height: 20%;"></div>
+            <div class="freq-bar" style="height: 35%;"></div>
+            <div class="freq-bar" style="height: 15%;"></div>
+            <div class="freq-bar" style="height: 45%;"></div>
+            <div class="freq-bar" style="height: 25%;"></div>
+            <div class="freq-bar" style="height: 60%;"></div>
+            <div class="freq-bar" style="height: 30%;"></div>
+            <div class="freq-bar" style="height: 40%;"></div>
+        </div>
+    </div>
+
+    <svg class="sound-wave" viewBox="0 0 600 100">
+        <path class="wave-line" d="M0,50 Q150,30 300,50 T600,50" />
+    </svg>
+
+    <div class="memory-controls">
+        <button class="control-btn active">Calibrate</button>
+        <button class="control-btn">Perform</button>
+        <button class="control-btn">Memory Map</button>
+    </div>
+
+    <script>
+        const zones = document.querySelectorAll('.finger-zone');
+        const sensationLevel = document.querySelector('.sensation-level');
+        const progressFill = document.querySelector('.progress-fill');
+        const instructions = document.querySelector('.instructions');
+        const frequencyBars = document.querySelectorAll('.freq-bar');
+        const phantomSpace = document.querySelector('.phantom-space');
+        
+        let calibrationProgress = 0;
+        let isCalibrating = true;
+        
+        zones.forEach((zone, index) => {
+            zone.addEventListener('mouseenter', () => {
+                if (isCalibrating) {
+                    zone.classList.add('calibrating');
+                    updateSensation(0.3 + Math.random() * 0.4);
+                }
+            });
+            
+            zone.addEventListener('mouseleave', () => {
+                zone.classList.remove('calibrating');
+                updateSensation(0);
+            });
+            
+            zone.addEventListener('click', (e) => {
+                instructions.style.opacity = '0';
+                zone.classList.add('active');
+                createSensationTrail(e.pageX, e.pageY);
+                
+                if (isCalibrating) {
+                    calibrationProgress += 20;
+                    progressFill.style.width = `${Math.min(calibrationProgress, 100)}%`;
+                }
+                
+                updateSensation(0.8 + Math.random() * 0.2);
+                animateFrequencyBars();
+                
+                setTimeout(() => {
+                    zone.classList.remove('active');
+                    updateSensation(0);
+                }, 800);
+            });
+        });
+        
+        function updateSensation(level) {
+            sensationLevel.textContent = level.toFixed(1);
+            sensationLevel.style.opacity = 0.5 + (level * 0.5);
+            sensationLevel.style.textShadow = `0 0 ${level * 30}px var(--phantom-glow)`;
+        }
+        
+        function createSensationTrail(x, y) {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const trail = document.createElement('div');
+                    trail.className = 'sensation-trail';
+                    trail.style.left = `${x + (Math.random() - 0.5) * 50}px`;
+                    trail.style.top = `${y + (Math.random() - 0.5) * 50}px`;
+                    document.body.appendChild(trail);
+                    
+                    setTimeout(() => trail.remove(), 2000);
+                }, i * 100);
+            }
+        }
+        
+        function animateFrequencyBars() {
+            frequencyBars.forEach((bar, index) => {
+                const height = 20 + Math.random() * 60;
+                setTimeout(() => {
+                    bar.style.height = `${height}%`;
+                    bar.style.opacity = 0.3 + Math.random() * 0.7;
+                }, index * 50);
+                
+                setTimeout(() => {
+                    bar.style.height = `${20 + Math.random() * 30}%`;
+                    bar.style.opacity = 0.6;
+                }, 500 + index * 50);
+            });
+        }
+        
+        document.querySelectorAll('.control-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.control-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                if (btn.textContent === 'Perform') {
+                    isCalibrating = false;
+                    document.querySelector('.mode-status').textContent = 'Performance';
+                    document.querySelector('.mode-status').classList.add('active');
+                } else if (btn.textContent === 'Calibrate') {
+                    isCalibrating = true;
+                    document.querySelector('.mode-status').textContent = 'Calibration';
+                    document.querySelector('.mode-status').classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

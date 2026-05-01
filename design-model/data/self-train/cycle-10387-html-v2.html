@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Fragment Collector</title>
+    <style>
+        :root {
+            --dawn-deep: #1a0f2e;
+            --dawn-purple: #3d2f5b;
+            --dawn-light: #d4a574;
+            --wisp-active: #88b0d3;
+            --text-primary: rgba(212, 165, 116, 0.9);
+            --text-secondary: rgba(212, 165, 116, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(180deg, var(--dawn-deep) 0%, var(--dawn-purple) 60%, var(--dawn-deep) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 200;
+            color: var(--text-primary);
+            letter-spacing: 0.2em;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+        }
+
+        .collection-area {
+            flex: 1;
+            position: relative;
+            border-radius: 20px;
+            background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.02) 0%, transparent 70%);
+            backdrop-filter: blur(10px);
+        }
+
+        .fragment {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fragment::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--wisp-active);
+            border-radius: 50%;
+            opacity: 0.6;
+            filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .fragment::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            background: var(--dawn-light);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.8;
+        }
+
+        .fragment:hover {
+            transform: scale(1.1);
+        }
+
+        .fragment:hover::before {
+            filter: blur(30px);
+            opacity: 0.8;
+        }
+
+        .fragment.collected {
+            pointer-events: none;
+            animation: collect 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes collect {
+            to {
+                transform: scale(0);
+                opacity: 0;
+            }
+        }
+
+        .counter {
+            position: fixed;
+            bottom: 3rem;
+            right: 3rem;
+            padding: 1.5rem 2rem;
+            background: rgba(26, 15, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            z-index: 10;
+        }
+
+        .counter-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .counter-value {
+            font-size: 2rem;
+            font-weight: 200;
+            color: var(--text-primary);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(136, 176, 211, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+            animation: drift 20s infinite alternate ease-in-out;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(-50%, -50%); }
+            100% { transform: translate(calc(-50% + 100px), calc(-50% + 50px)); }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow" style="top: 20%; left: 30%;"></div>
+    
+    <div class="container">
+        <header>
+            <h1>DREAM FRAGMENTS</h1>
+            <p class="subtitle">Collect the scattered pieces of consciousness</p>
+        </header>
+        
+        <div class="collection-area" id="collectionArea">
+            <!-- Fragments will be generated here -->
+        </div>
+    </div>
+
+    <div class="counter">
+        <div class="counter-label">COLLECTED</div>
+        <div class="counter-value" id="counter">0</div>
+    </div>
+
+    <script>
+        const collectionArea = document.getElementById('collectionArea');
+        const counter = document.getElementById('counter');
+        let collected = 0;
+
+        function createFragment() {
+            const fragment = document.createElement('div');
+            fragment.className = 'fragment';
+            
+            const areaRect = collectionArea.getBoundingClientRect();
+            const x = Math.random() * (areaRect.width - 80);
+            const y = Math.random() * (areaRect.height - 80);
+            
+            fragment.style.left = `${x}px`;
+            fragment.style.top = `${y}px`;
+            
+            fragment.addEventListener('click', function() {
+                this.classList.add('collected');
+                collected++;
+                counter.textContent = collected;
+                
+                setTimeout(() => {
+                    this.remove();
+                    if (collectionArea.children.length < 8) {
+                        setTimeout(createFragment, 1000);
+                    }
+                }, 800);
+            });
+            
+            collectionArea.appendChild(fragment);
+        }
+
+        // Initialize with fragments
+        for (let i = 0; i < 8; i++) {
+            setTimeout(() => createFragment(), i * 200);
+        }
+    </script>
+</body>
+</html>

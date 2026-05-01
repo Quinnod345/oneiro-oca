@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Debt Calculator</title>
+    <style>
+        :root {
+            --bg-day: #f8f9fa;
+            --bg-night: #1a1f2e;
+            --text-day: #2d3436;
+            --text-night: #f1f3f5;
+            --accent: #6c5ce7;
+            --warning: #fd79a8;
+            --success: #00b894;
+            --card-day: #ffffff;
+            --card-night: #2d3447;
+            --border: #e1e4e8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-day);
+            color: var(--text-day);
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        body.night-mode {
+            background: var(--bg-night);
+            color: var(--text-night);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-day);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            transition: background-color 0.3s ease;
+        }
+
+        body.night-mode .container {
+            background: var(--card-night);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+
+        body.night-mode .subtitle {
+            color: #9ca3af;
+        }
+
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: 2px solid var(--border);
+            border-radius: 24px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        body.night-mode .mode-toggle {
+            border-color: var(--text-night);
+            color: var(--text-night);
+        }
+
+        .mode-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-grid {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+        }
+
+        body.night-mode label {
+            color: #9ca3af;
+        }
+
+        input[type="number"] {
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: transparent;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        body.night-mode input[type="number"] {
+            border-color: #4b5563;
+            color: var(--text-night);
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .calculate-btn {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 32px;
+        }
+
+        .calculate-btn:hover {
+            background: #5f3dc4;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(108, 92, 231, 0.2);
+        }
+
+        .results {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card {
+            background: var(--bg-day);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        body.night-mode .result-card {
+            background: var(--bg-night);
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .result-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .result-icon.good {
+            background: rgba(0, 184, 148, 0.1);
+            color: var(--success);
+        }
+
+        .result-icon.warning {
+            background: rgba(253, 121, 168, 0.1);
+            color: var(--warning);
+        }
+
+        .result-title {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .result-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+
+        .result-description {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+
+        body.night-mode .result-description {
+            color: #9ca3af;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 16px;
+        }
+
+        body.night-mode .progress-bar {
+            background: #4b5563;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-fill.warning {
+            background: var(--warning);
+        }
+
+        .progress-fill.success {
+            background: var(--success);
+        }
+    </style>
+</head>
+<body>
+    <button class="mode-toggle" onclick="toggleMode()">
+        <span id="mode-icon">🌙</span>
+        <span id="mode-text">Night</span>
+    </button>
+
+    <div class="container">
+        <div class="header">
+            <h1>Sleep Debt Calculator</h1>
+            <p class="subtitle">Track your sleep patterns and calculate your sleep debt</p>
+        </div>
+
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="ideal-sleep">Ideal Sleep Hours</label>
+                <input type="number" id="ideal-sleep" min="1" max="24" step="0.5" value="8" placeholder="8">
+            </div>
+
+            <div class="input-group">
+                <label for="monday">Monday</label>
+                <input type="number" id="monday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="tuesday">Tuesday</label>
+                <input type="number" id="tuesday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="wednesday">Wednesday</label>
+                <input type="number" id="wednesday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="thursday">Thursday</label>
+                <input type="number" id="thursday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="friday">Friday</label>
+                <input type="number" id="friday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="saturday">Saturday</label>
+                <input type="number" id="saturday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+
+            <div class="input-group">
+                <label for="sunday">Sunday</label>
+                <input type="number" id="sunday" min="0" max="24" step="0.5" placeholder="Hours slept">
+            </div>
+        </div>
+
+        <button class="calculate-btn" onclick="calculateSleepDebt()">Calculate Sleep Debt</button>
+
+        <div id="results" class="results">
+            <div class="result-card">
+                <div class="result-header">
+                    <div class="result-icon" id="debt-icon">
+                        <span>📊</span>
+                    </div>
+                    <h3 class="result-title">Weekly Sleep Debt</h3>
+                </div>
+                <div class="result-value" id="debt-value">0 hours</div>
+                <p class="result-description" id="debt-description">You're getting exactly the sleep you need!</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="debt-progress"></div>
+                </div>
+            </div>
+
+            <div class="result-card">
+                <div class="result-header">
+                    <div class="result-icon good">
+                        <span>⏰</span>
+                    </div>
+                    <h3 class="result-title">Average Sleep</h3>
+                </div>
+                <div class="result-value" id="average-value">0 hours</div>
+                <p class="result-description">Per night this week</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleMode() {
+            document.body.classList.toggle('night-mode');
+            const icon = document.getElementById('mode-icon');
+            const text = document.getElementById('mode-text');
+            
+            if (document.body.classList.contains('night-mode')) {
+                icon.textContent = '☀️';
+                text.textContent = 'Day';
+            } else {
+                icon.textContent = '🌙';
+                text.textContent = 'Night';
+            }
+        }
+
+        function calculateSleepDebt() {
+            const idealSleep = parseFloat(document.getElementById('ideal-sleep').value) || 8;
+            const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            
+            let totalSleep = 0;
+            let daysWithData = 0;
+            
+            days.forEach(day => {
+                const value = parseFloat(document.getElementById(day).value);
+                if (!isNaN(value)) {
+                    totalSleep += value;
+                    daysWithData++;
+                }
+            });
+            
+            if (daysWithData === 0) {
+                alert('Please enter sleep hours for at least one day');
+                return;
+            }
+            
+            const idealWeeklyTotal = idealSleep * daysWithData;
+            const sleepDebt = idealWeeklyTotal - totalSleep;
+            const averageSleep = totalSleep / daysWithData;
+            
+            // Update results
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('debt-value').textContent = Math.abs(sleepDebt).toFixed(1) + ' hours';
+            document.getElementById('average-value').textContent = averageSleep.toFixed(1) + ' hours';
+            
+            // Update debt icon and description
+            const debtIcon = document.getElementById('debt-icon');
+            const debtDescription = document.getElementById('debt-description');
+            const debtProgress = document.getElementById('debt-progress');
+            
+            if (sleepDebt > 0) {
+                debtIcon.className = 'result-icon warning';
+                debtIcon.innerHTML = '<span>😴</span>';
+                debtDescription.textContent = `You're ${sleepDebt.toFixed(1)} hours behind on sleep this week`;
+                debtProgress.className = 'progress-fill warning';
+                debtProgress.style.width = Math.min((sleepDebt / idealWeeklyTotal) * 100, 100) + '%';
+            } else if (sleepDebt < 0) {
+                debtIcon.className = 'result-icon success';
+                debtIcon.innerHTML = '<span>🌟</span>';
+                debtDescription.textContent = `Great! You're getting ${Math.abs(sleepDebt).toFixed(1)} extra hours of sleep`;
+                debtProgress.className = 'progress-fill success';
+                debtProgress.style.width = Math.min((Math.abs(sleepDebt) / idealWeeklyTotal) * 100, 100) + '%';
+            } else {
+                debtIcon.className = 'result-icon good';
+                debtIcon.innerHTML = '<span>✨</span>';
+                debtDescription.textContent = "Perfect! You're getting exactly the sleep you need";
+                debtProgress.className = 'progress-fill success';
+                debtProgress.style.width = '100%';
+            }
+        }
+    </script>
+</body>
+</html>

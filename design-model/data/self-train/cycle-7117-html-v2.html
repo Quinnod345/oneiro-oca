@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --bg-primary: #FAF8F6;
+            --bg-secondary: #F4F0EA;
+            --text-primary: #3A3632;
+            --border-light: #E5E2DE;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 2rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+
+        main {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+
+        .input-section, .output-section {
+            background: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input[type="number"], 
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 1px solid var(--border-light);
+            border-radius: 4px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--text-primary);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: var(--border-light);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--text-primary);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--text-primary);
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .range-value {
+            text-align: right;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            opacity: 0.7;
+        }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1rem;
+            font-weight: 500;
+            background: var(--text-primary);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .visualization {
+            height: 200px;
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 4px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .decay-curve {
+            width: 100%;
+            height: 100%;
+        }
+
+        .curve-path {
+            fill: none;
+            stroke: var(--text-primary);
+            stroke-width: 2;
+        }
+
+        .axis {
+            stroke: var(--border-light);
+            stroke-width: 1;
+        }
+
+        .result-item {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            font-size: 0.875rem;
+            opacity: 0.7;
+            margin-bottom: 0.25rem;
+        }
+
+        .result-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Memory Decay Calculator</h1>
+        <p class="subtitle">Model memory retention and forgetting curves based on cognitive parameters</p>
+    </header>
+
+    <main>
+        <section class="input-section">
+            <h2 class="section-title">Memory Parameters</h2>
+            
+            <form id="memoryForm">
+                <div class="form-group">
+                    <label for="memoryType">Memory Type</label>
+                    <select id="memoryType" name="memoryType">
+                        <option value="episodic">Episodic Memory</option>
+                        <option value="semantic">Semantic Memory</option>
+                        <option value="procedural">Procedural Memory</option>
+                        <option value="working">Working Memory</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="initialStrength">Initial Memory Strength</label>
+                    <input type="range" id="initialStrength" name="initialStrength" min="0" max="100" value="75">
+                    <div class="range-value"><span id="strengthValue">75</span>%</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="timeInterval">Time Interval (days)</label>
+                    <input type="number" id="timeInterval" name="timeInterval" min="1" max="365" value="30">
+                </div>
+
+                <div class="form-group">
+                    <label for="reinforcement">Reinforcement Events</label>
+                    <input type="number" id="reinforcement" name="reinforcement" min="0" max="10" value="0">
+                </div>
+
+                <div class="form-group">
+                    <label for="emotionalWeight">Emotional Weight</label>
+                    <input type="range" id="emotionalWeight" name="emotionalWeight" min="0" max="100" value="50">
+                    <div class="range-value"><span id="emotionalValue">50</span>%</div>
+                </div>
+
+                <button type="submit">Calculate Decay</button>
+            </form>
+        </section>
+
+        <section class="output-section">
+            <h2 class="section-title">Decay Analysis</h2>
+            
+            <div class="visualization">
+                <svg class="decay-curve" viewBox="0 0 400 200">
+                    <line class="axis" x1="40" y1="160" x2="360" y2="160"/>
+                    <line class="axis" x1="40" y1="160" x2="40" y2="40"/>
+                    <path class="curve-path" id="decayCurve" d="M 40 50 Q 200 100, 360 140"/>
+                </svg>
+            </div>
+
+            <div class="results">
+                <div class="result-item">
+                    <div class="result-label">Retention after interval</div>
+                    <div class="result-value" id="retentionResult">--</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Half-life (days)</div>
+                    <div class="result-value" id="halfLifeResult">--</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Recommended review</div>
+                    <div class="result-value" id="reviewResult">--</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Update range values
+        document.getElementById('initialStrength').addEventListener('input', function(e) {
+            document.getElementById('strengthValue').textContent = e.target.value;
+        });
+
+        document.getElementById('emotionalWeight').addEventListener('input', function(e) {
+            document.getElementById('emotionalValue').textContent = e.target.value;
+        });
+
+        // Form submission
+        document.getElementById('memoryForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const memoryType = document.getElementById('memoryType').value;
+            const initialStrength = parseInt(document.getElementById('initialStrength').value);
+            const timeInterval = parseInt(document.getElementById('timeInterval').value);
+            const reinforcement = parseInt(document.getElementById('reinforcement').value);
+            const emotionalWeight = parseInt(document.getElementById('emotionalWeight').value);
+            
+            // Simple decay calculation
+            const decayRate = 0.1 - (emotionalWeight * 0.0005) - (reinforcement * 0.01);
+            const retention = initialStrength * Math.exp(-decayRate * timeInterval);
+            const halfLife = Math.log(2) / decayRate;
+            
+            // Update results
+            document.getElementById('retentionResult').textContent = Math.round(retention) + '%';
+            document.getElementById('halfLifeResult').textContent = Math.round(halfLife);
+            document.getElementById('reviewResult').textContent = Math.round(halfLife * 0.7) + ' days';
+            
+            // Update curve
+            const curve = document.getElementById('decayCurve');
+            const points = [];
+            for (let t = 0; t <= timeInterval; t += timeInterval/10) {
+                const x = 40 + (320 * t / timeInterval);
+                const y = 160 - (120 * initialStrength * Math.exp(-decayRate * t) / 100);
+                points.push(`${x},${y}`);
+            }
+            curve.setAttribute('d', `M ${points.join(' L ')}`);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Origami</title>
+    <style>
+        :root {
+            --paper: #fefdf8;
+            --ink: #1a1a1a;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --fold: #e8e4db;
+            --active: #c94d3f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--paper);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px;
+        }
+
+        .paper-strip {
+            width: 90vw;
+            max-width: 1200px;
+            height: 400px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fold-section {
+            position: absolute;
+            width: 300px;
+            height: 400px;
+            background: var(--paper);
+            border: 1px solid var(--fold);
+            transform-origin: left center;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            box-shadow: 
+                2px 0 8px var(--shadow),
+                inset -2px 0 2px rgba(0, 0, 0, 0.02);
+        }
+
+        .fold-section:nth-child(1) { left: 0; z-index: 5; }
+        .fold-section:nth-child(2) { left: 280px; z-index: 4; transform: rotateY(-15deg); }
+        .fold-section:nth-child(3) { left: 560px; z-index: 3; transform: rotateY(-30deg); }
+        .fold-section:nth-child(4) { left: 840px; z-index: 2; transform: rotateY(-45deg); }
+        .fold-section:nth-child(5) { left: 1120px; z-index: 1; transform: rotateY(-60deg); }
+
+        .fold-section.active {
+            transform: rotateY(0deg);
+            z-index: 10;
+            box-shadow: 
+                4px 0 20px var(--shadow),
+                -4px 0 20px var(--shadow);
+        }
+
+        .fold-section.folded-past {
+            transform: rotateY(170deg);
+            opacity: 0.6;
+        }
+
+        .fold-section.folded-future {
+            transform: rotateY(-170deg);
+            opacity: 0.6;
+        }
+
+        .fold-content {
+            padding: 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .age-label {
+            font-size: 14px;
+            color: var(--ink);
+            opacity: 0.6;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .message-area {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            color: var(--ink);
+        }
+
+        .message-area::placeholder {
+            color: var(--ink);
+            opacity: 0.3;
+        }
+
+        .fold-edge {
+            position: absolute;
+            left: -1px;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(to bottom, 
+                transparent 0%, 
+                var(--fold) 10%, 
+                var(--fold) 90%, 
+                transparent 100%);
+            opacity: 0.8;
+        }
+
+        .timeline-nav {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-button {
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--fold);
+            background: var(--paper);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .nav-button:hover {
+            background: var(--fold);
+            transform: scale(1.05);
+        }
+
+        .nav-button svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--ink);
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .current-age {
+            font-size: 18px;
+            font-weight: 300;
+            color: var(--ink);
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .compose-trigger {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            background: var(--active);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(201, 77, 63, 0.3);
+        }
+
+        .compose-trigger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(201, 77, 63, 0.4);
+        }
+
+        .compose-trigger svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .paper-texture {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            pointer-events: none;
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 6px),
+                repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 6px);
+        }
+
+        @keyframes unfold {
+            from { transform: rotateY(-170deg); }
+            to { transform: rotateY(0deg); }
+        }
+
+        @keyframes fold {
+            from { transform: rotateY(0deg); }
+            to { transform: rotateY(170deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="paper-strip">
+        <div class="fold-section" data-age="16">
+            <div class="fold-edge"></div>
+            <div class="fold-content">
+                <div class="age-label">Age 16</div>
+                <textarea class="message-area" placeholder="Write to your past self..."></textarea>
+            </div>
+            <div class="paper-texture"></div>
+        </div>
+        <div class="fold-section" data-age="25">
+            <div class="fold-edge"></div>
+            <div class="fold-content">
+                <div class="age-label">Age 25</div>
+                <textarea class="message-area" placeholder="Write to your past self..."></textarea>
+            </div>
+            <div class="paper-texture"></div>
+        </div>
+        <div class="fold-section active" data-age="current">
+            <div class="fold-edge"></div>
+            <div class="fold-content">
+                <div class="age-label">Present</div>
+                <textarea class="message-area" placeholder="Reflect on now..."></textarea>
+            </div>
+            <div class="paper-texture"></div>
+        </div>
+        <div class="fold-section" data-age="45">
+            <div class="fold-edge"></div>
+            <div class="fold-content">
+                <div class="age-label">Age 45</div>
+                <textarea class="message-area" placeholder="Write to your future self..."></textarea>
+            </div>
+            <div class="paper-texture"></div>
+        </div>
+        <div class="fold-section" data-age="65">
+            <div class="fold-edge"></div>
+            <div class="fold-content">
+                <div class="age-label">Age 65</div>
+                <textarea class="message-area" placeholder="Write to your future self..."></textarea>
+            </div>
+            <div class="paper-texture"></div>
+        </div>
+    </div>
+
+    <div class="timeline-nav">
+        <button class="nav-button" onclick="navigateTime(-1)">
+            <svg><polyline points="14 16 8 10 14 4"></polyline></svg>
+        </button>
+        <div class="current-age">Present</div>
+        <button class="nav-button" onclick="navigateTime(1)">
+            <svg><polyline points="10 4 16 10 10 16"></polyline></svg>
+        </button>
+    </div>
+
+    <button class="compose-trigger" onclick="addFold()">
+        <svg><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    </button>
+
+    <script>
+        let currentIndex = 2;
+        const sections = document.querySelectorAll('.fold-section');
+        
+        function updateFolds() {
+            sections.forEach((section, index) => {
+                section.classList.remove('active', 'folded-past', 'folded-future');
+                if (index < currentIndex) {
+                    section.classList.add('folded-past');
+                } else if (index > currentIndex) {
+                    section.classList.add('folded-future');
+                } else {
+                    section.classList.add('active');
+                    updateCurrentAge(section.dataset.age);
+                }
+            });
+        }
+
+        function navigateTime(direction) {
+            const newIndex = currentIndex + direction;
+            if (newIndex >= 0 && newIndex < sections.length) {
+                currentIndex = newIndex;
+                updateFolds();
+            }
+        }
+
+        function updateCurrentAge(age) {
+            const display = age === 'current' ? 'Present' : `Age ${age}`;
+            document.querySelector('.current-age').textContent = display;
+        }
+
+        sections.forEach((section, index) => {
+            section.addEventListener('click', () => {
+                if (index !== currentIndex) {
+                    currentIndex = index;
+                    updateFolds();
+                }
+            });
+        });
+
+        function addFold() {
+            const age = prompt('Enter age for new fold:');
+            if (age && !isNaN(age)) {
+                console.log('Add fold for age:', age);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') navigateTime(-1);
+            if (e.key === 'ArrowRight') navigateTime(1);
+        });
+    </script>
+</body>
+</html>

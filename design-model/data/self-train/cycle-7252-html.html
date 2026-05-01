@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Fragment Collector</title>
+    <style>
+        :root {
+            --cosmos: #050511;
+            --nebula: #1a1a3e;
+            --stardust: #f5f5f0;
+            --aurora-1: #64ffda;
+            --aurora-2: #ff6b9d;
+            --aurora-3: #c44569;
+            --fragment-glow: #feca57;
+            --crystalline: rgba(100, 255, 218, 0.15);
+            --consciousness: #ff6348;
+            --void-gradient: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(100, 255, 218, 0.05) 0%, transparent 40%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            background: var(--cosmos);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        .custom-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--aurora-1);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.1s ease-out, border-color 0.3s ease;
+            mix-blend-mode: screen;
+        }
+
+        .custom-cursor.capturing {
+            transform: scale(2);
+            border-color: var(--fragment-glow);
+            animation: pulse-cursor 0.8s infinite;
+        }
+
+        @keyframes pulse-cursor {
+            0%, 100% { transform: scale(2); opacity: 1; }
+            50% { transform: scale(2.5); opacity: 0.5; }
+        }
+
+        .starfield {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--cosmos);
+        }
+
+        .star {
+            position: absolute;
+            background: var(--stardust);
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+            transition: transform 0.3s ease-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.9; }
+        }
+
+        .consciousness-sphere {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--consciousness), transparent 70%);
+            box-shadow: 
+                0 0 80px rgba(255, 99, 72, 0.5),
+                inset 0 0 40px rgba(255, 99, 72, 0.3);
+            animation: consciousness-pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes consciousness-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .consciousness-sphere::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent, var(--aurora-1), transparent, var(--aurora-2), transparent);
+            animation: rotate-aura 20s linear infinite;
+            opacity: 0.3;
+        }
+
+        @keyframes rotate-aura {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .thought-fragment {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            filter: blur(0.5px);
+            transition: all 0.3s ease;
+        }
+
+        .thought-fragment svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .thought-fragment.dragging {
+            filter: blur(2px) brightness(1.5);
+            transform: scale(1.2);
+        }
+
+        .thought-fragment.crystallizing {
+            animation: crystallize 1.5s ease-out forwards;
+        }
+
+        @keyframes crystallize {
+            0% { 
+                filter: blur(2px);
+                transform: scale(1.2) rotate(0deg);
+            }
+            50% {
+                filter: blur(0);
+                transform: scale(0.8) rotate(180deg);
+            }
+            100% {
+                filter: drop-shadow(0 0 20px var(--fragment-glow));
+                transform: scale(1) rotate(360deg);
+            }
+        }
+
+        .crystallized-fragment {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            animation: orbit 20s linear infinite;
+            transform-origin: center center;
+        }
+
+        @keyframes orbit {
+            0% { transform: rotate(0deg) translateX(150px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(150px) rotate(-360deg); }
+        }
+
+        .fragment-trail {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--aurora-1);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: fade-trail 1s ease-out forwards;
+        }
+
+        @keyframes fade-trail {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0); }
+        }
+
+        .capture-zone {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 1px dashed rgba(100, 255, 218, 0.2);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: zone-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes zone-pulse {
+            0%, 100% { opacity: 0.2; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.05); }
+        }
+
+        .gesture-indicator {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--stardust);
+            font-size: 14px;
+            opacity: 0.7;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
+
+        .energy-meter {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            width: 4px;
+            height: 200px;
+            background: rgba(100, 255, 218, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .energy-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, var(--consciousness), var(--aurora-1));
+            transition: height 0.5s ease-out;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .fragment-count {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            color: var(--stardust);
+            font-size: 48px;
+            font-weight: 100;
+            opacity: 0.8;
+            letter-spacing: -2px;
+        }
+
+        .fragment-count span {
+            font-size: 14px;
+            letter-spacing: 2px;
+            opacity: 0.6;
+            display: block;
+            margin-top: -10px;
+        }
+
+        .gravity-ripple {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid rgba(100, 255, 218, 0.3);
+            pointer-events: none;
+            animation: ripple-out 1.5s ease-out forwards;
+        }
+
+        @keyframes ripple-out {
+            0% { 
+                width: 0;
+                height: 0;
+                opacity: 1;
+            }
+            100% { 
+                width: 300px;
+                height: 300px;
+                opacity: 0;
+                transform: translate(-150px, -150px);
+            }
+        }
+
+        .morphing-shape {
+            fill: url(#fragment-gradient);
+            opacity: 0.7;
+        }
+
+        .crystallized-shape {
+            fill: url(#crystal-gradient);
+            stroke: var(--fragment-glow);
+            stroke-width: 1;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="custom-cursor"></div>
+    
+    <div class="starfield" id="starfield"></div>
+    
+    <div class="capture-zone"></div>
+    
+    <div class="consciousness-sphere" id="consciousness"></div>
+    
+    <div class="fragment-count">
+        <div id="count">0</div>
+        <span>FRAGMENTS</span>
+    </div>
+    
+    <div class="energy-meter">
+        <div class="energy-fill" id="energy" style="height: 0%"></div>
+    </div>
+    
+    <div class="gesture-indicator" id="gesture">Drag fragments to capture</div>
+    
+    <svg style="position: absolute; width: 0; height: 0">
+        <defs>
+            <linearGradient id="fragment-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color: var(--aurora-1); stop-opacity: 0.6" />
+                <stop offset="100%" style="stop-color: var(--aurora-2); stop-opacity: 0.3" />
+            </linearGradient>
+            <linearGradient id="crystal-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color: var(--fragment-glow); stop-opacity: 0.9" />
+                <stop offset="100%" style="stop-color: var(--aurora-3); stop-opacity: 0.7" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <script>
+        const starfield = document.getElementById('starfield');
+        const consciousness = document.getElementById('consciousness');
+        const cursor = document.querySelector('.custom-cursor');
+        const gestureText = document.getElementById('gesture');
+        const countDisplay = document.getElementById('count');
+        const energyFill = document.getElementById('energy');
+        
+        let mouseX = 0, mouseY = 0;
+        let fragments = [];
+        let capturedCount = 0;
+        let isDragging = false;
+        let currentFragment = null;
+        let gestureStartX = 0, gestureStartY = 0;
+        
+        // Create starfield
+        for (let i = 0; i < 150; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.width = star.style.height = Math.random() * 3 + 'px';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            starfield.appendChild(star);
+        }
+        
+        // Mouse tracking
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            cursor.style.left = mouseX + 'px';
+            cursor.style.top = mouseY + 'px';
+            
+            // Gravitational distortion
+            const stars = document.querySelectorAll('.star');
+            stars.forEach(star => {
+                const rect = star.getBoundingClientRect();
+                const starX = rect.left + rect.width / 2;
+                const starY = rect.top + rect.height / 2;
+                const distance = Math.sqrt(Math.pow(mouseX - starX, 2) + Math.pow(mouseY - starY, 2));
+                
+                if (distance < 150) {
+                    const force = (150 - distance) / 150;
+                    const angle = Math.atan2(starY - mouseY, starX - mouseX);
+                    const offsetX = Math.cos(angle) * force * 20;
+                    const offsetY = Math.sin(angle) * force * 20;
+                    star.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                } else {
+                    star.style.transform = 'translate(0, 0)';
+                }
+            });
+            
+            // Gesture detection during drag
+            if (isDragging && currentFragment) {
+                const deltaX = mouseX - gestureStartX;
+                const deltaY = mouseY - gestureStartY;
+                const gesture = detectGesture(deltaX, deltaY);
+                
+                if (gesture === 'spiral') {
+                    gestureText.textContent = 'Release to crystallize';
+                } else {
+                    gestureText.textContent = 'Draw a spiral to crystallize';
+                }
+            }
+        });
+        
+        // Create thought fragments
+        function createFragment() {
+            const fragment = document.createElement('div');
+            fragment.className = 'thought-fragment';
+            fragment.style.left = Math.random() * (window.innerWidth - 120) + 'px';
+            fragment.style.top = Math.random() * (window.innerHeight - 120) + 'px';
+            
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 120 120');
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.classList.add('morphing-shape');
+            path.setAttribute('d', generateBlobPath());
+            
+            svg.appendChild(path);
+            fragment.appendChild(svg);
+            document.body.appendChild(fragment);
+            
+            // Animate blob morphing
+            setInterval(() => {
+                if (!fragment.classList.contains('crystallizing')) {
+                    path.setAttribute('d', generateBlobPath());
+                }
+            }, 2000);
+            
+            // Drag handling
+            fragment.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                currentFragment = fragment;
+                fragment.classList.add('dragging');
+                cursor.classList.add('capturing');
+                gestureStartX = e.clientX;
+                gestureStartY = e.clientY;
+                e.preventDefault();
+            });
+            
+            fragments.push(fragment);
+        }
+        
+        // Generate random blob path
+        function generateBlobPath() {
+            const points = 8;
+            const angleStep = (Math.PI * 2) / points;
+            let path = 'M ';
+            
+            for (let i = 0; i < points; i++) {
+                const angle = angleStep * i;
+                const radius = 40 + Math.random() * 20;
+                const x = 60 + Math.cos(angle) * radius;
+                const y = 60 + Math.sin(angle) * radius;
+                
+                if (i === 0) {
+                    path += `${x} ${y}`;
+                } else {
+                    const cp1x = 60 + Math.cos(angle - angleStep/2) * (radius + 10);
+                    const cp1y = 60 + Math.sin(angle - angleStep/2) * (radius + 10);
+                    path += ` Q ${cp1x} ${cp1y} ${x} ${y}`;
+                }
+            }
+            
+            path += ' Z';
+            return path;
+        }
+        
+        // Detect gesture
+        function detectGesture(deltaX, deltaY) {
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance > 100) {
+                return 'spiral';
+            }
+            return 'none';
+        }
+        
+        // Mouse up - release fragment
+        document.addEventListener('mouseup', (e) => {
+            if (isDragging && currentFragment) {
+                isDragging = false;
+                currentFragment.classList.remove('dragging');
+                cursor.classList.remove('capturing');
+                
+                const deltaX = mouseX - gestureStartX;
+                const deltaY = mouseY - gestureStartY;
+                const gesture = detectGesture(deltaX, deltaY);
+                
+                if (gesture === 'spiral' && isInCaptureZone(currentFragment)) {
+                    crystallizeFragment(currentFragment);
+                } else {
+                    gestureText.textContent = 'Fragment escaped';
+                    setTimeout(() => {
+                        gestureText.textContent = 'Drag fragments to capture';
+                    }, 1000);
+                }
+                
+                currentFragment = null;
+            }
+        });
+        
+        // Check if fragment is in capture zone
+        function isInCaptureZone(fragment) {
+            const rect = fragment.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const consciousnessRect = consciousness.getBoundingClientRect();
+            const consciousnessCenterX = consciousnessRect.left + consciousnessRect.width / 2;
+            const consciousnessCenterY = consciousnessRect.top + consciousnessRect.height / 2;
+            
+            const distance = Math.sqrt(
+                Math.pow(centerX - consciousnessCenterX, 2) + 
+                Math.pow(centerY - consciousnessCenterY, 2)
+            );
+            
+            return distance < 150;
+        }
+        
+        // Crystallize fragment
+        function crystallizeFragment(fragment) {
+            fragment.classList.add('crystallizing');
+            
+            setTimeout(() => {
+                // Create crystallized version
+                const crystal = document.createElement('div');
+                crystal.className = 'crystallized-fragment';
+                crystal.style.animationDelay = capturedCount * 0.5 + 's';
+                
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('viewBox', '0 0 60 60');
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.classList.add('crystallized-shape');
+                path.setAttribute('d', 'M 30 5 L 45 20 L 45 40 L 30 55 L 15 40 L 15 20 Z');
+                
+                svg.appendChild(path);
+                crystal.appendChild(svg);
+                consciousness.appendChild(crystal);
+                
+                // Remove original fragment
+                fragment.remove();
+                fragments = fragments.filter(f => f !== fragment);
+                
+                // Update UI
+                capturedCount++;
+                countDisplay.textContent = capturedCount;
+                energyFill.style.height = Math.min(capturedCount * 10, 100) + '%';
+                
+                // Create ripple effect
+                createRipple(consciousness.getBoundingClientRect().left + 90, consciousness.getBoundingClientRect().top + 90);
+                
+                gestureText.textContent = 'Fragment captured!';
+                setTimeout(() => {
+                    gestureText.textContent = 'Drag fragments to capture';
+                }, 1500);
+            }, 1500);
+        }
+        
+        // Create ripple effect
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'gravity-ripple';
+            ripple.style.left = x + 'px';
+            ripple.style.top = y + 'px';
+            document.body.appendChild(ripple);
+            
+            setTimeout(() => ripple.remove(), 1500);
+        }
+        
+        // Create fragment trail
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const trail = document.createElement('div');
+                trail.className = 'fragment-trail';
+                trail.style.left = e.clientX + 'px';
+                trail.style.top = e.clientY + 'px';
+                document.body.appendChild(trail);
+                
+                setTimeout(() => trail.remove(), 1000);
+            }
+        });
+        
+        // Initialize fragments
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => createFragment(), i * 800);
+        }
+        
+        // Generate new fragments periodically
+        setInterval(() => {
+            if (fragments.length < 8) {
+                createFragment();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

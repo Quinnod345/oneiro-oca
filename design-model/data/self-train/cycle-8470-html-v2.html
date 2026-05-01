@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Texture Library</title>
+    <style>
+        :root {
+            --charcoal: #1a1a1a;
+            --bone: #f5f2ed;
+            --rust: #b85c4e;
+            --sage: #7a8b7f;
+            --dust: #d4c8b8;
+            --thread: #e8dfd6;
+            --shadow: rgba(26, 26, 26, 0.12);
+            --spacing-unit: 8px;
+            --ratio: 1.618;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bone);
+            color: var(--charcoal);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .workspace {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(280px, 320px) 1fr;
+            gap: 0;
+        }
+
+        @media (max-width: 768px) {
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+            .library {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 40vh;
+                z-index: 100;
+                border-right: none !important;
+                border-top: 1px solid var(--dust);
+            }
+            .quilt-canvas {
+                padding-bottom: 40vh;
+            }
+        }
+
+        .library {
+            background: var(--thread);
+            border-right: 1px solid var(--dust);
+            padding: calc(var(--spacing-unit) * 5) calc(var(--spacing-unit) * 4);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .library h1 {
+            font-size: calc(16px * var(--ratio));
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: calc(var(--spacing-unit) * 4);
+            color: var(--charcoal);
+        }
+
+        .library h2 {
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: calc(var(--spacing-unit) * 3);
+            opacity: 0.6;
+        }
+
+        .fabric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: calc(var(--spacing-unit) * 2);
+            margin-bottom: calc(var(--spacing-unit) * 5);
+        }
+
+        .fabric-swatch {
+            aspect-ratio: 1;
+            background: var(--bone);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: all 0.2s ease;
+            cursor: grab;
+        }
+
+        .fabric-swatch:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px var(--shadow);
+        }
+
+        .fabric-swatch:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .fabric-swatch.dragging {
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0.85;
+            transform: rotate(2deg);
+            box-shadow: 0 16px 32px var(--shadow);
+        }
+
+        .fabric-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: calc(var(--spacing-unit) * 1.5);
+            background: linear-gradient(to top, rgba(26, 26, 26, 0.8), transparent);
+            color: var(--bone);
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: all 0.3s ease;
+        }
+
+        .fabric-swatch:hover .fabric-info {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .fabric-texture {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .fabric-swatch[data-texture="silk"] .fabric-texture {
+            background: linear-gradient(45deg, #f8f8f8 25%, transparent 25%, transparent 75%, #f8f8f8 75%, #f8f8f8),
+                        linear-gradient(-45deg, #f8f8f8 25%, transparent 25%, transparent 75%, #f8f8f8 75%, #f8f8f8);
+            background-size: 4px 4px;
+            background-position: 0 0, 2px 2px;
+        }
+
+        .fabric-swatch[data-texture="burlap"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.1) 3px, rgba(0,0,0,0.1) 6px),
+                repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,0,0,0.1) 3px, rgba(0,0,0,0.1) 6px);
+            background-size: 6px 6px;
+            background-color: #e8dcc4;
+        }
+
+        .fabric-swatch[data-texture="velvet"] .fabric-texture {
+            background: radial-gradient(ellipse at top, rgba(138, 43, 226, 0.2), transparent 70%),
+                        radial-gradient(ellipse at bottom, rgba(75, 0, 130, 0.1), transparent 70%);
+            background-size: 100% 50%;
+            background-position: top, bottom;
+            background-color: #4a148c;
+        }
+
+        .fabric-swatch[data-texture="linen"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.05) 4px, rgba(0,0,0,0.05) 8px),
+                repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,0,0,0.05) 4px, rgba(0,0,0,0.05) 8px);
+            background-color: #f5f0e8;
+        }
+
+        .fabric-swatch[data-texture="wool"] .fabric-texture {
+            background: 
+                radial-gradient(circle at 25% 25%, rgba(0,0,0,0.1) 0%, transparent 3%),
+                radial-gradient(circle at 75% 75%, rgba(0,0,0,0.1) 0%, transparent 3%),
+                radial-gradient(circle at 25% 75%, rgba(0,0,0,0.1) 0%, transparent 3%),
+                radial-gradient(circle at 75% 25%, rgba(0,0,0,0.1) 0%, transparent 3%);
+            background-size: 10px 10px;
+            background-color: #d4c4b0;
+        }
+
+        .fabric-swatch[data-texture="canvas"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 12px, rgba(0,0,0,0.03) 12px, rgba(0,0,0,0.03) 24px),
+                repeating-linear-gradient(-45deg, transparent, transparent 12px, rgba(0,0,0,0.03) 12px, rgba(0,0,0,0.03) 24px);
+            background-color: #e8e0d4;
+        }
+
+        .quilt-canvas {
+            background: var(--bone);
+            padding: calc(var(--spacing-unit) * 5);
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .quilt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: calc(var(--spacing-unit) * 2);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .quilt-square {
+            aspect-ratio: 1;
+            background: white;
+            border: 1px dashed var(--dust);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .quilt-square.occupied {
+            border: none;
+        }
+
+        .quilt-square.drag-over {
+            background: var(--thread);
+            border-color: var(--charcoal);
+            transform: scale(0.95);
+        }
+
+        .quilt-square-placeholder {
+            color: var(--dust);
+            font-size: 14px;
+            letter-spacing: 0.02em;
+        }
+
+        .placed-fabric {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            animation: placeIn 0.3s ease;
+        }
+
+        @keyframes placeIn {
+            from {
+                transform: scale(0.8) rotate(-5deg);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+        }
+
+        .quilt-controls {
+            position: fixed;
+            bottom: calc(var(--spacing-unit) * 3);
+            right: calc(var(--spacing-unit) * 3);
+            display: flex;
+            gap: calc(var(--spacing-unit) * 2);
+            z-index: 50;
+        }
+
+        .control-btn {
+            padding: calc(var(--spacing-unit) * 1.5) calc(var(--spacing-unit) * 3);
+            background: var(--charcoal);
+            color: var(--bone);
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px var(--shadow);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .instructions {
+            position: fixed;
+            top: calc(var(--spacing-unit) * 3);
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 3);
+            border-radius: 8px;
+            font-size: 14px;
+            box-shadow: 0 4px 16px var(--shadow);
+            z-index: 50;
+        }
+
+        @media (max-width: 768px) {
+            .instructions {
+                display: none;
+            }
+            .quilt-controls {
+                bottom: calc(40vh + var(--spacing-unit) * 3);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace">
+        <aside class="library">
+            <h1>Texture Library</h1>
+            <h2>Natural Fibers</h2>
+            <div class="fabric-grid">
+                <div class="fabric-swatch" data-texture="silk" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Silk</div>
+                </div>
+                <div class="fabric-swatch" data-texture="burlap" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Burlap</div>
+                </div>
+                <div class="fabric-swatch" data-texture="linen" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Linen</div>
+                </div>
+                <div class="fabric-swatch" data-texture="wool" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Wool</div>
+                </div>
+            </div>
+            <h2>Woven Materials</h2>
+            <div class="fabric-grid">
+                <div class="fabric-swatch" data-texture="velvet" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Velvet</div>
+                </div>
+                <div class="fabric-swatch" data-texture="canvas" draggable="true">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-info">Canvas</div>
+                </div>
+            </div>
+        </aside>
+        
+        <main class="quilt-canvas">
+            <div class="instructions">
+                Drag textures from the library to create your sonic quilt
+            </div>
+            <div class="quilt-grid">
+                <div class="quilt-square" data-position="0">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="1">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="2">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="3">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="4">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="5">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="6">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="7">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+                <div class="quilt-square" data-position="8">
+                    <span class="quilt-square-placeholder">+</span>
+                </div>
+            </div>
+            
+            <div class="quilt-controls">
+                <button class="control-btn" onclick="clearQuilt()">Clear Quilt</button>
+                <button class="control-btn" onclick="saveQuilt()">Save Pattern</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        let draggedClone = null;
+
+        document.querySelectorAll('.fabric-swatch').forEach(swatch => {
+            swatch.addEventListener('dragstart', handleDragStart);
+            swatch.addEventListener('dragend', handleDragEnd);
+        });
+
+        document.querySelectorAll('.quilt-square').forEach(square => {
+            square.addEventListener('dragover', handleDragOver);
+            square.addEventListener('drop', handleDrop);
+            square.addEventListener('dragleave', handleDragLeave);
+        });
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('texture', this.dataset.texture);
+            
+            draggedClone = this.cloneNode(true);
+            draggedClone.classList.add('dragging');
+            draggedClone.style.position = 'fixed';
+            draggedClone.style.width = '120px';
+            draggedClone.style.height = '120px';
+            draggedClone.style.pointerEvents = 'none';
+            draggedClone.style.zIndex = '1000';
+            document.body.appendChild(draggedClone);
+            
+            const updateClonePosition = (e) => {
+                if (draggedClone) {
+                    draggedClone.style.left = e.clientX - 60 + 'px';
+                    draggedClone.style.top = e.clientY - 60 + 'px';
+                }
+            };
+            
+            document.addEventListener('dragover', updateClonePosition);
+            this.dragUpdateListener = updateClonePosition;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            if (draggedClone) {
+                draggedClone.remove();
+                draggedClone = null;
+            }
+            if (this.dragUpdateListener) {
+                document.removeEventListener('dragover', this.dragUpdateListener);
+            }
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'copy';
+            this.classList.add('drag-over');
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            e.preventDefault();
+            
+            this.classList.remove('drag-over');
+            
+            const texture = e.dataTransfer.getData('texture');
+            if (texture && draggedElement) {
+                const fabric = document.createElement('div');
+                fabric.className = 'placed-fabric';
+                fabric.innerHTML = draggedElement.querySelector('.fabric-texture').outerHTML;
+                
+                this.innerHTML = '';
+                this.appendChild(fabric);
+                this.classList.add('occupied');
+                this.dataset.texture = texture;
+            }
+            
+            return false;
+        }
+
+        function clearQuilt() {
+            document.querySelectorAll('.quilt-square').forEach(square => {
+                square.innerHTML = '<span class="quilt-square-placeholder">+</span>';
+                square.classList.remove('occupied');
+                delete square.dataset.texture;
+            });
+        }
+
+        function saveQuilt() {
+            const pattern = [];
+            document.querySelectorAll('.quilt-square').forEach((square, index) => {
+                pattern.push({
+                    position: index,
+                    texture: square.dataset.texture || null
+                });
+            });
+            console.log('Quilt pattern:', pattern);
+            alert('Pattern saved! Check console for details.');
+        }
+
+        // Touch support for mobile
+        let touchItem = null;
+
+        document.addEventListener('touchstart', function(e) {
+            const touch = e.targetTouches[0];
+            const element = document.elementFromPoint(touch.pageX, touch.pageY);
+            
+            if (element && element.closest('.fabric-swatch')) {
+                touchItem = element.closest('.fabric-swatch');
+                touchItem.style.position = 'fixed';
+                touchItem.style.zIndex = '1000';
+            }
+        });
+
+        document.addEventListener('touchmove', function(e) {
+            if (!touchItem) return;
+            
+            const touch = e.targetTouches[0];
+            touchItem.style.left = touch.pageX - 60 + 'px';
+            touchItem.style.top = touch.pageY - 60 + 'px';
+        });
+
+        document.addEventListener('touchend', function(e) {
+            if (!touchItem) return;
+            
+            const touch = e.changedTouches[0];
+            const element = document.elementFromPoint(touch.pageX, touch.pageY);
+            const square = element?.closest('.quilt-square');
+            
+            if (square) {
+                const fabric = document.createElement('div');
+                fabric.className = 'placed-fabric';
+                fabric.innerHTML = touchItem.querySelector('.fabric-texture').outerHTML;
+                
+                square.innerHTML = '';
+                square.appendChild(fabric);
+                square.classList.add('occupied');
+                square.dataset.texture = touchItem.dataset.texture;
+            }
+            
+            touchItem.style.position = '';
+            touchItem.style.zIndex = '';
+            touchItem = null;
+        });
+    </script>
+</body>
+</html>

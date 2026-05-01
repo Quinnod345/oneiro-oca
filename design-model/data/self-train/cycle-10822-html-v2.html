@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Recovery</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #1a1f2e;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a9c4;
+            --accent: #4a9eff;
+            --surface: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 2rem 3rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .fragment-list {
+            list-style: none;
+        }
+
+        .fragment-item {
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fragment-item:hover {
+            background: rgba(74, 158, 255, 0.1);
+            border-color: var(--accent);
+            transform: translateX(4px);
+        }
+
+        .fragment-item.active {
+            background: rgba(74, 158, 255, 0.2);
+            border-color: var(--accent);
+        }
+
+        .fragment-item h3 {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .fragment-item p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .workspace {
+            flex: 1;
+            position: relative;
+            padding: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-display {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .memory-header {
+            margin-bottom: 2rem;
+        }
+
+        .memory-header h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .memory-meta {
+            display: flex;
+            gap: 2rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .memory-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: scan 3s ease-in-out infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .memory-text {
+            font-size: 1.125rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .memory-fragment {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            margin: 0 0.125rem;
+            background: rgba(74, 158, 255, 0.1);
+            border-radius: 0.25rem;
+            transition: all 0.2s ease;
+        }
+
+        .memory-fragment:hover {
+            background: rgba(74, 158, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .control-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: #6bb1ff;
+            transform: translateY(-2px);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Memory Recovery System</h1>
+        <p>Analyze and reconstruct fragmented memory data</p>
+    </header>
+
+    <div class="main-content">
+        <aside class="sidebar">
+            <h2>Available Fragments</h2>
+            <ul class="fragment-list">
+                <li class="fragment-item active">
+                    <h3>Fragment A-1</h3>
+                    <p>Core memory • 2.3MB</p>
+                </li>
+                <li class="fragment-item">
+                    <h3>Fragment B-7</h3>
+                    <p>Sensory data • 1.8MB</p>
+                </li>
+                <li class="fragment-item">
+                    <h3>Fragment C-3</h3>
+                    <p>Emotional matrix • 3.1MB</p>
+                </li>
+                <li class="fragment-item">
+                    <h3>Fragment D-9</h3>
+                    <p>Temporal index • 0.9MB</p>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="workspace">
+            <div class="memory-display">
+                <div class="memory-header">
+                    <h2>Fragment A-1 Analysis</h2>
+                    <div class="memory-meta">
+                        <span>Integrity: 87%</span>
+                        <span>Timestamp: 2024.01.15</span>
+                        <span>Priority: High</span>
+                    </div>
+                </div>
+                
+                <div class="memory-content">
+                    <p class="memory-text">
+                        The <span class="memory-fragment">sunlight</span> filtered through 
+                        the window, casting long shadows across the 
+                        <span class="memory-fragment">wooden floor</span>. 
+                        She remembered the way the <span class="memory-fragment">dust particles</span> 
+                        danced in the air, suspended like tiny stars in the afternoon glow. 
+                        The <span class="memory-fragment">old piano</span> in the corner 
+                        hadn't been played in years, but she could still hear the 
+                        <span class="memory-fragment">melody</span> echoing in her mind.
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="controls">
+        <button class="control-btn">Reconstruct</button>
+        <button class="control-btn">Export Data</button>
+    </div>
+
+    <div class="status-bar">
+        <span class="status-indicator"></span>
+        <span>System active • 4 fragments loaded • Memory usage: 23%</span>
+    </div>
+</body>
+</html>

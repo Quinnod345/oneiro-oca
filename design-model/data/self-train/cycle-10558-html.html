@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Constructor</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --timeline-track: #1a1a1a;
+            --raw-state: #7fba00;
+            --ripe-state: #ff6900;
+            --aged-state: #4b2c20;
+            --milk-white: #fafafa;
+            --cream-state: #fff8dc;
+            --cheese-young: #ffe4b5;
+            --cheese-aged: #d2691e;
+            --fusion-glow: #ff00ff;
+            --time-marker: rgba(255, 255, 255, 0.1);
+            --ingredient-ghost: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: #fff;
+        }
+
+        .temporal-workspace {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+        }
+
+        .ingredient-bank {
+            background: linear-gradient(90deg, var(--timeline-track) 0%, transparent 100%);
+            padding: 40px 30px;
+            position: relative;
+        }
+
+        .ingredient-bank h2 {
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            opacity: 0.5;
+            margin-bottom: 30px;
+        }
+
+        .ingredient-source {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            position: relative;
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+
+        .ingredient-source:hover {
+            transform: scale(1.1);
+        }
+
+        .ingredient-core {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tomato-core {
+            background: radial-gradient(circle at 30% 30%, var(--raw-state), var(--ripe-state));
+            box-shadow: 0 0 40px rgba(255, 105, 0, 0.3);
+        }
+
+        .cheese-core {
+            background: radial-gradient(circle at 70% 70%, var(--milk-white), var(--cream-state));
+            box-shadow: 0 0 40px rgba(255, 248, 220, 0.3);
+        }
+
+        .temporal-canvas {
+            position: relative;
+            background: radial-gradient(circle at center, var(--ingredient-ghost), transparent 70%);
+        }
+
+        .time-axis {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(180deg, transparent, var(--time-marker), transparent);
+            opacity: 0.3;
+        }
+
+        .timeline-ribbon {
+            position: absolute;
+            height: 120px;
+            cursor: ew-resize;
+            transition: filter 0.3s;
+        }
+
+        .timeline-ribbon:hover {
+            filter: brightness(1.2);
+        }
+
+        .tomato-timeline {
+            top: 200px;
+            left: 100px;
+            width: 600px;
+            background: linear-gradient(90deg, 
+                var(--raw-state) 0%, 
+                var(--raw-state) 20%,
+                var(--ripe-state) 50%,
+                var(--aged-state) 100%);
+            opacity: 0.4;
+            clip-path: polygon(0 40%, 100% 20%, 100% 80%, 0 60%);
+        }
+
+        .cheese-timeline {
+            top: 350px;
+            left: 200px;
+            width: 700px;
+            background: linear-gradient(90deg,
+                var(--milk-white) 0%,
+                var(--cream-state) 30%,
+                var(--cheese-young) 60%,
+                var(--cheese-aged) 100%);
+            opacity: 0.4;
+            clip-path: polygon(0 30%, 100% 40%, 100% 60%, 0 70%);
+        }
+
+        .timeline-state {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .timeline-ribbon:hover .timeline-state {
+            opacity: 1;
+        }
+
+        .fusion-point {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--fusion-glow), transparent 70%);
+            opacity: 0;
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+        }
+
+        .temporal-sculpture {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .sculpture-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            opacity: 0.6;
+            mix-blend-mode: screen;
+        }
+
+        .past-state {
+            background: radial-gradient(circle at 30% 30%, var(--raw-state), transparent 60%);
+            transform: scale(0.9) rotate(-10deg);
+        }
+
+        .present-state {
+            background: radial-gradient(circle at center, var(--ripe-state), transparent 60%);
+        }
+
+        .future-state {
+            background: radial-gradient(circle at 70% 70%, var(--aged-state), transparent 60%);
+            transform: scale(1.1) rotate(10deg);
+        }
+
+        .time-controls {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .time-scrubber {
+            width: 300px;
+            height: 4px;
+            background: var(--timeline-track);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .scrubber-handle {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .time-label {
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            text-transform: uppercase;
+        }
+
+        .recipe-output {
+            background: linear-gradient(270deg, var(--timeline-track) 0%, transparent 100%);
+            padding: 40px 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .output-header {
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            opacity: 0.5;
+            margin-bottom: 20px;
+        }
+
+        .temporal-recipe {
+            font-size: 14px;
+            line-height: 1.8;
+            opacity: 0.8;
+            font-weight: 300;
+        }
+
+        .recipe-moment {
+            margin-bottom: 16px;
+            padding-left: 20px;
+            border-left: 2px solid var(--time-marker);
+        }
+
+        .moment-time {
+            font-size: 10px;
+            opacity: 0.5;
+            margin-bottom: 4px;
+        }
+
+        .intersection-marker {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--fusion-glow);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            animation: rotate 10s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .hover-time {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            opacity: 0.5;
+            letter-spacing: 0.1em;
+        }
+
+        .ingredient-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            opacity: 0.5;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-workspace">
+        <div class="ingredient-bank">
+            <h2>Raw Ingredients</h2>
+            <div class="ingredient-source">
+                <div class="ingredient-core tomato-core"></div>
+                <span class="ingredient-label">Tomato</span>
+            </div>
+            <div class="ingredient-source">
+                <div class="ingredient-core cheese-core"></div>
+                <span class="ingredient-label">Cheese</span>
+            </div>
+        </div>
+
+        <div class="temporal-canvas">
+            <div class="time-axis"></div>
+            
+            <div class="timeline-ribbon tomato-timeline">
+                <div class="timeline-state" style="left: 10%;">GREEN</div>
+                <div class="timeline-state" style="left: 50%;">RIPE</div>
+                <div class="timeline-state" style="left: 90%;">DRIED</div>
+            </div>
+            
+            <div class="timeline-ribbon cheese-timeline">
+                <div class="timeline-state" style="left: 10%;">MILK</div>
+                <div class="timeline-state" style="left: 40%;">FRESH</div>
+                <div class="timeline-state" style="left: 70%;">AGED</div>
+                <div class="timeline-state" style="left: 95%;">PARMESAN</div>
+            </div>
+
+            <div class="fusion-point" style="left: 400px; top: 280px;"></div>
+            <div class="intersection-marker" style="left: 450px; top: 320px;"></div>
+
+            <div class="temporal-sculpture">
+                <div class="sculpture-layer past-state"></div>
+                <div class="sculpture-layer present-state"></div>
+                <div class="sculpture-layer future-state"></div>
+            </div>
+
+            <div class="time-controls">
+                <span class="time-label">Past</span>
+                <div class="time-scrubber">
+                    <div class="scrubber-handle"></div>
+                </div>
+                <span class="time-label">Future</span>
+            </div>
+
+            <div class="hover-time">T+45 minutes</div>
+        </div>
+
+        <div class="recipe-output">
+            <div>
+                <h2 class="output-header">Temporal Recipe</h2>
+                <div class="temporal-recipe">
+                    <div class="recipe-moment">
+                        <div class="moment-time">T-20 min</div>
+                        <div>Green tomato essence emerges</div>
+                    </div>
+                    <div class="recipe-moment">
+                        <div class="moment-time">T+0 min</div>
+                        <div>Ripe tomato × fresh mozzarella intersection</div>
+                    </div>
+                    <div class="recipe-moment">
+                        <div class="moment-time">T+45 min</div>
+                        <div>Sun-dried intensity meets aged parmesan</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scrubber = document.querySelector('.scrubber-handle');
+        const timeLabel = document.querySelector('.hover-time');
+        const sculpture = document.querySelector('.temporal-sculpture');
+        let isDragging = false;
+
+        scrubber.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const scrubberTrack = document.querySelector('.time-scrubber');
+                const rect = scrubberTrack.getBoundingClientRect();
+                const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                const percent = x / rect.width;
+                scrubber.style.left = `${percent * 100}%`;
+                
+                const time = Math.round((percent - 0.5) * 120);
+                timeLabel.textContent = `T${time >= 0 ? '+' : ''}${time} minutes`;
+                
+                sculpture.style.transform = `translate(-50%, -50%) rotate(${percent * 360}deg)`;
+            }
+        });
+
+        document.querySelectorAll('.timeline-ribbon').forEach(ribbon => {
+            ribbon.addEventListener('mouseenter', () => {
+                const fusion = document.querySelector('.fusion-point');
+                const marker = document.querySelector('.intersection-marker');
+                fusion.style.opacity = '1';
+                marker.style.opacity = '0.5';
+            });
+            
+            ribbon.addEventListener('mouseleave', () => {
+                const fusion = document.querySelector('.fusion-point');
+                const marker = document.querySelector('.intersection-marker');
+                fusion.style.opacity = '0';
+                marker.style.opacity = '0';
+            });
+        });
+    </script>
+</body>
+</html>

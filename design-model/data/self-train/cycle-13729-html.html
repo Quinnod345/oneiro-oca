@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Argument Settler</title>
+    <style>
+        :root {
+            --membrane-neutral: #f4f1e8;
+            --tension-red: #e63946;
+            --tension-orange: #f77f00;
+            --agreement-blue: #457b9d;
+            --agreement-teal: #1d3557;
+            --background: #0a0a0a;
+            --grid-line: #1a1a1a;
+            --text-light: #e8e6df;
+            --text-dim: #6b6a65;
+            --fracture-glow: #fcbf49;
+            --equilibrium-green: #06ffa5;
+            --ui-border: #2a2a2a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--background);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-light);
+        }
+
+        .grid-underlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+        }
+
+        .membrane-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 800px;
+            height: 800px;
+            transform: translate(-50%, -50%);
+        }
+
+        .membrane {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .membrane-surface {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 40%, var(--membrane-neutral) 0%, transparent 70%);
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: breathe 8s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .tension-point {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .tension-point.active {
+            background: radial-gradient(circle at center, var(--tension-red) 0%, transparent 60%);
+            box-shadow: 0 0 40px var(--tension-orange);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .tension-point.relaxed {
+            background: radial-gradient(circle at center, var(--agreement-blue) 0%, transparent 60%);
+            animation: settle 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        @keyframes settle {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(0.9) rotate(5deg); }
+        }
+
+        .fracture-line {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--fracture-glow), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .fracture-line.visible {
+            opacity: 0.7;
+            animation: fracture-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes fracture-pulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.5); }
+        }
+
+        .participant {
+            position: absolute;
+            width: 180px;
+            background: rgba(42, 42, 42, 0.8);
+            border: 1px solid var(--ui-border);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .participant-1 {
+            top: 50%;
+            left: 80px;
+            transform: translateY(-50%);
+        }
+
+        .participant-2 {
+            top: 50%;
+            right: 80px;
+            transform: translateY(-50%);
+        }
+
+        .participant-name {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .input-control {
+            margin: 16px 0;
+        }
+
+        .control-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .slider {
+            width: 100%;
+            height: 4px;
+            background: var(--ui-border);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--text-light);
+            border-radius: 50%;
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: var(--fracture-glow);
+        }
+
+        .slider::-webkit-slider-thumb:active {
+            cursor: grabbing;
+        }
+
+        .tension-meter {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .meter-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+
+        .meter-bar {
+            width: 300px;
+            height: 8px;
+            background: var(--ui-border);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--agreement-teal), var(--tension-orange));
+            width: 50%;
+            transition: width 0.3s ease;
+        }
+
+        .equilibrium-indicator {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .equilibrium-indicator.active {
+            opacity: 1;
+        }
+
+        .equilibrium-text {
+            font-size: 14px;
+            color: var(--equilibrium-green);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            animation: equilibrium-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes equilibrium-glow {
+            0%, 100% { text-shadow: 0 0 10px var(--equilibrium-green); }
+            50% { text-shadow: 0 0 20px var(--equilibrium-green), 0 0 30px var(--equilibrium-green); }
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 1px;
+            background: var(--agreement-blue);
+            opacity: 0.3;
+            transform-origin: left center;
+        }
+
+        .status-text {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        .membrane-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--membrane-neutral);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: drift 20s infinite ease-in-out;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(50px, -30px) scale(1.2); }
+            50% { transform: translate(-30px, 50px) scale(0.8); }
+            75% { transform: translate(30px, 30px) scale(1.1); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+
+        .control-value {
+            font-size: 12px;
+            color: var(--text-light);
+            text-align: right;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-underlay"></div>
+
+    <div class="tension-meter">
+        <div class="meter-label">System Tension</div>
+        <div class="meter-bar">
+            <div class="meter-fill" style="width: 75%;"></div>
+        </div>
+    </div>
+
+    <div class="membrane-container">
+        <div class="membrane">
+            <div class="membrane-surface"></div>
+            
+            <div class="membrane-particles">
+                <div class="particle" style="top: 20%; left: 30%; animation-delay: 0s;"></div>
+                <div class="particle" style="top: 60%; left: 70%; animation-delay: 2s;"></div>
+                <div class="particle" style="top: 40%; left: 50%; animation-delay: 4s;"></div>
+                <div class="particle" style="top: 80%; left: 20%; animation-delay: 6s;"></div>
+                <div class="particle" style="top: 10%; left: 80%; animation-delay: 8s;"></div>
+            </div>
+
+            <div class="tension-point active" style="top: 25%; left: 35%;"></div>
+            <div class="tension-point active" style="top: 65%; left: 70%;"></div>
+            <div class="tension-point relaxed" style="top: 50%; left: 50%;"></div>
+
+            <div class="fracture-line visible" style="top: 30%; left: 40%; width: 150px; transform: rotate(-25deg);"></div>
+            <div class="fracture-line visible" style="top: 70%; left: 60%; width: 120px; transform: rotate(35deg);"></div>
+
+            <div class="connection-thread" style="top: 50%; left: 20%; width: 300px; transform: rotate(15deg);"></div>
+            <div class="connection-thread" style="top: 40%; left: 40%; width: 200px; transform: rotate(-10deg);"></div>
+        </div>
+    </div>
+
+    <div class="participant participant-1">
+        <div class="participant-name">Position A</div>
+        <div class="input-control">
+            <label class="control-label">Pull Force</label>
+            <input type="range" class="slider" min="0" max="100" value="70">
+            <div class="control-value">70%</div>
+        </div>
+        <div class="input-control">
+            <label class="control-label">Flexibility</label>
+            <input type="range" class="slider" min="0" max="100" value="30">
+            <div class="control-value">30%</div>
+        </div>
+        <div class="input-control">
+            <label class="control-label">Anchor Point</label>
+            <input type="range" class="slider" min="0" max="100" value="85">
+            <div class="control-value">85%</div>
+        </div>
+    </div>
+
+    <div class="participant participant-2">
+        <div class="participant-name">Position B</div>
+        <div class="input-control">
+            <label class="control-label">Pull Force</label>
+            <input type="range" class="slider" min="0" max="100" value="65">
+            <div class="control-value">65%</div>
+        </div>
+        <div class="input-control">
+            <label class="control-label">Flexibility</label>
+            <input type="range" class="slider" min="0" max="100" value="45">
+            <div class="control-value">45%</div>
+        </div>
+        <div class="input-control">
+            <label class="control-label">Anchor Point</label>
+            <input type="range" class="slider" min="0" max="100" value="60">
+            <div class="control-value">60%</div>
+        </div>
+    </div>
+
+    <div class="equilibrium-indicator">
+        <div class="equilibrium-text">Approaching Equilibrium</div>
+    </div>
+
+    <div class="status-text">
+        Areas of high tension indicate fundamental disagreements<br>
+        Adjust your position to find collaborative balance
+    </div>
+
+    <script>
+        const sliders = document.querySelectorAll('.slider');
+        const tensionPoints = document.querySelectorAll('.tension-point');
+        const fractureLines = document.querySelectorAll('.fracture-line');
+        const meterFill = document.querySelector('.meter-fill');
+        const equilibriumIndicator = document.querySelector('.equilibrium-indicator');
+
+        sliders.forEach(slider => {
+            slider.addEventListener('input', function() {
+                const value = this.value;
+                const valueDisplay = this.parentElement.querySelector('.control-value');
+                valueDisplay.textContent = value + '%';
+
+                // Update membrane tension
+                const totalTension = Array.from(sliders).reduce((sum, s) => sum + parseInt(s.value), 0) / sliders.length;
+                meterFill.style.width = totalTension + '%';
+
+                // Show equilibrium when balanced
+                if (Math.abs(totalTension - 50) < 10) {
+                    equilibriumIndicator.classList.add('active');
+                } else {
+                    equilibriumIndicator.classList.remove('active');
+                }
+
+                // Animate tension points
+                tensionPoints.forEach((point, index) => {
+                    const offset = Math.sin(Date.now() * 0.001 + index) * 10;
+                    point.style.transform = `translate(${offset}px, ${offset}px)`;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

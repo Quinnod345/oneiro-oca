@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Logic Calculator</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --dream-mist: #1a1a2e;
+            --prime-purple: #7209b7;
+            --square-crystal: #4cc9f0;
+            --irrational-spiral: #f72585;
+            --stardust-trail: #ffd60a;
+            --memory-fade: #4a4e69;
+            --portal-cyan: #00f5ff;
+            --shy-seven: #e0aaff;
+            --reality-anchor: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: none;
+        }
+
+        .dream-cursor {
+            width: 12px;
+            height: 12px;
+            background: var(--stardust-trail);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            box-shadow: 0 0 20px var(--stardust-trail), 0 0 40px var(--stardust-trail);
+            mix-blend-mode: screen;
+        }
+
+        .stardust-trail {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: var(--stardust-trail);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            animation: dustFade 2s ease-out;
+        }
+
+        @keyframes dustFade {
+            0% {
+                opacity: 1;
+                transform: scale(1) translate(0, 0);
+                filter: brightness(2);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.1) translate(random() * 50px - 25px, random() * 50px - 25px);
+                filter: brightness(0.5);
+            }
+        }
+
+        .calculator-void {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, var(--dream-mist) 0%, var(--void-black) 70%);
+        }
+
+        .floating-numbers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .number-entity {
+            position: absolute;
+            font-size: 48px;
+            font-weight: 100;
+            opacity: 0.3;
+            transition: all 0.5s ease;
+            cursor: pointer;
+            pointer-events: all;
+        }
+
+        .number-entity.seven {
+            color: var(--shy-seven);
+            animation: shyHide 8s infinite;
+        }
+
+        @keyframes shyHide {
+            0%, 70% {
+                opacity: 0.3;
+                transform: translate(0, 0);
+            }
+            80% {
+                opacity: 0.1;
+                transform: translate(-20px, -10px) scale(0.8);
+            }
+            90% {
+                opacity: 0.05;
+                transform: translate(-30px, -15px) scale(0.6);
+            }
+            100% {
+                opacity: 0.3;
+                transform: translate(0, 0) scale(1);
+            }
+        }
+
+        .number-entity.zero {
+            color: var(--portal-cyan);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, transparent 40%, var(--portal-cyan) 50%, transparent 60%);
+            animation: portalSpin 20s infinite linear;
+        }
+
+        @keyframes portalSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .equation-canvas {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 400px;
+            pointer-events: none;
+        }
+
+        .drawn-number {
+            position: absolute;
+            font-size: 72px;
+            font-weight: 100;
+            color: var(--stardust-trail);
+            text-shadow: 0 0 30px currentColor;
+            animation: meltReform 3s ease-in-out infinite;
+            filter: blur(0.5px);
+        }
+
+        @keyframes meltReform {
+            0%, 100% {
+                transform: scaleY(1) translateY(0);
+                filter: blur(0.5px);
+            }
+            50% {
+                transform: scaleY(0.6) translateY(10px);
+                filter: blur(2px);
+                opacity: 0.7;
+            }
+        }
+
+        .reality-anchor {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--reality-anchor);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: var(--reality-anchor);
+            opacity: 0.8;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+
+        .reality-anchor:hover {
+            box-shadow: 0 0 50px var(--reality-anchor), inset 0 0 30px var(--reality-anchor);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .multiplication-echo {
+            position: absolute;
+            font-size: 48px;
+            color: var(--memory-fade);
+            pointer-events: none;
+            animation: echoFade 3s ease-out forwards;
+        }
+
+        @keyframes echoFade {
+            0% {
+                opacity: 0.8;
+                transform: scale(1) translate(0, 0);
+                filter: blur(0);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.5) translate(50px, -30px);
+                filter: blur(5px);
+            }
+        }
+
+        .division-fragment {
+            position: absolute;
+            font-size: 24px;
+            color: var(--square-crystal);
+            pointer-events: all;
+            cursor: grab;
+            animation: fragmentFloat 10s ease-in-out infinite;
+            transition: all 0.2s ease;
+        }
+
+        @keyframes fragmentFloat {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            25% {
+                transform: translateY(-30px) rotate(90deg);
+            }
+            50% {
+                transform: translateY(20px) rotate(180deg);
+            }
+            75% {
+                transform: translateY(-10px) rotate(270deg);
+            }
+        }
+
+        .division-fragment:hover {
+            transform: scale(1.2);
+            text-shadow: 0 0 20px var(--square-crystal);
+        }
+
+        .constellation-result {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            pointer-events: none;
+        }
+
+        .star-point {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--reality-anchor);
+            border-radius: 50%;
+            animation: starPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes starPulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 1;
+            }
+        }
+
+        .prime-glow {
+            background: var(--prime-purple);
+            box-shadow: 0 0 30px var(--prime-purple), 0 0 60px var(--prime-purple);
+        }
+
+        .perfect-square {
+            background: var(--square-crystal);
+            border-radius: 0;
+            transform: rotate(45deg);
+            animation: crystallize 3s ease-in-out infinite;
+        }
+
+        @keyframes crystallize {
+            0%, 100% {
+                transform: rotate(45deg) scale(1);
+            }
+            50% {
+                transform: rotate(225deg) scale(1.2);
+            }
+        }
+
+        .irrational-spiral {
+            width: 200px;
+            height: 200px;
+            position: absolute;
+            border: 2px solid var(--irrational-spiral);
+            border-radius: 50%;
+            animation: spiralInward 5s linear infinite;
+            background: conic-gradient(from 0deg, transparent, var(--irrational-spiral), transparent);
+            opacity: 0.6;
+        }
+
+        @keyframes spiralInward {
+            from {
+                transform: rotate(0deg) scale(1);
+            }
+            to {
+                transform: rotate(720deg) scale(0.1);
+            }
+        }
+
+        .backwards-solver {
+            position: absolute;
+            bottom: 50px;
+            right: 50px;
+            width: 300px;
+            height: 100px;
+            border: 1px solid var(--memory-fade);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            direction: rtl;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 24px;
+            color: var(--memory-fade);
+            opacity: 0.7;
+        }
+
+        .gravity-optional {
+            position: absolute;
+            font-size: 18px;
+            color: var(--memory-fade);
+            opacity: 0.4;
+            animation: floatUp 15s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(900px) rotate(0deg);
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+            }
+        }
+
+        .dream-operator {
+            position: absolute;
+            font-size: 36px;
+            color: var(--stardust-trail);
+            opacity: 0.6;
+            animation: operatorDrift 20s ease-in-out infinite;
+        }
+
+        @keyframes operatorDrift {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            25% {
+                transform: translate(100px, -50px);
+            }
+            50% {
+                transform: translate(-80px, 80px);
+            }
+            75% {
+                transform: translate(60px, 40px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dream-cursor"></div>
+    <div class="calculator-void"></div>
+    
+    <div class="floating-numbers">
+        <div class="number-entity seven" style="left: 200px; top: 150px;">7</div>
+        <div class="number-entity zero" style="left: 800px; top: 300px;">0</div>
+        <div class="number-entity" style="left: 400px; top: 200px; color: var(--square-crystal);">4</div>
+        <div class="number-entity" style="left: 1200px; top: 500px; color: var(--prime-purple);">3</div>
+        <div class="number-entity seven" style="left: 600px; top: 700px;">7</div>
+        <div class="number-entity" style="left: 1000px; top: 100px; color: var(--irrational-spiral);">π</div>
+    </div>
+
+    <div class="equation-canvas">
+        <div class="drawn-number" style="left: 50px; top: 100px;">2</div>
+        <div class="drawn-number" style="left: 150px; top: 100px;">+</div>
+        <div class="drawn-number" style="left: 250px; top: 100px;">5</div>
+    </div>
+
+    <div class="reality-anchor">=</div>
+
+    <div class="multiplication-echo" style="left: 300px; top: 400px;">3</div>
+    <div class="multiplication-echo" style="left: 350px; top: 420px; animation-delay: 0.5s;">3</div>
+    <div class="multiplication-echo" style="left: 400px; top: 440px; animation-delay: 1s;">3</div>
+
+    <div class="division-fragment" style="left: 700px; top: 600px;">½</div>
+    <div class="division-fragment" style="left: 750px; top: 650px; animation-delay: 2s;">¼</div>
+    <div class="division-fragment" style="left: 650px; top: 620px; animation-delay: 4s;">⅛</div>
+
+    <div class="constellation-result" style="left: 900px; top: 400px;">
+        <div class="star-point prime-glow" style="left: 50px; top: 50px;"></div>
+        <div class="star-point prime-glow" style="left: 100px; top: 30px;"></div>
+        <div class="star-point prime-glow" style="left: 150px; top: 70px;"></div>
+        <div class="star-point prime-glow" style="left: 120px; top: 120px;"></div>
+        <div class="star-point prime-glow" style="left: 80px; top: 100px;"></div>
+    </div>
+
+    <div class="perfect-square star-point" style="left: 500px; top: 500px; width: 20px; height: 20px;"></div>
+
+    <div class="irrational-spiral" style="left: 200px; top: 500px;"></div>
+
+    <div class="backwards-solver">
+        7 = 5 + 2
+    </div>
+
+    <div class="gravity-optional">∞</div>
+    <div class="gravity-optional" style="animation-delay: 5s; left: 300px;">√</div>
+    <div class="gravity-optional" style="animation-delay: 10s; left: 600px;">∑</div>
+
+    <div class="dream-operator" style="left: 100px; top: 300px;">×</div>
+    <div class="dream-operator" style="left: 1100px; top: 200px; animation-delay: 5s;">÷</div>
+    <div class="dream-operator" style="left: 500px; top: 600px; animation-delay: 10s;">+</div>
+
+    <script>
+        const cursor = document.querySelector('.dream-cursor');
+        const body = document.body;
+        
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX - 6 + 'px';
+            cursor.style.top = e.clientY - 6 + 'px';
+            
+            if (Math.random() > 0.9) {
+                const dust = document.createElement('div');
+                dust.className = 'stardust-trail';
+                dust.style.left = e.clientX - 2 + 'px';
+                dust.style.top = e.clientY - 2 + 'px';
+                body.appendChild(dust);
+                setTimeout(() => dust.remove(), 2000);
+            }
+        });
+
+        document.querySelectorAll('.number-entity').forEach(num => {
+            num.addEventListener('mouseenter', function() {
+                if (this.classList.contains('seven')) {
+                    this.style.opacity = '0.05';
+                    this.style.transform = 'translate(-40px, -20px) scale(0.5)';
+                } else {
+                    this.style.transform = 'scale(1.2)';
+                    this.style.opacity = '0.8';
+                }
+            });
+            
+            num.addEventListener('mouseleave', function() {
+                this.style.transform = '';
+                this.style.opacity = '';
+            });
+        });
+
+        document.querySelector('.reality-anchor').addEventListener('click', function() {
+            document.querySelectorAll('.drawn-number, .multiplication-echo, .division-fragment').forEach(el => {
+                el.style.animation = 'none';
+                setTimeout(() => {
+                    el.style.animation = '';
+                }, 100);
+            });
+        });
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const dust = document.createElement('div');
+            dust.className = 'stardust-trail';
+            dust.style.left = e.clientX - 2 + 'px';
+            dust.style.top = e.clientY - 2 + 'px';
+            dust.style.width = '8px';
+            dust.style.height = '8px';
+            dust.style.animationDuration = '4s';
+            body.appendChild(dust);
+            setTimeout(() => dust.remove(), 4000);
+        });
+    </script>
+</body>
+</html>

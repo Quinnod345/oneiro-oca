@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Constructor</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --surface: #1a1a1a;
+            --raw-state: #7fba00;
+            --ripe-state: #ff6900;
+            --aged-state: #4b2c20;
+            --milk-white: #fafafa;
+            --cream-state: #fff8dc;
+            --cheese-young: #ffe4b5;
+            --cheese-aged: #d2691e;
+            --accent: #ff00ff;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .temporal-workspace {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            grid-template-rows: 80px 1fr;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .ingredient-bank {
+            background: var(--surface);
+            padding: 40px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ingredient-bank h2 {
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        .ingredients-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+
+        .ingredient-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: grab;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .ingredient-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .ingredient-card:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .ingredient-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 12px;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .tomato-icon {
+            background: linear-gradient(135deg, var(--raw-state), var(--ripe-state));
+        }
+
+        .cheese-icon {
+            background: linear-gradient(135deg, var(--milk-white), var(--cream-state));
+        }
+
+        .ingredient-label {
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .ingredient-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .temporal-canvas {
+            position: relative;
+            background: var(--void);
+            padding: 40px;
+        }
+
+        .timeline-track {
+            width: 100%;
+            height: 120px;
+            background: var(--surface);
+            border-radius: 60px;
+            position: relative;
+            margin-bottom: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-label {
+            position: absolute;
+            left: -100px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            width: 80px;
+            text-align: right;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            border-radius: 60px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .tomato-progress {
+            background: linear-gradient(90deg, 
+                var(--raw-state) 0%, 
+                var(--raw-state) 30%,
+                var(--ripe-state) 70%,
+                var(--aged-state) 100%);
+            width: 0%;
+        }
+
+        .cheese-progress {
+            background: linear-gradient(90deg,
+                var(--milk-white) 0%,
+                var(--cream-state) 40%,
+                var(--cheese-young) 70%,
+                var(--cheese-aged) 100%);
+            width: 0%;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            cursor: ew-resize;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .timeline-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .timeline-marker:active {
+            cursor: grabbing;
+        }
+
+        .state-indicator {
+            position: absolute;
+            top: -32px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 500;
+            padding: 4px 12px;
+            background: var(--surface);
+            border-radius: 16px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+
+        .timeline-marker:hover .state-indicator {
+            opacity: 1;
+        }
+
+        .fusion-zone {
+            margin-top: 60px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 24px;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .fusion-zone.active {
+            background: rgba(255, 0, 255, 0.05);
+            border-color: var(--accent);
+        }
+
+        .fusion-title {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .fusion-result {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .fusion-result.show {
+            opacity: 1;
+            background: radial-gradient(circle, var(--accent), transparent 70%);
+        }
+
+        .time-scale {
+            position: absolute;
+            bottom: -30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+
+        .active-ingredient {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-workspace">
+        <div class="header">
+            <h1>Temporal Recipe Constructor</h1>
+        </div>
+        
+        <div class="ingredient-bank">
+            <h2>Ingredients</h2>
+            <div class="ingredients-grid">
+                <div class="ingredient-card" draggable="true">
+                    <div class="ingredient-icon tomato-icon"></div>
+                    <div class="ingredient-label">Tomato</div>
+                    <div class="ingredient-time">0 → 14 days</div>
+                </div>
+                <div class="ingredient-card" draggable="true">
+                    <div class="ingredient-icon cheese-icon"></div>
+                    <div class="ingredient-label">Cheese</div>
+                    <div class="ingredient-time">0 → 90 days</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="temporal-canvas">
+            <div class="timeline-track">
+                <div class="timeline-label">Tomato</div>
+                <div class="timeline-progress tomato-progress" style="width: 65%;">
+                    <div class="timeline-marker" style="left: 100%;">
+                        <div class="state-indicator">Ripe</div>
+                    </div>
+                </div>
+                <div class="time-scale">
+                    <span>Fresh</span>
+                    <span>Green</span>
+                    <span>Turning</span>
+                    <span>Ripe</span>
+                    <span>Overripe</span>
+                </div>
+            </div>
+            
+            <div class="timeline-track">
+                <div class="timeline-label">Cheese</div>
+                <div class="timeline-progress cheese-progress" style="width: 45%;">
+                    <div class="timeline-marker" style="left: 100%;">
+                        <div class="state-indicator">Young</div>
+                    </div>
+                </div>
+                <div class="time-scale">
+                    <span>Milk</span>
+                    <span>Curd</span>
+                    <span>Fresh</span>
+                    <span>Young</span>
+                    <span>Aged</span>
+                </div>
+            </div>
+            
+            <div class="fusion-zone">
+                <div class="fusion-title">Drop ingredients here to combine</div>
+                <div class="fusion-result">🍕</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.querySelectorAll('.timeline-marker').forEach(marker => {
+            let isDragging = false;
+            
+            marker.addEventListener('mousedown', () => isDragging = true);
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const track = marker.closest('.timeline-track');
+                const progress = marker.closest('.timeline-progress');
+                const rect = track.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+                
+                progress.style.width = percentage + '%';
+                
+                // Update state indicator based on position
+                const states = marker.closest('.tomato-progress') 
+                    ? ['Fresh', 'Green', 'Turning', 'Ripe', 'Overripe']
+                    : ['Milk', 'Curd', 'Fresh', 'Young', 'Aged'];
+                const stateIndex = Math.floor((percentage / 100) * (states.length - 1));
+                marker.querySelector('.state-indicator').textContent = states[stateIndex];
+            });
+            
+            document.addEventListener('mouseup', () => isDragging = false);
+        });
+        
+        // Drag and drop
+        document.querySelectorAll('.ingredient-card').forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                card.classList.add('active-ingredient');
+            });
+            
+            card.addEventListener('dragend', () => {
+                card.classList.remove('active-ingredient');
+            });
+        });
+        
+        const fusionZone = document.querySelector('.fusion-zone');
+        fusionZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fusionZone.classList.add('active');
+        });
+        
+        fusionZone.addEventListener('dragleave', () => {
+            fusionZone.classList.remove('active');
+        });
+        
+        fusionZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fusionZone.classList.remove('active');
+            document.querySelector('.fusion-result').classList.add('show');
+        });
+    </script>
+</body>
+</html>

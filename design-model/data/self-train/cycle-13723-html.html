@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Altitude</title>
+    <style>
+        :root {
+            --bedrock: #0f0d0c;
+            --sediment: #1a1614;
+            --strata-line: rgba(186, 168, 152, 0.12);
+            --memory-core: rgba(255, 251, 235, 0.85);
+            --memory-halo: rgba(255, 251, 235, 0.08);
+            --excavation-active: rgba(255, 251, 235, 0.03);
+            --time-marker: #665c52;
+            --depth-fog: rgba(15, 13, 12, 0.4);
+            --connection-thread: rgba(186, 168, 152, 0.25);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bedrock);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .topographical-field {
+            position: absolute;
+            inset: 0;
+            transform: perspective(1200px) rotateX(12deg);
+            transform-origin: center 70%;
+        }
+
+        .strata-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+        }
+
+        .stratum {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .stratum-line {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: var(--strata-line);
+            transform: translateZ(0);
+        }
+
+        .memory-deposit {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: grab;
+            pointer-events: all;
+        }
+
+        .memory-core {
+            width: 4px;
+            height: 4px;
+            background: var(--memory-core);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px var(--memory-halo);
+        }
+
+        .memory-deposit.excavating .memory-core {
+            width: 120px;
+            height: 120px;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .emotional-elevation {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1px;
+            background: linear-gradient(to top, var(--memory-core), transparent);
+            transform-origin: bottom;
+            transition: height 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .memory-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            pointer-events: none;
+            width: 280px;
+            padding: 24px;
+            background: rgba(26, 22, 20, 0.95);
+            border: 1px solid var(--strata-line);
+            backdrop-filter: blur(10px);
+        }
+
+        .memory-deposit.excavating .memory-content {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .memory-year {
+            font-size: 11px;
+            color: var(--time-marker);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .memory-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--memory-core);
+            margin-bottom: 16px;
+        }
+
+        .memory-depth {
+            font-size: 10px;
+            color: var(--time-marker);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 1px;
+            background: var(--connection-thread);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1.2s ease;
+        }
+
+        .navigation-plane {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            right: 40px;
+            height: 80px;
+            background: rgba(26, 22, 20, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--strata-line);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 32px;
+        }
+
+        .time-scrubber {
+            flex: 1;
+            height: 40px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .scrubber-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--strata-line);
+            transform: translateY(-50%);
+        }
+
+        .scrubber-head {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: var(--memory-core);
+            border-radius: 50%;
+            cursor: grab;
+            transition: transform 0.2s ease;
+        }
+
+        .scrubber-head:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .depth-control {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .depth-label {
+            font-size: 10px;
+            color: var(--time-marker);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .depth-slider {
+            width: 120px;
+            height: 4px;
+            background: var(--strata-line);
+            position: relative;
+            cursor: pointer;
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 40px;
+            background: var(--excavation-active);
+            transform: translateX(-50%);
+            transition: left 0.3s ease;
+        }
+
+        .orientation-compass {
+            width: 40px;
+            height: 40px;
+            position: relative;
+        }
+
+        .compass-ring {
+            position: absolute;
+            inset: 0;
+            border: 1px solid var(--strata-line);
+            border-radius: 50%;
+        }
+
+        .compass-needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 16px;
+            background: var(--memory-core);
+            transform: translate(-50%, -50%) rotate(12deg);
+            transform-origin: center;
+            transition: transform 0.6s ease;
+        }
+
+        .excavation-cursor {
+            position: fixed;
+            pointer-events: none;
+            width: 60px;
+            height: 60px;
+            border: 1px solid var(--excavation-active);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            mix-blend-mode: screen;
+        }
+
+        body.excavating .excavation-cursor {
+            opacity: 1;
+        }
+
+        .strata-labels {
+            position: fixed;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            pointer-events: none;
+        }
+
+        .strata-label {
+            font-size: 10px;
+            color: var(--time-marker);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: right;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .strata-label.active {
+            opacity: 1;
+            color: var(--memory-core);
+        }
+
+        @keyframes depositPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+
+        .memory-deposit:hover .memory-core {
+            animation: depositPulse 2s ease infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="topographical-field">
+        <div class="strata-container">
+            <div class="stratum" style="transform: translateZ(-200px);">
+                <div class="stratum-line" style="top: 20%;"></div>
+                <div class="stratum-line" style="top: 25%;"></div>
+                <div class="stratum-line" style="top: 30%;"></div>
+                
+                <div class="memory-deposit" style="left: 25%; top: 22%;" data-year="1995" data-intensity="high">
+                    <div class="emotional-elevation" style="height: 80px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">1995</div>
+                        <div class="memory-text">First day of school. The smell of new crayons mixing with autumn leaves.</div>
+                        <div class="memory-depth">DEPTH: 68M</div>
+                    </div>
+                </div>
+                
+                <div class="memory-deposit" style="left: 60%; top: 28%;" data-year="1998" data-intensity="medium">
+                    <div class="emotional-elevation" style="height: 45px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">1998</div>
+                        <div class="memory-text">Learning to ride without training wheels. Dad's voice echoing behind.</div>
+                        <div class="memory-depth">DEPTH: 52M</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stratum" style="transform: translateZ(-100px);">
+                <div class="stratum-line" style="top: 35%;"></div>
+                <div class="stratum-line" style="top: 40%;"></div>
+                <div class="stratum-line" style="top: 45%;"></div>
+                
+                <div class="memory-deposit" style="left: 40%; top: 37%;" data-year="2003" data-intensity="high">
+                    <div class="emotional-elevation" style="height: 90px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">2003</div>
+                        <div class="memory-text">Grandmother's kitchen. Flour dust dancing in afternoon sunlight.</div>
+                        <div class="memory-depth">DEPTH: 41M</div>
+                    </div>
+                </div>
+                
+                <div class="memory-deposit" style="left: 75%; top: 43%;" data-year="2005" data-intensity="low">
+                    <div class="emotional-elevation" style="height: 25px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">2005</div>
+                        <div class="memory-text">Empty swings at dusk. Realizing childhood was ending.</div>
+                        <div class="memory-depth">DEPTH: 38M</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stratum" style="transform: translateZ(0);">
+                <div class="stratum-line" style="top: 50%;"></div>
+                <div class="stratum-line" style="top: 55%;"></div>
+                <div class="stratum-line" style="top: 60%;"></div>
+                
+                <div class="memory-deposit" style="left: 30%; top: 52%;" data-year="2010" data-intensity="medium">
+                    <div class="emotional-elevation" style="height: 55px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">2010</div>
+                        <div class="memory-text">First apartment. The weight of keys in an unfamiliar pocket.</div>
+                        <div class="memory-depth">DEPTH: 24M</div>
+                    </div>
+                </div>
+                
+                <div class="memory-deposit" style="left: 55%; top: 58%;" data-year="2015" data-intensity="high">
+                    <div class="emotional-elevation" style="height: 95px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">2015</div>
+                        <div class="memory-text">Wedding day rain. How it made everything shine brighter.</div>
+                        <div class="memory-depth">DEPTH: 18M</div>
+                    </div>
+                </div>
+                
+                <div class="memory-deposit" style="left: 80%; top: 54%;" data-year="2018" data-intensity="medium">
+                    <div class="emotional-elevation" style="height: 60px;"></div>
+                    <div class="memory-core"></div>
+                    <div class="memory-content">
+                        <div class="memory-year">2018</div>
+                        <div class="memory-text">Hospital corridor at 3am. Life beginning amidst fluorescent hum.</div>
+                        <div class="memory-depth">DEPTH: 12M</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="connection-thread" id="thread1"></div>
+        <div class="connection-thread" id="thread2"></div>
+        <div class="connection-thread" id="thread3"></div>
+    </div>
+    
+    <div class="strata-labels">
+        <div class="strata-label">RECENT</div>
+        <div class="strata-label active">FORMATIVE</div>
+        <div class="strata-label">FOUNDATION</div>
+    </div>
+    
+    <div class="navigation-plane">
+        <div class="time-scrubber">
+            <div class="scrubber-track"></div>
+            <div class="scrubber-head" style="left: 50%;"></div>
+        </div>
+        
+        <div class="depth-control">
+            <div class="depth-label">Excavation Depth</div>
+            <div class="depth-slider">
+                <div class="depth-indicator"></div>
+            </div>
+        </div>
+        
+        <div class="orientation-compass">
+            <div class="compass-ring"></div>
+            <div class="compass-needle"></div>
+        </div>
+    </div>
+    
+    <div class="excavation-cursor"></div>
+    
+    <script>
+        const memories = document.querySelectorAll('.memory-deposit');
+        const excavationCursor = document.querySelector('.excavation-cursor');
+        const scrubberHead = document.querySelector('.scrubber-head');
+        const depthIndicator = document.querySelector('.depth-indicator');
+        const compassNeedle = document.querySelector('.compass-needle');
+        let isDragging = false;
+        let currentDepth = 50;
+        
+        memories.forEach((memory, index) => {
+            memory.addEventListener('mouseenter', () => {
+                memory.classList.add('excavating');
+                document.body.classList.add('excavating');
+                
+                // Connect related memories
+                if (index > 0) {
+                    const prevMemory = memories[index - 1];
+                    const thread = document.querySelector(`#thread${index % 3 + 1}`);
+                    const rect1 = memory.getBoundingClientRect();
+                    const rect2 = prevMemory.getBoundingClientRect();
+                    
+                    const angle = Math.atan2(rect2.top - rect1.top, rect2.left - rect1.left);
+                    const distance = Math.hypot(rect2.left - rect1.left, rect2.top - rect1.top);
+                    
+                    thread.style.left = rect1.left + rect1.width / 2 + 'px';
+                    thread.style.top = rect1.top + rect1.height / 2 + 'px';
+                    thread.style.width = distance + 'px';
+                    thread.style.transform = `rotate(${angle}rad)`;
+                    thread.style.opacity = '1';
+                }
+            });
+            
+            memory.addEventListener('mouseleave', () => {
+                memory.classList.remove('excavating');
+                document.body.classList.remove('excavating');
+                
+                document.querySelectorAll('.connection-thread').forEach(thread => {
+                    thread.style.opacity = '0';
+                });
+            });
+        });
+        
+        // Time scrubber
+        scrubberHead.addEventListener('mousedown', () => {
+            isDragging = true;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const track = document.querySelector('.scrubber-track');
+                const rect = track.getBoundingClientRect();
+                const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                scrubberHead.style.left = x + 'px';
+                
+                // Rotate compass based on position
+                compassNeedle.style.transform = `translate(-50%, -50%) rotate(${(x / rect.width) * 360 - 180}deg)`;
+            }
+            
+            // Update excavation cursor
+            excavationCursor.style.left = e.clientX + 'px';
+            excavationCursor.style.top = e.clientY + 'px';
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        // Depth control
+        document.querySelector('.depth-slider').addEventListener('click', (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            depthIndicator.style.left = x + 'px';
+            
+            // Adjust strata visibility
+            const depth = (x / rect.width) * 100;
+            document.querySelectorAll('.stratum').forEach((stratum, index) => {
+                stratum.style.opacity = depth > (index * 33) ? '1' : '0.3';
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --substrate: #1a1a1a;
+            --steel: #8a8a8a;
+            --rust: #b7410e;
+            --text-primary: #f0f0f0;
+            --text-secondary: #a0a0a0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--substrate);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-container {
+            display: grid;
+            grid-template-columns: repeat(4, 280px);
+            grid-template-rows: repeat(3, 180px);
+            gap: 40px;
+            padding: 40px;
+        }
+
+        .memory-plate {
+            position: relative;
+            background: var(--steel);
+            border-radius: 2px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            overflow: hidden;
+        }
+
+        .memory-plate:hover {
+            transform: translateY(-4px);
+        }
+
+        .memory-plate::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .corrosion-mask {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 2s ease;
+            -webkit-mask-image: radial-gradient(circle at 30% 40%, black 20%, transparent 60%),
+                                radial-gradient(circle at 70% 70%, black 15%, transparent 50%);
+            mask-image: radial-gradient(circle at 30% 40%, black 20%, transparent 60%),
+                        radial-gradient(circle at 70% 70%, black 15%, transparent 50%);
+            -webkit-mask-composite: source-over;
+            mask-composite: add;
+            background: var(--rust);
+        }
+
+        .memory-plate.decaying .corrosion-mask {
+            opacity: 0.6;
+        }
+
+        .memory-plate.forgotten .corrosion-mask {
+            opacity: 0.9;
+        }
+
+        .memory-content {
+            position: relative;
+            padding: 24px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            color: var(--text-primary);
+            transition: opacity 1.5s ease;
+        }
+
+        .memory-plate.decaying .memory-content {
+            opacity: 0.6;
+        }
+
+        .memory-plate.forgotten .memory-content {
+            opacity: 0.2;
+        }
+
+        .memory-date {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .memory-title {
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .memory-description {
+            font-size: 14px;
+            line-height: 1.4;
+            color: var(--text-secondary);
+        }
+
+        .decay-indicator {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-plate:hover .decay-indicator {
+            opacity: 1;
+        }
+
+        .controls {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .control-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .control-button {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--steel);
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-radius: 2px;
+        }
+
+        .control-button:hover {
+            background: var(--steel);
+            color: var(--substrate);
+        }
+
+        .decay-status {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <span class="control-label">Memory Decay Simulation</span>
+        <button class="control-button" onclick="startDecay()">Start Decay</button>
+        <button class="control-button" onclick="resetMemories()">Reset</button>
+    </div>
+
+    <div class="memory-container">
+        <div class="memory-plate" data-age="30">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">30 days ago</div>
+                <h3 class="memory-title">Summer Evening</h3>
+                <p class="memory-description">Watched the sunset from the rooftop</p>
+            </div>
+            <span class="decay-indicator">30 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="7">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">7 days ago</div>
+                <h3 class="memory-title">Coffee Meeting</h3>
+                <p class="memory-description">Discussed the new project timeline</p>
+            </div>
+            <span class="decay-indicator">7 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="90">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">90 days ago</div>
+                <h3 class="memory-title">Birthday Party</h3>
+                <p class="memory-description">Celebrated with close friends</p>
+            </div>
+            <span class="decay-indicator">90 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="14">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">14 days ago</div>
+                <h3 class="memory-title">Mountain Hike</h3>
+                <p class="memory-description">Reached the summit at dawn</p>
+            </div>
+            <span class="decay-indicator">14 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="60">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">60 days ago</div>
+                <h3 class="memory-title">Concert Night</h3>
+                <p class="memory-description">Jazz quartet at the blue room</p>
+            </div>
+            <span class="decay-indicator">60 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="3">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">3 days ago</div>
+                <h3 class="memory-title">Book Finished</h3>
+                <p class="memory-description">Completed the philosophy series</p>
+            </div>
+            <span class="decay-indicator">3 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="45">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">45 days ago</div>
+                <h3 class="memory-title">Art Exhibition</h3>
+                <p class="memory-description">Contemporary pieces at the gallery</p>
+            </div>
+            <span class="decay-indicator">45 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="21">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">21 days ago</div>
+                <h3 class="memory-title">Weekend Trip</h3>
+                <p class="memory-description">Coastal drive to the lighthouse</p>
+            </div>
+            <span class="decay-indicator">21 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="75">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">75 days ago</div>
+                <h3 class="memory-title">Graduation Day</h3>
+                <p class="memory-description">Finally received the diploma</p>
+            </div>
+            <span class="decay-indicator">75 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="10">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">10 days ago</div>
+                <h3 class="memory-title">New Recipe</h3>
+                <p class="memory-description">Mastered grandmother's pasta sauce</p>
+            </div>
+            <span class="decay-indicator">10 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="35">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">35 days ago</div>
+                <h3 class="memory-title">Job Interview</h3>
+                <p class="memory-description">Went better than expected</p>
+            </div>
+            <span class="decay-indicator">35 days old</span>
+        </div>
+
+        <div class="memory-plate" data-age="50">
+            <div class="corrosion-mask"></div>
+            <div class="memory-content">
+                <div class="memory-date">50 days ago</div>
+                <h3 class="memory-title">First Snowfall</h3>
+                <p class="memory-description">City transformed overnight</p>
+            </div>
+            <span class="decay-indicator">50 days old</span>
+        </div>
+    </div>
+
+    <div class="decay-status">
+        <p>Memories decay based on time elapsed • Hover to inspect age</p>
+    </div>
+
+    <script>
+        function calculateDecay(age) {
+            if (age > 60) return 'forgotten';
+            if (age > 30) return 'decaying';
+            return 'fresh';
+        }
+
+        function applyDecay() {
+            const plates = document.querySelectorAll('.memory-plate');
+            plates.forEach(plate => {
+                const age = parseInt(plate.dataset.age);
+                const decayState = calculateDecay(age);
+                plate.classList.remove('fresh', 'decaying', 'forgotten');
+                plate.classList.add(decayState);
+            });
+        }
+
+        function startDecay() {
+            applyDecay();
+        }
+
+        function resetMemories() {
+            const plates = document.querySelectorAll('.memory-plate');
+            plates.forEach(plate => {
+                plate.classList.remove('fresh', 'decaying', 'forgotten');
+            });
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                applyDecay();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

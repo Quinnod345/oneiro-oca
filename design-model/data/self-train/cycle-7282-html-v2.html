@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Argument Settler</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #0a0a0a;
+            overflow: hidden;
+            height: 100vh;
+            color: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .argument-arena {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 200px 1fr;
+            align-items: center;
+        }
+
+        .participant-zone {
+            height: 100%;
+            position: relative;
+            padding: 4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .participant-left {
+            align-items: flex-start;
+        }
+
+        .participant-right {
+            align-items: flex-end;
+        }
+
+        .participant-name {
+            font-size: 3rem;
+            font-weight: 200;
+            letter-spacing: -0.02em;
+            margin-bottom: 2rem;
+            opacity: 0.3;
+            transition: opacity 0.3s ease;
+        }
+
+        .participant-zone.active .participant-name {
+            opacity: 1;
+        }
+
+        .evidence-stack {
+            position: relative;
+            width: 400px;
+            height: 600px;
+        }
+
+        .evidence-piece {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 4px;
+            padding: 2rem;
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 320px;
+            font-size: 1.125rem;
+            line-height: 1.6;
+        }
+
+        .evidence-piece:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateX(10px);
+        }
+
+        .participant-right .evidence-piece:hover {
+            transform: translateX(-10px);
+        }
+
+        .evidence-piece.dragging {
+            cursor: grabbing;
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.5);
+            z-index: 1000;
+        }
+
+        .evidence-weight {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            font-size: 2rem;
+            font-weight: 600;
+            opacity: 0.2;
+            transition: opacity 0.3s ease;
+        }
+
+        .evidence-piece:hover .evidence-weight,
+        .evidence-piece.dragging .evidence-weight {
+            opacity: 0.8;
+        }
+
+        .rope-physics {
+            position: relative;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rope {
+            position: absolute;
+            width: 8px;
+            height: 60%;
+            background: linear-gradient(to bottom, 
+                rgba(255, 255, 255, 0.1) 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255, 255, 255, 0.1) 100%
+            );
+            transform-origin: center;
+            transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            animation: rope-tension 4s ease-in-out infinite;
+        }
+
+        @keyframes rope-tension {
+            0%, 100% { transform: scaleY(1) rotateZ(0deg); }
+            25% { transform: scaleY(1.02) rotateZ(-0.5deg); }
+            75% { transform: scaleY(1.02) rotateZ(0.5deg); }
+        }
+
+        .rope.pulling-left {
+            transform: rotateZ(-15deg) scaleY(1.1);
+            animation: none;
+        }
+
+        .rope.pulling-right {
+            transform: rotateZ(15deg) scaleY(1.1);
+            animation: none;
+        }
+
+        .tension-meter {
+            position: absolute;
+            bottom: 8rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .tension-bar {
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, 
+                rgba(255, 59, 48, 0.8) 0%, 
+                rgba(255, 255, 255, 0.8) 50%, 
+                rgba(52, 199, 89, 0.8) 100%
+            );
+            transform: translateX(0);
+            transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .drop-zone {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 200px;
+            height: 200px;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            opacity: 0;
+        }
+
+        .drop-zone.left {
+            left: -100px;
+        }
+
+        .drop-zone.right {
+            right: -100px;
+        }
+
+        .drop-zone.active {
+            opacity: 1;
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .total-weight {
+            position: absolute;
+            bottom: 2rem;
+            font-size: 4rem;
+            font-weight: 100;
+            opacity: 0.2;
+            transition: all 0.3s ease;
+        }
+
+        .participant-left .total-weight {
+            left: 4rem;
+        }
+
+        .participant-right .total-weight {
+            right: 4rem;
+        }
+
+        .participant-zone.winning .total-weight {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="argument-arena">
+        <div class="participant-zone participant-left" data-side="left">
+            <h2 class="participant-name">Alex</h2>
+            <div class="evidence-stack">
+                <div class="evidence-piece" draggable="true" data-weight="8" style="top: 20px; left: 0;">
+                    Studies show 73% correlation between early intervention and positive outcomes
+                    <span class="evidence-weight">8</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="6" style="top: 120px; left: 20px;">
+                    Expert testimony from Dr. Chen supports this approach
+                    <span class="evidence-weight">6</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="9" style="top: 220px; left: 10px;">
+                    Meta-analysis of 50 studies confirms effectiveness
+                    <span class="evidence-weight">9</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="5" style="top: 320px; left: 30px;">
+                    Cost-benefit analysis shows 3:1 return on investment
+                    <span class="evidence-weight">5</span>
+                </div>
+            </div>
+            <div class="drop-zone left"></div>
+            <div class="total-weight">0</div>
+        </div>
+
+        <div class="rope-physics">
+            <div class="rope"></div>
+            <div class="tension-meter">
+                <div class="tension-bar"></div>
+            </div>
+        </div>
+
+        <div class="participant-zone participant-right" data-side="right">
+            <h2 class="participant-name">Jordan</h2>
+            <div class="evidence-stack">
+                <div class="evidence-piece" draggable="true" data-weight="7" style="top: 20px; right: 0;">
+                    Implementation challenges documented in 15 case studies
+                    <span class="evidence-weight">7</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="8" style="top: 120px; right: 20px;">
+                    Budget constraints limit feasibility in 80% of cases
+                    <span class="evidence-weight">8</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="6" style="top: 220px; right: 10px;">
+                    Alternative approaches show comparable results
+                    <span class="evidence-weight">6</span>
+                </div>
+                <div class="evidence-piece" draggable="true" data-weight="9" style="top: 320px; right: 30px;">
+                    Long-term sustainability concerns raised by review board
+                    <span class="evidence-weight">9</span>
+                </div>
+            </div>
+            <div class="drop-zone right"></div>
+            <div class="total-weight">0</div>
+        </div>
+    </div>
+
+    <script>
+        let leftWeight = 0;
+        let rightWeight = 0;
+        let draggedElement = null;
+
+        document.querySelectorAll('.evidence-piece').forEach(piece => {
+            piece.addEventListener('dragstart', handleDragStart);
+            piece.addEventListener('dragend', handleDragEnd);
+        });
+
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            zone.addEventListener('dragover', handleDragOver);
+            zone.addEventListener('drop', handleDrop);
+            zone.addEventListener('dragleave', handleDragLeave);
+        });
+
+        function handleDragStart(e) {
+            draggedElement = e.target;
+            e.target.classList.add('dragging');
+            document.querySelectorAll('.drop-zone').forEach(zone => {
+                zone.classList.add('active');
+            });
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.drop-zone').forEach(zone => {
+                zone.classList.remove('active');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+        }
+
+        function handleDragLeave(e) {
+            e.target.classList.remove('active');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            if (!draggedElement) return;
+
+            const weight = parseInt(draggedElement.dataset.weight);
+            const side = e.target.classList.contains('left') ? 'left' : 'right';
+            
+            if (side === 'left') {
+                leftWeight += weight;
+            } else {
+                rightWeight += weight;
+            }
+
+            draggedElement.style.opacity = '0';
+            setTimeout(() => {
+                draggedElement.remove();
+            }, 300);
+
+            updateRope();
+            updateWeights();
+        }
+
+        function updateRope() {
+            const rope = document.querySelector('.rope');
+            const tensionBar = document.querySelector('.tension-bar');
+            const difference = leftWeight - rightWeight;
+            const maxDifference = 30;
+            const normalizedDiff = Math.max(-maxDifference, Math.min(maxDifference, difference));
+            
+            rope.classList.remove('pulling-left', 'pulling-right');
+            
+            if (difference > 5) {
+                rope.classList.add('pulling-left');
+            } else if (difference < -5) {
+                rope.classList.add('pulling-right');
+            }
+
+            const barPosition = 50 - (normalizedDiff / maxDifference) * 40;
+            tensionBar.style.transform = `translateX(${barPosition - 50}%)`;
+        }
+
+        function updateWeights() {
+            document.querySelector('.participant-left .total-weight').textContent = leftWeight;
+            document.querySelector('.participant-right .total-weight').textContent = rightWeight;
+            
+            document.querySelectorAll('.participant-zone').forEach(zone => {
+                zone.classList.remove('winning', 'active');
+            });
+
+            if (leftWeight > rightWeight) {
+                document.querySelector('.participant-left').classList.add('winning', 'active');
+            } else if (rightWeight > leftWeight) {
+                document.querySelector('.participant-right').classList.add('winning', 'active');
+            }
+        }
+    </script>
+</body>
+</html>

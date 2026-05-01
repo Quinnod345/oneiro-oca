@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Texture Weaving</title>
+    <style>
+        :root {
+            --void-black: #0a0908;
+            --thread-gold: #f4d06f;
+            --thread-crimson: #d64933;
+            --thread-sage: #7fb069;
+            --thread-indigo: #4056a1;
+            --thread-pearl: #e8dab2;
+            --warp-shadow: rgba(10, 9, 8, 0.4);
+            --ghost-thread: rgba(244, 208, 111, 0.1);
+            --locked-glow: #fff8e7;
+            --grid-line: rgba(232, 218, 178, 0.08);
+            --pulse-accent: #ff8811;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: crosshair;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loom-frame {
+            position: absolute;
+            inset: 40px;
+            border: 1px solid rgba(244, 208, 111, 0.2);
+            background: radial-gradient(ellipse at 30% 40%, rgba(64, 86, 161, 0.02), transparent 40%),
+                        radial-gradient(ellipse at 70% 60%, rgba(214, 73, 51, 0.02), transparent 40%);
+        }
+
+        .weaving-grid {
+            position: absolute;
+            inset: 60px;
+            display: grid;
+            grid-template-columns: repeat(48, 1fr);
+            grid-template-rows: repeat(30, 1fr);
+            gap: 0;
+        }
+
+        .grid-point {
+            position: relative;
+            border-right: 1px solid var(--grid-line);
+            border-bottom: 1px solid var(--grid-line);
+            transition: background 0.3s ease;
+        }
+
+        .grid-point:hover {
+            background: rgba(244, 208, 111, 0.03);
+        }
+
+        .thread-layer {
+            position: absolute;
+            inset: 60px;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .temporal-thread {
+            position: absolute;
+            height: 2px;
+            background: var(--thread-gold);
+            transform-origin: left center;
+            filter: blur(0.5px);
+            opacity: 0.8;
+            animation: threadPulse 2s ease-in-out infinite;
+        }
+
+        .temporal-thread.fast {
+            height: 1px;
+            background: var(--thread-crimson);
+            filter: blur(0.2px);
+            animation-duration: 0.5s;
+        }
+
+        .temporal-thread.slow {
+            height: 4px;
+            background: var(--thread-indigo);
+            filter: blur(1px);
+            animation-duration: 4s;
+        }
+
+        .temporal-thread.locked {
+            opacity: 1;
+            filter: blur(0) drop-shadow(0 0 3px var(--locked-glow));
+            animation: none;
+        }
+
+        @keyframes threadPulse {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(1.2); }
+        }
+
+        .weft-thread {
+            position: absolute;
+            width: 2px;
+            background: var(--thread-sage);
+            transform-origin: top center;
+            filter: blur(0.5px);
+            opacity: 0.7;
+        }
+
+        .control-panel {
+            position: absolute;
+            left: 40px;
+            bottom: 40px;
+            display: flex;
+            gap: 30px;
+            align-items: flex-end;
+        }
+
+        .tempo-indicator {
+            width: 120px;
+            height: 80px;
+            border: 1px solid rgba(244, 208, 111, 0.3);
+            background: rgba(10, 9, 8, 0.6);
+            padding: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tempo-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 0%;
+            background: linear-gradient(to top, var(--thread-crimson), var(--thread-gold));
+            transition: height 0.1s ease;
+        }
+
+        .tempo-label {
+            position: relative;
+            color: var(--thread-pearl);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.7;
+        }
+
+        .playback-control {
+            width: 60px;
+            height: 60px;
+            border: 1px solid rgba(244, 208, 111, 0.3);
+            background: rgba(10, 9, 8, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .playback-control:hover {
+            border-color: var(--thread-gold);
+            background: rgba(244, 208, 111, 0.1);
+        }
+
+        .playback-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 10px 0 10px 16px;
+            border-color: transparent transparent transparent var(--thread-pearl);
+        }
+
+        .playback-control.playing .playback-icon {
+            width: 16px;
+            height: 20px;
+            border: none;
+            background: linear-gradient(to right, var(--thread-pearl) 30%, transparent 30%, transparent 70%, var(--thread-pearl) 70%);
+        }
+
+        .pattern-memory {
+            position: absolute;
+            right: 40px;
+            bottom: 40px;
+            width: 200px;
+            height: 120px;
+            border: 1px solid rgba(244, 208, 111, 0.3);
+            background: rgba(10, 9, 8, 0.6);
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .memory-cell {
+            border: 1px solid rgba(244, 208, 111, 0.2);
+            background: rgba(244, 208, 111, 0.05);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .memory-cell:hover {
+            border-color: var(--thread-gold);
+            background: rgba(244, 208, 111, 0.15);
+        }
+
+        .memory-cell.active {
+            background: rgba(255, 136, 17, 0.3);
+            border-color: var(--pulse-accent);
+            animation: memoryPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes memoryPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.95); }
+        }
+
+        .gesture-trail {
+            position: absolute;
+            pointer-events: none;
+            width: 4px;
+            height: 4px;
+            background: var(--thread-gold);
+            border-radius: 50%;
+            filter: blur(2px);
+            animation: trailFade 1s ease-out forwards;
+        }
+
+        @keyframes trailFade {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.5); }
+        }
+
+        .resonance-wave {
+            position: absolute;
+            pointer-events: none;
+            border: 1px solid var(--thread-gold);
+            border-radius: 50%;
+            animation: waveExpand 2s ease-out forwards;
+        }
+
+        @keyframes waveExpand {
+            0% {
+                width: 20px;
+                height: 20px;
+                opacity: 0.6;
+            }
+            100% {
+                width: 200px;
+                height: 200px;
+                opacity: 0;
+                transform: translate(-90px, -90px);
+            }
+        }
+
+        .header-notation {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: var(--thread-pearl);
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.5;
+        }
+
+        .velocity-echo {
+            position: absolute;
+            inset: 60px;
+            pointer-events: none;
+            opacity: 0.03;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                var(--thread-gold) 10px,
+                var(--thread-gold) 11px
+            );
+            mix-blend-mode: screen;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-notation">Temporal Texture</div>
+    
+    <div class="loom-frame">
+        <div class="velocity-echo"></div>
+        <div class="weaving-grid" id="grid"></div>
+        <div class="thread-layer" id="threadLayer"></div>
+    </div>
+
+    <div class="control-panel">
+        <div class="tempo-indicator">
+            <div class="tempo-bar" id="tempoBar"></div>
+            <div class="tempo-label">Velocity</div>
+        </div>
+        <div class="playback-control" id="playbackBtn">
+            <div class="playback-icon"></div>
+        </div>
+    </div>
+
+    <div class="pattern-memory" id="patternMemory"></div>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const threadLayer = document.getElementById('threadLayer');
+        const tempoBar = document.getElementById('tempoBar');
+        const playbackBtn = document.getElementById('playbackBtn');
+        const patternMemory = document.getElementById('patternMemory');
+
+        let isWeaving = false;
+        let lastPos = null;
+        let lastTime = null;
+        let currentVelocity = 0;
+        let threadData = [];
+        let lockedThreads = [];
+        let pauseTimer = null;
+
+        // Create grid
+        for (let i = 0; i < 48 * 30; i++) {
+            const point = document.createElement('div');
+            point.className = 'grid-point';
+            grid.appendChild(point);
+        }
+
+        // Create memory cells
+        for (let i = 0; i < 15; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'memory-cell';
+            patternMemory.appendChild(cell);
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.control-panel') || e.target.closest('.pattern-memory')) return;
+            isWeaving = true;
+            lastPos = { x: e.clientX, y: e.clientY };
+            lastTime = Date.now();
+        });
+
+        document.addEventListener('mouseup', () => {
+            isWeaving = false;
+            lastPos = null;
+            lastTime = null;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isWeaving || !lastPos) return;
+
+            const currentPos = { x: e.clientX, y: e.clientY };
+            const currentTime = Date.now();
+            
+            const dx = currentPos.x - lastPos.x;
+            const dy = currentPos.y - lastPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const timeDelta = currentTime - lastTime;
+            
+            currentVelocity = distance / (timeDelta + 1);
+            
+            // Update tempo indicator
+            tempoBar.style.height = Math.min(currentVelocity * 20, 100) + '%';
+            
+            // Create thread
+            const thread = document.createElement('div');
+            thread.className = 'temporal-thread';
+            
+            if (currentVelocity > 2) {
+                thread.classList.add('fast');
+            } else if (currentVelocity < 0.5) {
+                thread.classList.add('slow');
+            }
+            
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            thread.style.left = lastPos.x + 'px';
+            thread.style.top = lastPos.y + 'px';
+            thread.style.width = distance + 'px';
+            thread.style.transform = `rotate(${angle}deg)`;
+            
+            threadLayer.appendChild(thread);
+            
+            // Store thread data
+            threadData.push({
+                element: thread,
+                velocity: currentVelocity,
+                position: { x: lastPos.x, y: lastPos.y },
+                angle: angle,
+                distance: distance,
+                timestamp: currentTime
+            });
+            
+            // Create gesture trail
+            const trail = document.createElement('div');
+            trail.className = 'gesture-trail';
+            trail.style.left = currentPos.x + 'px';
+            trail.style.top = currentPos.y + 'px';
+            document.body.appendChild(trail);
+            
+            setTimeout(() => trail.remove(), 1000);
+            
+            // Reset pause timer
+            clearTimeout(pauseTimer);
+            pauseTimer = setTimeout(() => {
+                if (threadData.length > 0) {
+                    const lastThread = threadData[threadData.length - 1];
+                    lastThread.element.classList.add('locked');
+                    lockedThreads.push(lastThread);
+                    
+                    // Create resonance wave
+                    const wave = document.createElement('div');
+                    wave.className = 'resonance-wave';
+                    wave.style.left = lastThread.position.x + 'px';
+                    wave.style.top = lastThread.position.y + 'px';
+                    threadLayer.appendChild(wave);
+                    
+                    setTimeout(() => wave.remove(), 2000);
+                }
+            }, 300);
+            
+            // Fade old threads
+            if (threadData.length > 50) {
+                const oldThread = threadData.shift();
+                if (!oldThread.element.classList.contains('locked')) {
+                    oldThread.element.style.opacity = '0';
+                    setTimeout(() => oldThread.element.remove(), 1000);
+                }
+            }
+            
+            lastPos = currentPos;
+            lastTime = currentTime;
+        });
+
+        // Playback functionality
+        playbackBtn.addEventListener('click', () => {
+            playbackBtn.classList.toggle('playing');
+            
+            if (playbackBtn.classList.contains('playing') && lockedThreads.length > 0) {
+                let index = 0;
+                const playbackInterval = setInterval(() => {
+                    if (!playbackBtn.classList.contains('playing')) {
+                        clearInterval(playbackInterval);
+                        return;
+                    }
+                    
+                    const thread = lockedThreads[index % lockedThreads.length];
+                    thread.element.style.filter = 'blur(0) drop-shadow(0 0 10px var(--pulse-accent))';
+                    
+                    setTimeout(() => {
+                        thread.element.style.filter = 'blur(0) drop-shadow(0 0 3px var(--locked-glow))';
+                    }, 200);
+                    
+                    index++;
+                }, 300);
+            }
+        });
+    </script>
+</body>
+</html>

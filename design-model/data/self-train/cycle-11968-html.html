@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Drift Calibrator</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --midnight-blue: #1a1a2e;
+            --deep-ocean: #16213e;
+            --time-current: #3f4e6f;
+            --wake-amber: #ff8c42;
+            --sleep-indigo: #4361ee;
+            --meal-gravity: #7209b7;
+            --social-pulse: #f72585;
+            --drift-glow: #4cc9f0;
+            --resistance-red: #e63946;
+            --timeline-silver: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--void-black);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+            color: white;
+        }
+
+        .temporal-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 20% 30%, var(--deep-ocean) 0%, var(--void-black) 60%);
+        }
+
+        .time-ribbon {
+            position: absolute;
+            width: 100%;
+            height: 400px;
+            top: 250px;
+            transform-origin: center;
+            filter: blur(0.5px);
+        }
+
+        .ribbon-segment {
+            position: absolute;
+            width: 120px;
+            height: 400px;
+            background: linear-gradient(180deg, 
+                transparent 0%, 
+                var(--timeline-silver) 20%,
+                var(--timeline-silver) 80%,
+                transparent 100%);
+            transform-origin: center;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ribbon-segment::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--sleep-indigo), var(--wake-amber));
+            opacity: 0;
+            transition: opacity 1.2s ease;
+        }
+
+        .ribbon-segment.night::before {
+            opacity: 0.6;
+            background: linear-gradient(90deg, var(--sleep-indigo), var(--deep-ocean));
+        }
+
+        .ribbon-segment.day::before {
+            opacity: 0.4;
+            background: linear-gradient(90deg, var(--wake-amber), #ffbe0b);
+        }
+
+        .body-clock {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            left: 680px;
+            top: 410px;
+            cursor: grab;
+            z-index: 100;
+        }
+
+        .body-clock.dragging {
+            cursor: grabbing;
+        }
+
+        .orb-core {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, var(--drift-glow) 0%, transparent 70%);
+            border-radius: 50%;
+            position: relative;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        .orb-core::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            top: 20px;
+            left: 20px;
+            box-shadow: 0 0 40px var(--drift-glow), 0 0 80px var(--drift-glow);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .gravity-well {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: gravityPulse 4s ease-in-out infinite;
+        }
+
+        .gravity-well.meal {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, transparent 30%, var(--meal-gravity) 50%, transparent 70%);
+        }
+
+        .gravity-well.social {
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle, transparent 20%, var(--social-pulse) 40%, transparent 60%);
+        }
+
+        @keyframes gravityPulse {
+            0%, 100% { opacity: 0.3; transform: scale(0.9); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        .resistance-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .resistance-zone {
+            position: absolute;
+            width: 200px;
+            height: 600px;
+            background: linear-gradient(90deg, transparent, var(--resistance-red), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .resistance-zone.active {
+            opacity: 0.2;
+        }
+
+        .time-labels {
+            position: absolute;
+            width: 100%;
+            height: 100px;
+            top: 700px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 100px;
+        }
+
+        .time-label {
+            font-size: 14px;
+            color: var(--time-current);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+        }
+
+        .time-label.current {
+            color: white;
+            font-weight: 500;
+        }
+
+        .time-label::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 400px;
+            background: var(--timeline-silver);
+            left: 50%;
+            bottom: 40px;
+            transform: translateX(-50%);
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 300px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--time-current);
+            margin-bottom: 32px;
+        }
+
+        .metric {
+            margin-bottom: 24px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--time-current);
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 200;
+        }
+
+        .metric-value span {
+            font-size: 16px;
+            color: var(--time-current);
+        }
+
+        .drift-indicator {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 200px;
+            height: 200px;
+        }
+
+        .drift-visual {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .drift-ring {
+            position: absolute;
+            border: 2px solid var(--timeline-silver);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+
+        .drift-ring:nth-child(1) {
+            width: 200px;
+            height: 200px;
+            top: 0;
+            left: 0;
+        }
+
+        .drift-ring:nth-child(2) {
+            width: 160px;
+            height: 160px;
+            top: 20px;
+            left: 20px;
+        }
+
+        .drift-ring:nth-child(3) {
+            width: 120px;
+            height: 120px;
+            top: 40px;
+            left: 40px;
+        }
+
+        .drift-pointer {
+            position: absolute;
+            width: 4px;
+            height: 80px;
+            background: var(--drift-glow);
+            top: 20px;
+            left: 98px;
+            transform-origin: bottom;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .viscosity-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .viscosity-layer.active {
+            opacity: 1;
+            background: radial-gradient(circle at var(--mouse-x) var(--mouse-y), 
+                rgba(255, 255, 255, 0.05) 0%, 
+                transparent 20%);
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-field">
+        <div class="time-ribbon" id="timeRibbon"></div>
+        
+        <div class="resistance-field">
+            <div class="resistance-zone" style="left: 400px;"></div>
+            <div class="resistance-zone" style="left: 800px;"></div>
+        </div>
+
+        <div class="gravity-well meal" style="top: 380px; left: 300px;"></div>
+        <div class="gravity-well meal" style="top: 420px; left: 700px;"></div>
+        <div class="gravity-well meal" style="top: 400px; left: 1100px;"></div>
+        
+        <div class="gravity-well social" style="top: 350px; left: 500px;"></div>
+        <div class="gravity-well social" style="top: 450px; left: 900px;"></div>
+
+        <div class="body-clock" id="bodyClock">
+            <div class="orb-core"></div>
+        </div>
+
+        <div class="time-labels">
+            <div class="time-label">00:00</div>
+            <div class="time-label">04:00</div>
+            <div class="time-label">08:00</div>
+            <div class="time-label current">12:00</div>
+            <div class="time-label">16:00</div>
+            <div class="time-label">20:00</div>
+            <div class="time-label">24:00</div>
+        </div>
+
+        <div class="control-panel">
+            <h1>Temporal Drift Calibrator</h1>
+            <div class="subtitle">Synchronizing biological rhythms</div>
+            
+            <div class="metric">
+                <div class="metric-label">Current Drift</div>
+                <div class="metric-value" id="driftValue">+4.5 <span>hours</span></div>
+            </div>
+            
+            <div class="metric">
+                <div class="metric-label">Adaptation Rate</div>
+                <div class="metric-value">72 <span>%</span></div>
+            </div>
+            
+            <div class="metric">
+                <div class="metric-label">Resistance Factor</div>
+                <div class="metric-value">2.3 <span>x</span></div>
+            </div>
+        </div>
+
+        <div class="drift-indicator">
+            <div class="drift-visual">
+                <div class="drift-ring"></div>
+                <div class="drift-ring"></div>
+                <div class="drift-ring"></div>
+                <div class="drift-pointer" id="driftPointer"></div>
+            </div>
+        </div>
+
+        <div class="viscosity-layer" id="viscosityLayer"></div>
+    </div>
+
+    <script>
+        const bodyClock = document.getElementById('bodyClock');
+        const timeRibbon = document.getElementById('timeRibbon');
+        const viscosityLayer = document.getElementById('viscosityLayer');
+        const driftPointer = document.getElementById('driftPointer');
+        const driftValue = document.getElementById('driftValue');
+        const resistanceZones = document.querySelectorAll('.resistance-zone');
+        
+        // Create ribbon segments
+        for (let i = 0; i < 12; i++) {
+            const segment = document.createElement('div');
+            segment.className = 'ribbon-segment';
+            segment.style.left = `${i * 120}px`;
+            segment.style.transform = `translateY(${Math.sin(i * 0.5) * 30}px) rotateY(${Math.sin(i * 0.3) * 10}deg)`;
+            
+            // Set day/night classes
+            if (i < 2 || i > 9) {
+                segment.classList.add('night');
+            } else {
+                segment.classList.add('day');
+            }
+            
+            timeRibbon.appendChild(segment);
+        }
+        
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let clockX = 680;
+        let clockY = 410;
+        let velocityX = 0;
+        let velocityY = 0;
+        let targetX = clockX;
+        let targetY = clockY;
+        
+        bodyClock.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            bodyClock.classList.add('dragging');
+            dragStartX = e.clientX - clockX;
+            dragStartY = e.clientY - clockY;
+            viscosityLayer.classList.add('active');
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                targetX = e.clientX - dragStartX;
+                targetY = e.clientY - dragStartY;
+                
+                // Update viscosity layer
+                viscosityLayer.style.setProperty('--mouse-x', `${e.clientX}px`);
+                viscosityLayer.style.setProperty('--mouse-y', `${e.clientY}px`);
+                
+                // Check resistance zones
+                resistanceZones.forEach(zone => {
+                    const rect = zone.getBoundingClientRect();
+                    if (targetX > rect.left - 100 && targetX < rect.right + 100) {
+                        zone.classList.add('active');
+                    } else {
+                        zone.classList.remove('active');
+                    }
+                });
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            bodyClock.classList.remove('dragging');
+            viscosityLayer.classList.remove('active');
+            resistanceZones.forEach(zone => zone.classList.remove('active'));
+        });
+        
+        // Physics simulation
+        function animate() {
+            if (!isDragging) {
+                // Apply gravity wells
+                const gravityWells = document.querySelectorAll('.gravity-well');
+                gravityWells.forEach(well => {
+                    const rect = well.getBoundingClientRect();
+                    const wellX = rect.left + rect.width / 2;
+                    const wellY = rect.top + rect.height / 2;
+                    const distance = Math.sqrt(Math.pow(clockX - wellX, 2) + Math.pow(clockY - wellY, 2));
+                    
+                    if (distance < 150) {
+                        const force = (150 - distance) / 150 * 0.5;
+                        const angle = Math.atan2(wellY - clockY, wellX - clockX);
+                        targetX += Math.cos(angle) * force;
+                        targetY += Math.sin(angle) * force;
+                    }
+                });
+            }
+            
+            // Viscous movement
+            const resistance = isDragging ? 0.08 : 0.15;
+            velocityX += (targetX - clockX) * resistance;
+            velocityY += (targetY - clockY) * resistance;
+            velocityX *= 0.85;
+            velocityY *= 0.85;
+            
+            clockX += velocityX;
+            clockY += velocityY;
+            
+            // Constrain to screen
+            clockX = Math.max(40, Math.min(1360, clockX));
+            clockY = Math.max(100, Math.min(700, clockY));
+            
+            bodyClock.style.left = `${clockX}px`;
+            bodyClock.style.top = `${clockY}px`;
+            
+            // Update ribbon warping
+            const ribbonSegments = document.querySelectorAll('.ribbon-segment');
+            ribbonSegments.forEach((segment, i) => {
+                const segmentX = i * 120 + 60;
+                const distance = Math.abs(clockX - segmentX);
+                const influence = Math.max(0, 1 - distance / 300);
+                const warp = influence * 50 * Math.sign(clockY - 450);
+                segment.style.transform = `translateY(${Math.sin(i * 0.5) * 30 + warp}px) rotateY(${Math.sin(i * 0.3) * 10}deg) scaleY(${1 + influence * 0.2})`;
+            });
+            
+            // Update drift indicator
+            const drift = (clockX - 680) / 100;
+            driftPointer.style.transform = `rotate(${drift * 30}deg)`;
+            driftValue.innerHTML = `${drift > 0 ? '+' : ''}${drift.toFixed(1)} <span>hours</span>`;
+            
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>

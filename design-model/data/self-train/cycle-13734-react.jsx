@@ -1,0 +1,356 @@
+function App() {
+  const [tension, setTension] = React.useState(0.8);
+  const [breathSync, setBreathSync] = React.useState(0);
+  const [goldenThreads, setGoldenThreads] = React.useState([]);
+  const [userPulls, setUserPulls] = React.useState({ left: [], right: [] });
+  const [phase, setPhase] = React.useState('conflict'); // conflict, unwinding, resolution
+  
+  React.useEffect(() => {
+    const breathInterval = setInterval(() => {
+      setBreathSync(prev => (prev + 1) % 360);
+    }, 50);
+    
+    return () => clearInterval(breathInterval);
+  }, []);
+  
+  React.useEffect(() => {
+    if (breathSync % 120 === 0 && tension > 0.2) {
+      setTension(prev => Math.max(0.2, prev - 0.05));
+      
+      if (Math.random() > 0.7 && tension < 0.5) {
+        const newGolden = {
+          id: Date.now(),
+          path: generateSmoothPath(200 + Math.random() * 200, 300 + Math.random() * 100)
+        };
+        setGoldenThreads(prev => [...prev, newGolden]);
+      }
+    }
+    
+    if (tension < 0.3 && phase === 'conflict') {
+      setPhase('unwinding');
+    }
+    
+    if (tension < 0.2 && goldenThreads.length > 3) {
+      setPhase('resolution');
+    }
+  }, [breathSync, tension, phase, goldenThreads.length]);
+  
+  function generateSmoothPath(length, variance) {
+    const points = [];
+    for (let i = 0; i < 8; i++) {
+      points.push({
+        x: 400 + Math.sin(i * 0.8) * variance,
+        y: 300 + Math.cos(i * 0.8) * variance * 0.7
+      });
+    }
+    
+    return points.map((p, i) => 
+      i === 0 ? `M ${p.x} ${p.y}` : `Q ${points[i-1].x + 20} ${points[i-1].y + 20}, ${p.x} ${p.y}`
+    ).join(' ');
+  }
+  
+  function handlePull(side, e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const newPull = {
+      id: Date.now(),
+      x: side === 'left' ? x : 800 - x,
+      y: y,
+      angle: Math.atan2(y - 300, (side === 'left' ? x : 800 - x) - 400) * 180 / Math.PI
+    };
+    
+    setUserPulls(prev => ({
+      ...prev,
+      [side]: [...prev[side].slice(-4), newPull]
+    }));
+    
+    setTension(prev => Math.min(1, prev + 0.02));
+  }
+  
+  const knotPoints = React.useMemo(() => {
+    const basePoints = [];
+    const numPoints = 12;
+    
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * Math.PI * 2;
+      const radius = 80 + tension * 40;
+      const wobble = Math.sin(breathSync * 0.02 + i) * tension * 20;
+      
+      basePoints.push({
+        x: 400 + Math.cos(angle) * (radius + wobble),
+        y: 300 + Math.sin(angle) * (radius + wobble)
+      });
+    }
+    
+    return basePoints;
+  }, [tension, breathSync]);
+  
+  return React.createElement('div', {
+    style: {
+      width: '100vw',
+      height: '100vh',
+      background: 'radial-gradient(circle at center, #0f0f12 0%, #050506 100%)',
+      position: 'relative',
+      overflow: 'hidden'
+    }
+  },
+    // Left participant area
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: '35%',
+        height: '100%',
+        cursor: 'grab',
+        zIndex: 2
+      },
+      onMouseDown: (e) => handlePull('left', e)
+    },
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          left: '60px',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        }
+      },
+        // Avatar with breath ring
+        React.createElement('div', {
+          className: 'breath-ring',
+          style: {
+            position: 'absolute',
+            width: '140px',
+            height: '140px',
+            border: '2px solid #4a7c7e',
+            borderRadius: '50%',
+            left: '-20px',
+            top: '-20px'
+          }
+        }),
+        React.createElement('div', {
+          style: {
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #2a4858 0%, #4a7c7e 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '40px',
+            color: '#0a0a0a',
+            fontWeight: '300'
+          }
+        }, 'A'),
+        
+        // Emotion indicator
+        React.createElement('div', {
+          style: {
+            position: 'absolute',
+            top: '120px',
+            left: '0',
+            width: '100px',
+            textAlign: 'center',
+            color: '#4a7c7e',
+            fontSize: '12px',
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            opacity: 0.6
+          }
+        }, phase === 'resolution' ? 'Harmonizing' : 'Releasing')
+      )
+    ),
+    
+    // Right participant area
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        width: '35%',
+        height: '100%',
+        cursor: 'grab',
+        zIndex: 2
+      },
+      onMouseDown: (e) => handlePull('right', e)
+    },
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          right: '60px',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        }
+      },
+        React.createElement('div', {
+          className: 'breath-ring',
+          style: {
+            position: 'absolute',
+            width: '140px',
+            height: '140px',
+            border: '2px solid #c47f17',
+            borderRadius: '50%',
+            left: '-20px',
+            top: '-20px'
+          }
+        }),
+        React.createElement('div', {
+          style: {
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #8b5a0f 0%, #c47f17 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '40px',
+            color: '#0a0a0a',
+            fontWeight: '300'
+          }
+        }, 'B'),
+        
+        React.createElement('div', {
+          style: {
+            position: 'absolute',
+            top: '120px',
+            left: '0',
+            width: '100px',
+            textAlign: 'center',
+            color: '#c47f17',
+            fontSize: '12px',
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            opacity: 0.6
+          }
+        }, phase === 'resolution' ? 'Flowing' : 'Softening')
+      )
+    ),
+    
+    // Central knot visualization
+    React.createElement('svg', {
+      style: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none'
+      },
+      viewBox: '0 0 800 600'
+    },
+      // User threads from left
+      userPulls.left.map((pull, i) => 
+        React.createElement('path', {
+          key: `left-${pull.id}`,
+          className: 'thread',
+          d: `M 60 300 Q ${200 + i * 20} ${pull.y} ${400 - tension * 50} ${300 + pull.angle * 0.5}`,
+          stroke: '#4a7c7e',
+          strokeWidth: 2 - i * 0.3,
+          fill: 'none',
+          opacity: 0.6 - i * 0.1
+        })
+      ),
+      
+      // User threads from right
+      userPulls.right.map((pull, i) => 
+        React.createElement('path', {
+          key: `right-${pull.id}`,
+          className: 'thread',
+          d: `M 740 300 Q ${600 - i * 20} ${pull.y} ${400 + tension * 50} ${300 + pull.angle * 0.5}`,
+          stroke: '#c47f17',
+          strokeWidth: 2 - i * 0.3,
+          fill: 'none',
+          opacity: 0.6 - i * 0.1
+        })
+      ),
+      
+      // Main knot
+      React.createElement('g', {
+        className: phase === 'conflict' ? 'knot-pulse' : '',
+        style: { transformOrigin: '400px 300px' }
+      },
+        knotPoints.map((point, i) => {
+          const nextPoint = knotPoints[(i + 1) % knotPoints.length];
+          const controlPoint = {
+            x: (point.x + nextPoint.x) / 2 + Math.sin(i + breathSync * 0.01) * tension * 30,
+            y: (point.y + nextPoint.y) / 2 + Math.cos(i + breathSync * 0.01) * tension * 30
+          };
+          
+          return React.createElement('path', {
+            key: `knot-${i}`,
+            d: `M ${point.x} ${point.y} Q ${controlPoint.x} ${controlPoint.y} ${nextPoint.x} ${nextPoint.y}`,
+            stroke: i % 2 === 0 ? '#4a7c7e' : '#c47f17',
+            strokeWidth: 3 + tension * 2,
+            fill: 'none',
+            opacity: 0.8,
+            style: {
+              filter: `blur(${tension * 0.5}px)`
+            }
+          });
+        })
+      ),
+      
+      // Golden threads of common ground
+      goldenThreads.map(thread => 
+        React.createElement('path', {
+          key: thread.id,
+          className: 'golden-thread',
+          d: thread.path,
+          stroke: '#d4af37',
+          strokeWidth: 2,
+          fill: 'none',
+          strokeDasharray: '1000',
+          style: {
+            filter: 'drop-shadow(0 0 4px #d4af37)',
+            mixBlendMode: 'screen'
+          }
+        })
+      )
+    ),
+    
+    // Tension meter
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        bottom: '40px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '300px',
+        height: '4px',
+        background: 'rgba(255,255,255,0.1)',
+        borderRadius: '2px',
+        overflow: 'hidden'
+      }
+    },
+      React.createElement('div', {
+        style: {
+          width: `${(1 - tension) * 100}%`,
+          height: '100%',
+          background: 'linear-gradient(90deg, #4a7c7e 0%, #d4af37 50%, #c47f17 100%)',
+          transition: 'width 0.3s ease-out'
+        }
+      })
+    ),
+    
+    // Phase indicator
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        top: '40px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        color: phase === 'resolution' ? '#d4af37' : 'rgba(255,255,255,0.4)',
+        fontSize: '14px',
+        letterSpacing: '3px',
+        textTransform: 'uppercase',
+        textAlign: 'center'
+      }
+    },
+      phase === 'conflict' ? 'Pull to express • Breathe to release' :
+      phase === 'unwinding' ? 'Common threads emerging' :
+      'Pattern revealed'
+    )
+  );
+}

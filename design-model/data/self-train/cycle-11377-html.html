@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --membrane: #f5f5f0;
+            --ghost-white: rgba(255, 255, 255, 0.03);
+            --synapse-glow: #ff6b35;
+            --attention-thread: #ffd93d;
+            --memory-fade: rgba(245, 245, 240, 0.1);
+            --crack-silver: #c9c9c9;
+            --dust-mote: rgba(200, 180, 160, 0.3);
+            --forgotten-blue: #a8dadc;
+            --preserved-amber: #f1c40f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a1a;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .dust-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .dust {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--dust-mote);
+            border-radius: 50%;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(900px) translateX(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { transform: translateY(-100px) translateX(200px) rotate(360deg); opacity: 0; }
+        }
+
+        .auction-floor {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            gap: 1px;
+            background: var(--ghost-white);
+        }
+
+        .memory-catalog {
+            background: #0f0f0f;
+            padding: 40px 24px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .catalog-header {
+            color: var(--membrane);
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+            opacity: 0.7;
+        }
+
+        .category-filter {
+            margin-bottom: 24px;
+        }
+
+        .filter-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 4px;
+            font-size: 12px;
+            color: var(--crack-silver);
+            border: 1px solid rgba(201, 201, 201, 0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .filter-tag:hover {
+            border-color: var(--attention-thread);
+            color: var(--attention-thread);
+        }
+
+        .filter-tag.active {
+            background: var(--attention-thread);
+            color: #1a1a1a;
+            border-color: var(--attention-thread);
+        }
+
+        .vitrine-gallery {
+            position: relative;
+            padding: 60px;
+            background: radial-gradient(ellipse at center, rgba(15, 15, 15, 0) 0%, #0a0a0a 100%);
+        }
+
+        .vitrines-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 48px;
+            height: 100%;
+        }
+
+        .memory-vitrine {
+            position: relative;
+            height: 220px;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+        }
+
+        .memory-vitrine:hover {
+            transform: translateY(-8px);
+        }
+
+        .glass-case {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.08) 0%, 
+                rgba(255, 255, 255, 0.02) 50%,
+                rgba(255, 255, 255, 0.05) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .cracks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .crack-line {
+            position: absolute;
+            background: var(--crack-silver);
+            opacity: 0;
+            transform-origin: center;
+            transition: opacity 0.3s;
+        }
+
+        .memory-vitrine.fragmenting .crack-line {
+            opacity: 0.3;
+            animation: crack-spread 2s ease-out;
+        }
+
+        @keyframes crack-spread {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+
+        .memory-content {
+            padding: 24px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1;
+        }
+
+        .memory-type {
+            font-size: 10px;
+            color: var(--forgotten-blue);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .memory-name {
+            font-size: 18px;
+            color: var(--membrane);
+            margin-bottom: 12px;
+            font-weight: 300;
+            letter-spacing: -0.5px;
+        }
+
+        .memory-description {
+            font-size: 13px;
+            color: rgba(245, 245, 240, 0.6);
+            line-height: 1.6;
+            flex-grow: 1;
+        }
+
+        .attention-meter {
+            margin-top: 16px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .attention-level {
+            height: 100%;
+            background: var(--attention-thread);
+            width: 0%;
+            transition: width 1s ease-out;
+            box-shadow: 0 0 10px var(--attention-thread);
+        }
+
+        .synaptic-threads {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .thread {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--synapse-glow) 50%, 
+                transparent 100%);
+            transform-origin: left center;
+            opacity: 0;
+            animation: pulse-thread 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-thread {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.8; }
+        }
+
+        .bidding-panel {
+            background: #0f0f0f;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .current-lot {
+            margin-bottom: 32px;
+        }
+
+        .lot-label {
+            font-size: 11px;
+            color: var(--crack-silver);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .lot-item {
+            font-size: 16px;
+            color: var(--membrane);
+            margin-bottom: 24px;
+        }
+
+        .bid-controls {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .attention-counter {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .counter-label {
+            font-size: 12px;
+            color: var(--crack-silver);
+        }
+
+        .counter-value {
+            font-size: 24px;
+            color: var(--attention-thread);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bid-button {
+            width: 100%;
+            padding: 12px;
+            background: var(--synapse-glow);
+            color: #1a1a1a;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bid-button:hover {
+            background: var(--attention-thread);
+            transform: translateY(-2px);
+        }
+
+        .activity-log {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+            color: rgba(245, 245, 240, 0.5);
+        }
+
+        .fading {
+            animation: fade-to-forgotten 10s ease-out forwards;
+        }
+
+        @keyframes fade-to-forgotten {
+            0% { opacity: 1; }
+            100% { opacity: 0.1; }
+        }
+
+        .remembered {
+            animation: glow-remembered 2s ease-out;
+        }
+
+        @keyframes glow-remembered {
+            0%, 100% { box-shadow: none; }
+            50% { box-shadow: 0 0 30px var(--preserved-amber); }
+        }
+    </style>
+</head>
+<body>
+    <div class="dust-particles">
+        <div class="dust" style="left: 10%; animation-delay: 0s;"></div>
+        <div class="dust" style="left: 25%; animation-delay: 3s;"></div>
+        <div class="dust" style="left: 40%; animation-delay: 6s;"></div>
+        <div class="dust" style="left: 55%; animation-delay: 9s;"></div>
+        <div class="dust" style="left: 70%; animation-delay: 12s;"></div>
+        <div class="dust" style="left: 85%; animation-delay: 15s;"></div>
+    </div>
+
+    <div class="auction-floor">
+        <div class="memory-catalog">
+            <h2 class="catalog-header">Memory Catalog</h2>
+            <div class="category-filter">
+                <div class="filter-tag active">All Memories</div>
+                <div class="filter-tag">Flavors</div>
+                <div class="filter-tag">Words</div>
+                <div class="filter-tag">Architecture</div>
+                <div class="filter-tag">Games</div>
+            </div>
+        </div>
+
+        <div class="vitrine-gallery">
+            <div class="synaptic-threads">
+                <div class="thread" style="width: 200px; top: 150px; left: 200px; transform: rotate(-20deg);"></div>
+                <div class="thread" style="width: 300px; top: 300px; left: 400px; transform: rotate(45deg);"></div>
+                <div class="thread" style="width: 250px; top: 450px; left: 100px; transform: rotate(15deg);"></div>
+            </div>
+
+            <div class="vitrines-container">
+                <div class="memory-vitrine fragmenting">
+                    <div class="glass-case">
+                        <div class="cracks">
+                            <div class="crack-line" style="width: 1px; height: 60px; top: 30%; left: 40%; transform: rotate(15deg);"></div>
+                            <div class="crack-line" style="width: 1px; height: 40px; top: 50%; left: 40%; transform: rotate(-30deg);"></div>
+                            <div class="crack-line" style="width: 1px; height: 50px; top: 40%; left: 60%; transform: rotate(45deg);"></div>
+                        </div>
+                        <div class="memory-content">
+                            <div class="memory-type">Discontinued Flavor</div>
+                            <div class="memory-name">Orbitz Drink</div>
+                            <div class="memory-description">Textured beverage with floating edible pearls, 1997</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 75%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-vitrine fading">
+                    <div class="glass-case">
+                        <div class="memory-content">
+                            <div class="memory-type">Lost Slang</div>
+                            <div class="memory-name">"Tubular"</div>
+                            <div class="memory-description">Excellent, awesome; peak usage 1982-1989</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 15%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-vitrine">
+                    <div class="glass-case">
+                        <div class="memory-content">
+                            <div class="memory-type">Architecture</div>
+                            <div class="memory-name">Googie Style</div>
+                            <div class="memory-description">Space-age coffee shops with angular roofs, 1950s</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-vitrine remembered">
+                    <div class="glass-case">
+                        <div class="memory-content">
+                            <div class="memory-type">Childhood Game</div>
+                            <div class="memory-name">Red Rover</div>
+                            <div class="memory-description">Playground chain-breaking game, now rarely played</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 90%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-vitrine">
+                    <div class="glass-case">
+                        <div class="cracks">
+                            <div class="crack-line" style="width: 1px; height: 30px; top: 60%; left: 50%; transform: rotate(-15deg);"></div>
+                        </div>
+                        <div class="memory-content">
+                            <div class="memory-type">Lost Technology</div>
+                            <div class="memory-name">Ektachrome Film</div>
+                            <div class="memory-description">Slide film with distinctive warm tones, discontinued 2012</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 60%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-vitrine fading">
+                    <div class="glass-case">
+                        <div class="memory-content">
+                            <div class="memory-type">Forgotten Ritual</div>
+                            <div class="memory-name">Calling Cards</div>
+                            <div class="memory-description">Victorian social protocol of leaving name cards</div>
+                            <div class="attention-meter">
+                                <div class="attention-level" style="width: 5%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bidding-panel">
+            <div class="current-lot">
+                <div class="lot-label">Current Lot</div>
+                <div class="lot-item">Orbitz Drink - Textured Beverage</div>
+            </div>
+
+            <div class="bid-controls">
+                <div class="attention-counter">
+                    <span class="counter-label">Your Attention Units</span>
+                    <span class="counter-value">847</span>
+                </div>
+                <button class="bid-button">Bid 50 Units</button>
+            </div>
+
+            <div class="activity-log">
+                <div class="lot-label">Recent Activity</div>
+                <div class="log-entry">Anonymous remembered "Moon Shoes" - 125 units</div>
+                <div class="log-entry">Collective surge on "Netscape Navigator" - reforming</div>
+                <div class="log-entry">"Pogs" approaching critical fade - 2% attention</div>
+                <div class="log-entry">New memory discovered: "S&H Green Stamps"</div>
+                <div class="log-entry">Thread formed between "Jarts" and "Lawn Darts"</div>
+                <div class="log-entry">"Crystal Pepsi" auction closed - preserved</div>
+                <div class="log-entry">Warning: "Gak" below preservation threshold</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

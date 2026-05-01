@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Argument Settler</title>
+    <style>
+        :root {
+            --tension-low: #f4f1e8;
+            --tension-med: #d4c3a1;
+            --tension-high: #8b7355;
+            --rope-hemp: #a68b5b;
+            --rope-silk: #e6ddd4;
+            --rope-chain: #4a4a4a;
+            --evidence-glow: rgba(255, 251, 235, 0.3);
+            --common-ground: #7cb342;
+            --divergence: #d32f2f;
+            --neutral: #fafaf8;
+            --text-primary: #2e2e2e;
+            --text-secondary: #666;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--neutral);
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .argument-space {
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            display: grid;
+            grid-template-columns: 420px 1fr 420px;
+        }
+
+        .participant-zone {
+            position: relative;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .participant-left {
+            background: linear-gradient(90deg, rgba(244, 241, 232, 0.4) 0%, transparent 100%);
+        }
+
+        .participant-right {
+            background: linear-gradient(-90deg, rgba(244, 241, 232, 0.4) 0%, transparent 100%);
+        }
+
+        .participant-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--tension-low);
+        }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            background: var(--tension-med);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.25rem;
+            color: white;
+        }
+
+        .participant-name {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .argument-strength {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .evidence-pool {
+            flex: 1;
+            position: relative;
+            border: 2px dashed var(--tension-low);
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .evidence-pool.active {
+            border-color: var(--tension-med);
+            background: var(--evidence-glow);
+        }
+
+        .evidence-bubble {
+            position: absolute;
+            background: white;
+            border: 2px solid var(--tension-low);
+            border-radius: 16px;
+            padding: 1rem 1.25rem;
+            cursor: grab;
+            transition: all 0.2s ease;
+            max-width: 320px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .evidence-bubble:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            border-color: var(--tension-med);
+        }
+
+        .evidence-bubble.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            transform: scale(1.05);
+        }
+
+        .evidence-text {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin-bottom: 0.5rem;
+        }
+
+        .evidence-weight {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .weight-indicator {
+            width: 40px;
+            height: 4px;
+            background: var(--tension-low);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .weight-fill {
+            height: 100%;
+            background: var(--tension-med);
+            transition: width 0.3s ease;
+        }
+
+        .rope-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .rope {
+            position: absolute;
+            width: 100%;
+            height: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            background-image: repeating-linear-gradient(
+                90deg,
+                var(--rope-hemp) 0px,
+                var(--rope-hemp) 8px,
+                transparent 8px,
+                transparent 12px
+            );
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .rope.silk {
+            background-image: linear-gradient(90deg, var(--rope-silk) 0%, rgba(230, 221, 212, 0.8) 50%, var(--rope-silk) 100%);
+            height: 20px;
+        }
+
+        .rope.chain {
+            background-image: repeating-linear-gradient(
+                90deg,
+                var(--rope-chain) 0px,
+                var(--rope-chain) 16px,
+                transparent 16px,
+                transparent 20px
+            );
+            height: 32px;
+        }
+
+        .central-knot {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, var(--rope-hemp) 0%, var(--tension-high) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s ease;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+
+        .central-knot.tight {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, var(--divergence) 0%, var(--rope-chain) 100%);
+        }
+
+        .central-knot.loose {
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, var(--common-ground) 0%, var(--rope-silk) 100%);
+        }
+
+        .knot-indicator {
+            font-size: 0.75rem;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .tension-meter {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            text-align: center;
+        }
+
+        .tension-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .tension-bar {
+            height: 8px;
+            background: var(--tension-low);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tension-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--common-ground) 0%, var(--tension-med) 50%, var(--divergence) 100%);
+            width: 50%;
+            transition: width 0.4s ease;
+        }
+
+        .outcome-preview {
+            position: absolute;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 1rem 2rem;
+            border-radius: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .outcome-preview.visible {
+            opacity: 1;
+        }
+
+        .add-evidence {
+            position: absolute;
+            bottom: 2rem;
+            background: white;
+            border: 2px solid var(--tension-med);
+            padding: 0.75rem 1.5rem;
+            border-radius: 24px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .add-evidence:hover {
+            background: var(--tension-low);
+            transform: translateY(-1px);
+        }
+
+        .add-evidence.left {
+            left: 2rem;
+        }
+
+        .add-evidence.right {
+            right: 2rem;
+        }
+
+        .rope-bend {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .rope-path {
+            stroke: var(--rope-hemp);
+            stroke-width: 24;
+            fill: none;
+            stroke-linecap: round;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .rope-path.silk {
+            stroke: var(--rope-silk);
+            stroke-width: 20;
+        }
+
+        .rope-path.chain {
+            stroke: var(--rope-chain);
+            stroke-width: 32;
+            stroke-dasharray: 16 4;
+        }
+    </style>
+</head>
+<body>
+    <div class="argument-space">
+        <div class="participant-zone participant-left">
+            <div class="participant-header">
+                <div class="avatar">A</div>
+                <div>
+                    <div class="participant-name">Alex</div>
+                    <div class="argument-strength">Argument Strength: 65%</div>
+                </div>
+            </div>
+            <div class="evidence-pool" id="leftPool">
+                <div class="evidence-bubble" style="left: 20px; top: 20px;" draggable="true">
+                    <div class="evidence-text">Research shows remote work increases productivity by 13%</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 80%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="evidence-bubble" style="left: 60px; top: 140px;" draggable="true">
+                    <div class="evidence-text">Employee satisfaction scores improved 22% with flexible hours</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 70%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="evidence-bubble" style="left: 40px; top: 280px;" draggable="true">
+                    <div class="evidence-text">Cost savings of $11,000 per remote employee annually</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 90%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="add-evidence left">+ Add Evidence</button>
+        </div>
+
+        <div class="rope-container">
+            <svg class="rope-bend" viewBox="0 0 600 900">
+                <path class="rope-path" d="M 0,450 Q 150,420 300,450 T 600,450" />
+            </svg>
+            <div class="central-knot">
+                <div class="knot-indicator">Finding<br>Common<br>Ground</div>
+            </div>
+            <div class="tension-meter">
+                <div class="tension-label">Discussion Temperature</div>
+                <div class="tension-bar">
+                    <div class="tension-fill"></div>
+                </div>
+            </div>
+            <div class="outcome-preview">
+                <span>Approaching consensus...</span>
+            </div>
+        </div>
+
+        <div class="participant-zone participant-right">
+            <div class="participant-header">
+                <div class="avatar">S</div>
+                <div>
+                    <div class="participant-name">Sam</div>
+                    <div class="argument-strength">Argument Strength: 72%</div>
+                </div>
+            </div>
+            <div class="evidence-pool" id="rightPool">
+                <div class="evidence-bubble" style="right: 20px; top: 20px;" draggable="true">
+                    <div class="evidence-text">Team collaboration suffers without in-person interaction</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 75%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="evidence-bubble" style="right: 60px; top: 140px;" draggable="true">
+                    <div class="evidence-text">New employees struggle with remote onboarding</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 85%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="evidence-bubble" style="right: 40px; top: 280px;" draggable="true">
+                    <div class="evidence-text">Innovation decreases 17% without spontaneous office interactions</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 80%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="add-evidence right">+ Add Evidence</button>
+        </div>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        let leftWeight = 65;
+        let rightWeight = 72;
+        let emotionalIntensity = 'hemp';
+        let commonGround = 50;
+
+        const bubbles = document.querySelectorAll('.evidence-bubble');
+        const leftPool = document.getElementById('leftPool');
+        const rightPool = document.getElementById('rightPool');
+        const ropePath = document.querySelector('.rope-path');
+        const centralKnot = document.querySelector('.central-knot');
+        const tensionFill = document.querySelector('.tension-fill');
+        
+        bubbles.forEach(bubble => {
+            bubble.addEventListener('dragstart', (e) => {
+                draggedElement = e.target;
+                e.target.classList.add('dragging');
+            });
+
+            bubble.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+                updateRopeTension();
+            });
+        });
+
+        [leftPool, rightPool].forEach(pool => {
+            pool.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                pool.classList.add('active');
+            });
+
+            pool.addEventListener('dragleave', () => {
+                pool.classList.remove('active');
+            });
+
+            pool.addEventListener('drop', (e) => {
+                e.preventDefault();
+                pool.classList.remove('active');
+                if (draggedElement && draggedElement !== e.target) {
+                    const rect = pool.getBoundingClientRect();
+                    const x = e.clientX - rect.left - draggedElement.offsetWidth / 2;
+                    const y = e.clientY - rect.top - draggedElement.offsetHeight / 2;
+                    
+                    draggedElement.style.position = 'absolute';
+                    draggedElement.style.left = Math.max(0, Math.min(x, rect.width - draggedElement.offsetWidth)) + 'px';
+                    draggedElement.style.top = Math.max(0, Math.min(y, rect.height - draggedElement.offsetHeight)) + 'px';
+                    
+                    pool.appendChild(draggedElement);
+                }
+            });
+        });
+
+        function updateRopeTension() {
+            const leftCount = leftPool.querySelectorAll('.evidence-bubble').length;
+            const rightCount = rightPool.querySelectorAll('.evidence-bubble').length;
+            
+            const diff = leftCount - rightCount;
+            const bendAmount = diff * 30;
+            
+            const pathData = `M 0,450 Q ${150 - bendAmount},${450 - Math.abs(bendAmount)} 300,450 T 600,450`;
+            ropePath.setAttribute('d', pathData);
+            
+            // Update emotional intensity based on difference
+            if (Math.abs(diff) > 2) {
+                emotionalIntensity = 'chain';
+                ropePath.classList.add('chain');
+                ropePath.classList.remove('silk', 'hemp');
+                centralKnot.classList.add('tight');
+                centralKnot.classList.remove('loose');
+            } else if (Math.abs(diff) <= 1) {
+                emotionalIntensity = 'silk';
+                ropePath.classList.add('silk');
+                ropePath.classList.remove('chain', 'hemp');
+                centralKnot.classList.add('loose');
+                centralKnot.classList.remove('tight');
+            } else {
+                emotionalIntensity = 'hemp';
+                ropePath.classList.remove('silk', 'chain');
+                centralKnot.classList.remove('tight', 'loose');
+            }
+            
+            // Update tension meter
+            const tension = Math.min(100, Math.abs(diff) * 25 + 25);
+            tensionFill.style.width = tension + '%';
+        }
+
+        // Add new evidence functionality
+        document.querySelectorAll('.add-evidence').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const isLeft = e.target.classList.contains('left');
+                const pool = isLeft ? leftPool : rightPool;
+                
+                const newBubble = document.createElement('div');
+                newBubble.className = 'evidence-bubble';
+                newBubble.draggable = true;
+                newBubble.style.position = 'absolute';
+                newBubble.style.left = '20px';
+                newBubble.style.top = (pool.children.length - 1) * 120 + 20 + 'px';
+                
+                newBubble.innerHTML = `
+                    <div class="evidence-text">New evidence point...</div>
+                    <div class="evidence-weight">
+                        <span>Weight:</span>
+                        <div class="weight-indicator">
+                            <div class="weight-fill" style="width: 60%"></div>
+                        </div>
+                    </div>
+                `;
+                
+                pool.appendChild(newBubble);
+                
+                // Add event listeners to new bubble
+                newBubble.addEventListener('dragstart', (e) => {
+                    draggedElement = e.target;
+                    e.target.classList.add('dragging');
+                });
+
+                newBubble.addEventListener('dragend', (e) => {
+                    e.target.classList.remove('dragging');
+                    updateRopeTension();
+                });
+                
+                updateRopeTension();
+            });
+        });
+
+        // Initialize
+        updateRopeTension();
+    </script>
+</body>
+</html>

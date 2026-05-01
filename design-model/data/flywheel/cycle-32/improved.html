@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile Card</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @keyframes cardEntrance {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes orbFloat {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50%       { transform: translateY(-10px) scale(1.04); }
+    }
+    @keyframes orbFloat2 {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50%       { transform: translateY(8px) scale(0.97); }
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+      50%       { box-shadow: 0 0 0 5px rgba(34,197,94,0); }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+    @keyframes gradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes tagIn {
+      from { opacity: 0; transform: translateY(6px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes statIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .card {
+      width: 360px;
+      background: #ffffff;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow:
+        0 2px 4px rgba(0,0,0,0.04),
+        0 8px 24px rgba(0,0,0,0.12),
+        0 32px 80px rgba(0,0,0,0.32),
+        0 0 0 1px rgba(255,255,255,0.06);
+      animation: cardEntrance 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+      position: relative;
+    }
+
+    .cover {
+      height: 116px;
+      background: linear-gradient(135deg, #667eea, #764ba2, #f093fb, #667eea);
+      background-size: 300% 300%;
+      animation: gradientShift 8s ease infinite;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cover-orb-1 {
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 70%);
+      animation: orbFloat 6s ease-in-out infinite;
+    }
+
+    .cover-orb-2 {
+      position: absolute;
+      bottom: -60px;
+      left: -30px;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 70%);
+      animation: orbFloat2 7s ease-in-out infinite;
+    }
+
+    .cover-orb-3 {
+      position: absolute;
+      top: 20px;
+      left: 40%;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 70%);
+      animation: orbFloat 9s ease-in-out infinite 1s;
+    }
+
+    .menu-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 10px;
+      padding: 7px 9px;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 3.5px;
+      align-items: center;
+      transition: background 0.2s ease, transform 0.15s ease;
+    }
+    .menu-btn:hover {
+      background: rgba(255,255,255,0.28);
+      transform: scale(1.06);
+    }
+    .menu-btn span {
+      display: block;
+      width: 14px;
+      height: 1.5px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 2px;
+      transition: width 0.2s ease;
+    }
+    .menu-btn:hover span:nth-child(2) { width: 10px; }
+
+    .avatar-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 22px;
+      margin-top: -42px;
+      position: relative;
+      z-index: 2;
+      animation: fadeSlideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+    }
+
+    .avatar-wrap {
+      position: relative;
+      filter: drop-shadow(0 8px 20px rgba(118,75,162,0.4));
+    }
+
+    .avatar-ring {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      padding: 3px;
+      background: linear-gradient(135deg, #f093fb, #667eea, #764ba2);
+      animation: gradientShift 6s ease infinite;
+      background-size: 300% 300%;
+    }
+
+    .avatar-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      overflow: hidden;
+      background: linear-gradient(135deg, #f093fb, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .online-dot {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 14px;
+      height: 14px;
+      background: #22c55e;
+      border-radius: 50%;
+      border: 2.5px solid #ffffff;
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+
+    .follow-btn {
+      margin-bottom: 10px;
+      padding: 9px 22px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      background-size: 200% 200%;
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+      box-shadow: 0 4px 14px rgba(102,126,234,0.42), inset 0 1px 0 rgba(255,255,255,0.15);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background-position 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .follow-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%);
+      border-radius: inherit;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .follow-btn:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 24px rgba(102,126,234,0.55), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .follow-btn:hover::after { opacity: 1; }
+    .follow-btn:active { transform: translateY(0) scale(0.98); }
+
+    .identity {
+      padding: 14px 22px 0;
+      animation: fadeSlideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+    }
+
+    .name-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+
+    .verified-icon {
+      flex-shrink: 0;
+      opacity: 0.9;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .verified-icon:hover { transform: scale(1.2) rotate(8deg); }
+
+    .title {
+      margin: 5px 0 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #7c3aed;
+      letter-spacing: 0.1px;
+    }
+
+    .location {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 7px;
+    }
+
+    .location span {
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 400;
+    }
+
+    .bio {
+      padding: 14px 22px 0;
+      animation: fadeSlideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both;
+    }
+
+    .bio p {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.75;
+      color: #475569;
+      font-weight: 400;
+    }
+
+    .tags {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      padding: 14px 22px 0;
+    }
+
+    .tag {
+      padding: 5px 12px;
+      border-radius: 50px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: default;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
+    }
+    .tag:hover {
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      filter: brightness(1.04);
+    }
+    .tag:nth-child(1) { background: #f1f5f9; color: #475569; animation: tagIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.38s both; }
+    .tag:nth-child(2) { background: #ede9fe; color: #7c3aed; animation: tagIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.44s both; }
+    .tag:nth-child(3) { background: #fdf2f8; color: #be185d; animation: tagIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.50s both; }
+    .tag:nth-child(4) { background: #f0fdf4; color: #15803d; animation: tagIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.56s both; }
+
+    .divider {
+      margin: 20px 22px 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #e2e8f0 30%, #e2e8f0 70%, transparent);
+    }
+
+    .stats {
+      display: flex;
+      padding: 18px 22px 22px;
+      gap: 0;
+    }
+
+    .stat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: default;
+      padding: 10px 6px;
+      border-radius: 14px;
+      transition: background 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .stat:hover {
+      background: #f8fafc;
+      transform: translateY(-2px);
+    }
+    .stat:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 20%;
+      height: 60%;
+      width: 1px;
+      background: #e2e8f0;
+    }
+
+    .stat:nth-child(1) { animation: statIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.55s both; }
+    .stat:nth-child(2) { animation: statIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.62s both; }
+    .stat:nth-child(3) { animation: statIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.69s both; }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      padding: 0 22px 22px;
+      animation: fadeSlideUp 0.4s cubic-bezier(0.22,1,0.36,1) 0.72s both;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 11px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 14px;
+      background: #ffffff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #475569;
+      font-family: inherit;
+      transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease;
+    }
+    .action-btn:hover {
+      border-color: #c4b5fd;
+      background: #faf5ff;
+      color: #7c3aed;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(124,58,237,0.12);
+    }
+    .action-btn:active { transform: translateY(0) scale(0.98); }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+
+    <!-- Cover Banner -->
+    <div class="cover">
+      <div class="cover-orb-1"></div>
+      <div class="cover-orb-2"></div>
+      <div class="cover-orb-3"></div>
+      <button class="menu-btn" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+
+    <!-- Avatar Row -->
+    <div class="avatar-row">
+      <div class="avatar-wrap">
+        <div class="avatar-ring">
+          <div class="avatar-inner">
+            <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="width:78px;height:78px;">
+              <defs>
+                <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#f093fb"/>
+                  <stop offset="100%" style="stop-color:#764ba2"/>
+                </linearGradient>
+              </defs>
+              <rect width="80" height="80" fill="url(#avatarGrad)"/>
+              <circle cx="40" cy="30" r="14" fill="rgba(255,255,255,0.92)"/>
+              <ellipse cx="40" cy="70" rx="22" ry="16" fill="rgba(255,255,255,0.92)"/>
+            </svg>
+          </div>
+        </div>
+        <span class="online-dot"></span>
+      </div>
+      <button class="follow-btn">+ Follow</button>
+    </div>
+
+    <!-- Identity -->
+    <div class="identity">
+      <div class="name-row">
+        <h2 class="name">Aria Nakamura</h2>
+        <svg class="verified-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#667eea" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="title">Product Designer & Creative Lead</p>
+      <div class="location">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+          <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke="#94a3b8" stroke-width="2"/>
+        </svg>
+        <span>San Francisco, CA</span>
+      </div>
+    </div>
+
+    <!-- Bio -->
+    <div class="bio">
+      <p>Crafting intuitive experiences that live at the intersection of art and function. 5× Dribbble award winner. Open to collaborations. ✦</p>
+    </div>
+
+    <!-- Tags -->
+    <div class="tags">
+      <span class="tag">UI/UX</span>
+      <span class="tag">Figma</span>
+      <span class="tag">Brand</span>
+      <span class="tag">Motion</span>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value">4.2K</span>
+        <span class="stat-label">Followers</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">318</span>
+        <span class="stat-label">Following</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">91</span>
+        <span class="stat-label">Projects</span>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="action-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Message
+      </button>
+      <button class="action-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        Share
+      </button>
+    </div>
+
+  </div>
+
+</body>
+</html>

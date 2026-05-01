@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Origami</title>
+    <style>
+        :root {
+            --paper-white: #faf8f3;
+            --paper-shadow: #e8e2d5;
+            --crease-dark: #c4b5a0;
+            --fold-shadow: rgba(92, 76, 54, 0.15);
+            --time-pressure: #d4614e;
+            --time-relaxed: #7eb09b;
+            --morning-tint: #f7e8d0;
+            --evening-tint: #e3d4e8;
+            --text-primary: #3d3226;
+            --text-secondary: #6b5d4f;
+            --hidden-time: #f0d896;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #f5f2ed;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .workspace {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .paper-day {
+            width: 900px;
+            height: 600px;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(8deg) rotateY(-3deg);
+        }
+
+        .paper-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--paper-white) 0%, var(--paper-shadow) 100%);
+            box-shadow: 
+                0 20px 40px rgba(0,0,0,0.1),
+                inset 0 0 60px rgba(255,255,255,0.8);
+            border-radius: 3px;
+        }
+
+        .time-block {
+            position: absolute;
+            transform-style: preserve-3d;
+            cursor: grab;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .time-block:active {
+            cursor: grabbing;
+        }
+
+        .morning-routine {
+            top: 50px;
+            left: 100px;
+            width: 250px;
+            height: 150px;
+            background: linear-gradient(145deg, var(--morning-tint), var(--paper-white));
+            transform: translateZ(20px) rotateY(-15deg);
+            box-shadow: 15px 15px 30px var(--fold-shadow);
+        }
+
+        .morning-routine::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, transparent 50%, var(--hidden-time) 50%);
+            transform-origin: top right;
+            transform: rotateZ(0deg);
+            transition: transform 0.6s ease;
+            cursor: pointer;
+        }
+
+        .morning-routine:hover::before {
+            transform: rotateZ(-90deg);
+        }
+
+        .hidden-pocket {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 80px;
+            height: 30px;
+            background: var(--hidden-time);
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.4s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 500;
+            border-radius: 2px;
+            z-index: -1;
+        }
+
+        .morning-routine:hover .hidden-pocket {
+            opacity: 1;
+            transform: scale(1);
+            z-index: 1;
+        }
+
+        .meetings {
+            top: 230px;
+            left: 200px;
+            width: 180px;
+            height: 100px;
+            background: var(--paper-white);
+            transform: translateZ(30px);
+            box-shadow: 10px 10px 20px var(--fold-shadow);
+        }
+
+        .meetings-2 {
+            top: 250px;
+            left: 400px;
+            width: 180px;
+            height: 100px;
+            background: var(--paper-white);
+            transform: translateZ(25px);
+            box-shadow: 10px 10px 20px var(--fold-shadow);
+        }
+
+        .crease {
+            position: absolute;
+            top: 240px;
+            left: 380px;
+            width: 2px;
+            height: 80px;
+            background: var(--crease-dark);
+            transform: translateZ(35px);
+            opacity: 0;
+            transition: all 0.5s ease;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .meetings:hover ~ .crease,
+        .meetings-2:hover ~ .crease {
+            opacity: 1;
+            width: 20px;
+            background: var(--time-relaxed);
+        }
+
+        .evening {
+            top: 380px;
+            left: 300px;
+            width: 300px;
+            height: 150px;
+            background: linear-gradient(135deg, var(--evening-tint), var(--paper-white));
+            transform: translateZ(15px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer-reveal {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--paper-white);
+            transform-origin: left center;
+            transform: rotateY(0deg);
+            transition: transform 0.6s ease;
+            backface-visibility: hidden;
+        }
+
+        .evening:hover .layer-reveal {
+            transform: rotateY(-140deg);
+        }
+
+        .actual-flow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                var(--time-pressure) 0%, 
+                var(--time-pressure) 30%,
+                var(--time-relaxed) 30%,
+                var(--time-relaxed) 50%,
+                var(--time-pressure) 50%,
+                var(--time-pressure) 80%,
+                var(--time-relaxed) 80%);
+            opacity: 0.3;
+        }
+
+        .planned-flow {
+            position: absolute;
+            width: 100%;
+            height: 50%;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                var(--time-relaxed) 0%,
+                var(--time-relaxed) 60%,
+                var(--time-pressure) 60%,
+                var(--time-pressure) 100%);
+            opacity: 0.5;
+            border-top: 1px dashed var(--crease-dark);
+        }
+
+        .texture-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.4;
+            mix-blend-mode: multiply;
+        }
+
+        .smooth {
+            background-image: 
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(0,0,0,0.01) 10px,
+                    rgba(0,0,0,0.01) 11px
+                );
+        }
+
+        .crumpled {
+            background-image: 
+                radial-gradient(ellipse at 20% 30%, transparent 10%, rgba(0,0,0,0.05) 40%),
+                radial-gradient(ellipse at 60% 70%, transparent 20%, rgba(0,0,0,0.05) 50%),
+                radial-gradient(ellipse at 80% 20%, transparent 15%, rgba(0,0,0,0.05) 45%);
+        }
+
+        .time-label {
+            position: absolute;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        .morning-label {
+            top: 80px;
+            left: 120px;
+        }
+
+        .meeting-label {
+            top: 260px;
+            left: 220px;
+        }
+
+        .evening-label {
+            top: 410px;
+            left: 320px;
+        }
+
+        .fold-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .time-counter {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            font-size: 24px;
+            color: var(--text-primary);
+            font-weight: 300;
+        }
+
+        .found-time {
+            color: var(--hidden-time);
+            font-weight: 500;
+        }
+
+        @keyframes paperFloat {
+            0%, 100% { transform: translateZ(0px); }
+            50% { transform: translateZ(5px); }
+        }
+
+        .paper-layer {
+            animation: paperFloat 8s ease-in-out infinite;
+        }
+
+        .shadow-depth {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.1) 100%);
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace">
+        <div class="paper-day">
+            <div class="paper-layer">
+                <div class="texture-overlay smooth"></div>
+                
+                <div class="time-block morning-routine">
+                    <div class="texture-overlay smooth"></div>
+                    <span class="time-label morning-label">morning routine</span>
+                    <div class="hidden-pocket">+15 min</div>
+                </div>
+                
+                <div class="time-block meetings">
+                    <div class="texture-overlay crumpled"></div>
+                    <span class="time-label meeting-label">meetings</span>
+                </div>
+                
+                <div class="time-block meetings-2">
+                    <div class="texture-overlay crumpled"></div>
+                </div>
+                
+                <div class="crease"></div>
+                
+                <div class="time-block evening">
+                    <div class="actual-flow"></div>
+                    <div class="planned-flow"></div>
+                    <div class="layer-reveal">
+                        <div class="texture-overlay smooth"></div>
+                    </div>
+                    <span class="time-label evening-label">evening</span>
+                </div>
+                
+                <div class="shadow-depth"></div>
+            </div>
+        </div>
+        
+        <div class="fold-indicator">drag corners to reveal hidden time • pinch to create breaks • pull to see flow</div>
+        <div class="time-counter">Found: <span class="found-time">0 minutes</span></div>
+    </div>
+</body>
+</html>

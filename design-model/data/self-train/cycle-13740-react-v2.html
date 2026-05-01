@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#root { width: 100vw; min-height: 100vh; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [palace, setPalace] = React.useState({
+    rooms: [],
+    connections: [],
+    activeRoom: null,
+    conceptWell: [
+      { id: 'c1', text: 'Photosynthesis', category: 'biology', visits: 0 },
+      { id: 'c2', text: 'Pythagorean theorem', category: 'math', visits: 0 },
+      { id: 'c3', text: 'French Revolution', category: 'history', visits: 0 },
+      { id: 'c4', text: 'Periodic Table', category: 'chemistry', visits: 0 },
+      { id: 'c5', text: 'Shakespeare sonnets', category: 'literature', visits: 0 }
+    ]
+  });
+  
+  const [draggedConcept, setDraggedConcept] = React.useState(null);
+  const [hoveredWall, setHoveredWall] = React.useState(null);
+  const [ripples, setRipples] = React.useState([]);
+  const [viewMode, setViewMode] = React.useState('architect');
+  const [cameraPos, setCameraPos] = React.useState({ x: 0, y: 0, zoom: 1 });
+  const [conceptWellOpen, setConceptWellOpen] = React.useState(true);
+
+  const categoryColors = {
+    biology: { h: 120, s: 30, l: 50 },
+    math: { h: 220, s: 40, l: 55 },
+    history: { h: 30, s: 35, l: 50 },
+    chemistry: { h: 280, s: 35, l: 55 },
+    literature: { h: 350, s: 30, l: 50 }
+  };
+
+  const createRoom = (x, y) => {
+    const shapes = ['hexagon', 'triangle', 'pentagon'];
+    const newRoom = {
+      id: `room-${Date.now()}`,
+      x,
+      y,
+      shape: shapes[Math.floor(Math.random() * shapes.length)],
+      rotation: 0,
+      walls: Array(6).fill(null),
+      memories: [],
+      visitCount: 0,
+      lastVisit: null,
+      pulsePhase: Math.random() * Math.PI * 2
+    };
+    
+    setPalace(prev => ({
+      ...prev,
+      rooms: [...prev.rooms, newRoom]
+    }));
+  };
+
+  const handleConceptDrop = (roomId, wallIndex, concept) => {
+    if (!concept) return;
+    
+    const rippleId = Date.now();
+    setRipples(prev => [...prev, { id: rippleId, roomId, wallIndex, time: 0 }]);
+    
+    setPalace(prev => ({
+      ...prev,
+      rooms: prev.rooms.map(room => {
+        if (room.id === roomId) {
+          const newWalls = [...room.walls];
+          newWalls[wallIndex] = {
+            concept: concept.text,
+            category: concept.category,
+            addedAt: Date.now(),
+            morphPhase: 0
+          };
+          return {
+            ...room,
+            walls: newWalls,
+            memories: [...room.memories, concept]
+          };
+        }
+        return room;
+      }),
+      conceptWell: prev.conceptWell.filter(c => c.id !== concept.id)
+    }));
+    
+    setDraggedConcept(null);
+    setHoveredWall(null);
+    
+    setTimeout(() => {
+      setRipples(prev => prev.filter(r => r.id !== rippleId));
+    }, 2000);
+  };
+
+  const handleCanvasClick = (e) => {
+    if (viewMode !== 'architect' || e.target.id !== 'palace-canvas') return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left - rect.width / 2) / cameraPos.zoom - cameraPos.x;
+    const y = (e.clientY - rect.top - rect.height / 2) / cameraPos.zoom - cameraPos.y;
+    
+    createRoom(x, y);
+  };
+
+  React.useEffect(() => {
+    let animId;
+    const animate = () => {
+      setRipples(prev => prev.map(r => ({ ...r, time: r.time + 0.02 })));
+      setPalace(prev => ({
+        ...prev,
+        rooms: prev.rooms.map(room => ({
+          ...room,
+          pulsePhase: room.pulsePhase + 0.01,
+          walls: room.walls.map(wall => 
+            wall && wall.concept ? { ...wall, morphPhase: wall.morphPhase + 0.01 } : wall
+          )
+        }))
+      }));
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  const Room = ({ room, isActive }) => {
+    const vertices = room.shape === 'hexagon' ? 6 : room.shape === 'pentagon' ? 5 : 3;
+    const angleStep = (Math.PI * 2) / vertices;
+    const radius = 80;
+    
+    const points = Array.from({ length: vertices }, (_, i) => {
+      const angle = i * angleStep - Math.PI / 2;
+      return {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius
+      };
+    });
+    
+    const pathData = points.map((p, i) => 
+      `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+    ).join(' ') + ' Z';
+    
+    const baseOpacity = 0.15 + Math.sin(room.pulsePhase) * 0.05;
+    
+    return (
+      <g
+        transform={`translate(${room.x}, ${room.y}) rotate(${room.rotation})`}
+        style={{ cursor: 'pointer' }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setPalace(prev => ({ ...prev, activeRoom: room.id }));
+        }}
+      >
+        <defs>
+          <radialGradient id={`room-gradient-${room.id}`}>
+            <stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+        </defs>
+        
+        <path
+          d={pathData}
+          fill={`url(#room-gradient-${room.id})`}
+          stroke={isActive ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'}
+          strokeWidth={isActive ? 2 : 1}
+          opacity={baseOpacity}
+        />
+        
+        {room.walls.map((wall, i) => {
+          const p1 = points[i];
+          const p2 = points[(i + 1) % vertices];
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          const ripple = ripples.find(r => r.roomId === room.id && r.wallIndex === i);
+          const isHovered = hoveredWall?.roomId === room.id && hoveredWall?.wallIndex === i;
+          
+          return (
+            <g key={i}>
+              {ripple && (
+                <circle
+                  cx={midX}
+                  cy={midY}
+                  r={ripple.time * 40}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.4)"
+                  strokeWidth={2 - ripple.time * 1.5}
+                  opacity={Math.max(0, 1 - ripple.time)}
+                />
+              )}
+              
+              <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke={wall && wall.concept ? 
+                  `hsla(${categoryColors[wall.category].h}, ${categoryColors[wall.category].s}%, ${categoryColors[wall.category].l}%, 0.6)` : 
+                  'rgba(255,255,255,0.1)'
+                }
+                strokeWidth={wall && wall.concept ? 2.5 : 1}
+                className={`drop-zone ${isHovered ? 'hover' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggedConcept && !wall) {
+                    setHoveredWall({ roomId: room.id, wallIndex: i });
+                  }
+                }}
+                onDragLeave={() => setHoveredWall(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (draggedConcept && !wall) {
+                    handleConceptDrop(room.id, i, draggedConcept);
+                  }
+                }}
+                style={{ cursor: draggedConcept && !wall ? 'copy' : 'default' }}
+              />
+              
+              {wall && wall.concept && (
+                <g>
+                  <circle
+                    cx={midX}
+                    cy={midY}
+                    r="20"
+                    fill={`hsla(${categoryColors[wall.category].h}, ${categoryColors[wall.category].s}%, ${categoryColors[wall.category].l}%, 0.1)`}
+                    stroke="none"
+                  />
+                  <text
+                    x={midX}
+                    y={midY}
+                    fill="rgba(255,255,255,0.9)"
+                    fontSize="11"
+                    fontWeight="500"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    transform={`rotate(${-room.rotation}, ${midX}, ${midY})`}
+                    style={{ pointerEvents: 'none', letterSpacing: '0.5px' }}
+                  >
+                    {wall.concept.length > 15 ? wall.concept.substring(0, 13) + '...' : wall.concept}
+                  </text>
+                </g>
+              )}
+            </g>
+          );
+        })}
+        
+        {isActive && (
+          <circle
+            cx="0"
+            cy="0"
+            r={radius + 10}
+            fill="none"
+            stroke="rgba(255,255,255,0.3)"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+            opacity={0.6}
+          />
+        )}
+      </g>
+    );
+  };
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', position: 'relative', background: '#0a0a0a' }}>
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        padding: '20px',
+        background: 'linear-gradient(to bottom, rgba(10,10,10,0.9), rgba(10,10,10,0))',
+        zIndex: 10
+      }}>
+        <h1 style={{ 
+          fontSize: '24px', 
+          fontWeight: '600', 
+          marginBottom: '12px',
+          letterSpacing: '-0.5px',
+          color: '#ffffff'
+        }}>
+          Memory Palace
+        </h1>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button
+            onClick={() => setViewMode('architect')}
+            style={{
+              padding: '8px 16px',
+              background: viewMode === 'architect' ? 'rgba(255,255,255,0.1)' : 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              color: '#e0e0e0',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Architect Mode
+          </button>
+          <button
+            onClick={() => setViewMode('traverse')}
+            style={{
+              padding: '8px 16px',
+              background: viewMode === 'traverse' ? 'rgba(255,255,255,0.1)' : 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              color: '#e0e0e0',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Traverse Mode
+          </button>
+          {viewMode === 'architect' && (
+            <span style={{ 
+              marginLeft: '16px', 
+              fontSize: '13px', 
+              color: 'rgba(255,255,255,0.5)',
+              fontWeight: '400'
+            }}>
+              Click canvas to create rooms • Drag concepts to walls
+            </span>
+          )}
+        </div>
+      </div>
+      
+      <svg
+        id="palace-canvas"
+        width="100%"
+        height="100%"
+        onClick={handleCanvasClick}
+        style={{ cursor: viewMode === 'architect' ? 'crosshair' : 'grab' }}
+      >
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        
+        <g transform={`translate(${window.innerWidth/2 + cameraPos.x * cameraPos.zoom}, ${window.innerHeight/2 + cameraPos.y * cameraPos.zoom}) scale(${cameraPos.zoom})`}>
+          {palace.rooms.map(room => (
+            <Room 
+              key={room.id} 
+              room={room} 
+              isActive={room.id === palace.activeRoom}
+            />
+          ))}
+        </g>
+      </svg>
+      
+      <div style={{
+        position: 'fixed',
+        bottom: conceptWellOpen ? '0' : '-180px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '90%',
+        maxWidth: '800px',
+        background: 'rgba(20, 20, 20, 0.8)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '16px 16px 0 0',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderBottom: 'none',
+        padding: '20px',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        zIndex: 20
+      }}>
+        <button
+          onClick={() => setConceptWellOpen(!conceptWellOpen)}
+          style={{
+            position: 'absolute',
+            top: '-40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(20, 20, 20, 0.8)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px 8px 0 0',
+            padding: '8px 24px',
+            color: '#e0e0e0',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            borderBottom: 'none'
+          }}
+        >
+          Concept Well {conceptWellOpen ? '↓' : '↑'}
+        </button>
+        
+        <h3 style={{ 
+          fontSize: '16px', 
+          fontWeight: '600', 
+          marginBottom: '16px',
+          color: '#ffffff',
+          letterSpacing: '-0.3px'
+        }}>
+          Available Concepts
+        </h3>
+        
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: '12px',
+          maxHeight: '140px',
+          overflowY: 'auto',
+          paddingRight: '8px'
+        }}>
+          {palace.conceptWell.map(concept => {
+            const color = categoryColors[concept.category];
+            return (
+              <div
+                key={concept.id}
+                className={`concept-card ${draggedConcept?.id === concept.id ? 'dragging' : ''}`}
+                draggable
+                onDragStart={() => setDraggedConcept(concept)}
+                onDragEnd={() => {
+                  setDraggedConcept(null);
+                  setHoveredWall(null);
+                }}
+                style={{
+                  padding: '16px',
+                  borderRadius: '8px',
+                  cursor: 'grab',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '2px',
+                  background: `hsla(${color.h}, ${color.s}%, ${color.l}%, 0.6)`
+                }} />
+                
+                <h4 style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '600', 
+                  marginBottom: '4px',
+                  color: '#ffffff'
+                }}>
+                  {concept.text}
+                </h4>
+                <span style={{ 
+                  fontSize: '11px', 
+                  color: `hsla(${color.h}, ${color.s}%, ${color.l}%, 0.8)`,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  fontWeight: '500'
+                }}>
+                  {concept.category}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+// Try to find the main component — user should export default or define App
+if (typeof App !== 'undefined') {
+  root.render(React.createElement(App));
+} else {
+  root.render(React.createElement('div', {style: {padding: 20}}, 'No App component found'));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "cycle": 13725,
+  "captured_at": "2026-04-15T19:02:48Z",
+  "language": "react",
+  "brief": "Design an interface for \"Memory Auction House\" where users bid on their own forgotten memories using emotional currency - each memory appears as a translucent glass orb floating in a dark void, with size indicating emotional weight and opacity showing how faded it has become, where users must sacrifice current emotional states (represented as glowing particles they drag from their heart meter) to reclaim memories, but the twist is that reclaiming one memory causes others to drift further away an",
+  "scores": {
+    "typography_quality": 0.3,
+    "color_harmony": 0.2,
+    "spatial_composition": 0.4,
+    "motion_elegance": 0.3,
+    "emotional_resonance": 0.6,
+    "craft_visibility": 0.5,
+    "minimalism_coherence": 0.2,
+    "native_integration": 0.1,
+    "visceral_score": 0.3,
+    "behavioral_score": 0.4,
+    "reflective_score": 0.5,
+    "overall_aesthetic": 0.3,
+    "innovation_score": 0.7,
+    "system_creativity": 0.6,
+    "design_distinctiveness": 0.6,
+    "problem_level": 0.5
+  },
+  "overall": 0.3,
+  "innovation": 0.7,
+  "critique": "The design attempts a poetic memory-trading concept but suffers from poor visual hierarchy with floating orbs that feel disconnected and amateur, while the drag-drop interaction is confusing and the grayscale palette lacks emotional depth. The UI feels like a tech demo rather than a cohesive experience, with jarring transitions and no clear visual language connecting the emotional currency to the memory reclamation mechanic.",
+  "fixes": [
+    "Replace floating orbs with a coherent spatial system like memory cards on a timeline or constellation map with clear visual connections",
+    "Implement a proper color system that maps emotional states to hues (warm for positive, cool for distant) instead of monotone grays",
+    "Create a clear interaction model with preview states, hover affordances, and animated transitions that communicate the cost-benefit of memory trading"
+  ],
+  "compiled": true,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13725-react.jsx",
+  "png_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13725-react.png",
+  "code_snippet": "function App() {\n  const [memories, setMemories] = React.useState([\n    { id: 1, name: \"First day of school\", weight: 85, opacity: 0.3, cost: 15, angle: 0, distance: 200 },\n    { id: 2, name: \"Mother's lullaby\", weight: 95, opacity: 0.15, cost: 35, angle: 45, distance: 250 },\n    { id: 3, name: \"Summer by the lake\", weight: 70, opacity: 0.45, cost: 8, angle: 90, distance: 180 },\n    { id: 4, name: \"Grandfather's stories\", weight: 80, opacity: 0.25, cost: 20, angle: 135, distance: 220 },\n    { id: 5, name: \"Best friend's laugh\", weight: 75, opacity: 0.4, cost: 12, angle: 180, distance: 190 },\n    { id: 6, name: \"First heartbreak\", weight: 90, opacity: 0.2, cost: 30, angle: 225, distance: 240 },\n    { id: 7, name: \"Childhood bedroom\", weight: 65, opacity: 0.5, cost: 5, angle: 270, distance: 170 },\n    { id: 8, name: \"Family dinner table\", weight: 88, opacity: 0.22, cost: 25, angle: 315, distance: 230 }\n  ]);\n  \n  const [heartMeter, setHeartMeter] = React.useState(100);\n  const [selectedMemory, setSelectedMemory] = React.useState(null);\n  const [particles, setParticles] = React.useState([]);\n  const [draggedParticles, setDraggedParticles] = React.useState(0);\n  const [isDragging, setIsDragging] = React.useState(false);\n  const [reclaimed, setReclaimed] = React.useState([]);\n\n  const handleMemoryClick = (memory) => {\n    if (reclaimed.includes(memory.id)) return;\n    setSelectedMemory(memory.id === selectedMemory ? null : memory.id);\n    setDraggedParticles(0);\n  };\n\n  const handleDragStart = (e) => {\n    if (heartMeter <= 0) return;\n    setIsDragging(true);\n    e.dataTransfer.effectAllowed = 'move';\n  };\n\n  const handleDragEnd = () => {\n    setIsDragging(false);\n  };\n\n  const handleDrop = (e, memory) => {\n    e.preventDefault();\n    if (isDragging && selectedMemory === memory.id && heartMeter >= memory.cost) {\n      // Reclaim memory\n      setHeartMeter(prev => prev - memory.cost);\n      setReclaimed(prev => [...prev, memory.id]);\n      \n      // Make other memories drift away and more expensive\n      setMemories(prev => prev.map(m => {\n        if (m.id === memory.id) return m;\n        return {\n          ...m,\n          distance: m.distance + 50,\n          cost: Math.min(50, m.cost + 5),\n          opacity: Math.max(0.1, m.opacity - 0.05)\n        };\n      }));\n\n      // Create particle effect\n      const newParticles = Array(memory.cost).fill(null).map((_, i) => ({\n        id: Date.now() + i,\n        x: e.clientX - 5 + (Math.random() - 0.5) * 20,\n        y: e.clientY - 5 + (Math.random() - 0.5) * 20\n      }));\n      setParticles(prev => [...prev, ...newParticles]);\n      \n      setTimeout(() => {\n        setParticles(prev => prev.filter(p => !newParticles.find(np => np.id === p.id)));\n      }, 1000);\n\n      setSelectedMemory(null);\n    }\n    setIsDragging(false);\n  };\n\n  const Memory = ({ memory }) => {\n    const isSelected = selectedMemory === memory.id;\n    const isReclaimed = reclaimed.includes(memory.id);\n    const canAfford = heartMeter >= memor"
+}

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flavor Fusion Kitchen</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --accent-green: #4ecca3;
+            --accent-red: #ff6b6b;
+            --accent-yellow: #ffd93d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --protein: #ff7979;
+            --vegetable: #6ab04c;
+            --dairy: #f9ca24;
+            --grain: #c7a17a;
+            --spice: #ee5a6f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--bg-primary);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .header {
+            padding: 40px 60px;
+            background: linear-gradient(to bottom, var(--bg-secondary), transparent);
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100% - 160px);
+            padding: 0 60px 60px;
+            gap: 40px;
+        }
+
+        .ingredients-panel {
+            width: 320px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        .ingredients-panel h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            font-weight: 600;
+        }
+
+        .ingredient-category {
+            margin-bottom: 32px;
+        }
+
+        .ingredient-category h3 {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+
+        .ingredient-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .ingredient {
+            cursor: grab;
+            transition: transform 0.2s ease;
+        }
+
+        .ingredient:hover {
+            transform: scale(1.1);
+        }
+
+        .ingredient:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .ingredient-item {
+            width: 64px;
+            height: 64px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .ingredient-item.protein {
+            background: linear-gradient(135deg, var(--protein), #eb4d4b);
+        }
+
+        .ingredient-item.vegetable {
+            background: linear-gradient(135deg, var(--vegetable), #44bd32);
+        }
+
+        .ingredient-item.dairy {
+            background: linear-gradient(135deg, var(--dairy), #f0932b);
+        }
+
+        .ingredient-item.grain {
+            background: linear-gradient(135deg, var(--grain), #8b6f47);
+        }
+
+        .ingredient-item.spice {
+            background: linear-gradient(135deg, var(--spice), #c44569);
+        }
+
+        .ingredient-tooltip {
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+
+        .ingredient:hover .ingredient-tooltip {
+            opacity: 1;
+        }
+
+        .cooking-area {
+            flex: 1;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 40px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cooking-pot {
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+            background: radial-gradient(circle at 50% 40%, #3a3a3a, #2a2a2a);
+            border-radius: 50%;
+            box-shadow: 
+                inset 0 -20px 40px rgba(0, 0, 0, 0.5),
+                0 8px 24px rgba(0, 0, 0, 0.4);
+            position: relative;
+            border: 3px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .pot-content {
+            position: relative;
+            width: 90%;
+            height: 90%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 40px;
+        }
+
+        .dropped-ingredient {
+            width: 56px;
+            height: 56px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            animation: dropIn 0.4s ease-out;
+        }
+
+        @keyframes dropIn {
+            from {
+                transform: translateY(-40px) scale(1.2);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .compatibility-indicator {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .compatibility-indicator.good {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .compatibility-indicator.neutral {
+            background: var(--text-secondary);
+            color: var(--bg-primary);
+        }
+
+        .compatibility-indicator.bad {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .recipe-suggestions {
+            margin-top: 40px;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+
+        .recipe-suggestions h3 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .suggestion-list {
+            display: flex;
+            gap: 16px;
+        }
+
+        .suggestion-item {
+            background: var(--bg-primary);
+            padding: 16px;
+            border-radius: 8px;
+            flex: 1;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .suggestion-item:hover {
+            border-color: var(--accent-yellow);
+            transform: translateY(-2px);
+        }
+
+        .suggestion-item h4 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--accent-yellow);
+        }
+
+        .suggestion-item p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            display: flex;
+            gap: 16px;
+        }
+
+        .control-btn {
+            background: var(--bg-primary);
+            border: 2px solid var(--text-secondary);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: var(--text-secondary);
+            color: var(--bg-primary);
+        }
+
+        .control-btn.primary {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .control-btn.primary:hover {
+            background: #3eb88f;
+            border-color: #3eb88f;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Flavor Fusion Kitchen</h1>
+        <p>Drag ingredients to discover perfect flavor combinations</p>
+    </div>
+
+    <div class="main-container">
+        <div class="ingredients-panel">
+            <h2>Ingredients</h2>
+            
+            <div class="ingredient-category">
+                <h3>Proteins</h3>
+                <div class="ingredient-list">
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item protein">🥩</div>
+                        <div class="ingredient-tooltip">Beef</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item protein">🍗</div>
+                        <div class="ingredient-tooltip">Chicken</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item protein">🐟</div>
+                        <div class="ingredient-tooltip">Fish</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ingredient-category">
+                <h3>Vegetables</h3>
+                <div class="ingredient-list">
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item vegetable">🥕</div>
+                        <div class="ingredient-tooltip">Carrot</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item vegetable">🥦</div>
+                        <div class="ingredient-tooltip">Broccoli</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item vegetable">🍄</div>
+                        <div class="ingredient-tooltip">Mushroom</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item vegetable">🫑</div>
+                        <div class="ingredient-tooltip">Bell Pepper</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ingredient-category">
+                <h3>Dairy</h3>
+                <div class="ingredient-list">
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item dairy">🧀</div>
+                        <div class="ingredient-tooltip">Cheese</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item dairy">🥛</div>
+                        <div class="ingredient-tooltip">Milk</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item dairy">🧈</div>
+                        <div class="ingredient-tooltip">Butter</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ingredient-category">
+                <h3>Grains</h3>
+                <div class="ingredient-list">
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item grain">🍝</div>
+                        <div class="ingredient-tooltip">Pasta</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item grain">🍚</div>
+                        <div class="ingredient-tooltip">Rice</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item grain">🥖</div>
+                        <div class="ingredient-tooltip">Bread</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ingredient-category">
+                <h3>Spices</h3>
+                <div class="ingredient-list">
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item spice">🌶️</div>
+                        <div class="ingredient-tooltip">Chili</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item spice">🧄</div>
+                        <div class="ingredient-tooltip">Garlic</div>
+                    </div>
+                    <div class="ingredient" draggable="true">
+                        <div class="ingredient-item spice">🌿</div>
+                        <div class="ingredient-tooltip">Herbs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cooking-area">
+            <div class="cooking-pot">
+                <div class="compatibility-indicator good" style="opacity: 0;">Great combination!</div>
+                <div class="pot-content">
+                    <!-- Dropped ingredients appear here -->
+                </div>
+            </div>
+
+            <div class="recipe-suggestions">
+                <h3>Suggested Recipes</h3>
+                <div class="suggestion-list">
+                    <div class="suggestion-item">
+                        <h4>Classic Stir Fry</h4>
+                        <p>Add soy sauce and ginger for an authentic Asian flavor</p>
+                    </div>
+                    <div class="suggestion-item">
+                        <h4>Mediterranean Bowl</h4>
+                        <p>Try olive oil and lemon for a fresh taste</p>
+                    </div>
+                    <div class="suggestion-item">
+                        <h4>Comfort Soup</h4>
+                        <p>Add broth and simmer for a hearty meal</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="control-btn">Clear Pot</button>
+                <button class="control-btn primary">Cook Now</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

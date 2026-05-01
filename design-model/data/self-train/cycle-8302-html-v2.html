@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Decay Monitor</title>
+    <style>
+        :root {
+            --wake: #f7f3ef;
+            --sleep: #1a1618;
+            --dissolve: #8b7355;
+            --anchor: #e85d04;
+            --mist: rgba(251, 247, 242, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--wake);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+            transition: background 8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.dreaming {
+            background: var(--sleep);
+        }
+
+        .decay-container {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 60px;
+            padding: 120px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .memory-fragment {
+            position: relative;
+            overflow: hidden;
+            background: var(--mist);
+            transition: all 3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-fragment h2 {
+            font-size: 48px;
+            font-weight: 200;
+            color: var(--sleep);
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+            transition: opacity 3s ease;
+        }
+
+        .memory-fragment p {
+            font-size: 18px;
+            line-height: 1.8;
+            color: var(--sleep);
+            font-weight: 400;
+            max-width: 280px;
+            transition: opacity 3s ease;
+        }
+
+        .memory-fragment[data-decay="1"] {
+            opacity: 0.8;
+            transform: translateY(4px);
+        }
+
+        .memory-fragment[data-decay="1"] h2,
+        .memory-fragment[data-decay="1"] p {
+            opacity: 0.8;
+        }
+
+        .memory-fragment[data-decay="2"] {
+            opacity: 0.5;
+            transform: translateY(12px);
+            filter: blur(2px);
+        }
+
+        .memory-fragment[data-decay="2"] h2,
+        .memory-fragment[data-decay="2"] p {
+            opacity: 0.5;
+        }
+
+        .memory-fragment[data-decay="3"] {
+            opacity: 0.2;
+            transform: translateY(24px);
+            filter: blur(6px);
+        }
+
+        .memory-fragment[data-decay="3"] h2,
+        .memory-fragment[data-decay="3"] p {
+            opacity: 0.2;
+        }
+
+        .memory-fragment[data-decay="4"] {
+            opacity: 0.05;
+            transform: translateY(40px);
+            filter: blur(12px);
+        }
+
+        .anchor-point {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--anchor) 0%, var(--anchor) 40%, transparent 70%);
+            cursor: grab;
+            z-index: 100;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0.8;
+        }
+
+        .anchor-point:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            opacity: 1;
+        }
+
+        .anchor-point:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        .anchor-point::after {
+            content: 'HOLD';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+        }
+
+        .pinned-memory {
+            position: fixed;
+            padding: 24px 32px;
+            background: white;
+            border-left: 4px solid var(--anchor);
+            font-size: 16px;
+            color: var(--sleep);
+            z-index: 50;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: appear 0.6s ease forwards;
+            max-width: 320px;
+            line-height: 1.6;
+        }
+
+        @keyframes appear {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fragment-content {
+            text-align: center;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="decay-container">
+        <div class="memory-fragment" data-decay="0">
+            <div class="fragment-content">
+                <h2>Origin</h2>
+                <p>The first memory remains clear, untouched by time's gentle erosion.</p>
+            </div>
+        </div>
+        <div class="memory-fragment" data-decay="1">
+            <div class="fragment-content">
+                <h2>Echo</h2>
+                <p>Details begin to soften, edges blur into suggestion.</p>
+            </div>
+        </div>
+        <div class="memory-fragment" data-decay="2">
+            <div class="fragment-content">
+                <h2>Whisper</h2>
+                <p>Only impressions remain, floating between real and imagined.</p>
+            </div>
+        </div>
+        <div class="memory-fragment" data-decay="3">
+            <div class="fragment-content">
+                <h2>Shadow</h2>
+                <p>A ghost of what was, barely distinguishable from dream.</p>
+            </div>
+        </div>
+        <div class="memory-fragment" data-decay="4">
+            <div class="fragment-content">
+                <h2>Void</h2>
+                <p>The final dissolution, where memory becomes absence.</p>
+            </div>
+        </div>
+        <div class="memory-fragment" data-decay="1">
+            <div class="fragment-content">
+                <h2>Return</h2>
+                <p>Sometimes forgotten things resurface, changed but familiar.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="anchor-point" draggable="true"></div>
+
+    <script>
+        const anchor = document.querySelector('.anchor-point');
+        const fragments = document.querySelectorAll('.memory-fragment');
+        const body = document.body;
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        function dragStart(e) {
+            if (e.type === "touchstart") {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+
+            if (e.target === anchor) {
+                isDragging = true;
+            }
+        }
+
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+            
+            fragments.forEach(fragment => {
+                const rect = fragment.getBoundingClientRect();
+                const anchorRect = anchor.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(rect.left + rect.width/2 - anchorRect.left - anchorRect.width/2, 2) +
+                    Math.pow(rect.top + rect.height/2 - anchorRect.top - anchorRect.height/2, 2)
+                );
+                
+                if (distance < 150) {
+                    const currentDecay = parseInt(fragment.dataset.decay);
+                    if (currentDecay > 0) {
+                        fragment.dataset.decay = Math.max(0, currentDecay - 1);
+                    }
+                }
+            });
+        }
+
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                if (e.type === "touchmove") {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                anchor.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px))`;
+            }
+        }
+
+        anchor.addEventListener('mousedown', dragStart);
+        document.addEventListener('mouseup', dragEnd);
+        document.addEventListener('mousemove', drag);
+
+        anchor.addEventListener('touchstart', dragStart);
+        document.addEventListener('touchend', dragEnd);
+        document.addEventListener('touchmove', drag);
+
+        anchor.addEventListener('mousedown', () => body.classList.add('dreaming'));
+        anchor.addEventListener('mouseup', () => body.classList.remove('dreaming'));
+
+        setInterval(() => {
+            fragments.forEach(fragment => {
+                if (Math.random() > 0.8) {
+                    const currentDecay = parseInt(fragment.dataset.decay);
+                    if (currentDecay < 4) {
+                        fragment.dataset.decay = Math.min(4, currentDecay + 1);
+                    }
+                }
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

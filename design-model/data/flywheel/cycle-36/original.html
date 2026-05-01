@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: rgba(255,255,255,0.06);
+    --accent: #7c6ef7;
+    --accent-2: #a78bfa;
+    --accent-glow: rgba(124, 110, 247, 0.3);
+    --text-primary: #f0f0f8;
+    --text-secondary: #8888a8;
+    --text-tertiary: #5555708;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse at center, rgba(124,110,247,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -20%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(ellipse at center, rgba(167,139,250,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 52px 44px 48px;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.5px rgba(255,255,255,0.04) inset,
+      0 32px 80px rgba(0,0,0,0.5),
+      0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  /* Subtle top highlight */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12) 30%, rgba(124,110,247,0.3) 50%, rgba(255,255,255,0.12) 70%, transparent);
+  }
+
+  /* Noise texture overlay */
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.4;
+  }
+
+  /* App Icon */
+  .icon-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 36px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .app-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    background: linear-gradient(145deg, #8b7cf8 0%, #6d5ce7 45%, #4f3fd4 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.12) inset,
+      0 20px 48px rgba(124,110,247,0.35),
+      0 8px 16px rgba(0,0,0,0.3);
+  }
+
+  .app-icon::before {
+    content: '';
+    position: absolute;
+    top: 1px; left: 8px; right: 8px;
+    height: 40%;
+    border-radius: 20px 20px 50% 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%);
+  }
+
+  .icon-svg {
+    width: 44px;
+    height: 44px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header text */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 14px;
+    padding: 5px 12px;
+    background: rgba(124,110,247,0.1);
+    border: 1px solid rgba(124,110,247,0.2);
+    border-radius: 100px;
+  }
+
+  .eyebrow-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    box-shadow: 0 0 6px var(--accent-2);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+  }
+
+  h1 span {
+    background: linear-gradient(135deg, #a78bfa 0%, #7c6ef7 50%, #c4b5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 300px;
+    margin: 0 auto;
+  }
+
+  /* Feature highlights */
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 44px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .feature {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    cursor: default;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(124,110,247,0.04) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .feature:hover {
+    border-color: rgba(124,110,247,0.25);
+    background: rgba(26,26,38,0.8);
+  }
+
+  .feature:hover::before {
+    opacity: 1;
+  }
+
+  .feature-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .feature-icon svg {
+    width: 20px;
+    height: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .feature-icon-1 {
+    background: linear-gradient(135deg, rgba(124,110,247,0.2), rgba(124,110,247,0.08));
+    border: 1px solid rgba(124,110,247,0.2);
+    box-shadow: 0 4px 12px rgba(124,110,247,0.1);
+  }
+
+  .feature-icon-2 {
+    background: linear-gradient(135deg, rgba(251,146,60,0.15), rgba(251,146,60,0.06));
+    border: 1px solid rgba(251,146,60,0.18);
+    box-shadow: 0 4px 12px rgba(251,146,60,0.08);
+  }
+
+  .feature-icon-3 {
+    background: linear-gradient(135deg, rgba(52,211,153,0.15), rgba(52,211,153,0.06));
+    border: 1px solid rgba(52,211,153,0.18);
+    box-shadow: 0 4px 12px rgba(52,211,153,0.08);
+  }
+
+  .feature-text {
+    flex: 1;
+  }
+
+  .feature-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+    letter-spacing: -0.01em;
+  }
+
+  .feature-desc {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .feature-arrow {
+    color: rgba(255,255,255,0.15);
+    flex-shrink: 0;
+    transition: color 0.2s, transform 0.2s;
+  }
+
+  .feature:hover .feature-arrow {
+    color: rgba(124,110,247,0.5);
+    transform: translateX(2px);
+  }
+
+  /* CTA */
+  .cta-wrap {
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 17px 24px;
+    background: linear-gradient(135deg, #8b7cf8 0%, #6d5ce7 100%);
+    color: #fff;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.15) inset,
+      0 1px 0 rgba(255,255,255,0.2) inset,
+      0 12px 32px rgba(124,110,247,0.4),
+      0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
+    border-radius: 14px 14px 0 0;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.15) inset,
+      0 1px 0 rgba(255,255,255,0.2) inset,
+      0 16px 40px rgba(124,110,247,0.5),
+      0 6px 16px rgba(0,0,0,0.25);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0px);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.12) inset,
+      0 8px 20px rgba(124,110,247,0.3),
+      0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .btn-label {
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-icon {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    transition: transform 0.15s ease;
+  }
+
+  .btn-primary:hover .btn-icon {
+    transform: translateX(3px);
+  }
+
+  .footer-note {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 12px;
+    color: rgba(136,136,168,0.5);
+    letter-spacing: 0.01em;
+  }
+
+  .footer-note a {
+    color: rgba(167,139,250,0.6);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .footer-note a:hover {
+    color: var(--accent-2);
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- App Icon -->
+  <div class="icon-wrap">
+    <div class="app-icon">
+      <svg class="icon-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22 8C22 8 14 14 14 22C14 30 22 36 22 36C22 36 30 30 30 22C30 14 22 8 22 8Z" fill="rgba(255,255,255,0.9)"/>
+        <path d="M22 8C22 8 14 14 14 22C14 30 22 36 22 36" fill="rgba(255,255,255,0.4)"/>
+        <circle cx="22" cy="22" r="4.5" fill="rgba(124,110,247,0.9)"/>
+        <circle cx="22" cy="22" r="2" fill="white"/>
+        <path d="M8 22H14M30 22H36" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="eyebrow">
+      <span class="eyebrow-dot"></span>
+      Now Available
+    </div>
+    <h1>Design without<br><span>boundaries.</span></h1>
+    <p class="subtitle">Create stunning interfaces in minutes. No experience required — just your vision.</p>
+  </div>
+
+  <!-- Features -->
+  <div class="features">
+
+    <div class="feature">
+      <div class="feature-icon feature-icon-1">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 2L12.5 7.5H18L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L2 7.5H7.5L10 2Z" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">AI-Powered Creation</div>
+        <div class="feature-desc">Generate pixel-perfect designs from a simple description in seconds.</div>
+      </div>
+      <svg class="feature-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon feature-icon-2">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="7" height="7" rx="2" stroke="#fb923c" stroke-width="1.5"/>
+          <rect x="11" y="2" width="7" height="7" rx="2" stroke="#fb923c" stroke-width="1.5"/>
+          <rect x="2" y="11" width="7" height="7" rx="2" stroke="#fb923c" stroke-width="1.5"/>
+          <rect x="11" y="11" width="7" height="7" rx="2" stroke="#fb923c" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">Component Library</div>
+        <div class="feature-desc">500+ handcrafted components ready to drag, drop, and customize freely.</div>
+      </div>
+      <svg class="feature-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon feature-icon-3">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="10" r="7.5" stroke="#34d399" stroke-width="1.5"/>
+          <path d="M7 10L9 12L13 8" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="feature-text">
+        <div class="feature-title">Export Anywhere</div>
+        <div class="feature-desc">Ship to React, SwiftUI, or HTML — clean code, zero friction.</div>
+      </div>
+      <svg class="feature-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-wrap">
+    <button class="btn-primary">
+      <span class="btn-label">Get Started — It's Free</span>
+      <span class="btn-icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8H13M9 4L13 8L9 12" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </button>
+    <p class="footer-note">No credit card needed &nbsp;·&nbsp; <a href="#">Privacy Policy</a></p>
+  </div>
+
+</div>
+
+</body>
+</html>

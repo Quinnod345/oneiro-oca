@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Observatory</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --stellar: #1a1a2e;
+            --nebula: #16213e;
+            --starlight: #e8e3d3;
+            --decay: #ff6b6b;
+            --preserve: #4ecdc4;
+            --constellation: rgba(255, 255, 255, 0.15);
+            --time: #8b8b9a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: radial-gradient(ellipse at top, var(--nebula) 0%, var(--void) 100%);
+            color: var(--starlight);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .observatory {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .star-field {
+            position: relative;
+            width: 80%;
+            height: 80%;
+            max-width: 800px;
+            max-height: 600px;
+        }
+
+        .memory-star {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        .memory-star::before {
+            content: '';
+            display: block;
+            width: var(--star-size, 12px);
+            height: var(--star-size, 12px);
+            background: radial-gradient(circle, var(--starlight) 0%, transparent 70%);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            transition: all 0.4s ease;
+        }
+
+        .memory-star:hover::before {
+            transform: scale(1.5);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 
+                        0 0 60px rgba(78, 205, 196, 0.4);
+        }
+
+        .memory-star.fading::before {
+            background: radial-gradient(circle, var(--decay) 0%, transparent 70%);
+            opacity: 0.5;
+        }
+
+        .memory-star:nth-child(1) { left: 20%; top: 30%; --star-size: 16px; }
+        .memory-star:nth-child(2) { left: 70%; top: 20%; --star-size: 14px; }
+        .memory-star:nth-child(3) { left: 50%; top: 50%; --star-size: 20px; }
+        .memory-star:nth-child(4) { left: 30%; top: 70%; --star-size: 12px; }
+        .memory-star:nth-child(5) { left: 80%; top: 60%; --star-size: 15px; }
+
+        .memory-label {
+            position: absolute;
+            top: calc(var(--star-size, 12px) + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--starlight);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            text-shadow: 0 2px 10px var(--void);
+            background: rgba(10, 10, 15, 0.8);
+            padding: 4px 12px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .memory-star:hover .memory-label {
+            opacity: 1;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, var(--constellation) 50%, transparent 100%);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            z-index: 5;
+        }
+
+        .constellation-line.active {
+            opacity: 0.4;
+        }
+
+        .temporal-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(600px, 90vw);
+            background: rgba(26, 26, 46, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 24px 30px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            z-index: 100;
+        }
+
+        .control-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--time);
+        }
+
+        .time-scrubber {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .time-progress {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(90deg, var(--preserve), var(--decay));
+            border-radius: 3px;
+            width: 50%;
+            transition: width 0.3s ease;
+        }
+
+        .time-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: var(--starlight);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+
+        .time-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.8);
+        }
+
+        .time-marker:active {
+            cursor: grabbing;
+        }
+
+        .action-button {
+            background: rgba(78, 205, 196, 0.2);
+            border: 1px solid var(--preserve);
+            color: var(--starlight);
+            padding: 8px 20px;
+            border-radius: 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .action-button:hover {
+            background: rgba(78, 205, 196, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .status-panel {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            background: rgba(26, 26, 46, 0.8);
+            backdrop-filter: blur(20px);
+            padding: 20px 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+            line-height: 1.6;
+            max-width: 250px;
+            z-index: 50;
+        }
+
+        .status-title {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: var(--preserve);
+        }
+
+        .status-metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            color: var(--time);
+        }
+
+        .status-value {
+            color: var(--starlight);
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .temporal-controls {
+                padding: 16px 20px;
+                gap: 16px;
+            }
+            
+            .status-panel {
+                top: 20px;
+                left: 20px;
+                right: 20px;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="observatory">
+        <div class="star-field">
+            <div class="memory-star" data-memory="first-day">
+                <span class="memory-label">First Day of School</span>
+            </div>
+            <div class="memory-star" data-memory="summer-camp">
+                <span class="memory-label">Summer at the Lake</span>
+            </div>
+            <div class="memory-star" data-memory="graduation">
+                <span class="memory-label">Graduation Day</span>
+            </div>
+            <div class="memory-star fading" data-memory="childhood">
+                <span class="memory-label">Childhood Home</span>
+            </div>
+            <div class="memory-star" data-memory="first-love">
+                <span class="memory-label">First Love</span>
+            </div>
+            
+            <svg class="constellation-line active" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;">
+                <line x1="20%" y1="30%" x2="50%" y2="50%" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <line x1="50%" y1="50%" x2="70%" y2="20%" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <line x1="30%" y1="70%" x2="50%" y2="50%" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+            </svg>
+        </div>
+        
+        <div class="status-panel">
+            <div class="status-title">Memory Observatory</div>
+            <div class="status-metric">
+                <span>Active Memories</span>
+                <span class="status-value">5</span>
+            </div>
+            <div class="status-metric">
+                <span>Preservation Rate</span>
+                <span class="status-value">73%</span>
+            </div>
+            <div class="status-metric">
+                <span>Time Elapsed</span>
+                <span class="status-value">12 years</span>
+            </div>
+        </div>
+        
+        <div class="temporal-controls">
+            <span class="control-label">Timeline</span>
+            <div class="time-scrubber">
+                <div class="time-progress"></div>
+                <div class="time-marker"></div>
+            </div>
+            <button class="action-button">Preserve</button>
+            <button class="action-button">Recall</button>
+        </div>
+    </div>
+    
+    <script>
+        const stars = document.querySelectorAll('.memory-star');
+        const timeMarker = document.querySelector('.time-marker');
+        const timeProgress = document.querySelector('.time-progress');
+        const timeScrubber = document.querySelector('.time-scrubber');
+        
+        let isDragging = false;
+        
+        stars.forEach(star => {
+            star.addEventListener('click', function() {
+                this.style.transform = `scale(2)`;
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 300);
+            });
+        });
+        
+        timeMarker.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = timeScrubber.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+            
+            timeMarker.style.left = `${percentage}%`;
+            timeProgress.style.width = `${percentage}%`;
+        });
+        
+        timeScrubber.addEventListener('click', (e) => {
+            const rect = timeScrubber.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+            
+            timeMarker.style.left = `${percentage}%`;
+            timeProgress.style.width = `${percentage}%`;
+        });
+    </script>
+</body>
+</html>

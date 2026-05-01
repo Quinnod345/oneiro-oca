@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haiku Stream</title>
+    <style>
+        :root {
+            --ink: #2a2a2a;
+            --paper: #f9f7f4;
+            --accent: #8b7355;
+            --shadow: rgba(42, 42, 42, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--paper);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .haiku-container {
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .line {
+            width: 100%;
+            height: 2px;
+            background: var(--ink);
+            margin: 60px 0;
+            position: relative;
+            opacity: 0.15;
+        }
+
+        .line::before {
+            content: attr(data-syllables);
+            position: absolute;
+            right: -40px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: var(--accent);
+            opacity: 0.6;
+        }
+
+        .line-content {
+            position: absolute;
+            top: -30px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            gap: 16px;
+            min-height: 40px;
+        }
+
+        .placed-word {
+            padding: 8px 16px;
+            background: transparent;
+            color: var(--ink);
+            font-size: 18px;
+            letter-spacing: 0.05em;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .word-stream {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .falling-word {
+            position: absolute;
+            padding: 10px 20px;
+            color: var(--ink);
+            font-size: 16px;
+            cursor: pointer;
+            pointer-events: all;
+            user-select: none;
+            opacity: 0;
+            animation: gentleFall 12s linear forwards;
+            transition: all 0.3s ease;
+        }
+
+        .falling-word:hover {
+            transform: scale(1.1);
+            opacity: 1 !important;
+        }
+
+        @keyframes gentleFall {
+            0% {
+                top: -50px;
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                top: 110vh;
+                opacity: 0;
+            }
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: var(--accent);
+            font-size: 14px;
+            opacity: 0.6;
+        }
+
+        .complete-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px var(--shadow);
+            text-align: center;
+            display: none;
+            animation: appear 0.5s ease-out;
+        }
+
+        .complete-message h2 {
+            color: var(--ink);
+            margin-bottom: 20px;
+            font-weight: normal;
+        }
+
+        .complete-message .haiku-display {
+            font-size: 20px;
+            line-height: 1.8;
+            color: var(--ink);
+            margin: 20px 0;
+        }
+
+        @keyframes appear {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -45%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        .reset-button {
+            margin-top: 20px;
+            padding: 10px 24px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .reset-button:hover {
+            background: #6b5a45;
+        }
+    </style>
+</head>
+<body>
+    <div class="word-stream" id="wordStream"></div>
+    
+    <div class="haiku-container">
+        <div class="line" data-syllables="5">
+            <div class="line-content" id="line1"></div>
+        </div>
+        <div class="line" data-syllables="7">
+            <div class="line-content" id="line2"></div>
+        </div>
+        <div class="line" data-syllables="5">
+            <div class="line-content" id="line3"></div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        Click falling words to build your haiku
+    </div>
+
+    <div class="complete-message" id="completeMessage">
+        <h2>Your Haiku</h2>
+        <div class="haiku-display" id="haikuDisplay"></div>
+        <button class="reset-button" onclick="resetHaiku()">Create Another</button>
+    </div>
+
+    <script>
+        const wordPool = {
+            1: ['moon', 'sun', 'wind', 'rain', 'snow', 'mist', 'fog', 'dew'],
+            2: ['autumn', 'winter', 'morning', 'evening', 'shadow', 'silence', 'gentle', 'flowing'],
+            3: ['chrysanthemum', 'wandering', 'reflection', 'meditation'],
+            4: ['illuminates', 'contemplating']
+        };
+
+        const lines = [
+            { element: document.getElementById('line1'), syllables: 5, words: [] },
+            { element: document.getElementById('line2'), syllables: 7, words: [] },
+            { element: document.getElementById('line3'), syllables: 5, words: [] }
+        ];
+
+        let currentLine = 0;
+
+        function getSyllableCount(word) {
+            const lengths = Object.keys(wordPool);
+            for (let len of lengths) {
+                if (wordPool[len].includes(word)) return parseInt(len);
+            }
+            return 1;
+        }
+
+        function createFallingWord() {
+            const allWords = Object.values(wordPool).flat();
+            const word = allWords[Math.floor(Math.random() * allWords.length)];
+            
+            const wordElement = document.createElement('div');
+            wordElement.className = 'falling-word';
+            wordElement.textContent = word;
+            wordElement.style.left = Math.random() * (window.innerWidth - 100) + 'px';
+            wordElement.style.animationDuration = (10 + Math.random() * 5) + 's';
+            
+            wordElement.addEventListener('click', () => catchWord(word, wordElement));
+            
+            document.getElementById('wordStream').appendChild(wordElement);
+            
+            setTimeout(() => wordElement.remove(), 15000);
+        }
+
+        function catchWord(word, element) {
+            if (currentLine >= lines.length) return;
+            
+            const syllableCount = getSyllableCount(word);
+            const line = lines[currentLine];
+            const currentSyllables = line.words.reduce((sum, w) => sum + getSyllableCount(w), 0);
+            
+            if (currentSyllables + syllableCount <= line.syllables) {
+                line.words.push(word);
+                element.remove();
+                updateLine(line);
+                
+                if (currentSyllables + syllableCount === line.syllables) {
+                    currentLine++;
+                    if (currentLine >= lines.length) {
+                        showComplete();
+                    }
+                }
+            }
+        }
+
+        function updateLine(line) {
+            line.element.innerHTML = '';
+            line.words.forEach(word => {
+                const wordElement = document.createElement('span');
+                wordElement.className = 'placed-word';
+                wordElement.textContent = word;
+                line.element.appendChild(wordElement);
+            });
+        }
+
+        function showComplete() {
+            const haiku = lines.map(line => line.words.join(' ')).join('<br>');
+            document.getElementById('haikuDisplay').innerHTML = haiku;
+            document.getElementById('completeMessage').style.display = 'block';
+        }
+
+        function resetHaiku() {
+            lines.forEach(line => {
+                line.words = [];
+                line.element.innerHTML = '';
+            });
+            currentLine = 0;
+            document.getElementById('completeMessage').style.display = 'none';
+        }
+
+        setInterval(createFallingWord, 2000);
+        createFallingWord();
+    </script>
+</body>
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --sand: #e8d4b0;
+            --clay: #b87333;
+            --papyrus: #f4e8d0;
+            --charcoal: #2c2416;
+            --worn-gold: #d4a574;
+            --faded-ink: #5c4a3a;
+            --ghost-white: rgba(255, 255, 255, 0.15);
+            --sediment-1: #c9a876;
+            --sediment-2: #b5926c;
+            --sediment-3: #a17c5a;
+            --fragment-shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: linear-gradient(to bottom, #f5e6d3 0%, #e8d4b0 100%);
+            font-family: Georgia, 'Times New Roman', serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .excavation-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.1;
+            background-image: 
+                repeating-linear-gradient(0deg, var(--faded-ink) 0, var(--faded-ink) 1px, transparent 1px, transparent 40px),
+                repeating-linear-gradient(90deg, var(--faded-ink) 0, var(--faded-ink) 1px, transparent 1px, transparent 40px);
+            pointer-events: none;
+        }
+
+        .dig-site {
+            position: absolute;
+            width: 400px;
+            height: 100%;
+            left: 0;
+            background: linear-gradient(to right, rgba(184, 115, 51, 0.1), transparent);
+            border-right: 2px solid var(--clay);
+        }
+
+        .fragment-tray {
+            padding: 30px 20px;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .fragment-tray::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .fragment-tray::-webkit-scrollbar-track {
+            background: rgba(184, 115, 51, 0.1);
+        }
+
+        .fragment-tray::-webkit-scrollbar-thumb {
+            background: var(--clay);
+            border-radius: 4px;
+        }
+
+        .fragment {
+            position: relative;
+            cursor: grab;
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .fragment:active {
+            cursor: grabbing;
+        }
+
+        .pottery-shard {
+            width: 120px;
+            height: 80px;
+            background: var(--clay);
+            clip-path: polygon(
+                20% 0%, 80% 10%, 100% 30%, 
+                90% 80%, 60% 100%, 30% 90%, 
+                0% 70%, 10% 20%
+            );
+            box-shadow: 0 4px 12px var(--fragment-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pottery-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-5deg);
+            color: var(--charcoal);
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            width: 80%;
+        }
+
+        .manuscript-fragment {
+            width: 140px;
+            height: 100px;
+            background: var(--papyrus);
+            clip-path: polygon(
+                0% 10%, 95% 0%, 100% 20%, 
+                98% 85%, 80% 100%, 20% 95%, 
+                0% 80%
+            );
+            box-shadow: 0 3px 10px var(--fragment-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .manuscript-text {
+            position: absolute;
+            padding: 15px 10px;
+            font-size: 10px;
+            color: var(--faded-ink);
+            line-height: 1.4;
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        .hieroglyph {
+            width: 60px;
+            height: 60px;
+            background: var(--worn-gold);
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 2px 8px var(--fragment-shadow);
+            margin-right: 10px;
+            margin-bottom: 10px;
+            cursor: grab;
+        }
+
+        .reconstruction-table {
+            position: absolute;
+            left: 440px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 560px;
+            height: 600px;
+            background: radial-gradient(ellipse at center, #f9f3eb, #f4e8d0);
+            border: 3px solid var(--clay);
+            border-radius: 8px;
+            box-shadow: inset 0 0 40px rgba(184, 115, 51, 0.1);
+            overflow: hidden;
+        }
+
+        .table-surface {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ghost-outline {
+            position: absolute;
+            border: 2px dashed var(--ghost-white);
+            border-radius: 4px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        .ghost-outline.pottery-slot {
+            width: 130px;
+            height: 90px;
+            top: 80px;
+            left: 60px;
+        }
+
+        .ghost-outline.manuscript-slot {
+            width: 150px;
+            height: 110px;
+            top: 200px;
+            left: 200px;
+        }
+
+        .ghost-outline.ingredient-slot {
+            width: 280px;
+            height: 70px;
+            bottom: 120px;
+            left: 140px;
+        }
+
+        .confidence-panel {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 320px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid var(--clay);
+            border-radius: 6px;
+            padding: 25px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel-title {
+            font-size: 20px;
+            color: var(--charcoal);
+            margin-bottom: 20px;
+            font-weight: normal;
+        }
+
+        .sediment-visualization {
+            height: 300px;
+            background: linear-gradient(to bottom, 
+                var(--sand) 0%, 
+                var(--sediment-1) 30%, 
+                var(--sediment-2) 60%, 
+                var(--sediment-3) 100%
+            );
+            border: 1px solid var(--clay);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .sediment-layer {
+            position: absolute;
+            width: 100%;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .layer-1 {
+            height: 33%;
+            bottom: 0;
+            background: var(--sediment-3);
+            opacity: 0.8;
+        }
+
+        .layer-2 {
+            height: 33%;
+            bottom: 33%;
+            background: var(--sediment-2);
+            opacity: 0.7;
+        }
+
+        .layer-3 {
+            height: 34%;
+            top: 0;
+            background: var(--sediment-1);
+            opacity: 0.6;
+        }
+
+        .confidence-indicator {
+            font-size: 14px;
+            color: var(--faded-ink);
+            line-height: 1.6;
+        }
+
+        .confidence-level {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(184, 115, 51, 0.2);
+        }
+
+        .dragging {
+            opacity: 0.5;
+            transform: scale(1.1);
+        }
+
+        .placed-fragment {
+            position: absolute;
+            transition: none;
+        }
+
+        .interpretation-tooltip {
+            position: absolute;
+            background: var(--charcoal);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 100;
+            max-width: 200px;
+        }
+
+        .interpretation-tooltip.visible {
+            opacity: 0.9;
+        }
+
+        .contradiction-marker {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #d32f2f;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: help;
+            z-index: 10;
+        }
+
+        .timeline-ruler {
+            position: absolute;
+            bottom: 20px;
+            left: 440px;
+            width: 560px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--clay);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 11px;
+            color: var(--faded-ink);
+        }
+
+        .era-marker {
+            flex: 1;
+            text-align: center;
+            border-right: 1px solid var(--clay);
+            padding: 5px;
+        }
+
+        .era-marker:last-child {
+            border-right: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="excavation-grid"></div>
+    
+    <div class="dig-site">
+        <div class="fragment-tray">
+            <div class="fragment pottery-shard" draggable="true">
+                <div class="pottery-text">BOIL<br>GRAINS</div>
+            </div>
+            
+            <div class="fragment manuscript-fragment" draggable="true">
+                <div class="manuscript-text">...steep for three sunrises in vessels of clay, stirring with...</div>
+            </div>
+            
+            <div class="fragment pottery-shard" draggable="true">
+                <div class="pottery-text">FERMENT<br>7 DAYS</div>
+            </div>
+            
+            <div class="fragment manuscript-fragment" draggable="true">
+                <div class="manuscript-text">...honey from the northern hives mixed with crushed...</div>
+            </div>
+            
+            <div>
+                <div class="hieroglyph" draggable="true">🌾</div>
+                <div class="hieroglyph" draggable="true">🍯</div>
+                <div class="hieroglyph" draggable="true">🏺</div>
+                <div class="hieroglyph" draggable="true">🔥</div>
+                <div class="hieroglyph" draggable="true">☀️</div>
+                <div class="hieroglyph" draggable="true">🌿</div>
+            </div>
+            
+            <div class="fragment pottery-shard" draggable="true">
+                <div class="pottery-text">SACRED<br>FEAST</div>
+            </div>
+            
+            <div class="fragment manuscript-fragment" draggable="true">
+                <div class="manuscript-text">...but others say roast first until the smoke carries prayers...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="reconstruction-table">
+        <div class="table-surface">
+            <div class="ghost-outline pottery-slot"></div>
+            <div class="ghost-outline manuscript-slot"></div>
+            <div class="ghost-outline ingredient-slot"></div>
+            
+            <div class="contradiction-marker" style="top: 140px; left: 180px;">!</div>
+        </div>
+    </div>
+    
+    <div class="confidence-panel">
+        <h2 class="panel-title">Archaeological Confidence</h2>
+        
+        <div class="sediment-visualization">
+            <div class="sediment-layer layer-1"></div>
+            <div class="sediment-layer layer-2"></div>
+            <div class="sediment-layer layer-3"></div>
+        </div>
+        
+        <div class="confidence-indicator">
+            <div class="confidence-level">
+                <span>Primary Method:</span>
+                <strong>Fermentation (62%)</strong>
+            </div>
+            <div class="confidence-level">
+                <span>Time Period:</span>
+                <strong>Late Bronze Age</strong>
+            </div>
+            <div class="confidence-level">
+                <span>Cultural Context:</span>
+                <strong>Ritual Preparation</strong>
+            </div>
+            <div class="confidence-level">
+                <span>Contradictions:</span>
+                <strong style="color: #d32f2f;">3 Found</strong>
+            </div>
+        </div>
+    </div>
+    
+    <div class="timeline-ruler">
+        <div class="era-marker">3000 BCE</div>
+        <div class="era-marker">2000 BCE</div>
+        <div class="era-marker">1000 BCE</div>
+        <div class="era-marker">1 CE</div>
+    </div>
+    
+    <div class="interpretation-tooltip">
+        Conflicting sources: Earlier texts suggest boiling, but pottery evidence indicates roasting
+    </div>
+
+    <script>
+        let draggedElement = null;
+        
+        document.querySelectorAll('[draggable="true"]').forEach(elem => {
+            elem.addEventListener('dragstart', (e) => {
+                draggedElement = e.target;
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            
+            elem.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+            });
+        });
+        
+        const table = document.querySelector('.table-surface');
+        
+        table.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+        
+        table.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedElement) {
+                const rect = table.getBoundingClientRect();
+                const x = e.clientX - rect.left - (draggedElement.offsetWidth / 2);
+                const y = e.clientY - rect.top - (draggedElement.offsetHeight / 2);
+                
+                const clone = draggedElement.cloneNode(true);
+                clone.classList.add('placed-fragment');
+                clone.style.left = x + 'px';
+                clone.style.top = y + 'px';
+                clone.draggable = true;
+                
+                table.appendChild(clone);
+                
+                // Animate sediment layers
+                const layers = document.querySelectorAll('.sediment-layer');
+                layers.forEach((layer, index) => {
+                    setTimeout(() => {
+                        layer.style.transform = `translateY(${Math.random() * 10 - 5}px)`;
+                    }, index * 100);
+                });
+                
+                setTimeout(() => {
+                    layers.forEach(layer => {
+                        layer.style.transform = 'translateY(0)';
+                    });
+                }, 800);
+            }
+        });
+        
+        document.querySelector('.contradiction-marker').addEventListener('mouseenter', (e) => {
+            const tooltip = document.querySelector('.interpretation-tooltip');
+            tooltip.style.left = e.target.offsetLeft + 30 + 'px';
+            tooltip.style.top = e.target.offsetTop + 'px';
+            tooltip.classList.add('visible');
+        });
+        
+        document.querySelector('.contradiction-marker').addEventListener('mouseleave', () => {
+            document.querySelector('.interpretation-tooltip').classList.remove('visible');
+        });
+    </script>
+</body>
+</html>

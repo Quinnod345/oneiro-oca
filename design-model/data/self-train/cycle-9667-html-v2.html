@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Adjuster</title>
+    <style>
+        :root {
+            --parchment: #f4e8d0;
+            --ink-medieval: #3a2317;
+            --gold-leaf: #c9a961;
+            --copper-patina: #7a9d96;
+            --ivory: #faf7f0;
+            --shadow-soft: rgba(58, 35, 23, 0.1);
+            --shadow-medium: rgba(58, 35, 23, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Baskerville, Georgia, serif;
+            background: var(--ivory);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .recipe-translator {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: normal;
+            color: var(--ink-medieval);
+            font-variant: small-caps;
+            letter-spacing: 3px;
+            margin-bottom: 12px;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--copper-patina);
+            font-style: italic;
+        }
+
+        .timeline-container {
+            position: relative;
+            margin-bottom: 80px;
+        }
+
+        .timeline-track {
+            height: 4px;
+            background: var(--shadow-soft);
+            border-radius: 2px;
+            position: relative;
+            margin: 40px 0;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ink-medieval), var(--gold-leaf));
+            border-radius: 2px;
+            width: 16.66%;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .era-points {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            top: -22px;
+        }
+
+        .era-point {
+            background: var(--ivory);
+            border: 3px solid var(--shadow-soft);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .era-point:hover {
+            transform: scale(1.2);
+            border-color: var(--gold-leaf);
+        }
+
+        .era-point.active {
+            background: var(--gold-leaf);
+            border-color: var(--gold-leaf);
+            transform: scale(1.3);
+        }
+
+        .era-point.active::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background: var(--ivory);
+            border-radius: 50%;
+        }
+
+        .era-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .era-label {
+            text-align: center;
+            cursor: pointer;
+            padding: 8px;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+
+        .era-label h3 {
+            font-size: 16px;
+            font-weight: normal;
+            color: var(--ink-medieval);
+            margin-bottom: 4px;
+        }
+
+        .era-label span {
+            font-size: 12px;
+            color: var(--copper-patina);
+        }
+
+        .era-label:hover h3 {
+            color: var(--gold-leaf);
+        }
+
+        .era-label.active h3 {
+            color: var(--gold-leaf);
+            font-weight: bold;
+        }
+
+        .content-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: start;
+        }
+
+        .ingredients-panel {
+            background: var(--parchment);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px var(--shadow-soft);
+        }
+
+        .ingredients-panel h2 {
+            font-size: 28px;
+            color: var(--ink-medieval);
+            margin-bottom: 24px;
+            font-weight: normal;
+            font-variant: small-caps;
+        }
+
+        .ingredient-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .ingredient-card {
+            background: var(--ivory);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--shadow-soft);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .ingredient-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px var(--shadow-soft);
+            border-color: var(--gold-leaf);
+        }
+
+        .ingredient-card h4 {
+            font-size: 18px;
+            color: var(--ink-medieval);
+            margin-bottom: 8px;
+        }
+
+        .ingredient-card .historical {
+            font-size: 14px;
+            color: var(--copper-patina);
+            font-style: italic;
+            margin-bottom: 4px;
+        }
+
+        .ingredient-card .modern {
+            font-size: 14px;
+            color: var(--gold-leaf);
+            font-weight: bold;
+        }
+
+        .recipe-panel {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px var(--shadow-soft);
+        }
+
+        .recipe-panel h2 {
+            font-size: 28px;
+            color: var(--ink-medieval);
+            margin-bottom: 24px;
+            font-weight: normal;
+            font-variant: small-caps;
+        }
+
+        .recipe-text {
+            line-height: 1.8;
+            color: var(--ink-medieval);
+            font-size: 16px;
+        }
+
+        .recipe-text p {
+            margin-bottom: 16px;
+        }
+
+        .measurement-note {
+            background: var(--shadow-soft);
+            padding: 16px 20px;
+            border-radius: 6px;
+            margin-top: 24px;
+            font-size: 14px;
+            color: var(--copper-patina);
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .content-area {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .header h1 {
+                font-size: 36px;
+            }
+
+            .era-labels {
+                flex-wrap: wrap;
+            }
+
+            .era-label {
+                min-width: 33.33%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="recipe-translator">
+        <div class="header">
+            <h1>Temporal Recipe Translator</h1>
+            <p>Journey through culinary history and discover how ingredients evolved</p>
+        </div>
+
+        <div class="timeline-container">
+            <div class="timeline-track">
+                <div class="timeline-progress"></div>
+            </div>
+            <div class="era-points">
+                <div class="era-point active" data-era="0"></div>
+                <div class="era-point" data-era="1"></div>
+                <div class="era-point" data-era="2"></div>
+                <div class="era-point" data-era="3"></div>
+                <div class="era-point" data-era="4"></div>
+                <div class="era-point" data-era="5"></div>
+            </div>
+            <div class="era-labels">
+                <div class="era-label active" data-era="0">
+                    <h3>Medieval</h3>
+                    <span>500-1500</span>
+                </div>
+                <div class="era-label" data-era="1">
+                    <h3>Renaissance</h3>
+                    <span>1500-1700</span>
+                </div>
+                <div class="era-label" data-era="2">
+                    <h3>Enlightenment</h3>
+                    <span>1700-1800</span>
+                </div>
+                <div class="era-label" data-era="3">
+                    <h3>Industrial</h3>
+                    <span>1800-1900</span>
+                </div>
+                <div class="era-label" data-era="4">
+                    <h3>Modern</h3>
+                    <span>1900-2000</span>
+                </div>
+                <div class="era-label" data-era="5">
+                    <h3>Contemporary</h3>
+                    <span>2000-Present</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <div class="ingredients-panel">
+                <h2>Ingredient Evolution</h2>
+                <div class="ingredient-list">
+                    <div class="ingredient-card">
+                        <h4>Sweetener</h4>
+                        <div class="historical">Honey & dried fruits</div>
+                        <div class="modern">→ Refined sugar</div>
+                    </div>
+                    <div class="ingredient-card">
+                        <h4>Spices</h4>
+                        <div class="historical">Pepper, cinnamon, ginger</div>
+                        <div class="modern">→ Global spice blends</div>
+                    </div>
+                    <div class="ingredient-card">
+                        <h4>Preservation</h4>
+                        <div class="historical">Salt, smoke, vinegar</div>
+                        <div class="modern">→ Refrigeration</div>
+                    </div>
+                    <div class="ingredient-card">
+                        <h4>Fats</h4>
+                        <div class="historical">Lard, tallow, butter</div>
+                        <div class="modern">→ Vegetable oils</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recipe-panel">
+                <h2>Spiced Honey Cakes</h2>
+                <div class="recipe-text">
+                    <p>Take good honey and clarify it on the fire, and take fine white bread crumbs and grate them well. Mix the bread with the honey until it is stiff enough to be shaped.</p>
+                    <p>Add thereto powder of ginger, long pepper, and cinnamon, with a portion of saffron to give it noble color. Work this together while warm.</p>
+                    <p>Form into small cakes and let them dry before the fire, turning them often so they harden evenly. These shall keep through winter if stored properly.</p>
+                </div>
+                <div class="measurement-note">
+                    Medieval measurements were often imprecise, relying on "a goodly amount" or "as much as needed" rather than exact quantities.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const eras = ['Medieval', 'Renaissance', 'Enlightenment', 'Industrial', 'Modern', 'Contemporary'];
+        const eraPoints = document.querySelectorAll('.era-point');
+        const eraLabels = document.querySelectorAll('.era-label');
+        const progressBar = document.querySelector('.timeline-progress');
+        
+        const recipes = {
+            0: {
+                title: 'Spiced Honey Cakes',
+                text: '<p>Take good honey and clarify it on the fire, and take fine white bread crumbs and grate them well. Mix the bread with the honey until it is stiff enough to be shaped.</p><p>Add thereto powder of ginger, long pepper, and cinnamon, with a portion of saffron to give it noble color. Work this together while warm.</p><p>Form into small cakes and let them dry before the fire, turning them often so they harden evenly. These shall keep through winter if stored properly.</p>',
+                ingredients: [
+                    { name: 'Sweetener', historical: 'Honey & dried fruits', modern: '→ Refined sugar' },
+                    { name: 'Spices', historical: 'Pepper, cinnamon, ginger', modern: '→ Global spice blends' },
+                    { name: 'Preservation', historical: 'Salt, smoke, vinegar', modern: '→ Refrigeration' },
+                    { name: 'Fats', historical: 'Lard, tallow, butter', modern: '→ Vegetable oils' }
+                ]
+            },
+            1: {
+                title: 'Renaissance Marchpane',
+                text: '<p>Blanch almonds and pound them in a mortar with rose water to keep them from oiling. Add sugar in equal weight to the almonds and work together.</p><p>Form into shapes as fruits, birds, or coat of arms. Paint with saffron water for gold, or sanders for red.</p><p>Set in a temperate oven until dry but not browned. A noble confection for banquets.</p>',
+                ingredients: [
+                    { name: 'Sweetener', historical: 'Cane sugar (rare)', modern: '→ Abundant refined sugar' },
+                    { name: 'Nuts', historical: 'Almonds (luxury)', modern: '→ Various nut flours' },
+                    { name: 'Coloring', historical: 'Saffron, sanders', modern: '→ Food coloring' },
+                    { name: 'Flavoring', historical: 'Rose water', modern: '→ Vanilla extract' }
+                ]
+            },
+            2: {
+                title: 'Enlightenment Syllabub',
+                text: '<p>Take a pint of cream and the juice of two lemons, with the zest grated fine. Sweeten with loaf sugar to taste.</p><p>Add a glass of sherry or white wine, and whisk until it forms a thick froth. The newer mechanical whisks make this less laborious.</p><p>Serve immediately in glasses, with sweet biscuits alongside. A refreshing dessert for summer entertainments.</p>',
+                ingredients: [
+                    { name: 'Dairy', historical: 'Fresh cream (seasonal)', modern: '→ Year-round dairy' },
+                    { name: 'Acid', historical: 'Citrus (imported)', modern: '→ Global citrus variety' },
+                    { name: 'Alcohol', historical: 'Sherry, wine', modern: '→ Diverse spirits' },
+                    { name: 'Tools', historical: 'Hand whisks', modern: '→ Electric mixers' }
+                ]
+            },
+            3: {
+                title: 'Victorian Sponge Cake',
+                text: '<p>Beat six eggs until very light. Add gradually one cup of fine sugar, continuing to beat. Fold in one cup of flour sifted with baking powder.</p><p>The new chemical leavening agents produce a lighter cake than our grandmothers achieved. Add vanilla extract if desired.</p><p>Bake in a moderate oven for 30 minutes. Test with a broom straw - it should emerge clean. Cool on a wire rack.</p>',
+                ingredients: [
+                    { name: 'Leavening', historical: 'Beaten eggs only', modern: '→ Baking powder/soda' },
+                    { name: 'Sugar', historical: 'Loaf sugar', modern: '→ Granulated sugar' },
+                    { name: 'Flour', historical: 'Stone-ground', modern: '→ Refined white flour' },
+                    { name: 'Temperature', historical: '"Moderate oven"', modern: '→ Precise 350°F' }
+                ]
+            },
+            4: {
+                title: 'Mid-Century Jello Salad',
+                text: '<p>Dissolve one package lime gelatin in 2 cups boiling water. Add 1 can crushed pineapple with juice and 1 cup cottage cheese.</p><p>Fold in 1/2 cup mayonnaise and 1/2 cup chopped walnuts. The convenience foods make this a quick dish for busy homemakers.</p><p>Pour into a decorative mold and refrigerate until firm. Unmold onto lettuce leaves to serve.</p>',
+                ingredients: [
+                    { name: 'Gelatin', historical: 'Homemade from bones', modern: '→ Instant packets' },
+                    { name: 'Fruit', historical: 'Fresh/preserved', modern: '→ Canned varieties' },
+                    { name: 'Convenience', historical: 'All from scratch', modern: '→ Pre-made ingredients' },
+                    { name: 'Refrigeration', historical: 'Ice houses', modern: '→ Electric fridges' }
+                ]
+            },
+            5: {
+                title: 'Molecular Chocolate Sphere',
+                text: '<p>Temper 200g 70% dark chocolate using sous vide at 88°F. Create sphere molds using silicone.</p><p>Fill with passion fruit gel made with 2g agar per 100ml juice. Use immersion blender for smooth texture.</p><p>Seal spheres and dust with cocoa powder mixed with freeze-dried raspberry powder. Serve at exactly 65°F for optimal texture.</p>',
+                ingredients: [
+                    { name: 'Technique', historical: 'Hand tempering', modern: '→ Precision equipment' },
+                    { name: 'Gelling', historical: 'Gelatin only', modern: '→ Agar, pectin, etc.' },
+                    { name: 'Temperature', historical: 'Approximation', modern: '→ Digital precision' },
+                    { name: 'Ingredients', historical: 'Local, seasonal', modern: '→ Global, engineered' }
+                ]
+            }
+        };
+
+        let currentEra = 0;
+
+        function updateTimeline(era) {
+            currentEra = era;
+            
+            // Update points
+            eraPoints.forEach((point, index) => {
+                point.classList.toggle('active', index === era);
+            });
+            
+            // Update labels
+            eraLabels.forEach((label, index) => {
+                label.classList.toggle('active', index === era);
+            });
+            
+            // Update progress bar
+            progressBar.style.width = `${(era / 5) * 100}%`;
+            
+            // Update content
+            updateContent(era);
+        }
+
+        function updateContent(era) {
+            const recipe = recipes[era];
+            const recipeTitle = document.querySelector('.recipe-panel h2');
+            const recipeText = document.querySelector('.recipe-text');
+            const ingredientList = document.querySelector('.ingredient-list');
+            
+            recipeTitle.textContent = recipe.title;
+            recipeText.innerHTML = recipe.text;
+            
+            // Update ingredients with fade effect
+            ingredientList.style.opacity = '0';
+            setTimeout(() => {
+                ingredientList.innerHTML = recipe.ingredients.map(ing => `
+                    <div class="ingredient-card">
+                        <h4>${ing.name}</h4>
+                        <div class="historical">${ing.historical}</div>
+                        <div class="modern">${ing.modern}</div>
+                    </div>
+                `).join('');
+                ingredientList.style.opacity = '1';
+            }, 300);
+        }
+
+        // Event listeners
+        eraPoints.forEach((point, index) => {
+            point.addEventListener('click', () => updateTimeline(index));
+        });
+
+        eraLabels.forEach((label, index) => {
+            label.addEventListener('click', () => updateTimeline(index));
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' && currentEra < 5) {
+                updateTimeline(currentEra + 1);
+            } else if (e.key === 'ArrowLeft' && currentEra > 0) {
+                updateTimeline(currentEra - 1);
+            }
+        });
+
+        // Add transition to ingredient list
+        const style = document.createElement('style');
+        style.textContent = '.ingredient-list { transition: opacity 0.3s ease; }';
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0c0c12;
+    --ink-soft: #13131e;
+    --ink-muted: #1e1e2c;
+    --ink-raised: #252535;
+    --border: rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.12);
+    --text-primary: #eeecf8;
+    --text-secondary: #8e8ca8;
+    --text-muted: #52506c;
+    --gold: #c9a84c;
+    --gold-light: #e2c47a;
+    --gold-dim: rgba(201,168,76,0.08);
+    --gold-glow: rgba(201,168,76,0.22);
+    --violet: #7c6af5;
+    --violet-soft: rgba(124,106,245,0.1);
+    --green: #4ecb8d;
+    --green-soft: rgba(78,203,141,0.08);
+    --red-soft: rgba(255,100,100,0.08);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--ink);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 72px 24px 96px;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -5%, rgba(124,106,245,0.07) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 40% at 85% 105%, rgba(201,168,76,0.05) 0%, transparent 55%),
+      radial-gradient(ellipse 40% 30% at 10% 90%, rgba(78,203,141,0.03) 0%, transparent 50%);
+  }
+
+  /* ── Header ── */
+  .pricing-header {
+    text-align: center;
+    margin-bottom: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pricing-eyebrow {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pricing-eyebrow::before,
+  .pricing-eyebrow::after {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.45;
+  }
+
+  .pricing-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(30px, 4vw, 46px);
+    font-weight: 500;
+    line-height: 1.14;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+    margin-bottom: 14px;
+  }
+  .pricing-title em {
+    font-style: italic;
+    color: var(--gold-light);
+  }
+
+  .pricing-subtitle {
+    font-size: 15.5px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    max-width: 400px;
+    font-weight: 400;
+  }
+
+  /* ── Billing Toggle ── */
+  .billing-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    margin-top: 34px;
+    padding: 4px;
+    background: var(--ink-soft);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-track {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    border-radius: 32px;
+    background: var(--ink-raised);
+    border: 1px solid var(--border-bright);
+    transition: left 0.28s cubic-bezier(0.4,0,0.2,1), width 0.28s cubic-bezier(0.4,0,0.2,1);
+    pointer-events: none;
+  }
+
+  .toggle-option {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 7px 18px;
+    border-radius: 32px;
+    position: relative;
+    z-index: 1;
+    transition: color 0.22s ease;
+    white-space: nowrap;
+  }
+  .toggle-option.active { color: var(--text-primary); }
+
+  .toggle-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--green);
+    background: var(--green-soft);
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid rgba(78,203,141,0.18);
+    margin-left: 2px;
+  }
+
+  /* ── Grid ── */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    max-width: 1040px;
+    width: 100%;
+    align-items: stretch;
+    position: relative;
+  }
+
+  /* ── Cards ── */
+  .pricing-card {
+    position: relative;
+    padding: 40px 34px 44px;
+    border: 1px solid var(--border);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s ease, border-color 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    background: var(--ink-soft);
+  }
+  .pricing-card:first-child {
+    border-radius: 20px 0 0 20px;
+  }
+  .pricing-card:last-child {
+    border-radius: 0 20px 20px 0;
+  }
+  .pricing-card:hover:not(.featured) {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    border-color: var(--border-bright);
+    z-index: 1;
+  }
+
+  .pricing-card.featured {
+    border-radius: 20px;
+    margin: -22px -1px;
+    z-index: 2;
+    padding: 58px 34px 62px;
+    border-color: rgba(201,168,76,0.28);
+    background:
+      linear-gradient(165deg, rgba(201,168,76,0.07) 0%, rgba(201,168,76,0.02) 40%, transparent 65%),
+      var(--ink-soft);
+    box-shadow:
+      0 0 0 1px rgba(201,168,76,0.12),
+      0 28px 80px rgba(0,0,0,0.55),
+      0 0 80px rgba(201,168,76,0.04),
+      inset 0 1px 0 rgba(201,168,76,0.1);
+  }
+  .pricing-card.featured:hover {
+    box-shadow:
+      0 0 0 1px rgba(201,168,76,0.22),
+      0 36px 90px rgba(0,0,0,0.6),
+      0 0 100px rgba(201,168,76,0.07),
+      inset 0 1px 0 rgba(201,168,76,0.12);
+    transform: translateY(-3px);
+  }
+
+  /* featured shimmer line */
+  .pricing-card.featured::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 16px; right: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent);
+    border-radius: 100%;
+  }
+
+  .featured-badge {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #b8922e 0%, var(--gold-light) 50%, var(--gold) 100%);
+    color: #1a1300;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 5px 16px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 4px 18px rgba(201,168,76,0.4), 0 1px 0 rgba(255,255,255,0.15) inset;
+  }
+
+  /* ── Plan header ── */
+  .plan-tier {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 7px;
+  }
+  .featured .plan-tier { color: var(--gold); opacity: 0.75; }
+
+  .plan-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 9px;
+    letter-spacing: -0.01em;
+  }
+
+  .plan-description {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.58;
+    margin-bottom: 28px;
+    min-height: 40px;
+  }
+
+  /* ── Pricing ── */
+  .plan-price-block {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    margin-bottom: 6px;
+  }
+
+  .price-currency {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 9px;
+    line-height: 1;
+  }
+
+  .price-amount {
+    font-size: 50px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    letter-spacing: -0.05em;
+    transition: opacity 0.2s ease;
+  }
+  .featured .price-amount {
+    background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .price-period {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    line-height: 1;
+  }
+
+  .price-annual-note {
+    font-size: 11.5px;
+    color: var(--green);
+    margin-bottom: 26px;
+    min-height: 16px;
+    transition: opacity 0.2s ease;
+    font-weight: 500;
+  }
+
+  /* ── Divider ── */
+  .card-divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0 26px;
+  }
+  .featured .card-divider { background: rgba(201,168,76,0.12); }
+
+  /* ── CTA Button ── */
+  .plan-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4,0,0.2,1);
+    border: 1px solid transparent;
+    margin-bottom: 28px;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+  }
+  .plan-cta::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.2s ease;
+  }
+  .plan-cta:hover::after { background: rgba(255,255,255,0.04); }
+
+  .plan-cta.cta-secondary {
+    background: var(--ink-muted);
+    color: var(--text-primary);
+    border-color: var(--border-bright);
+  }
+  .plan-cta.cta-secondary:hover {
+    background: var(--ink-raised);
+    border-color: rgba(255,255,255,0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .plan-cta.cta-secondary:active { transform: translateY(0); box-shadow: none; }
+
+  .plan-cta.cta-primary {
+    background: linear-gradient(135deg, #b8922e 0%, var(--gold-light) 60%, #c9a84c 100%);
+    color: #1a1300;
+    border-color: rgba(255,220,140,0.3);
+    box-shadow: 0 4px 20px rgba(201,168,76,0.3), 0 1px 0 rgba(255,255,255,0.25) inset;
+    font-weight: 700;
+  }
+  .plan-cta.cta-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(201,168,76,0.45), 0 1px 0 rgba(255,255,255,0.25) inset;
+  }
+  .plan-cta.cta-primary:active { transform: translateY(0); box-shadow: 0 2px 12px rgba(201,168,76,0.3); }
+
+  .cta-arrow {
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }
+  .plan-cta:hover .cta-arrow { transform: translateX(3px); }
+
+  /* ── Features ── */
+  .features-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  .feature-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    flex: 1;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    transition: color 0.15s ease;
+  }
+  .feature-item:hover { color: var(--text-primary); }
+
+  .feature-icon {
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .feature-icon.check {
+    background: var(--green-soft);
+    color: var(--green);
+    border: 1px solid rgba(78,203,141,0.2);
+  }
+  .featured .feature-icon.check {
+    background: var(--gold-dim);
+    color: var(--gold);
+    border-color: rgba(201,168,76,0.2);
+  }
+  .feature-icon.cross {
+    background: var(--red-soft);
+    color: rgba(255,100,100,0.5);
+    border: 1px solid rgba(255,100,100,0.12);
+  }
+
+  .feature-text { flex: 1; }
+  .feature-text strong { color: var(--text-primary); font-weight: 500; }
+  .feature-muted { color: var(--text-muted) !important; }
+  .feature-muted .feature-icon.check { opacity: 0.4; }
+
+  /* ── Enterprise footnote ── */
+  .pricing-footer {
+    margin-top: 52px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .footer-trust {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .trust-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  .footer-enterprise {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .footer-enterprise a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-bright);
+    padding-bottom: 1px;
+    transition: color 0.15s, border-color 0.15s;
+    cursor: pointer;
+  }
+  .footer-enterprise a:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+  /* ── Animations ── */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .pricing-header { animation: fadeSlideIn 0.5s cubic-bezier(0.4,0,0.2,1) both; }
+  .pricing-grid { animation: fadeSlideIn 0.5s 0.1s cubic-bezier(0.4,0,0.2,1) both; }
+  .pricing-footer { animation: fadeSlideIn 0.5s 0.2s cubic-bezier(0.4,0,0.2,1) both; }
+
+  /* price swap animation */
+  .price-updating .price-amount {
+    animation: priceFlip 0.22s ease both;
+  }
+  @keyframes priceFlip {
+    0% { opacity: 1; transform: translateY(0); }
+    40% { opacity: 0; transform: translateY(-6px); }
+    60% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 720px) {
+    .pricing-grid {
+      grid-template-columns: 1fr;
+      max-width: 400px;
+      gap: 12px;
+    }
+    .pricing-card:first-child { border-radius: 20px; }
+    .pricing-card:last-child { border-radius: 20px; }
+    .pricing-card.featured { border-radius: 20px; margin: 0; padding: 50px 30px 54px; }
+    .pricing-card:hover:not(.featured) { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="pricing-header">
+  <p class="pricing-eyebrow">Simple Pricing</p>
+  <h1 class="pricing-title">Choose your <em>path forward</em></h1>
+  <p class="pricing-subtitle">Transparent plans that scale with your team. No hidden fees, no surprises.</p>
+
+  <div class="billing-toggle" id="billingToggle" role="group" aria-label="Billing period">
+    <div class="toggle-track" id="toggleTrack"></div>
+    <div class="toggle-option active" data-period="monthly" id="optMonthly">Monthly</div>
+    <div class="toggle-option" data-period="annual" id="optAnnual">
+      Annual <span class="toggle-badge">Save 25%</span>
+    </div>
+  </div>
+</div>
+
+<div class="pricing-grid" id="pricingGrid">
+
+  <!-- Starter -->
+  <div class="pricing-card">
+    <p class="plan-tier">Starter</p>
+    <h2 class="plan-name">Essential</h2>
+    <p class="plan-description">Everything you need to get off the ground and validate your ideas quickly.</p>
+
+    <div class="plan-price-block">
+      <span class="price-currency">$</span>
+      <span class="price-amount" id="price-starter">19</span>
+      <span class="price-period">&nbsp;/ mo</span>
+    </div>
+    <p class="price-annual-note" id="note-starter">&nbsp;</p>
+
+    <div class="card-divider"></div>
+
+    <a class="plan-cta cta-secondary" href="#" onclick="return false;">
+      Get started <span class="cta-arrow">→</span>
+    </a>
+
+    <p class="features-label">What's included</p>
+    <ul class="feature-list">
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Up to <strong>3 projects</strong></span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text"><strong>5 GB</strong> storage</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Basic analytics dashboard</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Email support</span>
+      </li>
+      <li class="feature-item feature-muted">
+        <span class="feature-icon cross">✗</span>
+        <span class="feature-text">Custom domains</span>
+      </li>
+      <li class="feature-item feature-muted">
+        <span class="feature-icon cross">✗</span>
+        <span class="feature-text">Team collaboration</span>
+      </li>
+      <li class="feature-item feature-muted">
+        <span class="feature-icon cross">✗</span>
+        <span class="feature-text">Priority support</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Pro (featured) -->
+  <div class="pricing-card featured">
+    <div class="featured-badge">Most Popular</div>
+
+    <p class="plan-tier">Professional</p>
+    <h2 class="plan-name">Studio</h2>
+    <p class="plan-description">The complete toolkit for serious teams shipping products at pace.</p>
+
+    <div class="plan-price-block">
+      <span class="price-currency">$</span>
+      <span class="price-amount" id="price-pro">59</span>
+      <span class="price-period">&nbsp;/ mo</span>
+    </div>
+    <p class="price-annual-note" id="note-pro">&nbsp;</p>
+
+    <div class="card-divider"></div>
+
+    <a class="plan-cta cta-primary" href="#" onclick="return false;">
+      Start free trial <span class="cta-arrow">→</span>
+    </a>
+
+    <p class="features-label">Everything in Essential, plus</p>
+    <ul class="feature-list">
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Unlimited projects</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text"><strong>100 GB</strong> storage</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Advanced analytics &amp; exports</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text"><strong>Custom domains</strong> — up to 10</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Team collaboration — <strong>10 seats</strong></span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Priority email &amp; chat support</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Audit logs &amp; access controls</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Enterprise -->
+  <div class="pricing-card">
+    <p class="plan-tier">Enterprise</p>
+    <h2 class="plan-name">Scale</h2>
+    <p class="plan-description">Custom infrastructure, compliance tooling, and white-glove onboarding.</p>
+
+    <div class="plan-price-block">
+      <span class="price-currency" style="opacity:0">$</span>
+      <span class="price-amount" id="price-enterprise" style="font-size:38px; padding-bottom: 6px;">Custom</span>
+    </div>
+    <p class="price-annual-note" id="note-enterprise">Volume discounts available</p>
+
+    <div class="card-divider"></div>
+
+    <a class="plan-cta cta-secondary" href="#" onclick="return false;">
+      Contact sales <span class="cta-arrow">→</span>
+    </a>
+
+    <p class="features-label">Everything in Studio, plus</p>
+    <ul class="feature-list">
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Unlimited seats</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text"><strong>Unlimited</strong> storage &amp; bandwidth</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">SAML SSO &amp; SCIM provisioning</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">SLA — 99.99% uptime guarantee</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Dedicated infrastructure</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">SOC 2 Type II &amp; HIPAA ready</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-icon check">✓</span>
+        <span class="feature-text">Dedicated success manager</span>
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="pricing-footer">
+  <div class="footer-trust">
+    <span class="trust-item"><span class="trust-dot"></span>14-day free trial</span>
+    <span class="trust-item"><span class="trust-dot"></span>No credit card required</span>
+    <span class="trust-item"><span class="trust-dot"></span>Cancel anytime</span>
+  </div>
+  <p class="footer-enterprise">Need something tailored? <a onclick="return false;">Talk to our team →</a></p>
+</div>
+
+<script>
+  // ── Billing toggle logic ──
+  const prices = {
+    starter:    { monthly: 19,  annual: 15  },
+    pro:        { monthly: 59,  annual: 44  },
+  };
+
+  const toggle   = document.getElementById('billingToggle');
+  const track    = document.getElementById('toggleTrack');
+  const optM     = document.getElementById('optMonthly');
+  const optA     = document.getElementById('optAnnual');
+  const grid     = document.getElementById('pricingGrid');
+
+  let period = 'monthly';
+
+  function positionTrack(active) {
+    const rect = active.getBoundingClientRect();
+    const parentRect = toggle.getBoundingClientRect();
+    track.style.left  = (rect.left - parentRect.left) + 'px';
+    track.style.width = rect.width + 'px';
+  }
+
+  function updatePrices() {
+    const isAnnual = period === 'annual';
+
+    // Animate
+    grid.classList.add('price-updating');
+    setTimeout(() => grid.classList.remove('price-updating'), 300);
+
+    // Starter
+    document.getElementById('price-starter').textContent =
+      isAnnual ? prices.starter.annual : prices.starter.monthly;
+    document.getElementById('note-starter').textContent =
+      isAnnual ? `Billed as $${prices.starter.annual * 12}/yr — you save $${(prices.starter.monthly - prices.starter.annual) * 12}` : '\u00A0';
+
+    // Pro
+    document.getElementById('price-pro').textContent =
+      isAnnual ? prices.pro.annual : prices.pro.monthly;
+    document.getElementById('note-pro').textContent =
+      isAnnual ? `Billed as $${prices.pro.annual * 12}/yr — you save $${(prices.pro.monthly - prices.pro.annual) * 12}` : '\u00A0';
+  }
+
+  function switchTo(newPeriod) {
+    if (newPeriod === period) return;
+    period = newPeriod;
+
+    if (period === 'monthly') {
+      optM.classList.add('active');
+      optA.classList.remove('active');
+      positionTrack(optM);
+    } else {
+      optA.classList.add('active');
+      optM.classList.remove('active');
+      positionTrack(optA);
+    }
+    updatePrices();
+  }
+
+  toggle.addEventListener('click', (e) => {
+    const opt = e.target.closest('[data-period]');
+    if (opt) switchTo(opt.dataset.period);
+  });
+
+  // Keyboard support
+  toggle.setAttribute('role', 'radiogroup');
+  optM.setAttribute('tabindex', '0');
+  optA.setAttribute('tabindex', '0');
+  [optM, optA].forEach(el => {
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        switchTo(el.dataset.period);
+      }
+      if (e.key === 'ArrowRight') { e.preventDefault(); optA.focus(); switchTo('annual'); }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); optM.focus(); switchTo('monthly'); }
+    });
+  });
+
+  // Init track position
+  requestAnimationFrame(() => positionTrack(optM));
+  window.addEventListener('resize', () => {
+    positionTrack(period === 'monthly' ? optM : optA);
+  });
+
+  // ── Ripple on CTA click ──
+  document.querySelectorAll('.plan-cta').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      const ripple = document.createElement('span');
+      const rect = this.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height) * 2;
+      ripple.style.cssText = `
+        position:absolute; border-radius:50%;
+        width:${size}px; height:${size}px;
+        left:${e.clientX - rect.left - size/2}px;
+        top:${e.clientY - rect.top - size/2}px;
+        background:rgba(255,255,255,0.12);
+        pointer-events:none;
+        animation: rippleOut 0.5s ease-out forwards;
+      `;
+      this.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 500);
+    });
+  });
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    @keyframes rippleOut {
+      from { transform: scale(0); opacity: 1; }
+      to   { transform: scale(1); opacity: 0; }
+    }
+  `;
+  document.head.appendChild(styleEl);
+</script>
+</body>
+</html>

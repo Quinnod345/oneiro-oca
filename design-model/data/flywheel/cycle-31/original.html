@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidebar Navigation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: #0d0f12;
+    display: flex;
+    min-height: 100vh;
+    color: #e2e8f0;
+  }
+
+  :root {
+    --sidebar-bg: #111318;
+    --sidebar-border: rgba(255,255,255,0.06);
+    --item-hover: rgba(255,255,255,0.05);
+    --item-active-bg: rgba(99,102,241,0.15);
+    --item-active-border: #6366f1;
+    --accent: #6366f1;
+    --accent-soft: rgba(99,102,241,0.2);
+    --text-primary: #e2e8f0;
+    --text-secondary: #8b95a5;
+    --text-muted: #4a5568;
+    --section-label: #4a5568;
+    --icon-color: #6b7589;
+    --badge-bg: rgba(99,102,241,0.18);
+    --badge-text: #818cf8;
+    --scrollbar-thumb: rgba(255,255,255,0.08);
+    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar {
+    width: 260px;
+    min-height: 100vh;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle gradient top accent */
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent);
+  }
+
+  /* Workspace header */
+  .workspace-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid var(--sidebar-border);
+    cursor: pointer;
+    transition: background var(--transition);
+    border-radius: 0;
+    position: relative;
+  }
+  .workspace-header:hover { background: var(--item-hover); }
+
+  .workspace-logo {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 2px 8px rgba(99,102,241,0.2);
+  }
+  .workspace-logo svg { width: 16px; height: 16px; fill: white; }
+
+  .workspace-info { flex: 1; min-width: 0; }
+  .workspace-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .workspace-plan {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+    letter-spacing: 0.02em;
+  }
+
+  .workspace-chevron {
+    color: var(--text-muted);
+    transition: transform var(--transition);
+    flex-shrink: 0;
+  }
+
+  /* Scrollable nav area */
+  .nav-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  .nav-scroll::-webkit-scrollbar { width: 4px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 2px;
+  }
+
+  /* Section */
+  .nav-section { margin-bottom: 4px; }
+
+  .section-toggle {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 16px 4px;
+    cursor: pointer;
+    width: 100%;
+    background: none; border: none;
+    color: var(--section-label);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: color var(--transition);
+    user-select: none;
+    text-align: left;
+  }
+  .section-toggle:hover { color: var(--text-secondary); }
+  .section-toggle .section-chevron {
+    margin-left: auto;
+    transition: transform var(--transition);
+    opacity: 0.6;
+  }
+  .section-toggle.collapsed .section-chevron {
+    transform: rotate(-90deg);
+  }
+
+  /* Section items container */
+  .section-items {
+    overflow: hidden;
+    transition: max-height 350ms cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 250ms ease;
+    max-height: 600px;
+    opacity: 1;
+  }
+  .section-items.collapsed {
+    max-height: 0;
+    opacity: 0;
+  }
+
+  /* Nav item */
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 14px 7px 16px;
+    margin: 1px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 13.5px;
+    font-weight: 450;
+    letter-spacing: -0.01em;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    position: relative;
+    border: 1px solid transparent;
+    user-select: none;
+  }
+  .nav-item:hover {
+    background: var(--item-hover);
+    color: var(--text-primary);
+  }
+  .nav-item.active {
+    background: var(--item-active-bg);
+    color: var(--text-primary);
+    border-color: rgba(99,102,241,0.2);
+    box-shadow: inset 3px 0 0 var(--item-active-border);
+    font-weight: 500;
+  }
+
+  .nav-item-icon {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    color: var(--icon-color);
+    transition: color var(--transition);
+  }
+  .nav-item:hover .nav-item-icon,
+  .nav-item.active .nav-item-icon {
+    color: var(--accent);
+  }
+  .nav-item-icon svg { width: 15px; height: 15px; }
+
+  .nav-item-label { flex: 1; min-width: 0; }
+
+  /* Badge */
+  .nav-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1.5px 6.5px;
+    border-radius: 999px;
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    letter-spacing: 0.01em;
+    flex-shrink: 0;
+  }
+  .nav-badge.red {
+    background: rgba(239,68,68,0.15);
+    color: #f87171;
+  }
+  .nav-badge.green {
+    background: rgba(16,185,129,0.15);
+    color: #34d399;
+  }
+
+  /* Dot indicator */
+  .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(16,185,129,0.5);
+  }
+
+  /* Nested items */
+  .nav-item.nested {
+    padding-left: 38px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .nav-item.nested:hover { color: var(--text-secondary); }
+  .nav-item.nested.active { color: var(--text-primary); }
+
+  .nested-group { position: relative; }
+  .nested-group::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 4px; bottom: 4px;
+    width: 1px;
+    background: var(--sidebar-border);
+  }
+
+  /* Expand toggle for nested */
+  .nav-expand-btn {
+    width: 16px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    transition: background var(--transition), transform var(--transition);
+    flex-shrink: 0;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .nav-expand-btn:hover { background: rgba(255,255,255,0.08); }
+  .nav-expand-btn.open { transform: rotate(90deg); }
+  .nav-expand-btn svg { width: 10px; height: 10px; }
+
+  /* Divider */
+  .nav-divider {
+    height: 1px;
+    background: var(--sidebar-border);
+    margin: 8px 16px;
+  }
+
+  /* Footer */
+  .sidebar-footer {
+    padding: 12px 8px;
+    border-top: 1px solid var(--sidebar-border);
+  }
+
+  .user-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .user-row:hover { background: var(--item-hover); }
+
+  .user-avatar {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    letter-spacing: 0.03em;
+  }
+
+  .user-info { flex: 1; min-width: 0; }
+  .user-name {
+    font-size: 13px; font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .user-email {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .user-settings {
+    color: var(--text-muted);
+    transition: color var(--transition);
+    flex-shrink: 0;
+  }
+  .user-row:hover .user-settings { color: var(--text-secondary); }
+
+  /* Main content placeholder */
+  .main-content {
+    flex: 1;
+    padding: 48px;
+    display: flex; align-items: flex-start;
+    background: #0d0f12;
+  }
+  .placeholder-text {
+    font-size: 14px;
+    color: var(--text-muted);
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+
+  <!-- Workspace header -->
+  <div class="workspace-header">
+    <div class="workspace-logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    <div class="workspace-info">
+      <div class="workspace-name">Oneiro Studio</div>
+      <div class="workspace-plan">Pro workspace</div>
+    </div>
+    <svg class="workspace-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 10l5 5 5-5"/>
+    </svg>
+  </div>
+
+  <div class="nav-scroll">
+
+    <!-- Top-level items (no section) -->
+    <div style="padding: 4px 0 2px;">
+      <a class="nav-item active" onclick="setActive(this)">
+        <span class="nav-item-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </span>
+        <span class="nav-item-label">Overview</span>
+      </a>
+      <a class="nav-item" onclick="setActive(this)">
+        <span class="nav-item-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </span>
+        <span class="nav-item-label">Home</span>
+        <span class="nav-dot"></span>
+      </a>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- PROJECTS section -->
+    <div class="nav-section">
+      <button class="section-toggle" onclick="toggleSection(this)">
+        Projects
+        <svg class="section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="section-items">
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">All Projects</span>
+          <span class="nav-badge">12</span>
+        </a>
+
+        <!-- Expandable project -->
+        <a class="nav-item" onclick="toggleNested(this, 'design-nested')">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Design System</span>
+          <span class="nav-expand-btn" id="expand-design">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </a>
+        <div class="nested-group section-items" id="design-nested" style="max-height: 0; opacity: 0;">
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">Components</span>
+            <span class="nav-badge">48</span>
+          </a>
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">Tokens</span>
+          </a>
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">Documentation</span>
+            <span class="nav-badge red">3</span>
+          </a>
+        </div>
+
+        <a class="nav-item" onclick="toggleNested(this, 'mobile-nested')">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Mobile App</span>
+          <span class="nav-expand-btn" id="expand-mobile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </a>
+        <div class="nested-group section-items" id="mobile-nested" style="max-height: 0; opacity: 0;">
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">iOS</span>
+            <span class="nav-badge green">Live</span>
+          </a>
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">Android</span>
+          </a>
+          <a class="nav-item nested" onclick="setActive(this)">
+            <span class="nav-item-label">Shared Logic</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS section -->
+    <div class="nav-section">
+      <button class="section-toggle" onclick="toggleSection(this)">
+        Analytics
+        <svg class="section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="section-items">
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Reports</span>
+        </a>
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Live Metrics</span>
+          <span class="nav-dot"></span>
+        </a>
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Audiences</span>
+          <span class="nav-badge">3</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- SETTINGS section -->
+    <div class="nav-section">
+      <button class="section-toggle" onclick="toggleSection(this)">
+        Settings
+        <svg class="section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div class="section-items">
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Integrations</span>
+        </a>
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Permissions</span>
+          <span class="nav-badge red">1</span>
+        </a>
+        <a class="nav-item" onclick="setActive(this)">
+          <span class="nav-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+          </span>
+          <span class="nav-item-label">Preferences</span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="user-avatar">QO</div>
+      <div class="user-info">
+        <div class="user-name">Quinn O'Donnell</div>
+        <div class="user-email">quinn@oneiro.co</div>
+      </div>
+      <svg class="user-settings" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+      </svg>
+    </div>
+  </div>
+
+</nav>
+
+<div class="main-content">
+  <p class="placeholder-text">← Interact with the sidebar</p>
+</div>
+
+<script>
+  function setActive(el) {
+    document.querySelectorAll('.nav-item.active').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  function toggleSection(btn) {
+    const section = btn.closest('.nav-section');
+    const items = section.querySelector('.section-items');
+    const isCollapsed = items.classList.contains('collapsed');
+    items.classList.toggle('collapsed', !isCollapsed);
+    btn.classList.toggle('collapsed', !isCollapsed);
+  }
+
+  function toggleNested(btn, id) {
+    const container = document.getElementById(id);
+    const expandBtn = btn.querySelector('.nav-expand-btn');
+    const isOpen = !container.classList.contains('collapsed') && container.style.maxHeight !== '0px';
+
+    if (isOpen) {
+      container.style.maxHeight = '0';
+      container.style.opacity = '0';
+      expandBtn && expandBtn.classList.remove('open');
+    } else {
+      container.style.maxHeight = '400px';
+      container.style.opacity = '1';
+      expandBtn && expandBtn.classList.add('open');
+    }
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Grocery List</title>
+    <style>
+        :root {
+            --soil-deep: #1a0f0a;
+            --soil-mid: #2a1810;
+            --rot-brown: #4a3020;
+            --wilt-green: #3a4a20;
+            --fresh-green: #7ab55c;
+            --mold-blue: #4a6a7a;
+            --decay-yellow: #8a7a3a;
+            --time-tick: #3a3530;
+            --compost-dark: #0f0a08;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--soil-deep);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .timeline-container {
+            position: absolute;
+            left: 320px;
+            top: 0;
+            width: 800px;
+            height: 100%;
+            background: linear-gradient(to bottom, 
+                transparent 0%, 
+                rgba(26, 15, 10, 0.3) 20%,
+                rgba(26, 15, 10, 0.6) 80%,
+                var(--compost-dark) 100%);
+        }
+
+        .time-markers {
+            position: absolute;
+            left: -80px;
+            top: 120px;
+            height: calc(100% - 240px);
+            width: 60px;
+        }
+
+        .time-mark {
+            position: absolute;
+            right: 0;
+            font-size: 11px;
+            color: var(--time-tick);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transform: translateX(100%);
+            white-space: nowrap;
+        }
+
+        .time-mark::before {
+            content: '';
+            position: absolute;
+            right: calc(100% + 8px);
+            top: 50%;
+            width: 40px;
+            height: 1px;
+            background: linear-gradient(to left, var(--time-tick), transparent);
+            transform: translateY(-50%);
+        }
+
+        .item {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+        }
+
+        .item.wilting {
+            animation: sway 3s ease-in-out infinite;
+        }
+
+        .item.falling {
+            animation: fall 2s cubic-bezier(0.6, 0, 0.4, 1) forwards;
+            pointer-events: none;
+        }
+
+        @keyframes sway {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            50% { transform: translateX(-50%) rotate(-2deg); }
+        }
+
+        @keyframes fall {
+            0% { 
+                transform: translateX(-50%) rotate(0deg);
+                opacity: 1;
+            }
+            100% { 
+                transform: translateX(-50%) translateY(400px) rotate(25deg);
+                opacity: 0;
+            }
+        }
+
+        .herb-item {
+            width: 120px;
+            height: 180px;
+            background: conic-gradient(from 45deg at 50% 50%, 
+                var(--fresh-green) 0deg, 
+                #6aa54c 90deg, 
+                var(--fresh-green) 180deg,
+                #5a9540 270deg,
+                var(--fresh-green) 360deg);
+            clip-path: polygon(50% 0%, 65% 15%, 80% 5%, 75% 25%, 90% 30%, 85% 45%, 95% 60%, 80% 70%, 85% 85%, 70% 95%, 50% 100%, 30% 95%, 15% 85%, 20% 70%, 5% 60%, 15% 45%, 10% 30%, 25% 25%, 20% 5%, 35% 15%);
+            transform-origin: bottom center;
+        }
+
+        .herb-item.decay-1 {
+            background: conic-gradient(from 45deg at 50% 50%, 
+                var(--wilt-green) 0deg, 
+                #5a8540 90deg, 
+                var(--decay-yellow) 180deg,
+                #4a7530 270deg,
+                var(--wilt-green) 360deg);
+        }
+
+        .herb-item.decay-2 {
+            background: conic-gradient(from 45deg at 50% 50%, 
+                var(--rot-brown) 0deg, 
+                #3a5020 90deg, 
+                var(--decay-yellow) 180deg,
+                #2a4010 270deg,
+                var(--rot-brown) 360deg);
+            transform: translateX(-50%) rotate(-15deg) scaleY(0.9);
+        }
+
+        .bread-item {
+            width: 160px;
+            height: 120px;
+            background: linear-gradient(135deg, #d4a574 0%, #c19660 50%, #b08050 100%);
+            border-radius: 20px 20px 60px 60px / 20px 20px 40px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bread-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 8px,
+                rgba(0, 0, 0, 0.05) 8px,
+                rgba(0, 0, 0, 0.05) 9px
+            );
+        }
+
+        .mold-spot {
+            position: absolute;
+            background: radial-gradient(ellipse at center, 
+                var(--mold-blue) 0%, 
+                rgba(74, 106, 122, 0.6) 40%, 
+                transparent 70%);
+            border-radius: 50%;
+            opacity: 0;
+            animation: moldGrow 0.8s ease-out forwards;
+        }
+
+        @keyframes moldGrow {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+        }
+
+        .milk-item {
+            width: 100px;
+            height: 160px;
+            background: linear-gradient(to bottom, #e8e4dc 0%, #d8d4cc 100%);
+            border-radius: 10px 10px 15px 15px;
+            position: relative;
+            transform-origin: bottom center;
+        }
+
+        .milk-item::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            height: 40px;
+            background: #4a7ab4;
+            border-radius: 5px;
+        }
+
+        .milk-item.bloat {
+            animation: bloat 2s ease-out forwards;
+        }
+
+        @keyframes bloat {
+            0% { transform: translateX(-50%) scaleX(1); }
+            100% { transform: translateX(-50%) scaleX(1.2) scaleY(1.05); }
+        }
+
+        .leak {
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            width: 2px;
+            background: linear-gradient(to bottom, #d8d4cc, transparent);
+            opacity: 0.8;
+            animation: drip 2s ease-in infinite;
+        }
+
+        @keyframes drip {
+            0% { height: 0; }
+            100% { height: 40px; transform: translateX(-50%) translateY(40px); }
+        }
+
+        .apple-item {
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(ellipse at 30% 30%, #ff6b6b, #d63031);
+            border-radius: 50% 50% 55% 55%;
+            position: relative;
+        }
+
+        .apple-item::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            width: 3px;
+            height: 15px;
+            background: #654321;
+            transform: translateX(-50%);
+        }
+
+        .rot-patch {
+            position: absolute;
+            background: radial-gradient(ellipse at center, 
+                var(--rot-brown) 0%, 
+                rgba(74, 48, 32, 0.6) 60%, 
+                transparent 100%);
+            border-radius: 50%;
+            opacity: 0;
+            animation: rotSpread 1s ease-out forwards;
+        }
+
+        @keyframes rotSpread {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0.9;
+            }
+        }
+
+        .lettuce-item {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle at center, var(--fresh-green), #6aa54c);
+            clip-path: polygon(50% 10%, 65% 15%, 75% 5%, 85% 20%, 95% 35%, 90% 50%, 95% 65%, 85% 80%, 75% 95%, 65% 85%, 50% 90%, 35% 85%, 25% 95%, 15% 80%, 5% 65%, 10% 50%, 5% 35%, 15% 20%, 25% 5%, 35% 15%);
+            transform-origin: center;
+        }
+
+        .lettuce-item.wilt {
+            background: radial-gradient(circle at center, var(--wilt-green), #4a6530);
+            transform: translateX(-50%) scale(0.85) rotate(-10deg);
+        }
+
+        .consume-effect {
+            position: absolute;
+            inset: -20px;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .reverse-time {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, 
+                rgba(122, 181, 92, 0.8) 0%, 
+                transparent 60%);
+            transform: scale(0);
+            animation: reverseTime 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes reverseTime {
+            0% { transform: scale(0); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .compost-heap {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: linear-gradient(to top, 
+                var(--compost-dark) 0%, 
+                rgba(15, 10, 8, 0.8) 50%,
+                transparent 100%);
+            pointer-events: none;
+        }
+
+        .compost-texture {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                radial-gradient(ellipse at 20% 80%, rgba(74, 48, 32, 0.4) 0%, transparent 40%),
+                radial-gradient(ellipse at 70% 60%, rgba(58, 74, 32, 0.3) 0%, transparent 30%),
+                radial-gradient(ellipse at 40% 90%, rgba(42, 24, 16, 0.5) 0%, transparent 35%);
+        }
+
+        .add-panel {
+            position: absolute;
+            left: 40px;
+            top: 120px;
+            width: 240px;
+        }
+
+        .add-input {
+            width: 100%;
+            padding: 16px;
+            background: rgba(42, 24, 16, 0.4);
+            border: 1px solid var(--rot-brown);
+            border-radius: 8px;
+            color: #d4a574;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .add-input:focus {
+            background: rgba(42, 24, 16, 0.6);
+            border-color: var(--decay-yellow);
+        }
+
+        .add-input::placeholder {
+            color: var(--time-tick);
+        }
+
+        .item-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--decay-yellow);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            opacity: 0.8;
+        }
+
+        .decay-timer {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--time-tick);
+            letter-spacing: 0.1em;
+        }
+
+        .header-text {
+            position: absolute;
+            left: 40px;
+            top: 40px;
+            color: var(--decay-yellow);
+            font-size: 24px;
+            font-weight: 200;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        .instructions {
+            position: absolute;
+            right: 40px;
+            top: 120px;
+            width: 200px;
+            color: var(--time-tick);
+            font-size: 12px;
+            line-height: 1.8;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-text">Temporal Decay</div>
+    
+    <div class="timeline-container">
+        <div class="time-markers">
+            <div class="time-mark" style="top: 0%;">Fresh</div>
+            <div class="time-mark" style="top: 20%;">24 Hours</div>
+            <div class="time-mark" style="top: 40%;">3 Days</div>
+            <div class="time-mark" style="top: 60%;">5 Days</div>
+            <div class="time-mark" style="top: 80%;">1 Week</div>
+        </div>
+        
+        <div class="item" style="top: 180px;" data-age="1" data-type="herb">
+            <div class="herb-item"></div>
+            <div class="item-label">Basil</div>
+            <div class="decay-timer">1 day old</div>
+        </div>
+        
+        <div class="item wilting" style="top: 320px;" data-age="3" data-type="lettuce">
+            <div class="lettuce-item wilt"></div>
+            <div class="item-label">Lettuce</div>
+            <div class="decay-timer">3 days old</div>
+        </div>
+        
+        <div class="item" style="top: 480px;" data-age="5" data-type="bread">
+            <div class="bread-item">
+                <div class="mold-spot" style="width: 20px; height: 20px; top: 30px; left: 20px;"></div>
+                <div class="mold-spot" style="width: 15px; height: 15px; top: 50px; right: 30px; animation-delay: 0.3s;"></div>
+                <div class="mold-spot" style="width: 25px; height: 25px; bottom: 20px; left: 40px; animation-delay: 0.6s;"></div>
+            </div>
+            <div class="item-label">Whole Grain</div>
+            <div class="decay-timer">5 days old</div>
+        </div>
+        
+        <div class="item" style="top: 640px;" data-age="7" data-type="milk">
+            <div class="milk-item bloat">
+                <div class="leak"></div>
+            </div>
+            <div class="item-label">Milk</div>
+            <div class="decay-timer">7 days old</div>
+        </div>
+        
+        <div class="compost-heap">
+            <div class="compost-texture"></div>
+        </div>
+    </div>
+    
+    <div class="add-panel">
+        <input type="text" class="add-input" placeholder="Add perishable...">
+    </div>
+    
+    <div class="instructions">
+        Click items to consume<br>
+        Watch decay in real-time<br>
+        Items fall when expired
+    </div>
+
+    <script>
+        const items = document.querySelectorAll('.item');
+        
+        items.forEach(item => {
+            item.addEventListener('click', function() {
+                const consumeEffect = document.createElement('div');
+                consumeEffect.className = 'consume-effect';
+                consumeEffect.innerHTML = '<div class="reverse-time"></div>';
+                this.appendChild(consumeEffect);
+                
+                setTimeout(() => {
+                    this.style.opacity = '0';
+                    setTimeout(() => this.remove(), 600);
+                }, 600);
+            });
+        });
+        
+        // Simulate aging
+        setInterval(() => {
+            document.querySelectorAll('.item').forEach(item => {
+                const age = parseInt(item.dataset.age) || 0;
+                const type = item.dataset.type;
+                
+                if (age >= 8 && !item.classList.contains('falling')) {
+                    item.classList.add('falling');
+                }
+                
+                // Update visual decay based on age
+                if (type === 'herb' && age >= 2) {
+                    const herbElement = item.querySelector('.herb-item');
+                    if (age >= 3) herbElement.className = 'herb-item decay-2';
+                    else herbElement.className = 'herb-item decay-1';
+                }
+                
+                if (type === 'apple' && age >= 4) {
+                    const apple = item.querySelector('.apple-item');
+                    if (!apple.querySelector('.rot-patch')) {
+                        const rot = document.createElement('div');
+                        rot.className = 'rot-patch';
+                        rot.style.width = '30px';
+                        rot.style.height = '30px';
+                        rot.style.top = '20px';
+                        rot.style.left = '20px';
+                        apple.appendChild(rot);
+                    }
+                }
+            });
+        }, 2000);
+        
+        // Add new items
+        document.querySelector('.add-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value) {
+                const newItem = document.createElement('div');
+                newItem.className = 'item';
+                newItem.style.top = '120px';
+                newItem.dataset.age = '0';
+                newItem.dataset.type = 'apple';
+                newItem.innerHTML = `
+                    <div class="apple-item"></div>
+                    <div class="item-label">${this.value}</div>
+                    <div class="decay-timer">Fresh</div>
+                `;
+                document.querySelector('.timeline-container').appendChild(newItem);
+                this.value = '';
+                
+                // Animate down timeline
+                setTimeout(() => {
+                    newItem.style.transition = 'top 8s linear';
+                    newItem.style.top = '640px';
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>

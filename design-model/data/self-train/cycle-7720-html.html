@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Sommelier - Synesthetic Music Experience</title>
+    <style>
+        :root {
+            --canvas: #0a0908;
+            --honey: #ffc857;
+            --umami: #e85d04;
+            --chocolate: #6a040f;
+            --cream: #fdf0d5;
+            --bitter: #264653;
+            --citrus: #f4a261;
+            --salt: #e9c46a;
+            --pepper: #2a9d8f;
+            --interface: rgba(253, 240, 213, 0.03);
+            --text: rgba(253, 240, 213, 0.9);
+            --text-dim: rgba(253, 240, 213, 0.4);
+            --pulse-duration: 2.4s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--canvas);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .taste-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            border-radius: 50%;
+            opacity: 0;
+            animation: drift 8s infinite;
+        }
+
+        @keyframes drift {
+            0%, 100% { opacity: 0; transform: translate(0, 0) scale(0); }
+            20% { opacity: 0.3; }
+            50% { opacity: 0.6; transform: translate(var(--x), var(--y)) scale(1); }
+            80% { opacity: 0.2; }
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            position: relative;
+            z-index: 2;
+        }
+
+        .instrument-panel {
+            background: var(--interface);
+            border-right: 1px solid rgba(253, 240, 213, 0.08);
+            padding: 40px 30px;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 30px;
+        }
+
+        .instrument-item {
+            margin-bottom: 24px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .instrument-item:hover {
+            transform: translateX(4px);
+        }
+
+        .instrument-name {
+            font-size: 18px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .taste-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .violin .taste-indicator { background: var(--honey); }
+        .drums .taste-indicator { background: var(--umami); }
+        .bass .taste-indicator { background: var(--chocolate); }
+        .piano .taste-indicator { background: var(--cream); }
+        .synth .taste-indicator { background: var(--citrus); }
+
+        .instrument-item.active .taste-indicator {
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        .taste-description {
+            font-size: 13px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .flavor-wheel-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .flavor-wheel {
+            width: 540px;
+            height: 540px;
+            position: relative;
+        }
+
+        .wheel-base {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                var(--honey) 0deg,
+                var(--citrus) 60deg,
+                var(--umami) 120deg,
+                var(--pepper) 180deg,
+                var(--chocolate) 240deg,
+                var(--bitter) 300deg,
+                var(--honey) 360deg
+            );
+            opacity: 0.1;
+            filter: blur(40px);
+            animation: rotate 60s linear infinite;
+        }
+
+        @keyframes rotate {
+            to { transform: rotate(360deg); }
+        }
+
+        .taste-segments {
+            position: absolute;
+            inset: 0;
+        }
+
+        .segment {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: 0 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .segment-shape {
+            width: 200px;
+            height: 200px;
+            clip-path: polygon(0 0, 100% 0, 50% 100%);
+            background: var(--color);
+            opacity: 0.2;
+            transform-origin: bottom center;
+            transition: all 0.4s;
+        }
+
+        .segment.active .segment-shape {
+            opacity: 0.8;
+            transform: scale(1.1);
+        }
+
+        .frequency-waves {
+            position: absolute;
+            inset: 20%;
+            pointer-events: none;
+        }
+
+        .wave-ring {
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--cream);
+            border-radius: 50%;
+            opacity: 0;
+        }
+
+        .wave-ring.active {
+            animation: pulse var(--pulse-duration) ease-out infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: scale(1.4);
+                opacity: 0;
+            }
+        }
+
+        .center-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 200px;
+        }
+
+        .current-taste {
+            font-size: 24px;
+            margin-bottom: 8px;
+            font-weight: 300;
+            letter-spacing: 0.02em;
+        }
+
+        .taste-intensity {
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        .intensity-bar {
+            width: 100%;
+            height: 3px;
+            background: rgba(253, 240, 213, 0.1);
+            margin-top: 12px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .intensity-fill {
+            height: 100%;
+            background: var(--cream);
+            width: 65%;
+            transition: width 0.3s;
+        }
+
+        .composition-panel {
+            background: var(--interface);
+            border-left: 1px solid rgba(253, 240, 213, 0.08);
+            padding: 40px 24px;
+        }
+
+        .composition-layers {
+            margin-top: 24px;
+        }
+
+        .layer-item {
+            background: rgba(253, 240, 213, 0.03);
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer-wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40%;
+            background: linear-gradient(180deg, transparent, var(--color));
+            opacity: 0.1;
+            transform: translateY(100%);
+            animation: rise 2s ease-out forwards;
+        }
+
+        @keyframes rise {
+            to { transform: translateY(0); }
+        }
+
+        .layer-info {
+            position: relative;
+            z-index: 1;
+        }
+
+        .layer-instrument {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .layer-taste {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .harmony-indicator {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(253, 240, 213, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .harmony-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--pepper);
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 24px;
+            z-index: 3;
+        }
+
+        .control-btn {
+            background: rgba(253, 240, 213, 0.05);
+            border: 1px solid rgba(253, 240, 213, 0.1);
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: rgba(253, 240, 213, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .control-btn.active {
+            background: var(--cream);
+            color: var(--canvas);
+        }
+
+        .frequency-display {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            z-index: 3;
+        }
+
+        .taste-trail {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .taste-trail.active {
+            animation: trail 3s ease-out forwards;
+        }
+
+        @keyframes trail {
+            0% {
+                opacity: 0;
+                transform: scale(0) translate(0, 0);
+            }
+            20% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1) translate(var(--trail-x), var(--trail-y));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="taste-particles" id="particles"></div>
+    
+    <div class="main-container">
+        <div class="instrument-panel">
+            <div class="panel-title">Instruments</div>
+            
+            <div class="instrument-item violin active" data-taste="honey" data-color="#ffc857">
+                <div class="instrument-name">
+                    <div class="taste-indicator"></div>
+                    Violin
+                </div>
+                <div class="taste-description">Honeyed sweetness intensifying with vibrato</div>
+            </div>
+            
+            <div class="instrument-item drums" data-taste="umami" data-color="#e85d04">
+                <div class="instrument-name">
+                    <div class="taste-indicator"></div>
+                    Drums
+                </div>
+                <div class="taste-description">Umami bursts pulsing with the beat</div>
+            </div>
+            
+            <div class="instrument-item bass" data-taste="chocolate" data-color="#6a040f">
+                <div class="instrument-name">
+                    <div class="taste-indicator"></div>
+                    Bass
+                </div>
+                <div class="taste-description">Dark chocolate deepening with frequency</div>
+            </div>
+            
+            <div class="instrument-item piano" data-taste="cream" data-color="#fdf0d5">
+                <div class="instrument-name">
+                    <div class="taste-indicator"></div>
+                    Piano
+                </div>
+                <div class="taste-description">Creamy notes cascading through octaves</div>
+            </div>
+            
+            <div class="instrument-item synth" data-taste="citrus" data-color="#f4a261">
+                <div class="instrument-name">
+                    <div class="taste-indicator"></div>
+                    Synthesizer
+                </div>
+                <div class="taste-description">Citrus zest cutting through layers</div>
+            </div>
+        </div>
+        
+        <div class="flavor-wheel-container">
+            <div class="frequency-display">440Hz - A4</div>
+            
+            <div class="flavor-wheel">
+                <div class="wheel-base"></div>
+                
+                <div class="taste-segments">
+                    <div class="segment" style="--color: var(--honey); transform: translate(-50%, -50%) rotate(0deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                    <div class="segment" style="--color: var(--citrus); transform: translate(-50%, -50%) rotate(60deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                    <div class="segment" style="--color: var(--umami); transform: translate(-50%, -50%) rotate(120deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                    <div class="segment" style="--color: var(--pepper); transform: translate(-50%, -50%) rotate(180deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                    <div class="segment" style="--color: var(--chocolate); transform: translate(-50%, -50%) rotate(240deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                    <div class="segment" style="--color: var(--bitter); transform: translate(-50%, -50%) rotate(300deg);">
+                        <div class="segment-shape"></div>
+                    </div>
+                </div>
+                
+                <div class="frequency-waves">
+                    <div class="wave-ring active" style="animation-delay: 0s;"></div>
+                    <div class="wave-ring active" style="animation-delay: 0.8s;"></div>
+                    <div class="wave-ring active" style="animation-delay: 1.6s;"></div>
+                </div>
+                
+                <div class="center-display">
+                    <div class="current-taste">Honeyed Warmth</div>
+                    <div class="taste-intensity">INTENSITY</div>
+                    <div class="intensity-bar">
+                        <div class="intensity-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="composition-panel">
+            <div class="panel-title">Flavor Symphony</div>
+            
+            <div class="composition-layers">
+                <div class="layer-item">
+                    <div class="layer-wave" style="--color: var(--honey);"></div>
+                    <div class="layer-info">
+                        <div class="layer-instrument">Violin</div>
+                        <div class="layer-taste">Honeyed sweetness</div>
+                    </div>
+                    <div class="harmony-indicator">
+                        <div class="harmony-dot"></div>
+                    </div>
+                </div>
+                
+                <div class="layer-item">
+                    <div class="layer-wave" style="--color: var(--chocolate);"></div>
+                    <div class="layer-info">
+                        <div class="layer-instrument">Bass</div>
+                        <div class="layer-taste">Dark chocolate base</div>
+                    </div>
+                    <div class="harmony-indicator">
+                        <div class="harmony-dot"></div>
+                    </div>
+                </div>
+                
+                <div class="layer-item">
+                    <div class="layer-wave" style="--color: var(--cream);"></div>
+                    <div class="layer-info">
+                        <div class="layer-instrument">Piano</div>
+                        <div class="layer-taste">Creamy midtones</div>
+                    </div>
+                    <div class="harmony-indicator">
+                        <div class="harmony-dot"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button class="control-btn active">Compose</button>
+        <button class="control-btn">Experience</button>
+        <button class="control-btn">Share Taste</button>
+    </div>
+    
+    <script>
+        // Create floating taste particles
+        const particlesContainer = document.getElementById('particles');
+        const colors = ['#ffc857', '#e85d04', '#6a040f', '#fdf0d5', '#f4a261'];
+        
+        for (let i = 0; i < 30; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.setProperty('--x', (Math.random() - 0.5) * 200 + 'px');
+            particle.style.setProperty('--y', (Math.random() - 0.5) * 200 + 'px');
+            particle.style.animationDelay = Math.random() * 8 + 's';
+            particlesContainer.appendChild(particle);
+        }
+        
+        // Interactive segments
+        const segments = document.querySelectorAll('.segment');
+        const flavorWheel = document.querySelector('.flavor-wheel');
+        
+        segments.forEach((segment, index) => {
+            segment.addEventListener('mouseenter', () => {
+                segment.classList.add('active');
+                createTasteTrail(segment);
+            });
+            
+            segment.addEventListener('mouseleave', () => {
+                segment.classList.remove('active');
+            });
+        });
+        
+        function createTasteTrail(segment) {
+            const trail = document.createElement('div');
+            trail.className = 'taste-trail active';
+            trail.style.background = segment.style.getPropertyValue('--color');
+            trail.style.left = '50%';
+            trail.style.top = '50%';
+            trail.style.setProperty('--trail-x', (Math.random() - 0.5) * 100 + 'px');
+            trail.style.setProperty('--trail-y', (Math.random() - 0.5) * 100 + 'px');
+            flavorWheel.appendChild(trail);
+            
+            setTimeout(() => trail.remove(), 3000);
+        }
+        
+        // Instrument selection
+        const instruments = document.querySelectorAll('.instrument-item');
+        
+        instruments.forEach(instrument => {
+            instrument.addEventListener('click', () => {
+                instruments.forEach(i => i.classList.remove('active'));
+                instrument.classList.add('active');
+                
+                const taste = instrument.dataset.taste;
+                const color = instrument.dataset.color;
+                updateCenterDisplay(taste, color);
+            });
+        });
+        
+        function updateCenterDisplay(taste, color) {
+            const tasteNames = {
+                honey: 'Honeyed Warmth',
+                umami: 'Savory Depth',
+                chocolate: 'Dark Richness',
+                cream: 'Smooth Silk',
+                citrus: 'Bright Zest'
+            };
+            
+            document.querySelector('.current-taste').textContent = tasteNames[taste];
+            document.querySelector('.intensity-fill').style.background = color;
+            document.querySelector('.intensity-fill').style.width = Math.random() * 40 + 60 + '%';
+        }
+    </script>
+</body>
+</html>

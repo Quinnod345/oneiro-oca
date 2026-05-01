@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Decay Radio</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0c;
+            --secondary-bg: #1a1a1c;
+            --tube-glow: #ff9500;
+            --text-primary: #f2f2f7;
+            --text-secondary: #8e8e93;
+            --accent-green: #34c759;
+            --track-bg: #2a2a2c;
+            --spacing-unit: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-bg);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .radio-container {
+            width: 1200px;
+            height: 720px;
+            display: flex;
+            flex-direction: column;
+            gap: calc(var(--spacing-unit) * 4);
+        }
+
+        .radio-chassis {
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            padding: calc(var(--spacing-unit) * 4);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 200px;
+        }
+
+        .frequency-section {
+            display: flex;
+            flex-direction: column;
+            gap: calc(var(--spacing-unit) * 2);
+        }
+
+        .frequency-display {
+            position: relative;
+            padding: calc(var(--spacing-unit) * 2);
+        }
+
+        .frequency-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 80px;
+            background: radial-gradient(ellipse at center, var(--tube-glow) 0%, transparent 60%);
+            opacity: 0.3;
+            filter: blur(40px);
+        }
+
+        .frequency-readout {
+            font-size: 64px;
+            font-weight: 200;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+            color: var(--tube-glow);
+            text-shadow: 0 0 20px rgba(255, 149, 0, 0.4);
+            position: relative;
+            z-index: 1;
+        }
+
+        .decade-indicator {
+            font-size: 14px;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            padding-left: calc(var(--spacing-unit) * 2);
+        }
+
+        .waveform-viewport {
+            flex: 1;
+            margin-left: calc(var(--spacing-unit) * 8);
+            background: var(--primary-bg);
+            border-radius: 8px;
+            padding: calc(var(--spacing-unit) * 2);
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .waveform-line {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(to right, 
+                transparent 0%, 
+                var(--accent-green) 20%, 
+                var(--accent-green) 80%, 
+                transparent 100%);
+            position: relative;
+        }
+
+        .waveform-pulse {
+            position: absolute;
+            width: 4px;
+            height: 40px;
+            background: var(--accent-green);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            animation: pulse 3s infinite ease-out;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0; height: 40px; }
+            10% { opacity: 0.6; height: 60px; }
+            100% { opacity: 0; height: 40px; }
+        }
+
+        .timeline-container {
+            height: 400px;
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            padding: calc(var(--spacing-unit) * 4);
+            position: relative;
+        }
+
+        .timeline-track {
+            width: 100%;
+            height: 4px;
+            background: var(--track-bg);
+            border-radius: 2px;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .timeline-decades {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .decade-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: calc(var(--spacing-unit) * 2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: calc(var(--spacing-unit) * 2);
+        }
+
+        .decade-dot {
+            width: 16px;
+            height: 16px;
+            background: var(--track-bg);
+            border-radius: 50%;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .decade-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .decade-marker:hover .decade-dot {
+            width: 24px;
+            height: 24px;
+            background: var(--tube-glow);
+            box-shadow: 0 0 16px rgba(255, 149, 0, 0.4);
+        }
+
+        .decade-marker:hover .decade-label {
+            color: var(--text-primary);
+            transform: translateY(-4px);
+        }
+
+        .decade-marker.active .decade-dot {
+            background: var(--tube-glow);
+            box-shadow: 0 0 24px rgba(255, 149, 0, 0.6);
+        }
+
+        .decade-marker.active .decade-label {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .control-panel {
+            display: flex;
+            gap: calc(var(--spacing-unit) * 3);
+            justify-content: center;
+        }
+
+        .control-button {
+            width: 56px;
+            height: 56px;
+            background: var(--track-bg);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: var(--text-secondary);
+            font-size: 24px;
+        }
+
+        .control-button:hover {
+            background: var(--secondary-bg);
+            transform: scale(1.1);
+            color: var(--text-primary);
+        }
+
+        .control-button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="radio-container">
+        <div class="radio-chassis">
+            <div class="frequency-section">
+                <div class="frequency-display">
+                    <div class="frequency-glow"></div>
+                    <div class="frequency-readout">88.5</div>
+                </div>
+                <div class="decade-indicator">1980s Broadcast</div>
+            </div>
+            <div class="waveform-viewport">
+                <div class="waveform-line"></div>
+                <div class="waveform-pulse"></div>
+            </div>
+        </div>
+        
+        <div class="timeline-container">
+            <div class="timeline-track"></div>
+            <div class="timeline-decades">
+                <div class="decade-marker">
+                    <div class="decade-label">1920</div>
+                    <div class="decade-dot"></div>
+                </div>
+                <div class="decade-marker">
+                    <div class="decade-label">1940</div>
+                    <div class="decade-dot"></div>
+                </div>
+                <div class="decade-marker">
+                    <div class="decade-label">1960</div>
+                    <div class="decade-dot"></div>
+                </div>
+                <div class="decade-marker active">
+                    <div class="decade-label">1980</div>
+                    <div class="decade-dot"></div>
+                </div>
+                <div class="decade-marker">
+                    <div class="decade-label">2000</div>
+                    <div class="decade-dot"></div>
+                </div>
+                <div class="decade-marker">
+                    <div class="decade-label">2020</div>
+                    <div class="decade-dot"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <button class="control-button">⟨</button>
+            <button class="control-button">▶</button>
+            <button class="control-button">⟩</button>
+        </div>
+    </div>
+</body>
+</html>

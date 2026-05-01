@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Palace Builder</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --primary: #4a3f7c;
+            --accent: #00d4ff;
+            --text: #f5f5dc;
+            --grid: #1a1a2e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(180deg, var(--bg-dark) 0%, #16161f 100%);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        .chamber {
+            position: absolute;
+            width: 800px;
+            height: 600px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotateX(25deg) rotateY(-30deg);
+            transform-style: preserve-3d;
+        }
+
+        .floor {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--grid) 0px,
+                var(--grid) 1px,
+                transparent 1px,
+                transparent 50px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                var(--grid) 0px,
+                var(--grid) 1px,
+                transparent 1px,
+                transparent 50px
+            );
+            transform: rotateX(90deg) translateZ(-200px);
+            opacity: 0.2;
+        }
+
+        .memory-node {
+            position: absolute;
+            padding: 16px 24px;
+            background: rgba(74, 63, 124, 0.15);
+            border: 1px solid var(--primary);
+            cursor: move;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .memory-node:hover {
+            transform: translateZ(20px);
+            box-shadow: 0 10px 30px rgba(74, 63, 124, 0.3);
+        }
+
+        .memory-node.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .connection {
+            position: absolute;
+            height: 1px;
+            background: var(--accent);
+            transform-origin: left center;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .controls {
+            position: fixed;
+            top: 32px;
+            left: 32px;
+            display: flex;
+            gap: 16px;
+            z-index: 100;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: rgba(74, 63, 124, 0.2);
+            border: 1px solid var(--primary);
+            color: var(--text);
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: rgba(74, 63, 124, 0.4);
+            border-color: var(--accent);
+        }
+
+        .info {
+            position: fixed;
+            bottom: 32px;
+            left: 32px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .title {
+            position: fixed;
+            top: 32px;
+            right: 32px;
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chamber">
+        <div class="floor"></div>
+        
+        <div class="memory-node" style="left: 200px; top: 150px;">
+            Core Concept
+        </div>
+        
+        <div class="memory-node" style="left: 400px; top: 250px;">
+            Related Idea
+        </div>
+        
+        <div class="memory-node" style="left: 300px; top: 350px;">
+            Supporting Detail
+        </div>
+        
+        <div class="connection" style="left: 224px; top: 174px; width: 180px; transform: rotate(30deg);"></div>
+        <div class="connection" style="left: 224px; top: 174px; width: 150px; transform: rotate(65deg);"></div>
+    </div>
+    
+    <div class="controls">
+        <button class="btn">Add Memory</button>
+        <button class="btn">Connect</button>
+        <button class="btn">Clear</button>
+    </div>
+    
+    <div class="info">
+        Drag to move • Click to select • Connect to link
+    </div>
+    
+    <h1 class="title">MEMORY PALACE</h1>
+    
+    <script>
+        let selectedNode = null;
+        let isConnecting = false;
+        
+        document.querySelectorAll('.memory-node').forEach(node => {
+            node.addEventListener('mousedown', startDrag);
+            node.addEventListener('click', selectNode);
+        });
+        
+        function startDrag(e) {
+            const node = e.target;
+            const chamber = document.querySelector('.chamber');
+            const rect = chamber.getBoundingClientRect();
+            
+            const onMouseMove = (e) => {
+                node.style.left = e.clientX - rect.left + 'px';
+                node.style.top = e.clientY - rect.top + 'px';
+            };
+            
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+        
+        function selectNode(e) {
+            e.stopPropagation();
+            document.querySelectorAll('.memory-node').forEach(n => n.classList.remove('active'));
+            e.target.classList.add('active');
+            selectedNode = e.target;
+        }
+        
+        document.querySelector('.btn:nth-child(1)').addEventListener('click', () => {
+            const chamber = document.querySelector('.chamber');
+            const node = document.createElement('div');
+            node.className = 'memory-node';
+            node.textContent = 'New Memory';
+            node.style.left = '350px';
+            node.style.top = '200px';
+            node.addEventListener('mousedown', startDrag);
+            node.addEventListener('click', selectNode);
+            chamber.appendChild(node);
+        });
+        
+        document.querySelector('.btn:nth-child(2)').addEventListener('click', () => {
+            isConnecting = !isConnecting;
+            document.querySelector('.btn:nth-child(2)').style.borderColor = isConnecting ? '#00d4ff' : '#4a3f7c';
+        });
+        
+        document.querySelector('.btn:nth-child(3)').addEventListener('click', () => {
+            document.querySelectorAll('.memory-node').forEach(node => node.remove());
+            document.querySelectorAll('.connection').forEach(conn => conn.remove());
+        });
+    </script>
+</body>
+</html>

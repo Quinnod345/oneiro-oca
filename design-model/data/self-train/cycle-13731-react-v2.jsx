@@ -1,0 +1,565 @@
+function App() {
+  const [fragments, setFragments] = React.useState([
+    { id: 1, text: '2 cups flour', x: 1, y: 1, gridX: 0, gridY: 0, category: 'ingredient' },
+    { id: 2, text: 'beat until fluffy', x: 2, y: 1, gridX: 2, gridY: 0, category: 'instruction' },
+    { id: 3, text: '1 tsp vanilla', x: 3, y: 1, gridX: 4, gridY: 0, category: 'ingredient' },
+    { id: 4, text: '350°F for 25-30min', x: 1, y: 2, gridX: 0, gridY: 1, category: 'instruction' },
+    { id: 5, text: '½ cup butter, soft', x: 2, y: 2, gridX: 2, gridY: 1, category: 'ingredient' },
+    { id: 6, text: '3 eggs, room temp', x: 3, y: 2, gridX: 4, gridY: 1, category: 'ingredient' },
+    { id: 7, text: '1½ cups sugar', x: 1, y: 3, gridX: 1, gridY: 2, category: 'ingredient' }
+  ]);
+  
+  const [potFragments, setPotFragments] = React.useState([]);
+  const [isReconstructing, setIsReconstructing] = React.useState(false);
+  const [reconstructed, setReconstructed] = React.useState(null);
+  const [draggedFragment, setDraggedFragment] = React.useState(null);
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const [alternatives, setAlternatives] = React.useState({});
+  const [showAlternative, setShowAlternative] = React.useState(null);
+  const [bubbles, setBubbles] = React.useState([]);
+  
+  const potRef = React.useRef(null);
+  
+  const handleDragStart = (e, fragment) => {
+    setDraggedFragment(fragment);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDraggingOver(true);
+  };
+  
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+  
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    
+    if (!draggedFragment || !potRef.current) return;
+    
+    const potRect = potRef.current.getBoundingClientRect();
+    if (e.clientX >= potRect.left && e.clientX <= potRect.right &&
+        e.clientY >= potRect.top && e.clientY <= potRect.bottom) {
+      
+      setPotFragments([...potFragments, draggedFragment]);
+      setFragments(fragments.filter(f => f.id !== draggedFragment.id));
+      
+      // Add bubble effect
+      const newBubble = {
+        id: Date.now(),
+        x: e.clientX - potRect.left,
+        y: e.clientY - potRect.top
+      };
+      setBubbles([...bubbles, newBubble]);
+      
+      setTimeout(() => {
+        setBubbles(prev => prev.filter(b => b.id !== newBubble.id));
+      }, 1500);
+      
+      if (potFragments.length >= 2) {
+        setTimeout(() => setIsReconstructing(true), 500);
+      }
+    }
+    setDraggedFragment(null);
+  };
+  
+  React.useEffect(() => {
+    if (isReconstructing) {
+      setTimeout(() => {
+        setReconstructed({
+          title: "Grandmother's Vanilla Dream Cake",
+          ingredients: [
+            '2 cups all-purpose flour',
+            '1½ cups granulated sugar',
+            '½ cup butter, softened',
+            '3 large eggs, room temperature',
+            '1 teaspoon vanilla extract',
+            '1 cup whole milk',
+            '2 teaspoons baking powder',
+            '½ teaspoon salt'
+          ],
+          instructions: [
+            'Preheat oven to 350°F (175°C)',
+            'Cream butter and sugar until light and fluffy',
+            'Beat in eggs one at a time, then vanilla',
+            'Combine flour, baking powder, and salt',
+            'Alternate adding dry ingredients and milk',
+            'Beat until just combined',
+            'Bake for 25-30 minutes until golden'
+          ]
+        });
+        setAlternatives({
+          'vanilla extract': ['vanilla bean paste (92%)', 'vanilla essence (78%)', 'almond extract (45%)'],
+          '350°F': ['325°F for 35 min (88%)', '375°F for 22 min (65%)'],
+          'light and fluffy': ['pale and creamy (90%)', 'well combined (75%)']
+        });
+      }, 2500);
+    }
+  }, [isReconstructing]);
+  
+  const Fragment = ({ fragment }) => {
+    const [hover, setHover] = React.useState(false);
+    const gridSize = 160;
+    const gap = 20;
+    
+    return React.createElement('div', {
+      draggable: true,
+      onDragStart: (e) => handleDragStart(e, fragment),
+      onMouseEnter: () => setHover(true),
+      onMouseLeave: () => setHover(false),
+      style: {
+        position: 'absolute',
+        left: `${fragment.gridX * (gridSize + gap) + 40}px`,
+        top: `${fragment.gridY * (gridSize * 0.6 + gap) + 80}px`,
+        width: `${gridSize}px`,
+        height: `${gridSize * 0.6}px`,
+        transform: `scale(${hover ? 1.05 : 1}) ${hover ? 'translateY(-5px)' : ''}`,
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'grab',
+        animation: 'fadeInUp 0.6s ease-out forwards',
+        animationDelay: `${fragment.id * 0.1}s`,
+        opacity: 0
+      }
+    }, 
+      React.createElement('div', {
+        style: {
+          width: '100%',
+          height: '100%',
+          background: fragment.category === 'ingredient' 
+            ? 'linear-gradient(135deg, #fff5eb 0%, #ffe4cc 100%)' 
+            : 'linear-gradient(135deg, #e8f4fd 0%, #d1e9fc 100%)',
+          border: fragment.category === 'ingredient'
+            ? '2px solid #ff9500'
+            : '2px solid #007aff',
+          borderRadius: '12px',
+          padding: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: hover 
+            ? '0 10px 30px rgba(0,0,0,0.15)' 
+            : '0 4px 12px rgba(0,0,0,0.08)',
+          position: 'relative',
+          overflow: 'hidden'
+        }
+      },
+        React.createElement('div', {
+          style: {
+            position: 'absolute',
+            top: '8px',
+            right: '8px',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: fragment.category === 'ingredient' ? '#ff9500' : '#007aff',
+            opacity: 0.5
+          }
+        }),
+        React.createElement('p', {
+          style: {
+            fontSize: '18px',
+            fontWeight: '500',
+            color: '#2c3e50',
+            textAlign: 'center',
+            lineHeight: '1.4',
+            fontFamily: fragment.category === 'ingredient' ? 'Inter' : 'Playfair Display'
+          }
+        }, fragment.text)
+      )
+    );
+  };
+  
+  const Pot = () => {
+    return React.createElement('div', {
+      ref: potRef,
+      onDragOver: handleDragOver,
+      onDragLeave: handleDragLeave,
+      onDrop: handleDrop,
+      style: {
+        position: 'absolute',
+        bottom: '60px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '280px',
+        height: '240px',
+        animation: isDraggingOver ? 'glow 1s ease-in-out infinite' : '',
+        transition: 'all 0.3s ease'
+      }
+    },
+      React.createElement('svg', {
+        width: '280',
+        height: '240',
+        viewBox: '0 0 280 240',
+        style: { position: 'absolute' }
+      },
+        // Pot shadow
+        React.createElement('ellipse', {
+          cx: '140',
+          cy: '235',
+          rx: '80',
+          ry: '5',
+          fill: 'rgba(0,0,0,0.1)'
+        }),
+        // Pot body gradient
+        React.createElement('defs', null,
+          React.createElement('linearGradient', { id: 'potGradient', x1: '0%', y1: '0%', x2: '100%', y2: '100%' },
+            React.createElement('stop', { offset: '0%', stopColor: '#8b4513' }),
+            React.createElement('stop', { offset: '50%', stopColor: '#a0522d' }),
+            React.createElement('stop', { offset: '100%', stopColor: '#654321' })
+          ),
+          React.createElement('radialGradient', { id: 'potInner' },
+            React.createElement('stop', { offset: '0%', stopColor: '#2c1810' }),
+            React.createElement('stop', { offset: '100%', stopColor: '#1a0e08' })
+          )
+        ),
+        // Pot body
+        React.createElement('path', {
+          d: 'M 60 100 Q 60 180, 140 180 Q 220 180, 220 100 L 200 80 Q 140 70, 80 80 Z',
+          fill: 'url(#potGradient)',
+          stroke: '#4a2c17',
+          strokeWidth: '3'
+        }),
+        // Pot rim
+        React.createElement('ellipse', {
+          cx: '140',
+          cy: '90',
+          rx: '70',
+          ry: '15',
+          fill: '#a0522d',
+          stroke: '#4a2c17',
+          strokeWidth: '2'
+        }),
+        // Inner darkness
+        React.createElement('ellipse', {
+          cx: '140',
+          cy: '90',
+          rx: '60',
+          ry: '12',
+          fill: 'url(#potInner)',
+          opacity: '0.8'
+        }),
+        // Handle left
+        React.createElement('path', {
+          d: 'M 60 110 Q 30 110, 30 130 Q 30 150, 60 150',
+          fill: 'none',
+          stroke: '#8b4513',
+          strokeWidth: '12',
+          strokeLinecap: 'round'
+        }),
+        // Handle right
+        React.createElement('path', {
+          d: 'M 220 110 Q 250 110, 250 130 Q 250 150, 220 150',
+          fill: 'none',
+          stroke: '#8b4513',
+          strokeWidth: '12',
+          strokeLinecap: 'round'
+        })
+      ),
+      // Bubble effects
+      bubbles.map(bubble =>
+        React.createElement('div', {
+          key: bubble.id,
+          style: {
+            position: 'absolute',
+            left: bubble.x + 'px',
+            top: bubble.y + 'px',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,145,0,0.8) 0%, rgba(255,145,0,0.4) 100%)',
+            animation: 'bubble 1.5s ease-out forwards'
+          }
+        })
+      ),
+      // Stirring animation when reconstructing
+      isReconstructing && React.createElement('div', {
+        style: {
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '60px',
+          height: '60px',
+          borderRadius: '50%',
+          border: '3px solid rgba(255,145,0,0.5)',
+          borderTopColor: '#ff9500',
+          animation: 'stir 1s linear infinite'
+        }
+      }),
+      // Fragment count
+      potFragments.length > 0 && React.createElement('div', {
+        style: {
+          position: 'absolute',
+          top: '-30px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#ff9500',
+          color: 'white',
+          padding: '6px 16px',
+          borderRadius: '20px',
+          fontSize: '14px',
+          fontWeight: '600',
+          boxShadow: '0 4px 12px rgba(255,145,0,0.3)'
+        }
+      }, `${potFragments.length} fragments`)
+    );
+  };
+  
+  if (reconstructed) {
+    return React.createElement('div', {
+      style: {
+        minHeight: '100vh',
+        padding: '40px',
+        background: 'linear-gradient(135deg, #fff8f3 0%, #ffeedd 100%)',
+        animation: 'fadeInUp 0.8s ease-out'
+      }
+    },
+      React.createElement('div', {
+        style: {
+          maxWidth: '800px',
+          margin: '0 auto',
+          background: 'white',
+          borderRadius: '20px',
+          padding: '48px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.1)'
+        }
+      },
+        React.createElement('h1', {
+          style: {
+            fontSize: '48px',
+            fontWeight: '700',
+            marginBottom: '32px',
+            fontFamily: 'Playfair Display, serif',
+            color: '#2c3e50',
+            textAlign: 'center'
+          }
+        }, reconstructed.title),
+        React.createElement('div', {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '48px',
+            marginTop: '40px'
+          }
+        },
+          React.createElement('div', null,
+            React.createElement('h2', {
+              style: {
+                fontSize: '24px',
+                fontWeight: '600',
+                marginBottom: '20px',
+                color: '#ff9500',
+                fontFamily: 'Inter'
+              }
+            }, 'Ingredients'),
+            React.createElement('ul', {
+              style: {
+                listStyle: 'none',
+                lineHeight: '2'
+              }
+            }, reconstructed.ingredients.map((ing, i) =>
+              React.createElement('li', {
+                key: i,
+                style: {
+                  fontSize: '16px',
+                  color: '#5a6c7d',
+                  paddingLeft: '24px',
+                  position: 'relative'
+                }
+              },
+                React.createElement('span', {
+                  style: {
+                    position: 'absolute',
+                    left: '0',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: '#ff9500'
+                  }
+                }),
+                ing
+              )
+            ))
+          ),
+          React.createElement('div', null,
+            React.createElement('h2', {
+              style: {
+                fontSize: '24px',
+                fontWeight: '600',
+                marginBottom: '20px',
+                color: '#007aff',
+                fontFamily: 'Inter'
+              }
+            }, 'Instructions'),
+            React.createElement('ol', {
+              style: {
+                listStyle: 'none',
+                lineHeight: '2',
+                counterReset: 'step-counter'
+              }
+            }, reconstructed.instructions.map((inst, i) =>
+              React.createElement('li', {
+                key: i,
+                style: {
+                  fontSize: '16px',
+                  color: '#5a6c7d',
+                  paddingLeft: '32px',
+                  position: 'relative',
+                  counterIncrement: 'step-counter',
+                  marginBottom: '12px'
+                }
+              },
+                React.createElement('span', {
+                  style: {
+                    position: 'absolute',
+                    left: '0',
+                    top: '2px',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#007aff',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }
+                }, i + 1),
+                inst
+              )
+            ))
+          )
+        ),
+        // Confidence indicators
+        React.createElement('div', {
+          style: {
+            marginTop: '48px',
+            padding: '24px',
+            background: '#f8f9fa',
+            borderRadius: '12px'
+          }
+        },
+          React.createElement('h3', {
+            style: {
+              fontSize: '18px',
+              fontWeight: '600',
+              marginBottom: '16px',
+              color: '#2c3e50'
+            }
+          }, 'Alternative Interpretations'),
+          React.createElement('div', {
+            style: {
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '16px'
+            }
+          }, Object.entries(alternatives).slice(0, 3).map(([key, alts]) =>
+            React.createElement('div', {
+              key,
+              style: {
+                padding: '16px',
+                background: 'white',
+                borderRadius: '8px',
+                border: '1px solid #e1e8ed'
+              }
+            },
+              React.createElement('p', {
+                style: {
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#2c3e50',
+                  marginBottom: '8px'
+                }
+              }, key),
+              alts.map((alt, i) =>
+                React.createElement('p', {
+                  key: i,
+                  style: {
+                    fontSize: '13px',
+                    color: '#7a8a9a',
+                    marginBottom: '4px'
+                  }
+                }, alt)
+              )
+            )
+          ))
+        )
+      )
+    );
+  }
+  
+  return React.createElement('div', {
+    style: {
+      position: 'relative',
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden'
+    }
+  },
+    // Header
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        top: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        textAlign: 'center',
+        animation: 'fadeInUp 0.8s ease-out'
+      }
+    },
+      React.createElement('h1', {
+        style: {
+          fontSize: '36px',
+          fontWeight: '700',
+          fontFamily: 'Playfair Display, serif',
+          color: '#2c3e50',
+          marginBottom: '8px'
+        }
+      }, 'Recipe Reconstruction'),
+      React.createElement('p', {
+        style: {
+          fontSize: '16px',
+          color: '#7a8a9a',
+          fontFamily: 'Inter'
+        }
+      }, 'Drag fragments into the pot to reconstruct the recipe')
+    ),
+    // Fragments
+    fragments.map(fragment => 
+      React.createElement(Fragment, { key: fragment.id, fragment })
+    ),
+    // Pot
+    React.createElement(Pot),
+    // Progress indicator
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        bottom: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: '8px'
+      }
+    }, Array(3).fill(0).map((_, i) =>
+      React.createElement('div', {
+        key: i,
+        style: {
+          width: '12px',
+          height: '12px',
+          borderRadius: '50%',
+          background: i < potFragments.length ? '#ff9500' : '#e1e8ed',
+          transition: 'background 0.3s ease'
+        }
+      })
+    ))
+  );
+}
+
+ReactDOM.render(React.createElement(App), document.getElementById('root'));

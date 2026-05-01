@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0f0f14;
+    --ink-soft: #1c1c26;
+    --ink-muted: #2a2a38;
+    --border: rgba(255,255,255,0.07);
+    --border-bright: rgba(255,255,255,0.14);
+    --text-primary: #f0eef8;
+    --text-secondary: #9896b0;
+    --text-muted: #5e5c78;
+    --gold: #c9a84c;
+    --gold-light: #e2c47a;
+    --gold-glow: rgba(201,168,76,0.15);
+    --violet: #7c6af5;
+    --violet-soft: rgba(124,106,245,0.12);
+    --green: #4ecb8d;
+    --green-soft: rgba(78,203,141,0.1);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--ink);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 24px;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(124,106,245,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(201,168,76,0.05) 0%, transparent 50%);
+  }
+
+  .pricing-header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  .pricing-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .pricing-eyebrow::before,
+  .pricing-eyebrow::after {
+    content: '';
+    display: block;
+    width: 28px;
+    height: 1px;
+    background: var(--violet);
+    opacity: 0.5;
+  }
+
+  .pricing-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 4vw, 48px);
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  .pricing-title em {
+    font-style: italic;
+    color: var(--gold-light);
+  }
+
+  .pricing-subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 420px;
+    margin: 0 auto;
+    font-weight: 400;
+  }
+
+  .billing-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 32px;
+    padding: 6px 8px;
+    background: var(--ink-soft);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+  }
+
+  .toggle-option {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 6px 16px;
+    border-radius: 32px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .toggle-option.active {
+    background: var(--ink-muted);
+    color: var(--text-primary);
+  }
+
+  .toggle-badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--green);
+    background: var(--green-soft);
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid rgba(78,203,141,0.2);
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    max-width: 1020px;
+    width: 100%;
+    align-items: stretch;
+    position: relative;
+  }
+
+  .pricing-card {
+    position: relative;
+    padding: 40px 36px 44px;
+    border: 1px solid var(--border);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pricing-card:first-child {
+    border-radius: 20px 0 0 20px;
+    background: var(--ink-soft);
+  }
+
+  .pricing-card:last-child {
+    border-radius: 0 20px 20px 0;
+    background: var(--ink-soft);
+  }
+
+  .pricing-card:hover:not(.featured) {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    z-index: 1;
+  }
+
+  .pricing-card.featured {
+    border-radius: 20px;
+    margin: -20px -1px;
+    z-index: 2;
+    padding: 56px 36px 60px;
+    border-color: rgba(201,168,76,0.3);
+    background:
+      linear-gradient(160deg, rgba(201,168,76,0.06) 0%, transparent 50%),
+      var(--ink-soft);
+    box-shadow:
+      0 0 0 1px rgba(201,168,76,0.15),
+      0 32px 80px rgba(0,0,0,0.5),
+      0 0 60px rgba(201,168,76,0.04);
+  }
+
+  .featured-badge {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+    color: #1a1508;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 16px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(201,168,76,0.35);
+  }
+
+  .plan-tier {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .featured .plan-tier {
+    color: var(--gold);
+    opacity: 0.8;
+  }
+
+  .plan-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .plan-description {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin-bottom: 32px;
+    min-height: 42px;
+  }
+
+  .plan-price-block {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .price-currency {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    line-height: 1;
+  }
+
+  .price-amount {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+
+  .featured .price-amount {
+    background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .price-period {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    font-weight: 400;
+  }
+
+  .price-annual-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+    height: 18px;
+  }
+
+  .price-annual-note span {
+    color: var(--green);
+    font-weight: 500;
+  }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 28px;
+  }
+
+  .featured .divider {
+    background: rgba(201,168,76,0.15);
+  }
+
+  .features-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .features-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 36px;
+    flex: 1;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+  }
+
+  .feature-check {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+
+  .feature-check svg {
+    width: 9px;
+    height: 9px;
+    stroke: var(--text-muted);
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .featured .feature-check {
+    background: var(--gold-glow);
+    border-color: rgba(201,168,76,0.25);
+  }
+
+  .featured .feature-check svg {
+    stroke: var(--gold);
+  }
+
+  .feature-strong {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .feature-dim {
+    color: var(--text-muted);
+  }
+
+  .feature-dim .feature-check {
+    opacity: 0.4;
+  }
+
+  .cta-button {
+    display: block;
+    width: 100%;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0);
+    transition: background 0.2s ease;
+  }
+
+  .cta-button:hover::after {
+    background: rgba(255,255,255,0.05);
+  }
+
+  .cta-ghost {
+    background: transparent;
+    border-color: var(--border-bright);
+    color: var(--text-secondary);
+  }
+
+  .cta-ghost:hover {
+    border-color: rgba(255,255,255,0.25);
+    color: var(--text-primary);
+  }
+
+  .cta-primary {
+    background: linear-gradient(135deg, #c9a84c 0%, #e2c47a 50%, #c9a84c 100%);
+    background-size: 200% 100%;
+    background-position: 0% 0%;
+    border-color: transparent;
+    color: #1a1508;
+    font-weight: 700;
+    box-shadow: 0 8px 28px rgba(201,168,76,0.28), 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .cta-primary:hover {
+    background-position: 100% 0%;
+    box-shadow: 0 12px 36px rgba(201,168,76,0.38), 0 4px 12px rgba(0,0,0,0.3);
+    transform: translateY(-1px);
+  }
+
+  .trust-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    margin-top: 56px;
+    flex-wrap: wrap;
+  }
+
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .trust-item svg {
+    width: 15px;
+    height: 15px;
+    opacity: 0.5;
+  }
+
+  @media (max-width: 768px) {
+    .pricing-grid {
+      grid-template-columns: 1fr;
+      max-width: 400px;
+      gap: 16px;
+    }
+
+    .pricing-card:first-child,
+    .pricing-card:last-child {
+      border-radius: 20px;
+    }
+
+    .pricing-card.featured {
+      margin: 0;
+      padding: 56px 36px 60px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="pricing-header">
+  <div class="pricing-eyebrow">Simple Pricing</div>
+  <h1 class="pricing-title">Invest in your <em>craft</em></h1>
+  <p class="pricing-subtitle">Every plan includes a 14-day free trial. No credit card required to start.</p>
+  <div class="billing-toggle">
+    <span class="toggle-option">Monthly</span>
+    <span class="toggle-option active">Annual</span>
+    <span class="toggle-badge">Save 25%</span>
+  </div>
+</div>
+
+<div class="pricing-grid">
+
+  <!-- Starter -->
+  <div class="pricing-card">
+    <div class="plan-tier">Tier one</div>
+    <div class="plan-name">Starter</div>
+    <div class="plan-description">Everything you need to begin building with confidence.</div>
+    <div class="plan-price-block">
+      <div class="price-currency">$</div>
+      <div class="price-amount">19</div>
+      <div class="price-period">/mo</div>
+    </div>
+    <div class="price-annual-note"><span>$228</span> billed annually</div>
+    <div class="divider"></div>
+    <div class="features-label">What's included</div>
+    <ul class="features-list">
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Up to <span class="feature-strong">3 projects</span></span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">5 GB</span> cloud storage</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Basic analytics dashboard</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Email support</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>API access</span>
+      </li>
+      <li class="feature-item feature-dim">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Custom integrations</span>
+      </li>
+      <li class="feature-item feature-dim">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Priority support</span>
+      </li>
+    </ul>
+    <a href="#" class="cta-button cta-ghost">Get started free</a>
+  </div>
+
+  <!-- Pro (Featured) -->
+  <div class="pricing-card featured">
+    <div class="featured-badge">Most popular</div>
+    <div class="plan-tier">Tier two</div>
+    <div class="plan-name">Professional</div>
+    <div class="plan-description">For serious creators who need power without compromise.</div>
+    <div class="plan-price-block">
+      <div class="price-currency">$</div>
+      <div class="price-amount">59</div>
+      <div class="price-period">/mo</div>
+    </div>
+    <div class="price-annual-note"><span>$708</span> billed annually</div>
+    <div class="divider"></div>
+    <div class="features-label">What's included</div>
+    <ul class="features-list">
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Unlimited <span class="feature-strong">projects</span></span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">100 GB</span> cloud storage</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Advanced analytics + exports</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">Priority</span> email & chat support</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Full API + webhooks access</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">20+</span> native integrations</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Team collaboration tools</span>
+      </li>
+    </ul>
+    <a href="#" class="cta-button cta-primary">Start free trial</a>
+  </div>
+
+  <!-- Enterprise -->
+  <div class="pricing-card">
+    <div class="plan-tier">Tier three</div>
+    <div class="plan-name">Enterprise</div>
+    <div class="plan-description">Custom infrastructure and dedicated support at any scale.</div>
+    <div class="plan-price-block">
+      <div class="price-currency"></div>
+      <div class="price-amount" style="font-size: 40px; margin-bottom: 4px;">Custom</div>
+    </div>
+    <div class="price-annual-note">Volume discounts available</div>
+    <div class="divider"></div>
+    <div class="features-label">What's included</div>
+    <ul class="features-list">
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Everything in Professional</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">Unlimited</span> storage & bandwidth</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Dedicated infrastructure</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>99.99% uptime SLA</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>SSO & SAML 2.0</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span>Custom integrations & SDK</span>
+      </li>
+      <li class="feature-item">
+        <span class="feature-check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></span>
+        <span><span class="feature-strong">Dedicated</span> account manager</span>
+      </li>
+    </ul>
+    <a href="#" class="cta-button cta-ghost">Talk to sales →</a>
+  </div>
+
+</div>
+
+<div class="trust-row">
+  <span class="trust-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+    SOC 2 Type II certified
+  </span>
+  <span class="trust-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+    256-bit encryption
+  </span>
+  <span class="trust-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
+    Cancel anytime
+  </span>
+  <span class="trust-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+    12,000+ teams trust us
+  </span>
+</div>
+
+</body>
+</html>

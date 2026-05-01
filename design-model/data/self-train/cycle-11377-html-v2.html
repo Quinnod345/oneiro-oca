@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --primary-dark: #0a0a0a;
+            --primary-light: #fafafa;
+            --accent-warm: #ff6b35;
+            --accent-gold: #ffd93d;
+            --surface-elevated: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: #999999;
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --hover-glow: rgba(255, 107, 53, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--primary-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: var(--surface-elevated);
+            padding: 48px 32px;
+            border-right: 1px solid var(--border-subtle);
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: -0.5px;
+            margin-bottom: 48px;
+            color: var(--text-primary);
+        }
+
+        .section-title {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .filter-group {
+            margin-bottom: 40px;
+        }
+
+        .filter-button {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            margin-bottom: 8px;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .filter-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--hover-glow);
+            transition: left 0.3s ease;
+        }
+
+        .filter-button:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-warm);
+        }
+
+        .filter-button:hover::before {
+            left: 0;
+        }
+
+        .filter-button.active {
+            background: var(--accent-warm);
+            color: var(--primary-dark);
+            border-color: var(--accent-warm);
+            font-weight: 500;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 80px;
+            overflow-y: auto;
+        }
+
+        .header {
+            margin-bottom: 64px;
+        }
+
+        .page-title {
+            font-size: 48px;
+            font-weight: 200;
+            letter-spacing: -1px;
+            margin-bottom: 16px;
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 48px;
+            max-width: 1200px;
+        }
+
+        .memory-card {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 0%, var(--hover-glow) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .memory-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-warm);
+        }
+
+        .memory-card:hover::after {
+            opacity: 1;
+        }
+
+        .memory-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .memory-type {
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--accent-gold);
+        }
+
+        .memory-date {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .memory-title {
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .memory-description {
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .memory-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .bid-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .bid-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .bid-amount {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--accent-warm);
+        }
+
+        .bid-button {
+            padding: 12px 32px;
+            background: transparent;
+            border: 1px solid var(--accent-warm);
+            color: var(--accent-warm);
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .bid-button:hover {
+            background: var(--accent-warm);
+            color: var(--primary-dark);
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            padding: 8px 16px;
+            background: rgba(255, 215, 61, 0.1);
+            border: 1px solid var(--accent-gold);
+            color: var(--accent-gold);
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 1280px) {
+            .memory-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .main-content {
+                padding: 48px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -320px;
+                height: 100%;
+                z-index: 100;
+                transition: left 0.3s ease;
+            }
+            
+            .sidebar.open {
+                left: 0;
+            }
+            
+            .main-content {
+                padding: 24px;
+            }
+            
+            .page-title {
+                font-size: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo">Memory Vault</div>
+        
+        <div class="filter-group">
+            <div class="section-title">Categories</div>
+            <button class="filter-button active">All Memories</button>
+            <button class="filter-button">Childhood</button>
+            <button class="filter-button">First Times</button>
+            <button class="filter-button">Lost Moments</button>
+            <button class="filter-button">Forgotten Names</button>
+        </div>
+        
+        <div class="filter-group">
+            <div class="section-title">Status</div>
+            <button class="filter-button">Active Bidding</button>
+            <button class="filter-button">Ending Soon</button>
+            <button class="filter-button">Recently Added</button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="header">
+            <h1 class="page-title">Auction House of Memories</h1>
+            <p class="page-subtitle">Bid on fragments of forgotten moments</p>
+        </header>
+
+        <div class="memory-grid">
+            <article class="memory-card">
+                <span class="status-badge">2 days left</span>
+                <div class="memory-meta">
+                    <span class="memory-type">Childhood</span>
+                    <span class="memory-date">Summer 1992</span>
+                </div>
+                <h2 class="memory-title">The Sound of Rain on Canvas</h2>
+                <p class="memory-description">
+                    A camping trip where the rain created a symphony on the tent roof. 
+                    The smell of wet earth mixing with morning coffee. Includes the 
+                    laughter of a sibling now estranged.
+                </p>
+                <div class="memory-footer">
+                    <div class="bid-info">
+                        <span class="bid-label">Current Bid</span>
+                        <span class="bid-amount">$2,450</span>
+                    </div>
+                    <button class="bid-button">Place Bid</button>
+                </div>
+            </article>
+
+            <article class="memory-card">
+                <span class="status-badge">5 hours left</span>
+                <div class="memory-meta">
+                    <span class="memory-type">First Time</span>
+                    <span class="memory-date">March 2001</span>
+                </div>
+                <h2 class="memory-title">Learning to Ride Without Training Wheels</h2>
+                <p class="memory-description">
+                    The exact moment of balance achieved. Includes scraped knees, 
+                    a father's proud smile, and the sensation of flying down a 
+                    suburban sidewalk.
+                </p>
+                <div class="memory-footer">
+                    <div class="bid-info">
+                        <span class="bid-label">Current Bid</span>
+                        <span class="bid-amount">$3,200</span>
+                    </div>
+                    <button class="bid-button">Place Bid</button>
+                </div>
+            </article>
+
+            <article class="memory-card">
+                <div class="memory-meta">
+                    <span class="memory-type">Lost Moment</span>
+                    <span class="memory-date">December 2018</span>
+                </div>
+                <h2 class="memory-title">Last Conversation with Grandmother</h2>
+                <p class="memory-description">
+                    Her stories about the old country, the recipe for her famous 
+                    soup that was never written down. The warmth of her kitchen 
+                    and the way she said your name.
+                </p>
+                <div class="memory-footer">
+                    <div class="bid-info">
+                        <span class="bid-label">Current Bid</span>
+                        <span class="bid-amount">$8,750</span>
+                    </div>
+                    <button class="bid-button">Place Bid</button>
+                </div>
+            </article>
+
+            <article class="memory-card">
+                <div class="memory-meta">
+                    <span class="memory-type">Forgotten Name</span>
+                    <span class="memory-date">Unknown</span>
+                </div>
+                <h2 class="memory-title">The Girl from the Coffee Shop</h2>
+                <p class="memory-description">
+                    She wrote her number on a napkin. You talked about Murakami 
+                    and jazz. Her laugh was like silver bells. The napkin was 
+                    lost in the wash.
+                </p>
+                <div class="memory-footer">
+                    <div class="bid-info">
+                        <span class="bid-label">Current Bid</span>
+                        <span class="bid-amount">$1,100</span>
+                    </div>
+                    <button class="bid-button">Place Bid</button>
+                </div>
+            </article>
+        </div>
+    </main>
+</body>
+</html>

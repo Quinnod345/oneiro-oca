@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Adjuster</title>
+    <style>
+        :root {
+            --dawn-blue: #4a6fa5;
+            --morning-cyan: #6fa3cc;
+            --noon-yellow: #ffd93d;
+            --afternoon-amber: #ff9642;
+            --dusk-orange: #ff6b35;
+            --night-purple: #553c9a;
+            --plate-ceramic: #f8f5f0;
+            --shadow-gray: #2c2c2c;
+            --ingredient-active: #3a3a3a;
+            --ingredient-ghost: rgba(58, 58, 58, 0.2);
+            --steam-white: rgba(255, 255, 255, 0.7);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, #f9f6f2 0%, #e8e2d8 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .metabolic-ring {
+            position: absolute;
+            width: 720px;
+            height: 720px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg at 50% 50%,
+                var(--dawn-blue) 0deg,
+                var(--morning-cyan) 60deg,
+                var(--noon-yellow) 180deg,
+                var(--afternoon-amber) 270deg,
+                var(--dusk-orange) 315deg,
+                var(--night-purple) 360deg
+            );
+            opacity: 0.3;
+            animation: metabolicPulse 4s ease-in-out infinite;
+        }
+
+        @keyframes metabolicPulse {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.05) rotate(2deg); }
+        }
+
+        .plate-container {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dinner-plate {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--plate-ceramic);
+            box-shadow: 
+                inset 0 0 40px rgba(0,0,0,0.1),
+                0 20px 40px rgba(0,0,0,0.2);
+            border: 2px solid #eee;
+        }
+
+        .plate-rim {
+            position: absolute;
+            width: calc(100% + 40px);
+            height: calc(100% + 40px);
+            left: -20px;
+            top: -20px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            background: linear-gradient(var(--plate-ceramic), var(--plate-ceramic)) padding-box,
+                        conic-gradient(from var(--rotation, 0deg), 
+                            var(--dawn-blue), 
+                            var(--morning-cyan), 
+                            var(--noon-yellow), 
+                            var(--afternoon-amber), 
+                            var(--dusk-orange), 
+                            var(--night-purple),
+                            var(--dawn-blue)) border-box;
+            --rotation: 0deg;
+            animation: rimRotate 20s linear infinite;
+        }
+
+        @keyframes rimRotate {
+            to { --rotation: 360deg; }
+        }
+
+        .food-section {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            top: 25%;
+            left: 25%;
+            transform-origin: center;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .protein {
+            background: radial-gradient(ellipse at center, #8b4513, #6b3410);
+            border-radius: 30% 70% 70% 30% / 60% 30% 70% 40%;
+            transform: translateX(-20%) scale(var(--portion-scale, 1));
+        }
+
+        .carbs {
+            background: linear-gradient(45deg, #f4d03f, #edd834);
+            border-radius: 50%;
+            transform: translateX(30%) translateY(-20%) scale(var(--portion-scale, 1));
+            width: 40%;
+            height: 40%;
+        }
+
+        .vegetables {
+            background: linear-gradient(135deg, #228b22, #32cd32);
+            clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+            transform: translateY(40%) scale(var(--portion-scale, 1));
+        }
+
+        .steam-wisp {
+            position: absolute;
+            width: 2px;
+            height: 60px;
+            background: var(--steam-white);
+            filter: blur(3px);
+            opacity: 0;
+            animation: steamRise 3s ease-out infinite;
+        }
+
+        @keyframes steamRise {
+            0% {
+                transform: translateY(0) translateX(0) scaleY(0.3);
+                opacity: 0;
+            }
+            20% {
+                opacity: 0.7;
+            }
+            100% {
+                transform: translateY(-100px) translateX(20px) scaleY(1);
+                opacity: 0;
+            }
+        }
+
+        .steam-wisp:nth-child(1) { left: 40%; animation-delay: 0s; }
+        .steam-wisp:nth-child(2) { left: 50%; animation-delay: 1s; }
+        .steam-wisp:nth-child(3) { left: 60%; animation-delay: 2s; }
+
+        .timeline-container {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 60px;
+        }
+
+        .timeline-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 2px;
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--dawn-blue), var(--noon-yellow), var(--dusk-orange));
+            border-radius: 2px;
+            width: var(--timeline-progress, 50%);
+            transition: width 0.3s ease;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            top: 50%;
+            left: var(--timeline-progress, 50%);
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+
+        .timeline-handle:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .time-markers {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--shadow-gray);
+        }
+
+        .ingredient-list {
+            position: absolute;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 240px;
+        }
+
+        .ingredient {
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            opacity: var(--ingredient-opacity, 1);
+            transform: translateX(var(--ingredient-offset, 0));
+            font-size: 0.875rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ingredient.fading {
+            opacity: 0.3;
+            transform: translateX(-20px);
+        }
+
+        .ingredient-name {
+            font-weight: 500;
+            color: var(--ingredient-active);
+        }
+
+        .ingredient-amount {
+            color: var(--dawn-blue);
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .cooking-info {
+            position: absolute;
+            right: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 240px;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+
+        .cooking-time {
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--shadow-gray);
+            margin-bottom: 8px;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cooking-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--ingredient-ghost);
+        }
+
+        .servings {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .serving-count {
+            font-size: 1.5rem;
+            font-weight: 400;
+            color: var(--dusk-orange);
+            transition: all 0.3s ease;
+        }
+
+        .nutritional-meter {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+
+        .nutrient {
+            text-align: center;
+        }
+
+        .nutrient-bar {
+            width: 60px;
+            height: 4px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .nutrient-fill {
+            height: 100%;
+            background: var(--noon-yellow);
+            width: var(--nutrient-level, 50%);
+            transition: width 0.5s ease;
+        }
+
+        .nutrient-label {
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--shadow-gray);
+            opacity: 0.6;
+        }
+
+        .meal-history {
+            position: absolute;
+            bottom: 160px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+        }
+
+        .meal-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--dawn-blue);
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }
+
+        .meal-dot.active {
+            opacity: 1;
+            transform: scale(1.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="metabolic-ring"></div>
+    
+    <div class="plate-container" id="plateContainer">
+        <div class="plate-rim"></div>
+        <div class="dinner-plate">
+            <div class="food-section protein" style="--portion-scale: 1"></div>
+            <div class="food-section carbs" style="--portion-scale: 0.8"></div>
+            <div class="food-section vegetables" style="--portion-scale: 1.2"></div>
+            <div class="steam-wisp"></div>
+            <div class="steam-wisp"></div>
+            <div class="steam-wisp"></div>
+        </div>
+    </div>
+
+    <div class="ingredient-list" id="ingredientList">
+        <div class="ingredient" data-threshold="0.3">
+            <span class="ingredient-name">Chicken Breast</span>
+            <span class="ingredient-amount" id="chicken">200g</span>
+        </div>
+        <div class="ingredient" data-threshold="0.5">
+            <span class="ingredient-name">Quinoa</span>
+            <span class="ingredient-amount" id="quinoa">150g</span>
+        </div>
+        <div class="ingredient" data-threshold="0.7">
+            <span class="ingredient-name">Broccoli</span>
+            <span class="ingredient-amount" id="broccoli">250g</span>
+        </div>
+        <div class="ingredient" data-threshold="0.2">
+            <span class="ingredient-name">Olive Oil</span>
+            <span class="ingredient-amount" id="oil">2 tbsp</span>
+        </div>
+        <div class="ingredient" data-threshold="0.8">
+            <span class="ingredient-name">Garlic</span>
+            <span class="ingredient-amount" id="garlic">3 cloves</span>
+        </div>
+    </div>
+
+    <div class="cooking-info">
+        <div class="cooking-time" id="cookTime">35</div>
+        <div class="cooking-label">minutes cooking time</div>
+        <div class="servings">
+            <div class="cooking-label">Servings</div>
+            <div class="serving-count" id="servings">2</div>
+        </div>
+    </div>
+
+    <div class="nutritional-meter">
+        <div class="nutrient">
+            <div class="nutrient-bar">
+                <div class="nutrient-fill" style="--nutrient-level: 45%"></div>
+            </div>
+            <div class="nutrient-label">Protein</div>
+        </div>
+        <div class="nutrient">
+            <div class="nutrient-bar">
+                <div class="nutrient-fill" style="--nutrient-level: 65%"></div>
+            </div>
+            <div class="nutrient-label">Carbs</div>
+        </div>
+        <div class="nutrient">
+            <div class="nutrient-bar">
+                <div class="nutrient-fill" style="--nutrient-level: 30%"></div>
+            </div>
+            <div class="nutrient-label">Fats</div>
+        </div>
+    </div>
+
+    <div class="meal-history">
+        <div class="meal-dot"></div>
+        <div class="meal-dot active"></div>
+        <div class="meal-dot"></div>
+        <div class="meal-dot"></div>
+    </div>
+
+    <div class="timeline-container">
+        <div class="timeline-track">
+            <div class="timeline-progress" style="--timeline-progress: 65%"></div>
+            <div class="timeline-handle" id="timelineHandle" style="--timeline-progress: 65%"></div>
+        </div>
+        <div class="time-markers">
+            <span>6 AM</span>
+            <span>12 PM</span>
+            <span>6 PM</span>
+            <span>Now</span>
+        </div>
+    </div>
+
+    <script>
+        const handle = document.getElementById('timelineHandle');
+        const track = document.querySelector('.timeline-track');
+        const progress = document.querySelector('.timeline-progress');
+        const plate = document.getElementById('plateContainer');
+        const ingredients = document.querySelectorAll('.ingredient');
+        const cookTime = document.getElementById('cookTime');
+        const servings = document.getElementById('servings');
+        
+        let isDragging = false;
+        let currentProgress = 65;
+
+        const baseAmounts = {
+            chicken: 200,
+            quinoa: 150,
+            broccoli: 250,
+            oil: 2,
+            garlic: 3
+        };
+
+        handle.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = track.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+            
+            currentProgress = percentage;
+            handle.style.setProperty('--timeline-progress', percentage + '%');
+            progress.style.setProperty('--timeline-progress', percentage + '%');
+            
+            updateRecipe(percentage);
+        });
+
+        function updateRecipe(percentage) {
+            const scaleFactor = 1.5 - (percentage / 100);
+            
+            // Rotate plate based on time
+            plate.style.transform = `rotate(${percentage * 3.6}deg)`;
+            
+            // Update portions
+            document.querySelector('.protein').style.setProperty('--portion-scale', scaleFactor);
+            document.querySelector('.carbs').style.setProperty('--portion-scale', scaleFactor * 0.8);
+            document.querySelector('.vegetables').style.setProperty('--portion-scale', scaleFactor * 1.2);
+            
+            // Update ingredients
+            ingredients.forEach(ing => {
+                const threshold = parseFloat(ing.dataset.threshold) * 100;
+                if (percentage > threshold) {
+                    ing.classList.add('fading');
+                } else {
+                    ing.classList.remove('fading');
+                }
+            });
+            
+            // Update amounts
+            document.getElementById('chicken').textContent = Math.round(baseAmounts.chicken * scaleFactor) + 'g';
+            document.getElementById('quinoa').textContent = Math.round(baseAmounts.quinoa * scaleFactor) + 'g';
+            document.getElementById('broccoli').textContent = Math.round(baseAmounts.broccoli * scaleFactor) + 'g';
+            document.getElementById('oil').textContent = (baseAmounts.oil * scaleFactor).toFixed(1) + ' tbsp';
+            document.getElementById('garlic').textContent = Math.round(baseAmounts.garlic * scaleFactor) + ' cloves';
+            
+            // Update cooking time with curve
+            const timeScale = 1 + Math.sin((percentage / 100) * Math.PI) * 0.3;
+            cookTime.textContent = Math.round(35 * scaleFactor * timeScale);
+            
+            // Update servings
+            servings.textContent = Math.max(1, Math.round(2 * scaleFactor));
+            
+            // Update nutrient meters
+            document.querySelectorAll('.nutrient-fill').forEach((fill, i) => {
+                const base = [45, 65, 30][i];
+                fill.style.setProperty('--nutrient-level', (base + percentage/2) + '%');
+            });
+        }
+    </script>
+</body>
+</html>

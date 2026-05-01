@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --memory-sepia: #f4e8d0;
+            --aged-paper: #faf6ed;
+            --ink-blur: #4a3f36;
+            --spice-ochre: #d4814e;
+            --kitchen-sage: #8a9578;
+            --fragment-blue: #6b7f9c;
+            --confidence-gold: #c9a961;
+            --hesitation: rgba(106, 127, 156, 0.3);
+            --decade-drift: #e8dcc4;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--aged-paper);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .temporal-wheel {
+            position: absolute;
+            width: 720px;
+            height: 720px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: radial-gradient(circle at center, 
+                transparent 180px, 
+                var(--memory-sepia) 180px,
+                var(--memory-sepia) 200px,
+                transparent 200px,
+                transparent 340px,
+                rgba(244, 232, 208, 0.2) 340px,
+                rgba(244, 232, 208, 0.2) 360px,
+                transparent 360px
+            );
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .temporal-wheel::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                transparent 0deg,
+                var(--kitchen-sage) 30deg,
+                transparent 60deg,
+                var(--spice-ochre) 120deg,
+                transparent 150deg,
+                var(--fragment-blue) 210deg,
+                transparent 240deg,
+                var(--confidence-gold) 300deg,
+                transparent 330deg
+            );
+            opacity: 0.1;
+            z-index: -1;
+        }
+
+        .decade-marker {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 2px;
+            height: 360px;
+            background: var(--ink-blur);
+            opacity: 0.1;
+            transform-origin: center bottom;
+        }
+
+        .decade-marker:nth-child(1) { transform: translate(-50%, -50%) rotate(0deg); }
+        .decade-marker:nth-child(2) { transform: translate(-50%, -50%) rotate(45deg); }
+        .decade-marker:nth-child(3) { transform: translate(-50%, -50%) rotate(90deg); }
+        .decade-marker:nth-child(4) { transform: translate(-50%, -50%) rotate(135deg); }
+        .decade-marker:nth-child(5) { transform: translate(-50%, -50%) rotate(180deg); }
+        .decade-marker:nth-child(6) { transform: translate(-50%, -50%) rotate(225deg); }
+        .decade-marker:nth-child(7) { transform: translate(-50%, -50%) rotate(270deg); }
+        .decade-marker:nth-child(8) { transform: translate(-50%, -50%) rotate(315deg); }
+
+        .decade-label {
+            position: absolute;
+            font-size: 11px;
+            color: var(--ink-blur);
+            opacity: 0.5;
+            font-style: italic;
+            top: 20px;
+            left: -20px;
+            width: 40px;
+            text-align: center;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            cursor: move;
+            transition: all 0.3s ease;
+        }
+
+        .memory-fragment.dragging {
+            opacity: 0.7;
+            transform: scale(1.1);
+        }
+
+        .memory-fragment.locked {
+            cursor: default;
+            filter: saturate(1.2);
+        }
+
+        .handwriting-snippet {
+            width: 120px;
+            height: 80px;
+            background: var(--aged-paper);
+            border: 1px solid rgba(74, 63, 54, 0.2);
+            padding: 8px;
+            font-family: 'Brush Script MT', cursive;
+            font-size: 14px;
+            color: var(--ink-blur);
+            transform: rotate(-3deg);
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .sound-ripple {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 40%, var(--fragment-blue) 50%, transparent 60%);
+            position: relative;
+            opacity: 0.6;
+        }
+
+        .sound-ripple::before {
+            content: '~';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--fragment-blue);
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .spice-color {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--spice-ochre);
+            box-shadow: 0 0 12px rgba(212, 129, 78, 0.4);
+            position: relative;
+        }
+
+        .kitchen-sketch {
+            width: 100px;
+            height: 100px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20 80 Q 50 60 80 80" stroke="%234a3f36" stroke-width="2" fill="none" opacity="0.3"/><circle cx="30" cy="40" r="15" stroke="%234a3f36" stroke-width="1" fill="none" opacity="0.3"/><rect x="60" y="30" width="20" height="25" stroke="%234a3f36" stroke-width="1" fill="none" opacity="0.3"/></svg>') no-repeat center;
+            opacity: 0.7;
+        }
+
+        .fragment-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .fragment-overlay.visible {
+            opacity: 1;
+        }
+
+        .memory-sidebar {
+            position: absolute;
+            left: 40px;
+            top: 100px;
+            width: 280px;
+        }
+
+        .memory-bank {
+            margin-bottom: 30px;
+        }
+
+        .memory-bank h3 {
+            font-size: 13px;
+            color: var(--ink-blur);
+            margin-bottom: 12px;
+            font-weight: normal;
+            font-style: italic;
+            opacity: 0.7;
+        }
+
+        .memory-source {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .recipe-layers {
+            position: absolute;
+            right: 40px;
+            top: 100px;
+            width: 320px;
+            height: 500px;
+            perspective: 1000px;
+        }
+
+        .recipe-card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--aged-paper);
+            border: 1px solid rgba(74, 63, 54, 0.2);
+            padding: 30px;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+        }
+
+        .recipe-card:nth-child(1) {
+            transform: translateZ(0px);
+            opacity: 0.4;
+        }
+
+        .recipe-card:nth-child(2) {
+            transform: translateZ(-30px);
+            opacity: 0.6;
+        }
+
+        .recipe-card:nth-child(3) {
+            transform: translateZ(-60px);
+            opacity: 0.8;
+        }
+
+        .recipe-card:nth-child(4) {
+            transform: translateZ(-90px);
+            opacity: 1;
+        }
+
+        .recipe-header {
+            font-size: 24px;
+            color: var(--ink-blur);
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .recipe-step {
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--ink-blur);
+            margin-bottom: 16px;
+            opacity: 0;
+            animation: fadeInStep 0.8s forwards;
+        }
+
+        .recipe-step:nth-child(2) { animation-delay: 0.2s; }
+        .recipe-step:nth-child(3) { animation-delay: 0.4s; }
+        .recipe-step:nth-child(4) { animation-delay: 0.6s; }
+
+        @keyframes fadeInStep {
+            to { opacity: 1; }
+        }
+
+        .confidence-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+        }
+
+        .confidence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--hesitation);
+            transition: all 0.3s;
+        }
+
+        .confidence-dot.confident {
+            background: var(--confidence-gold);
+            box-shadow: 0 0 8px rgba(201, 169, 97, 0.6);
+        }
+
+        .temporal-hint {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            color: var(--ink-blur);
+            font-style: italic;
+            opacity: 0.6;
+            text-align: center;
+        }
+
+        .merge-indicator {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--confidence-gold) 0%, transparent 70%);
+            opacity: 0;
+            pointer-events: none;
+            animation: merge-pulse 1.5s;
+        }
+
+        @keyframes merge-pulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { opacity: 0.3; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .decade-memory {
+            position: absolute;
+            font-size: 11px;
+            color: var(--ink-blur);
+            opacity: 0.4;
+            font-style: italic;
+            white-space: nowrap;
+        }
+
+        .alternate-possibility {
+            position: absolute;
+            padding: 6px 12px;
+            background: var(--hesitation);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--ink-blur);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .alternate-possibility.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-hint">Rotate memories through time, where fragments align to reveal the whole</div>
+    
+    <div class="temporal-wheel">
+        <div class="decade-marker"><span class="decade-label">1950s</span></div>
+        <div class="decade-marker"><span class="decade-label">1960s</span></div>
+        <div class="decade-marker"><span class="decade-label">1970s</span></div>
+        <div class="decade-marker"><span class="decade-label">1980s</span></div>
+        <div class="decade-marker"><span class="decade-label">1990s</span></div>
+        <div class="decade-marker"><span class="decade-label">2000s</span></div>
+        <div class="decade-marker"><span class="decade-label">2010s</span></div>
+        <div class="decade-marker"><span class="decade-label">2020s</span></div>
+
+        <div class="memory-fragment" style="left: 300px; top: 150px;">
+            <div class="handwriting-snippet">2 cups flour, sifted twice</div>
+        </div>
+
+        <div class="memory-fragment" style="left: 450px; top: 280px;">
+            <div class="sound-ripple"></div>
+        </div>
+
+        <div class="memory-fragment locked" style="left: 380px; top: 380px;">
+            <div class="spice-color" style="background: #c67d3b;"></div>
+        </div>
+
+        <div class="memory-fragment" style="left: 250px; top: 450px;">
+            <div class="kitchen-sketch"></div>
+        </div>
+
+        <div class="decade-memory" style="left: 420px; top: 200px;">grandmother's Sunday ritual</div>
+        <div class="decade-memory" style="left: 180px; top: 340px;">cinnamon from the corner store</div>
+        
+        <div class="alternate-possibility" style="left: 480px; top: 320px;">or was it nutmeg?</div>
+
+        <div class="merge-indicator" style="left: 300px; top: 300px;"></div>
+    </div>
+
+    <div class="memory-sidebar">
+        <div class="memory-bank">
+            <h3>Handwritten Notes</h3>
+            <div class="memory-source">
+                <div class="memory-fragment">
+                    <div class="handwriting-snippet" style="font-size: 12px;">pinch of salt</div>
+                </div>
+                <div class="memory-fragment">
+                    <div class="handwriting-snippet" style="font-size: 13px;">butter, room temp</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-bank">
+            <h3>Kitchen Sounds</h3>
+            <div class="memory-source">
+                <div class="memory-fragment">
+                    <div class="sound-ripple" style="width: 50px; height: 50px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-bank">
+            <h3>Spice Colors</h3>
+            <div class="memory-source">
+                <div class="memory-fragment">
+                    <div class="spice-color" style="background: #8b6337;"></div>
+                </div>
+                <div class="memory-fragment">
+                    <div class="spice-color" style="background: #d4a76a;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="recipe-layers">
+        <div class="recipe-card">
+            <div class="recipe-header">Grandmother's Apple Cake</div>
+            <div class="recipe-step">The flour was always sifted, catching light through the kitchen window</div>
+            <div class="recipe-step">She'd hum while folding butter—three times, no more</div>
+        </div>
+        <div class="recipe-card">
+            <div class="recipe-header">Mother's Version, 1978</div>
+            <div class="recipe-step">Added vanilla extract (store-bought)</div>
+            <div class="recipe-step">Electric mixer replaced wooden spoon</div>
+        </div>
+        <div class="recipe-card">
+            <div class="recipe-header">My Interpretation, 1995</div>
+            <div class="recipe-step">Brown sugar instead of white</div>
+            <div class="recipe-step">Still hear the sizzle when it hits the pan</div>
+        </div>
+        <div class="recipe-card">
+            <div class="recipe-header">Today's Memory</div>
+            <div class="recipe-step">2 cups flour, pinch of something between cinnamon and nutmeg</div>
+            <div class="recipe-step">Butter folded with love, sugar measured by handful</div>
+            <div class="recipe-step">Bake until the kitchen smells like Sunday morning</div>
+            <div class="recipe-step">Serves: one family across generations</div>
+        </div>
+    </div>
+
+    <div class="confidence-indicator">
+        <div class="confidence-dot confident"></div>
+        <div class="confidence-dot confident"></div>
+        <div class="confidence-dot"></div>
+        <div class="confidence-dot"></div>
+        <div class="confidence-dot"></div>
+    </div>
+</body>
+</html>

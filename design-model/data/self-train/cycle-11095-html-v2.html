@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Forensics Lab</title>
+    <style>
+        :root {
+            --lab-bg: #0a0e14;
+            --accent: #00d9ff;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --glass: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            background: var(--lab-bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 300;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 60px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+
+        .memory-field {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            margin: 0 auto;
+            background: var(--glass);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .completion-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .target-zone {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .target-zone.complete {
+            border-color: var(--accent);
+            background: rgba(0, 217, 255, 0.1);
+        }
+
+        .shard {
+            position: absolute;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: grab;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--text-secondary);
+            backdrop-filter: blur(8px);
+        }
+
+        .shard:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.2);
+            border-color: var(--accent);
+        }
+
+        .shard.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            z-index: 1000;
+        }
+
+        .shard.aligned {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+            pointer-events: none;
+        }
+
+        .shard-1 {
+            width: 140px;
+            height: 80px;
+            left: 60px;
+            top: 60px;
+        }
+
+        .shard-2 {
+            width: 140px;
+            height: 80px;
+            right: 60px;
+            top: 60px;
+        }
+
+        .shard-3 {
+            width: 140px;
+            height: 80px;
+            left: 60px;
+            bottom: 60px;
+        }
+
+        .shard-4 {
+            width: 140px;
+            height: 80px;
+            right: 60px;
+            bottom: 60px;
+        }
+
+        .instructions {
+            margin-top: 40px;
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .success-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: var(--accent);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .success-message.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Memory Forensics Lab</h1>
+        <p>Reconstruct the fragmented memory by aligning the data shards within the target zone.</p>
+        
+        <div class="memory-field">
+            <div class="completion-indicator">0/4 aligned</div>
+            <div class="target-zone"></div>
+            <div class="success-message">Memory Reconstructed</div>
+            
+            <div class="shard shard-1" draggable="true">Fragment A</div>
+            <div class="shard shard-2" draggable="true">Fragment B</div>
+            <div class="shard shard-3" draggable="true">Fragment C</div>
+            <div class="shard shard-4" draggable="true">Fragment D</div>
+        </div>
+        
+        <p class="instructions">Drag all fragments into the target zone to complete reconstruction</p>
+    </div>
+
+    <script>
+        const shards = document.querySelectorAll('.shard');
+        const targetZone = document.querySelector('.target-zone');
+        const indicator = document.querySelector('.completion-indicator');
+        const successMessage = document.querySelector('.success-message');
+        const memoryField = document.querySelector('.memory-field');
+        
+        let draggedShard = null;
+        let alignedCount = 0;
+        let startX, startY, initialX, initialY;
+
+        shards.forEach(shard => {
+            shard.addEventListener('dragstart', (e) => {
+                draggedShard = shard;
+                shard.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setDragImage(new Image(), 0, 0);
+                
+                const rect = shard.getBoundingClientRect();
+                const fieldRect = memoryField.getBoundingClientRect();
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = rect.left - fieldRect.left;
+                initialY = rect.top - fieldRect.top;
+            });
+
+            shard.addEventListener('dragend', (e) => {
+                shard.classList.remove('dragging');
+                
+                const rect = shard.getBoundingClientRect();
+                const targetRect = targetZone.getBoundingClientRect();
+                
+                if (!shard.classList.contains('aligned') &&
+                    rect.left >= targetRect.left - 20 &&
+                    rect.right <= targetRect.right + 20 &&
+                    rect.top >= targetRect.top - 20 &&
+                    rect.bottom <= targetRect.bottom + 20) {
+                    
+                    shard.classList.add('aligned');
+                    alignedCount++;
+                    indicator.textContent = `${alignedCount}/4 aligned`;
+                    
+                    if (alignedCount === 4) {
+                        targetZone.classList.add('complete');
+                        successMessage.classList.add('show');
+                    }
+                }
+                
+                draggedShard = null;
+            });
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (draggedShard) {
+                const fieldRect = memoryField.getBoundingClientRect();
+                const x = initialX + (e.clientX - startX);
+                const y = initialY + (e.clientY - startY);
+                
+                draggedShard.style.left = `${x}px`;
+                draggedShard.style.top = `${y}px`;
+                draggedShard.style.right = 'auto';
+                draggedShard.style.bottom = 'auto';
+            }
+        });
+    </script>
+</body>
+</html>

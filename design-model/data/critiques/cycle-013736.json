@@ -1,0 +1,36 @@
+{
+  "cycle": 13736,
+  "captured_at": "2026-04-15T19:31:25Z",
+  "language": "swiftui",
+  "brief": "Design an interface for mapping personal energy levels throughout a 24-hour cycle where users manipulate a fluid, aurora-like membrane that responds to touch by creating ripples of light that settle into valleys (low energy) or peaks (high energy), with the entire surface breathing and pulsing like a living organism\u2014time flows radially from center to edge like tree rings, and as users sculpt their energy landscape, the membrane remembers patterns over weeks, showing ghostly traces of past rhythm",
+  "scores": {
+    "typography_quality": 0.4,
+    "color_harmony": 0.3,
+    "spatial_composition": 0.2,
+    "motion_elegance": 0.1,
+    "emotional_resonance": 0.2,
+    "craft_visibility": 0.3,
+    "minimalism_coherence": 0.2,
+    "native_integration": 0.3,
+    "visceral_score": 0.2,
+    "behavioral_score": 0.3,
+    "reflective_score": 0.2,
+    "overall_aesthetic": 0.2,
+    "innovation_score": 0.3,
+    "system_creativity": 0.2,
+    "design_distinctiveness": 0.3,
+    "problem_level": 0.2
+  },
+  "overall": 0.2,
+  "innovation": 0.3,
+  "critique": "The design suffers from poor spatial organization with an awkward 1440x900 fixed frame that breaks SwiftUI's adaptive principles, while the circular time visualization feels derivative and the energy pattern lacks meaningful data representation. The typography hierarchy is weak, animations are crude timer-based updates rather than smooth transitions, and the overall execution feels like a half-finished concept with truncated code and no clear problem being solved.",
+  "fixes": [
+    "Strip down to one core visualization (either the time ring OR the energy nodes) and perfect its clarity before adding any secondary elements",
+    "Establish a clear visual hierarchy with 3 distinct levels maximum: primary data, contextual information, and subtle ambient effects",
+    "Replace the generic sci-fi aesthetic with purposeful visual metaphors that actually communicate the underlying data relationships"
+  ],
+  "compiled": true,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13736-swiftui-v2.swift",
+  "png_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13736-swiftui-v2.png",
+  "code_snippet": "struct ContentView: View {\n    @State private var timeNodes: [TimeNode] = []\n    @State private var selectedHour: Int?\n    @State private var hoveredHour: Int?\n    @State private var animationPhase: Double = 0\n    \n    let center = CGPoint(x: 720, y: 450)\n    let radius: Double = 280\n    \n    var body: some View {\n        ZStack {\n            Color(red: 0.05, green: 0.05, blue: 0.08)\n                .ignoresSafeArea()\n            \n            // Main visualization\n            Canvas { context, size in\n                // Draw connection lines\n                drawConnections(in: context)\n                \n                // Draw time ring\n                drawTimeRing(in: context)\n                \n                // Draw hour markers\n                drawHourMarkers(in: context)\n            }\n            .frame(width: 1440, height: 900)\n            \n            // Interactive nodes\n            ForEach(timeNodes) { node in\n                TimeNodeView(\n                    node: node,\n                    isSelected: selectedHour == Int(node.hour),\n                    isHovered: hoveredHour == Int(node.hour)\n                )\n                .position(node.position)\n                .onTapGesture {\n                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {\n                        selectedHour = selectedHour == Int(node.hour) ? nil : Int(node.hour)\n                    }\n                }\n                .onHover { isHovering in\n                    hoveredHour = isHovering ? Int(node.hour) : nil\n                }\n            }\n            \n            // Info panel\n            if let selected = selectedHour {\n                VStack(alignment: .leading, spacing: 12) {\n                    Text(\"\\(selected):00\")\n                        .font(.system(size: 28, weight: .light, design: .rounded))\n                        .foregroundColor(.white)\n                    \n                    if let node = timeNodes.first(where: { Int($0.hour) == selected }) {\n                        Text(\"Energy Level\")\n                            .font(.system(size: 12, weight: .medium))\n                            .foregroundColor(.white.opacity(0.6))\n                        \n                        EnergyBar(value: node.energy)\n                    }\n                }\n                .padding(24)\n                .background(\n                    RoundedRectangle(cornerRadius: 16)\n                        .fill(Color.white.opacity(0.08))\n                        .overlay(\n                            RoundedRectangle(cornerRadius: 16)\n                                .stroke(Color.white.opacity(0.1), lineWidth: 1)\n                        )\n                )\n                .position(x: 200, y: 450)\n                .transition(.opacity.combined(with: .scale(scale: 0.9)))\n            }\n            \n            // Header\n            VStack {\n                HStack {\n                    Text(\"DAILY ENERGY PATTERN\")\n                        .font(.system(size: 14, weight: ."
+}

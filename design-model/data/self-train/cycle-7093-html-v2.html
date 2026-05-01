@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotional Weather System</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600;800&display=swap');
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: #666666;
+            --accent: #ff6b6b;
+            --calm: #4ecdc4;
+            --confused: #ffe66d;
+            --active-glow: 0 0 40px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .weather-system {
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+        }
+
+        .system-title {
+            font-size: 4rem;
+            font-weight: 200;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5rem;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        .system-subtitle {
+            font-size: 1rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 4rem;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.2s forwards;
+        }
+
+        .mood-selector {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-bottom: 4rem;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.4s forwards;
+        }
+
+        .mood-card {
+            width: 200px;
+            height: 200px;
+            background: var(--bg-secondary);
+            border-radius: 24px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .mood-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .mood-card.active {
+            transform: scale(1.05);
+        }
+
+        .mood-card.active.angry {
+            box-shadow: var(--active-glow) var(--accent);
+            background: linear-gradient(135deg, var(--bg-secondary), rgba(255, 107, 107, 0.1));
+        }
+
+        .mood-card.active.calm {
+            box-shadow: var(--active-glow) var(--calm);
+            background: linear-gradient(135deg, var(--bg-secondary), rgba(78, 205, 196, 0.1));
+        }
+
+        .mood-card.active.confused {
+            box-shadow: var(--active-glow) var(--confused);
+            background: linear-gradient(135deg, var(--bg-secondary), rgba(255, 230, 109, 0.1));
+        }
+
+        .mood-icon {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+
+        .angry-icon {
+            background: var(--accent);
+            clip-path: polygon(50% 0%, 20% 100%, 80% 100%);
+            transform: rotate(180deg);
+        }
+
+        .calm-icon {
+            background: var(--calm);
+            border-radius: 50%;
+        }
+
+        .confused-icon {
+            background: var(--confused);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            animation: spin 8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .mood-label {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .intensity-control {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.6s forwards;
+        }
+
+        .intensity-label {
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+        }
+
+        .intensity-slider {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            outline: none;
+            position: relative;
+        }
+
+        .intensity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .intensity-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .intensity-value {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .weather-display {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .weather-particle {
+            position: absolute;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .weather-display.angry .weather-particle {
+            width: 2px;
+            height: 20px;
+            background: var(--accent);
+            opacity: 0.6;
+            animation: lightning 0.2s ease-out;
+        }
+
+        .weather-display.calm .weather-particle {
+            width: 4px;
+            height: 4px;
+            background: var(--calm);
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: rain 2s linear infinite;
+        }
+
+        .weather-display.confused .weather-particle {
+            width: 30px;
+            height: 30px;
+            background: var(--confused);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            opacity: 0.2;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes lightning {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes rain {
+            to { transform: translateY(100vh); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="weather-display" id="weatherDisplay"></div>
+    
+    <div class="weather-system">
+        <h1 class="system-title">Emotional Weather</h1>
+        <p class="system-subtitle">Select your current state</p>
+        
+        <div class="mood-selector">
+            <div class="mood-card" data-mood="angry">
+                <div class="mood-icon angry-icon"></div>
+                <span class="mood-label">Angry</span>
+            </div>
+            
+            <div class="mood-card" data-mood="calm">
+                <div class="mood-icon calm-icon"></div>
+                <span class="mood-label">Calm</span>
+            </div>
+            
+            <div class="mood-card" data-mood="confused">
+                <div class="mood-icon confused-icon"></div>
+                <span class="mood-label">Confused</span>
+            </div>
+        </div>
+        
+        <div class="intensity-control">
+            <label class="intensity-label">Intensity Level</label>
+            <input type="range" class="intensity-slider" id="intensitySlider" min="0" max="100" value="50">
+            <div class="intensity-value">
+                <span>Minimal</span>
+                <span>Moderate</span>
+                <span>Extreme</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const moodCards = document.querySelectorAll('.mood-card');
+        const weatherDisplay = document.getElementById('weatherDisplay');
+        const intensitySlider = document.getElementById('intensitySlider');
+        let currentMood = null;
+        let particles = [];
+
+        moodCards.forEach(card => {
+            card.addEventListener('click', () => {
+                moodCards.forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                currentMood = card.dataset.mood;
+                updateWeather();
+            });
+        });
+
+        intensitySlider.addEventListener('input', updateWeather);
+
+        function updateWeather() {
+            if (!currentMood) return;
+            
+            weatherDisplay.className = `weather-display ${currentMood}`;
+            clearParticles();
+            
+            const intensity = intensitySlider.value / 100;
+            const particleCount = Math.floor(20 * intensity);
+            
+            for (let i = 0; i < particleCount; i++) {
+                setTimeout(() => createParticle(), i * 100);
+            }
+        }
+
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'weather-particle';
+            particle.style.left = Math.random() * window.innerWidth + 'px';
+            particle.style.top = Math.random() * window.innerHeight + 'px';
+            
+            if (currentMood === 'rain') {
+                particle.style.top = '-20px';
+            }
+            
+            weatherDisplay.appendChild(particle);
+            particles.push(particle);
+            
+            setTimeout(() => {
+                particle.remove();
+                particles = particles.filter(p => p !== particle);
+            }, 4000);
+        }
+
+        function clearParticles() {
+            particles.forEach(p => p.remove());
+            particles = [];
+        }
+    </script>
+</body>
+</html>

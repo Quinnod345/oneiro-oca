@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Palette</title>
+    <style>
+        :root {
+            --void: #0a0a0c;
+            --film-grain: #1a1a1c;
+            --timeline-track: #252528;
+            --ghost-white: #f8f8f6;
+            --memory-fade: rgba(255, 255, 255, 0.03);
+            --scrub-glow: #ff6b2b;
+            --temporal-blue: #4a9eff;
+            --sediment-brown: #8b6f47;
+            --rust-begin: #fe4a49;
+            --rust-mid: #d7263d;
+            --rust-end: #772e25;
+            --bloom-start: #ffd23f;
+            --bloom-peak: #ff6b6b;
+            --bloom-fade: #c9184a;
+            --sky-dawn: #2a1a3e;
+            --sky-noon: #ff8c42;
+            --sky-dusk: #553555;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--ghost-white);
+            cursor: default;
+        }
+
+        .temporal-container {
+            position: absolute;
+            top: 60px;
+            left: 80px;
+            right: 80px;
+            bottom: 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+        }
+
+        .phenomenon-selector {
+            display: flex;
+            gap: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .phenomenon-tab {
+            position: relative;
+            padding: 12px 20px;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.4);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .phenomenon-tab.active {
+            color: var(--ghost-white);
+        }
+
+        .phenomenon-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -21px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--scrub-glow);
+            animation: glow-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .main-stage {
+            flex: 1;
+            display: flex;
+            gap: 60px;
+            position: relative;
+        }
+
+        .timeline-panel {
+            flex: 1;
+            position: relative;
+            background: var(--film-grain);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .video-viewport {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 320px;
+            background: linear-gradient(45deg, var(--rust-begin), var(--rust-mid), var(--rust-end));
+            opacity: 0.9;
+            filter: saturate(1.2);
+            transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+        }
+
+        .video-viewport.blooming {
+            background: linear-gradient(135deg, var(--bloom-start), var(--bloom-peak), var(--bloom-fade));
+        }
+
+        .video-viewport.sky {
+            background: linear-gradient(90deg, var(--sky-dawn), var(--sky-noon), var(--sky-dusk));
+        }
+
+        .temporal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 320px;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.02) 2px,
+                rgba(255, 255, 255, 0.02) 4px
+            );
+            opacity: 0.5;
+        }
+
+        .timeline-scrubber {
+            position: absolute;
+            top: 340px;
+            left: 40px;
+            right: 40px;
+            height: 120px;
+        }
+
+        .time-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--timeline-track);
+            transform: translateY(-50%);
+            border-radius: 2px;
+        }
+
+        .scrub-head {
+            position: absolute;
+            top: 50%;
+            left: 30%;
+            width: 2px;
+            height: 80px;
+            background: var(--scrub-glow);
+            transform: translate(-50%, -50%);
+            cursor: ew-resize;
+            box-shadow: 0 0 20px var(--scrub-glow);
+            z-index: 10;
+        }
+
+        .scrub-head::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background: var(--scrub-glow);
+            border-radius: 50%;
+        }
+
+        .color-memory {
+            position: absolute;
+            height: 60px;
+            background: linear-gradient(90deg, transparent, var(--rust-mid), transparent);
+            opacity: 0.3;
+            pointer-events: none;
+            animation: memory-breathe 4s ease-in-out infinite;
+        }
+
+        @keyframes memory-breathe {
+            0%, 100% { opacity: 0.3; transform: scaleY(1); }
+            50% { opacity: 0.5; transform: scaleY(1.1); }
+        }
+
+        .sediment-layers {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: linear-gradient(0deg, var(--film-grain) 0%, transparent 100%);
+            overflow: hidden;
+        }
+
+        .sediment-layer {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 40px;
+            transform-origin: bottom;
+            animation: sediment-settle 0.8s cubic-bezier(0.23, 1, 0.320, 1) forwards;
+        }
+
+        @keyframes sediment-settle {
+            from { transform: translateY(-100px) scaleY(0); opacity: 0; }
+            to { transform: translateY(0) scaleY(1); opacity: 1; }
+        }
+
+        .extraction-panel {
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .current-extraction {
+            background: var(--film-grain);
+            border-radius: 4px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .extraction-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 24px;
+        }
+
+        .color-transformation {
+            height: 180px;
+            position: relative;
+            margin-bottom: 24px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .transformation-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, var(--rust-begin) 0%, var(--rust-mid) 50%, var(--rust-end) 100%);
+            animation: gradient-shift 8s ease-in-out infinite;
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(-20px); }
+        }
+
+        .transformation-cursor {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: white;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        .color-data {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .data-point {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .data-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .data-value {
+            font-size: 14px;
+            font-feature-settings: "tnum";
+            color: var(--ghost-white);
+        }
+
+        .memory-stack {
+            background: var(--film-grain);
+            border-radius: 4px;
+            padding: 24px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .memory-stack::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .memory-stack::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .memory-stack::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        .stack-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 16px;
+        }
+
+        .memory-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .memory-item:hover {
+            opacity: 0.8;
+        }
+
+        .memory-color {
+            width: 48px;
+            height: 48px;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-ghost {
+            position: absolute;
+            inset: 0;
+            background: inherit;
+            animation: ghost-fade 2s ease-in-out infinite;
+        }
+
+        @keyframes ghost-fade {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .memory-info {
+            flex: 1;
+        }
+
+        .memory-time {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .memory-hex {
+            font-size: 12px;
+            font-family: 'SF Mono', monospace;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .floating-particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: float-up 20s linear infinite;
+        }
+
+        @keyframes float-up {
+            from { transform: translateY(100vh); opacity: 0; }
+            10% { opacity: 0.3; }
+            90% { opacity: 0.3; }
+            to { transform: translateY(-100px); opacity: 0; }
+        }
+
+        .temporal-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-container">
+        <div class="phenomenon-selector">
+            <button class="phenomenon-tab active">Rusting Metal</button>
+            <button class="phenomenon-tab">Blooming Flower</button>
+            <button class="phenomenon-tab">Sunset Sky</button>
+        </div>
+
+        <div class="main-stage">
+            <div class="timeline-panel">
+                <div class="video-viewport"></div>
+                <div class="temporal-overlay"></div>
+                
+                <div class="timeline-scrubber">
+                    <div class="time-track"></div>
+                    <div class="scrub-head"></div>
+                    <div class="color-memory" style="left: 20%; width: 80px;"></div>
+                    <div class="color-memory" style="left: 45%; width: 60px; animation-delay: 1s;"></div>
+                    <div class="color-memory" style="left: 70%; width: 100px; animation-delay: 2s;"></div>
+                </div>
+
+                <div class="sediment-layers">
+                    <div class="sediment-layer" style="bottom: 0; background: linear-gradient(90deg, transparent, rgba(254, 74, 73, 0.2), transparent);"></div>
+                    <div class="sediment-layer" style="bottom: 40px; background: linear-gradient(90deg, transparent, rgba(215, 38, 61, 0.2), transparent); animation-delay: 0.2s;"></div>
+                    <div class="sediment-layer" style="bottom: 80px; background: linear-gradient(90deg, transparent, rgba(119, 46, 37, 0.2), transparent); animation-delay: 0.4s;"></div>
+                </div>
+
+                <div class="temporal-hint">Drag through time to extract color memories</div>
+            </div>
+
+            <div class="extraction-panel">
+                <div class="current-extraction">
+                    <div class="extraction-title">Current Extraction</div>
+                    <div class="color-transformation">
+                        <div class="transformation-gradient"></div>
+                        <div class="transformation-cursor"></div>
+                    </div>
+                    <div class="color-data">
+                        <div class="data-point">
+                            <span class="data-label">Past State</span>
+                            <span class="data-value">#FE4A49</span>
+                        </div>
+                        <div class="data-point">
+                            <span class="data-label">Current</span>
+                            <span class="data-value">#D7263D</span>
+                        </div>
+                        <div class="data-point">
+                            <span class="data-label">Future State</span>
+                            <span class="data-value">#772E25</span>
+                        </div>
+                        <div class="data-point">
+                            <span class="data-label">Duration</span>
+                            <span class="data-value">14.3 days</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="memory-stack">
+                    <div class="stack-title">Color Memories</div>
+                    <div class="memory-item">
+                        <div class="memory-color" style="background: #FE4A49;">
+                            <div class="memory-ghost"></div>
+                        </div>
+                        <div class="memory-info">
+                            <div class="memory-time">Day 0.5 - Fresh oxidation</div>
+                            <div class="memory-hex">#FE4A49 → #F83E3C</div>
+                        </div>
+                    </div>
+                    <div class="memory-item">
+                        <div class="memory-color" style="background: #D7263D;">
+                            <div class="memory-ghost"></div>
+                        </div>
+                        <div class="memory-info">
+                            <div class="memory-time">Day 7.2 - Deep rust</div>
+                            <div class="memory-hex">#E6344A → #C81832</div>
+                        </div>
+                    </div>
+                    <div class="memory-item">
+                        <div class="memory-color" style="background: #A52A2A;">
+                            <div class="memory-ghost"></div>
+                        </div>
+                        <div class="memory-info">
+                            <div class="memory-time">Day 11.8 - Stabilizing</div>
+                            <div class="memory-hex">#B73333 → #932121</div>
+                        </div>
+                    </div>
+                    <div class="memory-item">
+                        <div class="memory-color" style="background: #772E25;">
+                            <div class="memory-ghost"></div>
+                        </div>
+                        <div class="memory-info">
+                            <div class="memory-time">Day 14.3 - Weathered</div>
+                            <div class="memory-hex">#8A3A30 → #64221A</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="floating-particles">
+        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 25%; animation-delay: 3s;"></div>
+        <div class="particle" style="left: 40%; animation-delay: 7s;"></div>
+        <div class="particle" style="left: 55%; animation-delay: 11s;"></div>
+        <div class="particle" style="left: 70%; animation-delay: 15s;"></div>
+        <div class="particle" style="left: 85%; animation-delay: 19s;"></div>
+    </div>
+
+    <script>
+        const scrubHead = document.querySelector('.scrub-head');
+        const timeTrack = document.querySelector('.time-track');
+        const videoViewport = document.querySelector('.video-viewport');
+        const transformationGradient = document.querySelector('.transformation-gradient');
+        const transformationCursor = document.querySelector('.transformation-cursor');
+        const phenomenonTabs = document.querySelectorAll('.phenomenon-tab');
+        
+        let isDragging = false;
+        let currentPosition = 30;
+
+        const phenomena = {
+            'Rusting Metal': {
+                gradient: 'linear-gradient(45deg, #FE4A49, #D7263D, #772E25)',
+                colors: ['#FE4A49', '#D7263D', '#772E25']
+            },
+            'Blooming Flower': {
+                gradient: 'linear-gradient(135deg, #FFD23F, #FF6B6B, #C9184A)',
+                colors: ['#FFD23F', '#FF6B6B', '#C9184A']
+            },
+            'Sunset Sky': {
+                gradient: 'linear-gradient(90deg, #2A1A3E, #FF8C42, #553555)',
+                colors: ['#2A1A3E', '#FF8C42', '#553555']
+            }
+        };
+
+        scrubHead.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            document.body.style.cursor = 'ew-resize';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = timeTrack.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+            
+            currentPosition = percentage;
+            scrubHead.style.left = percentage + '%';
+            transformationCursor.style.left = percentage + '%';
+            
+            // Update video viewport opacity based on position
+            const opacity = 0.7 + (0.3 * (percentage / 100));
+            videoViewport.style.opacity = opacity;
+            
+            // Add subtle color shift
+            const hueRotate = (percentage / 100) * 30;
+            videoViewport.style.filter = `saturate(1.2) hue-rotate(${hueRotate}deg)`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.cursor = 'default';
+                
+                // Create new sediment layer on drag end
+                const newLayer = document.createElement('div');
+                newLayer.className = 'sediment-layer';
+                newLayer.style.bottom = (document.querySelectorAll('.sediment-layer').length * 40) + 'px';
+                newLayer.style.background = `linear-gradient(90deg, transparent, rgba(215, 38, 61, ${0.1 + Math.random() * 0.2}), transparent)`;
+                document.querySelector('.sediment-layers').appendChild(newLayer);
+            }
+        });
+
+        phenomenonTabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                phenomenonTabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                const phenomenon = phenomena[this.textContent];
+                videoViewport.style.background = phenomenon.gradient;
+                transformationGradient.style.background = phenomenon.gradient;
+                
+                // Update viewport class for specific styles
+                videoViewport.className = 'video-viewport';
+                if (this.textContent === 'Blooming Flower') {
+                    videoViewport.classList.add('blooming');
+                } else if (this.textContent === 'Sunset Sky') {
+                    videoViewport.classList.add('sky');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

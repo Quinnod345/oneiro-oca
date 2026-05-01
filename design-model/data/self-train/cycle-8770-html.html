@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Auction House</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --future-blue: #1a3a52;
+            --present-amber: #d4a574;
+            --distortion-red: #ff3366;
+            --distortion-cyan: #00ffcc;
+            --glass: rgba(255, 255, 255, 0.03);
+            --time-sand: #f4e4c1;
+            --memory-gold: #ffd700;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            perspective: 1200px;
+        }
+
+        .temporal-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, var(--void) 70%);
+        }
+
+        .sphere-constellation {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: drift 120s infinite linear;
+        }
+
+        @keyframes drift {
+            from { transform: rotateY(0deg); }
+            to { transform: rotateY(360deg); }
+        }
+
+        .future-sphere {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .sphere-glass {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 0 40px rgba(255, 255, 255, 0.05),
+                0 0 60px rgba(26, 58, 82, 0.3);
+        }
+
+        .sphere-glass::before,
+        .sphere-glass::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            animation: chromatic-shift 4s infinite alternate;
+        }
+
+        .sphere-glass::before {
+            top: -2px;
+            left: -2px;
+            right: 2px;
+            bottom: 2px;
+            background: radial-gradient(circle at 30% 30%, var(--distortion-cyan), transparent 40%);
+            opacity: 0.3;
+            filter: blur(2px);
+        }
+
+        .sphere-glass::after {
+            top: 2px;
+            left: 2px;
+            right: -2px;
+            bottom: -2px;
+            background: radial-gradient(circle at 70% 70%, var(--distortion-red), transparent 40%);
+            opacity: 0.3;
+            filter: blur(2px);
+        }
+
+        @keyframes chromatic-shift {
+            from { transform: scale(1) rotate(0deg); }
+            to { transform: scale(1.05) rotate(3deg); }
+        }
+
+        .miniature-scene {
+            position: absolute;
+            width: 140px;
+            height: 140px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            opacity: 0.3;
+            filter: blur(8px);
+            transition: all 0.8s ease;
+        }
+
+        .scene-elements {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            animation: scene-rotate 30s infinite linear;
+        }
+
+        @keyframes scene-rotate {
+            from { transform: rotateY(0deg); }
+            to { transform: rotateY(360deg); }
+        }
+
+        .future-sphere.bidding .miniature-scene {
+            opacity: 0.7;
+            filter: blur(3px);
+            transform: translate(-50%, -50%) scale(0.9);
+        }
+
+        .future-sphere.crystallizing .sphere-glass {
+            animation: crystallize 2s forwards;
+        }
+
+        @keyframes crystallize {
+            0% { 
+                filter: hue-rotate(0deg) brightness(1);
+                transform: scale(1);
+            }
+            50% { 
+                filter: hue-rotate(180deg) brightness(1.5);
+                transform: scale(1.1);
+            }
+            100% { 
+                filter: hue-rotate(45deg) brightness(1.2);
+                transform: scale(1);
+                box-shadow: 0 0 80px var(--memory-gold);
+            }
+        }
+
+        .hourglass-interface {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 200px;
+            cursor: grab;
+            z-index: 100;
+        }
+
+        .hourglass-interface:active {
+            cursor: grabbing;
+        }
+
+        .hourglass {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-origin: center center;
+            transition: transform 0.3s ease;
+        }
+
+        .hourglass-top,
+        .hourglass-bottom {
+            position: absolute;
+            width: 100px;
+            height: 80px;
+            left: 10px;
+            overflow: hidden;
+        }
+
+        .hourglass-top {
+            top: 20px;
+            clip-path: polygon(10% 0%, 90% 0%, 50% 100%);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .hourglass-bottom {
+            bottom: 20px;
+            clip-path: polygon(50% 0%, 10% 100%, 90% 100%);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .time-sand {
+            position: absolute;
+            width: 100%;
+            bottom: 0;
+            background: linear-gradient(to bottom, var(--time-sand), var(--present-amber));
+            transition: height 0.3s ease;
+        }
+
+        .hourglass-top .time-sand {
+            height: 60%;
+        }
+
+        .hourglass-bottom .time-sand {
+            height: 20%;
+        }
+
+        .sand-flow {
+            position: absolute;
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to bottom, transparent, var(--time-sand), transparent);
+            left: 49px;
+            top: 90px;
+            opacity: 0;
+            animation: flow 2s infinite;
+        }
+
+        @keyframes flow {
+            0% { opacity: 0; transform: scaleY(0); }
+            50% { opacity: 1; transform: scaleY(1); }
+            100% { opacity: 0; transform: scaleY(0); }
+        }
+
+        .temporal-currency {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            font-size: 14px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .currency-value {
+            font-size: 48px;
+            font-weight: 100;
+            color: var(--present-amber);
+            margin-top: 8px;
+            display: flex;
+            align-items: baseline;
+        }
+
+        .currency-unit {
+            font-size: 16px;
+            margin-left: 8px;
+            opacity: 0.6;
+        }
+
+        .bid-trail {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .time-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--time-sand);
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: particle-float 3s forwards;
+        }
+
+        @keyframes particle-float {
+            0% { 
+                transform: translate(0, 0) scale(1);
+                opacity: 0.8;
+            }
+            100% { 
+                transform: translate(var(--dx), var(--dy)) scale(0);
+                opacity: 0;
+            }
+        }
+
+        .gravitational-field {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(212, 165, 116, 0.1), transparent 70%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+            animation: pulse 3s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .bidder-avatar {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .memory-card {
+            position: absolute;
+            width: 200px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--memory-gold), var(--present-amber));
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(255, 215, 0, 0.3);
+            display: none;
+            overflow: hidden;
+        }
+
+        .memory-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        #sphere-1 { top: 20%; left: 15%; }
+        #sphere-2 { top: 35%; right: 20%; }
+        #sphere-3 { bottom: 30%; left: 25%; }
+        #sphere-4 { top: 15%; right: 40%; }
+        #sphere-5 { bottom: 20%; right: 30%; }
+
+        .scene-1 { background: radial-gradient(circle, #e74c3c, #c0392b); }
+        .scene-2 { background: radial-gradient(circle, #3498db, #2980b9); }
+        .scene-3 { background: radial-gradient(circle, #2ecc71, #27ae60); }
+        .scene-4 { background: radial-gradient(circle, #f39c12, #d68910); }
+        .scene-5 { background: radial-gradient(circle, #9b59b6, #8e44ad); }
+
+        .hourglass.tilted {
+            transform: rotate(45deg);
+        }
+
+        .hourglass.tilted .sand-flow {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-field"></div>
+    
+    <div class="sphere-constellation">
+        <div class="future-sphere" id="sphere-1" data-minutes="45">
+            <div class="sphere-glass">
+                <div class="miniature-scene">
+                    <div class="scene-elements scene-1"></div>
+                </div>
+            </div>
+            <div class="gravitational-field"></div>
+        </div>
+        
+        <div class="future-sphere" id="sphere-2" data-minutes="30">
+            <div class="sphere-glass">
+                <div class="miniature-scene">
+                    <div class="scene-elements scene-2"></div>
+                </div>
+            </div>
+            <div class="gravitational-field"></div>
+        </div>
+        
+        <div class="future-sphere" id="sphere-3" data-minutes="60">
+            <div class="sphere-glass">
+                <div class="miniature-scene">
+                    <div class="scene-elements scene-3"></div>
+                </div>
+            </div>
+            <div class="gravitational-field"></div>
+        </div>
+        
+        <div class="future-sphere" id="sphere-4" data-minutes="15">
+            <div class="sphere-glass">
+                <div class="miniature-scene">
+                    <div class="scene-elements scene-4"></div>
+                </div>
+            </div>
+            <div class="gravitational-field"></div>
+        </div>
+        
+        <div class="future-sphere" id="sphere-5" data-minutes="90">
+            <div class="sphere-glass">
+                <div class="miniature-scene">
+                    <div class="scene-elements scene-5"></div>
+                </div>
+            </div>
+            <div class="gravitational-field"></div>
+        </div>
+    </div>
+    
+    <div class="hourglass-interface" draggable="true">
+        <div class="hourglass">
+            <div class="hourglass-top">
+                <div class="time-sand"></div>
+            </div>
+            <div class="sand-flow"></div>
+            <div class="hourglass-bottom">
+                <div class="time-sand"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="temporal-currency">
+        Present Minutes
+        <div class="currency-value">
+            <span id="minutes-count">240</span>
+            <span class="currency-unit">min</span>
+        </div>
+    </div>
+    
+    <div class="bid-trail"></div>
+    
+    <script>
+        let currentMinutes = 240;
+        let isDragging = false;
+        let selectedSphere = null;
+        
+        const hourglass = document.querySelector('.hourglass-interface');
+        const hourglassElement = document.querySelector('.hourglass');
+        const minutesDisplay = document.getElementById('minutes-count');
+        const bidTrail = document.querySelector('.bid-trail');
+        
+        hourglass.addEventListener('dragstart', (e) => {
+            isDragging = true;
+            hourglassElement.classList.add('tilted');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        hourglass.addEventListener('dragend', () => {
+            isDragging = false;
+            hourglassElement.classList.remove('tilted');
+        });
+        
+        document.querySelectorAll('.future-sphere').forEach(sphere => {
+            sphere.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (isDragging) {
+                    sphere.classList.add('bidding');
+                    sphere.querySelector('.gravitational-field').style.opacity = '1';
+                    createTimeParticles(hourglass, sphere);
+                }
+            });
+            
+            sphere.addEventListener('dragleave', () => {
+                sphere.classList.remove('bidding');
+                sphere.querySelector('.gravitational-field').style.opacity = '0';
+            });
+            
+            sphere.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const requiredMinutes = parseInt(sphere.dataset.minutes);
+                
+                if (currentMinutes >= requiredMinutes) {
+                    currentMinutes -= requiredMinutes;
+                    minutesDisplay.textContent = currentMinutes;
+                    
+                    sphere.classList.add('crystallizing');
+                    setTimeout(() => {
+                        createMemoryCard(sphere);
+                    }, 2000);
+                }
+                
+                sphere.classList.remove('bidding');
+                sphere.querySelector('.gravitational-field').style.opacity = '0';
+            });
+            
+            sphere.addEventListener('click', () => {
+                if (!selectedSphere) {
+                    selectedSphere = sphere;
+                    createBidderAvatars(sphere);
+                }
+            });
+        });
+        
+        function createTimeParticles(source, target) {
+            const sourceRect = source.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => {
+                    const particle = document.createElement('div');
+                    particle.className = 'time-particle';
+                    particle.style.left = sourceRect.left + sourceRect.width / 2 + 'px';
+                    particle.style.top = sourceRect.top + sourceRect.height / 2 + 'px';
+                    
+                    const dx = targetRect.left - sourceRect.left + (Math.random() - 0.5) * 50;
+                    const dy = targetRect.top - sourceRect.top + (Math.random() - 0.5) * 50;
+                    
+                    particle.style.setProperty('--dx', dx + 'px');
+                    particle.style.setProperty('--dy', dy + 'px');
+                    
+                    bidTrail.appendChild(particle);
+                    
+                    setTimeout(() => particle.remove(), 3000);
+                }, i * 100);
+            }
+        }
+        
+        function createBidderAvatars(sphere) {
+            const avatarCount = 3;
+            const radius = 100;
+            
+            for (let i = 0; i < avatarCount; i++) {
+                const angle = (i / avatarCount) * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'bidder-avatar';
+                avatar.textContent = Math.floor(Math.random() * 90) + 10;
+                avatar.style.transform = `translate(${x}px, ${y}px)`;
+                
+                sphere.appendChild(avatar);
+                
+                setTimeout(() => {
+                    avatar.style.transform = `translate(0, 0) scale(0)`;
+                    setTimeout(() => avatar.remove(), 300);
+                }, 3000);
+            }
+        }
+        
+        function createMemoryCard(sphere) {
+            const card = document.createElement('div');
+            card.className = 'memory-card';
+            card.style.display = 'block';
+            card.style.left = sphere.offsetLeft + 'px';
+            card.style.top = sphere.offsetTop + 'px';
+            
+            document.body.appendChild(card);
+            
+            setTimeout(() => {
+                card.style.transform = 'scale(1.1) rotate(5deg)';
+            }, 100);
+        }
+        
+        // Add floating animation to spheres
+        document.querySelectorAll('.future-sphere').forEach((sphere, index) => {
+            sphere.style.animation = `float-${index % 3} ${10 + index * 2}s infinite ease-in-out`;
+        });
+        
+        // Create floating animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes float-0 {
+                0%, 100% { transform: translateY(0) translateX(0) rotateZ(0deg); }
+                25% { transform: translateY(-20px) translateX(10px) rotateZ(1deg); }
+                50% { transform: translateY(10px) translateX(-10px) rotateZ(-1deg); }
+                75% { transform: translateY(-10px) translateX(5px) rotateZ(0.5deg); }
+            }
+            @keyframes float-1 {
+                0%, 100% { transform: translateY(0) translateX(0) rotateZ(0deg); }
+                25% { transform: translateY(15px) translateX(-15px) rotateZ(-1.5deg); }
+                50% { transform: translateY(-25px) translateX(15px) rotateZ(1.5deg); }
+                75% { transform: translateY(5px) translateX(-5px) rotateZ(-0.5deg); }
+            }
+            @keyframes float-2 {
+                0%, 100% { transform: translateY(0) translateX(0) rotateZ(0deg); }
+                25% { transform: translateY(-30px) translateX(-20px) rotateZ(2deg); }
+                50% { transform: translateY(20px) translateX(20px) rotateZ(-2deg); }
+                75% { transform: translateY(-15px) translateX(-10px) rotateZ(1deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

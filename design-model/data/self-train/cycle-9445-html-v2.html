@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --memory-sepia: #f4e8d0;
+            --aged-paper: #faf6ed;
+            --ink-blur: #4a3f36;
+            --spice-ochre: #d4814e;
+            --kitchen-sage: #8a9578;
+            --fragment-blue: #6b7f9c;
+            --confidence-gold: #c9a961;
+            --hesitation: rgba(106, 127, 156, 0.3);
+            --decade-drift: #e8dcc4;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', serif;
+            background: var(--aged-paper);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-blur);
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1440px;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            gap: 40px;
+            padding: 40px;
+        }
+
+        /* Typography System */
+        h1 {
+            font-family: 'Georgia', serif;
+            font-size: 24px;
+            font-weight: normal;
+            color: var(--ink-blur);
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-family: 'Georgia', serif;
+            font-size: 18px;
+            font-weight: normal;
+            color: var(--ink-blur);
+            margin-bottom: 16px;
+        }
+
+        .ui-text {
+            font-family: -apple-system, system-ui, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--ink-blur);
+        }
+
+        .small-text {
+            font-family: -apple-system, system-ui, sans-serif;
+            font-size: 12px;
+            color: rgba(74, 63, 54, 0.7);
+        }
+
+        /* Left Sidebar */
+        .memory-bank {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fragment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stored-fragment {
+            background: white;
+            border: 1px solid var(--hesitation);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+
+        .stored-fragment:hover {
+            transform: translateX(8px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .fragment-type {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .type-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .type-icon.taste { background: rgba(212, 129, 78, 0.2); color: var(--spice-ochre); }
+        .type-icon.sound { background: rgba(107, 127, 156, 0.2); color: var(--fragment-blue); }
+        .type-icon.smell { background: rgba(138, 149, 120, 0.2); color: var(--kitchen-sage); }
+
+        /* Center Area */
+        .temporal-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .temporal-wheel {
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(
+                circle at center,
+                transparent 30%,
+                rgba(244, 232, 208, 0.1) 30%,
+                rgba(244, 232, 208, 0.3) 70%,
+                rgba(244, 232, 208, 0.1) 100%
+            );
+            border: 2px solid rgba(74, 63, 54, 0.1);
+            position: relative;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .wheel-zones {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .zone {
+            position: absolute;
+            inset: 0;
+            opacity: 0.05;
+        }
+
+        .zone.past { background: conic-gradient(from 0deg at 50% 50%, var(--memory-sepia) 0deg, transparent 90deg); }
+        .zone.childhood { background: conic-gradient(from 90deg at 50% 50%, var(--kitchen-sage) 0deg, transparent 90deg); }
+        .zone.recent { background: conic-gradient(from 180deg at 50% 50%, var(--fragment-blue) 0deg, transparent 90deg); }
+        .zone.present { background: conic-gradient(from 270deg at 50% 50%, var(--confidence-gold) 0deg, transparent 90deg); }
+
+        .decade-markers {
+            position: absolute;
+            inset: 0;
+        }
+
+        .decade-marker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .decade-marker span {
+            position: absolute;
+            font-size: 12px;
+            color: var(--ink-blur);
+            opacity: 0.4;
+            font-style: italic;
+        }
+
+        .decade-marker:nth-child(1) span { top: 10px; }
+        .decade-marker:nth-child(2) span { right: 10px; }
+        .decade-marker:nth-child(3) span { bottom: 10px; }
+        .decade-marker:nth-child(4) span { left: 10px; }
+
+        .center-recipe {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .recipe-title {
+            font-size: 20px;
+            color: var(--ink-blur);
+            text-align: center;
+            max-width: 200px;
+        }
+
+        .dropped-fragment {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            transition: all 0.3s ease;
+        }
+
+        .dropped-fragment:hover {
+            transform: scale(1.05);
+        }
+
+        .confidence-meter {
+            position: absolute;
+            bottom: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            text-align: center;
+        }
+
+        .meter-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(74, 63, 54, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .meter-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--hesitation), var(--confidence-gold));
+            width: 0%;
+            transition: width 0.6s ease;
+        }
+
+        /* Right Sidebar */
+        .reconstruction-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .recipe-output {
+            background: white;
+            border: 1px solid rgba(74, 63, 54, 0.1);
+            border-radius: 8px;
+            padding: 24px;
+            flex: 1;
+        }
+
+        .ingredient-list {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ingredient {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            background: var(--aged-paper);
+            border-radius: 6px;
+        }
+
+        .confidence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--confidence-gold);
+        }
+
+        .confidence-dot.low { opacity: 0.3; }
+        .confidence-dot.medium { opacity: 0.6; }
+        .confidence-dot.high { opacity: 1; }
+
+        .method-steps {
+            margin-top: 24px;
+        }
+
+        .step {
+            margin-bottom: 16px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .step::before {
+            content: counter(step);
+            counter-increment: step;
+            position: absolute;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            background: var(--decade-drift);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .method-steps {
+            counter-reset: step;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--kitchen-sage);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--ink-blur);
+            color: var(--ink-blur);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fragment-list > *, .ingredient, .step {
+            animation: fadeIn 0.4s ease backwards;
+        }
+
+        .fragment-list > :nth-child(2) { animation-delay: 0.1s; }
+        .fragment-list > :nth-child(3) { animation-delay: 0.2s; }
+        .fragment-list > :nth-child(4) { animation-delay: 0.3s; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="memory-bank">
+            <h1>Memory Fragments</h1>
+            <div class="fragment-list">
+                <div class="stored-fragment" draggable="true">
+                    <div class="fragment-type">
+                        <div class="type-icon taste">🌶️</div>
+                        <div>
+                            <div class="ui-text">Cumin & Paprika</div>
+                            <div class="small-text">Strong spice memory</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stored-fragment" draggable="true">
+                    <div class="fragment-type">
+                        <div class="type-icon sound">🔊</div>
+                        <div>
+                            <div class="ui-text">Sizzling Sound</div>
+                            <div class="small-text">Cast iron, high heat</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stored-fragment" draggable="true">
+                    <div class="fragment-type">
+                        <div class="type-icon smell">👃</div>
+                        <div>
+                            <div class="ui-text">Garlic Aroma</div>
+                            <div class="small-text">Early in cooking</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stored-fragment" draggable="true">
+                    <div class="fragment-type">
+                        <div class="type-icon taste">🍅</div>
+                        <div>
+                            <div class="ui-text">Tomato Base</div>
+                            <div class="small-text">Sweet and tangy</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="temporal-area">
+            <div class="temporal-wheel">
+                <div class="wheel-zones">
+                    <div class="zone past"></div>
+                    <div class="zone childhood"></div>
+                    <div class="zone recent"></div>
+                    <div class="zone present"></div>
+                </div>
+                <div class="decade-markers">
+                    <div class="decade-marker"><span>1970s</span></div>
+                    <div class="decade-marker"><span>1990s</span></div>
+                    <div class="decade-marker"><span>2010s</span></div>
+                    <div class="decade-marker"><span>Present</span></div>
+                </div>
+                <div class="center-recipe">
+                    <h2 class="recipe-title">Drop memories to reconstruct...</h2>
+                </div>
+            </div>
+            <div class="confidence-meter">
+                <p class="small-text">Recipe Confidence</p>
+                <div class="meter-bar">
+                    <div class="meter-fill" style="width: 35%;"></div>
+                </div>
+            </div>
+        </main>
+
+        <aside class="reconstruction-panel">
+            <h1>Reconstructed Recipe</h1>
+            <div class="recipe-output">
+                <h2>Emerging Pattern...</h2>
+                <div class="ingredient-list">
+                    <div class="ingredient">
+                        <div class="confidence-dot high"></div>
+                        <span class="ui-text">2 tsp cumin powder</span>
+                    </div>
+                    <div class="ingredient">
+                        <div class="confidence-dot medium"></div>
+                        <span class="ui-text">1 tbsp paprika</span>
+                    </div>
+                    <div class="ingredient">
+                        <div class="confidence-dot low"></div>
+                        <span class="ui-text">3-4 garlic cloves</span>
+                    </div>
+                </div>
+                <div class="method-steps">
+                    <h2>Method</h2>
+                    <div class="step">
+                        <p class="ui-text">Heat oil until shimmering</p>
+                    </div>
+                    <div class="step">
+                        <p class="ui-text">Add spices, stir frequently</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary">Save Draft</button>
+                    <button class="btn btn-primary">Test Recipe</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+</body>
+</html>

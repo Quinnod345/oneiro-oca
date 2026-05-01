@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flavor Memory Studio</title>
+    <style>
+        :root {
+            --canvas: #fdfcfa;
+            --surface: #f8f5f0;
+            --line: #e5dfd6;
+            --text: #3a352f;
+            --text-soft: #736b5e;
+            --umami: #8b5a8c;
+            --sweet: #f0b849;
+            --acid: #86b049;
+            --salt: #d4d4d4;
+            --bitter: #5c4033;
+            --hover: rgba(139, 90, 140, 0.08);
+            --active: rgba(139, 90, 140, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--surface);
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        .interface {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            gap: 1px;
+            background: var(--line);
+        }
+
+        .taste-palette {
+            background: var(--canvas);
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .palette-header {
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            color: var(--text-soft);
+            margin-bottom: 2rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .taste-element {
+            margin-bottom: 1.5rem;
+            cursor: grab;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        .taste-element:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .taste-element:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .taste-visual {
+            height: 72px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .taste-icon {
+            position: absolute;
+            opacity: 0.15;
+            font-size: 2.5rem;
+            color: currentColor;
+            pointer-events: none;
+        }
+
+        .taste-label {
+            position: absolute;
+            bottom: 8px;
+            left: 12px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: white;
+            background: rgba(0,0,0,0.4);
+            padding: 2px 8px;
+            border-radius: 4px;
+            backdrop-filter: blur(8px);
+        }
+
+        .umami-wave {
+            background: linear-gradient(135deg, var(--umami), #a06ba1);
+            color: var(--umami);
+        }
+
+        .sweet-spiral {
+            background: linear-gradient(135deg, var(--sweet), #f4c563);
+            color: var(--sweet);
+        }
+
+        .acid-fractal {
+            background: linear-gradient(135deg, var(--acid), #9bc45d);
+            color: var(--acid);
+        }
+
+        .salt-crystal {
+            background: linear-gradient(135deg, var(--salt), #e8e8e8);
+            color: var(--salt);
+        }
+
+        .bitter-depth {
+            background: linear-gradient(135deg, var(--bitter), #704e3d);
+            color: var(--bitter);
+        }
+
+        .canvas-area {
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .memory-canvas {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 24px rgba(0,0,0,0.06);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 2px dashed transparent;
+        }
+
+        .memory-canvas.drag-over {
+            border-color: var(--umami);
+            background: var(--hover);
+            transform: scale(1.02);
+        }
+
+        .canvas-content {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-soft);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .empty-state h3 {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .dropped-taste {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 60% 40% 60% 40%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            cursor: move;
+            transition: all 0.3s ease;
+            animation: settle 0.4s ease-out;
+        }
+
+        @keyframes settle {
+            from {
+                transform: scale(1.2) rotate(-5deg);
+                opacity: 0.7;
+            }
+            to {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .dropped-taste:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+
+        .timeline {
+            background: var(--canvas);
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .timeline-header {
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            color: var(--text-soft);
+            margin-bottom: 2rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .memory-entry {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid var(--line);
+            transition: all 0.2s ease;
+        }
+
+        .memory-entry:hover {
+            border-left-color: var(--umami);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .memory-time {
+            font-size: 0.75rem;
+            color: var(--text-soft);
+            margin-bottom: 0.25rem;
+        }
+
+        .memory-description {
+            font-size: 0.875rem;
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .control-panel {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .control-button {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .control-button:hover {
+            background: var(--hover);
+            border-color: var(--umami);
+            transform: translateY(-1px);
+        }
+
+        .control-button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="interface">
+        <aside class="taste-palette">
+            <h2 class="palette-header">Flavor Elements</h2>
+            
+            <div class="taste-element" draggable="true" data-taste="umami">
+                <div class="taste-visual umami-wave">
+                    <span class="taste-icon">●</span>
+                    <span class="taste-label">Umami</span>
+                </div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="sweet">
+                <div class="taste-visual sweet-spiral">
+                    <span class="taste-icon">○</span>
+                    <span class="taste-label">Sweet</span>
+                </div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="acid">
+                <div class="taste-visual acid-fractal">
+                    <span class="taste-icon">◆</span>
+                    <span class="taste-label">Acid</span>
+                </div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="salt">
+                <div class="taste-visual salt-crystal">
+                    <span class="taste-icon">■</span>
+                    <span class="taste-label">Salt</span>
+                </div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="bitter">
+                <div class="taste-visual bitter-depth">
+                    <span class="taste-icon">▲</span>
+                    <span class="taste-label">Bitter</span>
+                </div>
+            </div>
+        </aside>
+        
+        <main class="canvas-area">
+            <div class="memory-canvas" id="canvas">
+                <div class="canvas-content">
+                    <div class="empty-state">
+                        <h3>Begin Your Recipe</h3>
+                        <p>Drag flavor elements to compose your culinary memory</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <aside class="timeline">
+            <h2 class="timeline-header">Recipe Timeline</h2>
+            
+            <div class="memory-entry">
+                <div class="memory-time">Just now</div>
+                <div class="memory-description">Canvas initialized. Awaiting first flavor...</div>
+            </div>
+        </aside>
+    </div>
+    
+    <div class="control-panel">
+        <button class="control-button" onclick="clearCanvas()">Clear</button>
+        <button class="control-button" onclick="saveRecipe()">Save Recipe</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const tasteElements = document.querySelectorAll('.taste-element');
+        const timeline = document.querySelector('.timeline');
+        
+        const tasteColors = {
+            umami: '#8b5a8c',
+            sweet: '#f0b849',
+            acid: '#86b049',
+            salt: '#d4d4d4',
+            bitter: '#5c4033'
+        };
+        
+        let draggedElement = null;
+        let droppedCount = 0;
+        
+        tasteElements.forEach(element => {
+            element.addEventListener('dragstart', (e) => {
+                draggedElement = e.target;
+                e.target.style.opacity = '0.5';
+            });
+            
+            element.addEventListener('dragend', (e) => {
+                e.target.style.opacity = '';
+            });
+        });
+        
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            canvas.classList.add('drag-over');
+        });
+        
+        canvas.addEventListener('dragleave', () => {
+            canvas.classList.remove('drag-over');
+        });
+        
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            canvas.classList.remove('drag-over');
+            
+            if (draggedElement) {
+                const taste = draggedElement.dataset.taste;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                addTasteToCanvas(taste, x, y);
+                addTimelineEntry(taste);
+            }
+        });
+        
+        function addTasteToCanvas(taste, x, y) {
+            const emptyState = canvas.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            const tasteElement = document.createElement('div');
+            tasteElement.className = 'dropped-taste';
+            tasteElement.style.left = (x - 60) + 'px';
+            tasteElement.style.top = (y - 60) + 'px';
+            tasteElement.style.background = `linear-gradient(135deg, ${tasteColors[taste]}, ${tasteColors[taste]}dd)`;
+            tasteElement.textContent = taste.charAt(0).toUpperCase() + taste.slice(1);
+            tasteElement.draggable = true;
+            
+            tasteElement.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.target.style.opacity = '0.5';
+            });
+            
+            tasteElement.addEventListener('dragend', (e) => {
+                e.target.style.opacity = '';
+            });
+            
+            canvas.querySelector('.canvas-content').appendChild(tasteElement);
+            droppedCount++;
+        }
+        
+        function addTimelineEntry(taste) {
+            const entry = document.createElement('div');
+            entry.className = 'memory-entry';
+            entry.innerHTML = `
+                <div class="memory-time">${new Date().toLocaleTimeString()}</div>
+                <div class="memory-description">Added ${taste} flavor to the composition</div>
+            `;
+            timeline.insertBefore(entry, timeline.children[1]);
+        }
+        
+        function clearCanvas() {
+            const content = canvas.querySelector('.canvas-content');
+            content.innerHTML = `
+                <div class="empty-state">
+                    <h3>Begin Your Recipe</h3>
+                    <p>Drag flavor elements to compose your culinary memory</p>
+                </div>
+            `;
+            droppedCount = 0;
+            addTimelineEntry('canvas cleared');
+        }
+        
+        function saveRecipe() {
+            if (droppedCount > 0) {
+                addTimelineEntry(`recipe saved with ${droppedCount} flavors`);
+            }
+        }
+    </script>
+</body>
+</html>

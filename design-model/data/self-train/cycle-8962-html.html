@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Unraveler</title>
+    <style>
+        :root {
+            --parchment: #f4f0e6;
+            --aged-ink: #3a3028;
+            --mercury: #e8e8f0;
+            --strata-1: #d4a574;
+            --strata-2: #b8956a;
+            --strata-3: #9c7c5a;
+            --strata-4: #806349;
+            --thermal: #ff6b35;
+            --cursive-confidence: #2a4858;
+            --print-doubt: #7a6a5a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--parchment);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .excavation-site {
+            position: absolute;
+            left: 420px;
+            top: 50px;
+            width: 600px;
+            height: 800px;
+            perspective: 1000px;
+        }
+
+        .strata-layer {
+            position: absolute;
+            width: 100%;
+            height: 120px;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .strata-layer:nth-child(1) {
+            top: 0;
+            background: linear-gradient(to bottom, var(--strata-1) 0%, var(--strata-1) 85%, #c49968 100%);
+            transform: rotateX(-5deg) translateZ(0);
+        }
+
+        .strata-layer:nth-child(2) {
+            top: 110px;
+            background: linear-gradient(to bottom, var(--strata-2) 0%, var(--strata-2) 85%, #aa8760 100%);
+            transform: rotateX(-5deg) translateZ(-20px);
+        }
+
+        .strata-layer:nth-child(3) {
+            top: 220px;
+            background: linear-gradient(to bottom, var(--strata-3) 0%, var(--strata-3) 85%, #8e6e4c 100%);
+            transform: rotateX(-5deg) translateZ(-40px);
+        }
+
+        .strata-layer:nth-child(4) {
+            top: 330px;
+            background: linear-gradient(to bottom, var(--strata-4) 0%, var(--strata-4) 85%, #725541 100%);
+            transform: rotateX(-5deg) translateZ(-60px);
+        }
+
+        .strata-layer:nth-child(5) {
+            top: 440px;
+            background: linear-gradient(to bottom, #6a4f3e 0%, #6a4f3e 85%, #5c4335 100%);
+            transform: rotateX(-5deg) translateZ(-80px);
+        }
+
+        .strata-layer:nth-child(6) {
+            top: 550px;
+            background: linear-gradient(to bottom, #574336 0%, #574336 85%, #49372a 100%);
+            transform: rotateX(-5deg) translateZ(-100px);
+        }
+
+        .strata-layer:hover {
+            transform: rotateX(-5deg) translateZ(40px) translateY(-30px);
+        }
+
+        .ingredient-fossil {
+            position: absolute;
+            left: 50px;
+            top: 40%;
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            transform: skewY(-2deg);
+            letter-spacing: 0.5px;
+        }
+
+        .mercury-pool {
+            position: absolute;
+            right: 80px;
+            top: 35%;
+            width: 60px;
+            height: 30px;
+            background: var(--mercury);
+            border-radius: 50%;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--aged-ink);
+            animation: mercuryPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes mercuryPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        .handwriting-sample {
+            position: absolute;
+            left: 50px;
+            top: 80px;
+            width: 320px;
+            height: 740px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 40px 30px;
+            overflow: hidden;
+        }
+
+        .recipe-card {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 0%, rgba(218, 207, 190, 0.3) 100%);
+            position: relative;
+        }
+
+        .handwritten-text {
+            font-family: 'Courier New', monospace;
+            color: var(--aged-ink);
+            line-height: 1.8;
+            position: relative;
+        }
+
+        .cursive {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 22px;
+            transform: rotate(-2deg);
+            opacity: 0.8;
+        }
+
+        .print {
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            letter-spacing: 1px;
+            opacity: 0.9;
+        }
+
+        .confidence-morph {
+            transition: all 0.4s ease;
+        }
+
+        .low-confidence {
+            filter: blur(1px);
+            opacity: 0.5;
+        }
+
+        .weather-pattern {
+            position: absolute;
+            width: 100%;
+            height: 60px;
+            pointer-events: none;
+        }
+
+        .steam {
+            top: 160px;
+            background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 20%, transparent 40%, rgba(255,255,255,0.3) 60%, transparent 100%);
+            animation: steamDrift 8s linear infinite;
+        }
+
+        .heat-wave {
+            top: 380px;
+            background: linear-gradient(90deg, transparent 0%, rgba(255,107,53,0.2) 30%, transparent 60%, rgba(255,107,53,0.15) 80%, transparent 100%);
+            animation: heatShimmer 6s ease-in-out infinite;
+        }
+
+        @keyframes steamDrift {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        @keyframes heatShimmer {
+            0%, 100% { transform: translateX(0) scaleY(1); }
+            50% { transform: translateX(20px) scaleY(1.2); }
+        }
+
+        .thermal-ribbon {
+            position: absolute;
+            left: 420px;
+            top: 100px;
+            width: 600px;
+            height: 2px;
+            background: var(--thermal);
+            transform-origin: left center;
+            opacity: 0.6;
+        }
+
+        .thermal-ribbon:nth-child(1) {
+            transform: rotate(12deg);
+            top: 180px;
+        }
+
+        .thermal-ribbon:nth-child(2) {
+            transform: rotate(-8deg);
+            top: 320px;
+        }
+
+        .thermal-ribbon:nth-child(3) {
+            transform: rotate(15deg);
+            top: 460px;
+        }
+
+        .margin-note {
+            position: absolute;
+            right: -20px;
+            font-size: 12px;
+            color: var(--print-doubt);
+            transform: rotate(90deg);
+            transform-origin: center;
+            opacity: 0.7;
+        }
+
+        .timeline-ruler {
+            position: absolute;
+            right: 50px;
+            top: 80px;
+            width: 30px;
+            height: 740px;
+            border-right: 2px solid var(--aged-ink);
+            opacity: 0.3;
+        }
+
+        .time-marker {
+            position: absolute;
+            right: -40px;
+            width: 30px;
+            height: 1px;
+            background: var(--aged-ink);
+        }
+
+        .time-marker::after {
+            content: attr(data-time);
+            position: absolute;
+            right: -60px;
+            top: -8px;
+            font-size: 11px;
+            color: var(--aged-ink);
+            opacity: 0.6;
+        }
+
+        .time-marker:nth-child(1) { top: 0; }
+        .time-marker:nth-child(2) { top: 120px; }
+        .time-marker:nth-child(3) { top: 240px; }
+        .time-marker:nth-child(4) { top: 360px; }
+        .time-marker:nth-child(5) { top: 480px; }
+        .time-marker:nth-child(6) { top: 600px; }
+
+        .smudge {
+            position: absolute;
+            width: 80px;
+            height: 40px;
+            background: radial-gradient(ellipse at center, rgba(122, 106, 90, 0.2) 0%, transparent 70%);
+            filter: blur(2px);
+        }
+
+        .smudge:nth-child(1) {
+            top: 140px;
+            left: 120px;
+            transform: rotate(25deg);
+        }
+
+        .smudge:nth-child(2) {
+            top: 340px;
+            left: 200px;
+            transform: rotate(-15deg) scale(1.3);
+        }
+
+        .generational-echo {
+            position: absolute;
+            bottom: 30px;
+            left: 50px;
+            right: 430px;
+            font-style: italic;
+            color: var(--cursive-confidence);
+            opacity: 0.6;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .excavation-tools {
+            position: absolute;
+            right: 80px;
+            top: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tool {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--aged-ink);
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .tool:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .active-layer-indicator {
+            position: absolute;
+            left: 390px;
+            width: 20px;
+            height: 120px;
+            background: var(--thermal);
+            opacity: 0.3;
+            top: 50px;
+            transition: top 0.4s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="handwriting-sample">
+        <div class="recipe-card">
+            <div class="handwritten-text cursive">Mama's Secret Stew</div>
+            <br>
+            <div class="handwritten-text print confidence-morph">2 cups flour</div>
+            <div class="handwritten-text cursive low-confidence">pinch of... love?</div>
+            <br>
+            <div class="handwritten-text print">350° for 45 min</div>
+            <div class="margin-note">or until golden</div>
+            <br>
+            <div class="handwritten-text cursive confidence-morph low-confidence">fold gently, like</div>
+            <div class="handwritten-text print">summer clouds</div>
+            
+            <div class="smudge"></div>
+            <div class="smudge"></div>
+        </div>
+    </div>
+
+    <div class="excavation-site">
+        <div class="strata-layer">
+            <div class="ingredient-fossil">flour, sifted twice</div>
+            <div class="mercury-pool">2 cups</div>
+        </div>
+        <div class="strata-layer">
+            <div class="ingredient-fossil">butter, room temp</div>
+            <div class="mercury-pool">1/2 cup</div>
+        </div>
+        <div class="strata-layer">
+            <div class="ingredient-fossil">sugar, fine grain</div>
+            <div class="mercury-pool">3/4 cup</div>
+        </div>
+        <div class="strata-layer">
+            <div class="ingredient-fossil">eggs, beaten</div>
+            <div class="mercury-pool">3</div>
+        </div>
+        <div class="strata-layer">
+            <div class="ingredient-fossil">vanilla essence</div>
+            <div class="mercury-pool">1 tsp</div>
+        </div>
+        <div class="strata-layer">
+            <div class="ingredient-fossil">salt, just a whisper</div>
+            <div class="mercury-pool">pinch</div>
+        </div>
+    </div>
+
+    <div class="weather-pattern steam"></div>
+    <div class="weather-pattern heat-wave"></div>
+    
+    <div class="thermal-ribbon"></div>
+    <div class="thermal-ribbon"></div>
+    <div class="thermal-ribbon"></div>
+
+    <div class="timeline-ruler">
+        <div class="time-marker" data-time="1952"></div>
+        <div class="time-marker" data-time="1964"></div>
+        <div class="time-marker" data-time="1978"></div>
+        <div class="time-marker" data-time="1991"></div>
+        <div class="time-marker" data-time="2008"></div>
+        <div class="time-marker" data-time="2024"></div>
+    </div>
+
+    <div class="excavation-tools">
+        <div class="tool">🔍</div>
+        <div class="tool">⛏️</div>
+        <div class="tool">🌡️</div>
+    </div>
+
+    <div class="active-layer-indicator"></div>
+
+    <div class="generational-echo">
+        "She always said the secret was in the folding—three generations, three folds, like braiding time itself"
+    </div>
+</body>
+</html>

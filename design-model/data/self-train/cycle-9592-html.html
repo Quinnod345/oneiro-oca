@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Message Composer</title>
+    <style>
+        :root {
+            --void: #0a0a0c;
+            --lunar-surface: #1a1a1f;
+            --crater-shadow: #131316;
+            --moon-glow: #e8e3d3;
+            --text-light: rgba(232, 227, 211, 0.9);
+            --text-dim: rgba(232, 227, 211, 0.4);
+            --constellation: rgba(147, 197, 253, 0.3);
+            --emotional-warm: rgba(251, 191, 36, 0.6);
+            --emotional-cool: rgba(156, 163, 175, 0.6);
+            --emotional-intense: rgba(239, 68, 68, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: default;
+        }
+
+        .cosmos {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 25% 40%, #0f0f14 0%, var(--void) 50%);
+        }
+
+        .stars {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .star {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--text-light);
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.9; }
+        }
+
+        .moon-container {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+        }
+
+        .moon {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--lunar-surface);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 0 0 1px rgba(232, 227, 211, 0.05),
+                inset -40px -40px 80px var(--crater-shadow),
+                inset 20px 20px 60px rgba(232, 227, 211, 0.02);
+            transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .moon.filling {
+            background: radial-gradient(circle at 30% 30%, var(--moon-glow), var(--lunar-surface));
+            box-shadow: 
+                0 0 80px rgba(232, 227, 211, 0.3),
+                0 0 120px rgba(232, 227, 211, 0.1),
+                inset -20px -20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .craters {
+            position: absolute;
+            inset: 0;
+        }
+
+        .crater {
+            position: absolute;
+            border-radius: 50%;
+            background: var(--crater-shadow);
+            box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .crater:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            top: 60px;
+            left: 120px;
+        }
+
+        .crater:nth-child(2) {
+            width: 40px;
+            height: 40px;
+            top: 200px;
+            left: 80px;
+        }
+
+        .crater:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            bottom: 80px;
+            right: 100px;
+        }
+
+        .liquid-text {
+            position: absolute;
+            inset: 20px;
+            padding: 30px;
+            color: var(--text-light);
+            font-size: 14px;
+            line-height: 1.8;
+            letter-spacing: 0.02em;
+            opacity: 0;
+            transition: opacity 1s ease;
+            pointer-events: none;
+            mask-image: radial-gradient(circle, black 30%, transparent 70%);
+            -webkit-mask-image: radial-gradient(circle, black 30%, transparent 70%);
+        }
+
+        .moon.filling .liquid-text {
+            opacity: 1;
+        }
+
+        .composer {
+            position: absolute;
+            left: 120px;
+            bottom: 120px;
+            width: 480px;
+        }
+
+        .phase-indicator {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            color: var(--text-dim);
+            font-size: 13px;
+            letter-spacing: 0.05em;
+        }
+
+        .current-phase {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .phase-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--lunar-surface);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phase-icon::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--moon-glow);
+            clip-path: ellipse(50% 50% at 25% 50%);
+        }
+
+        .next-full {
+            margin-left: auto;
+        }
+
+        .message-input {
+            width: 100%;
+            min-height: 200px;
+            background: rgba(26, 26, 31, 0.4);
+            border: 1px solid rgba(232, 227, 211, 0.1);
+            border-radius: 12px;
+            padding: 24px;
+            color: var(--text-light);
+            font-size: 16px;
+            line-height: 1.7;
+            resize: none;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .message-input:focus {
+            background: rgba(26, 26, 31, 0.6);
+            border-color: rgba(232, 227, 211, 0.2);
+        }
+
+        .message-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .constellation-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .constellation-line {
+            stroke: var(--constellation);
+            stroke-width: 1;
+            fill: none;
+            opacity: 0;
+            animation: constellation-appear 1s ease forwards;
+        }
+
+        @keyframes constellation-appear {
+            to { opacity: 1; }
+        }
+
+        .emotion-node {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .emotion-node.warm {
+            background: var(--emotional-warm);
+            box-shadow: 0 0 12px var(--emotional-warm);
+        }
+
+        .emotion-node.cool {
+            background: var(--emotional-cool);
+            box-shadow: 0 0 12px var(--emotional-cool);
+        }
+
+        .emotion-node.intense {
+            background: var(--emotional-intense);
+            box-shadow: 0 0 12px var(--emotional-intense);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+
+        .send-ritual {
+            position: absolute;
+            right: 120px;
+            bottom: 120px;
+            width: 300px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .send-ritual.ready {
+            opacity: 1;
+        }
+
+        .gesture-guide {
+            color: var(--text-dim);
+            font-size: 13px;
+            letter-spacing: 0.05em;
+            margin-bottom: 24px;
+        }
+
+        .gesture-area {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+            border: 1px solid rgba(232, 227, 211, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: crosshair;
+            transition: all 0.3s ease;
+        }
+
+        .gesture-area:hover {
+            border-color: rgba(232, 227, 211, 0.3);
+            background: rgba(232, 227, 211, 0.02);
+        }
+
+        .gesture-path {
+            stroke: var(--moon-glow);
+            stroke-width: 2;
+            fill: none;
+            opacity: 0.3;
+            stroke-dasharray: 5 5;
+        }
+
+        .user-gesture {
+            stroke: var(--moon-glow);
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 4px var(--moon-glow));
+        }
+
+        .envelope {
+            position: absolute;
+            width: 40px;
+            height: 30px;
+            background: rgba(232, 227, 211, 0.1);
+            border: 1px solid rgba(232, 227, 211, 0.3);
+            border-radius: 4px;
+            opacity: 0;
+            transform: translate(-50%, -50%);
+            transition: all 0.5s ease;
+        }
+
+        .envelope.sealed {
+            opacity: 1;
+            animation: orbit 20s linear infinite;
+        }
+
+        @keyframes orbit {
+            from {
+                transform: rotate(0deg) translateX(250px) rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg) translateX(250px) rotate(-360deg);
+            }
+        }
+
+        .word-count {
+            position: absolute;
+            bottom: 40px;
+            left: 120px;
+            color: var(--text-dim);
+            font-size: 12px;
+            letter-spacing: 0.05em;
+        }
+
+        .resonance-preview {
+            position: absolute;
+            top: 120px;
+            right: 120px;
+            width: 280px;
+            padding: 24px;
+            background: rgba(26, 26, 31, 0.4);
+            border: 1px solid rgba(232, 227, 211, 0.1);
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .resonance-preview.visible {
+            opacity: 1;
+        }
+
+        .resonance-title {
+            color: var(--text-dim);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+
+        .resonance-meter {
+            height: 4px;
+            background: rgba(232, 227, 211, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .resonance-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--emotional-cool), var(--emotional-warm));
+            width: 0%;
+            transition: width 1s ease;
+        }
+
+        .resonance-words {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .resonance-word {
+            padding: 4px 8px;
+            background: rgba(232, 227, 211, 0.05);
+            border-radius: 4px;
+            color: var(--text-light);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmos">
+        <div class="stars"></div>
+    </div>
+
+    <div class="moon-container">
+        <div class="moon" id="moon">
+            <div class="craters">
+                <div class="crater"></div>
+                <div class="crater"></div>
+                <div class="crater"></div>
+            </div>
+            <div class="liquid-text" id="liquidText"></div>
+        </div>
+        <div class="envelope" id="envelope"></div>
+    </div>
+
+    <svg class="constellation-canvas" id="constellationCanvas">
+    </svg>
+
+    <div class="composer">
+        <div class="phase-indicator">
+            <div class="current-phase">
+                <div class="phase-icon"></div>
+                <span>Waxing Crescent</span>
+            </div>
+            <div class="next-full">Next Full Moon: 23 days</div>
+        </div>
+        <textarea 
+            class="message-input" 
+            id="messageInput"
+            placeholder="Write your message to be delivered under the full moon..."
+        ></textarea>
+    </div>
+
+    <div class="send-ritual" id="sendRitual">
+        <div class="gesture-guide">Trace the crescent to seal your message</div>
+        <div class="gesture-area" id="gestureArea">
+            <svg width="200" height="200" style="position: absolute; inset: 0;">
+                <path class="gesture-path" d="M 100 40 Q 140 100 100 160 Q 80 100 100 40" />
+                <path class="user-gesture" id="userGesture" d="" />
+            </svg>
+        </div>
+    </div>
+
+    <div class="word-count" id="wordCount">0 words written</div>
+
+    <div class="resonance-preview" id="resonancePreview">
+        <div class="resonance-title">Emotional Resonance</div>
+        <div class="resonance-meter">
+            <div class="resonance-fill" id="resonanceFill"></div>
+        </div>
+        <div class="resonance-words" id="resonanceWords"></div>
+    </div>
+
+    <script>
+        // Generate stars
+        const starsContainer = document.querySelector('.stars');
+        for (let i = 0; i < 200; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.animationDuration = (3 + Math.random() * 2) + 's';
+            starsContainer.appendChild(star);
+        }
+
+        // Message input handling
+        const messageInput = document.getElementById('messageInput');
+        const moon = document.getElementById('moon');
+        const liquidText = document.getElementById('liquidText');
+        const wordCount = document.getElementById('wordCount');
+        const sendRitual = document.getElementById('sendRitual');
+        const constellationCanvas = document.getElementById('constellationCanvas');
+        const resonancePreview = document.getElementById('resonancePreview');
+        const resonanceFill = document.getElementById('resonanceFill');
+        const resonanceWords = document.getElementById('resonanceWords');
+
+        let constellationPoints = [];
+        let emotionalWords = {
+            warm: ['love', 'hope', 'joy', 'peace', 'grateful', 'blessed', 'cherish', 'embrace'],
+            cool: ['reflect', 'wonder', 'dream', 'serene', 'tranquil', 'gentle', 'whisper'],
+            intense: ['passion', 'forever', 'destiny', 'soul', 'eternal', 'profound', 'deeply']
+        };
+
+        messageInput.addEventListener('input', (e) => {
+            const text = e.target.value;
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+            wordCount.textContent = `${words.length} words written`;
+
+            // Fill moon with text
+            if (text.length > 10) {
+                moon.classList.add('filling');
+                liquidText.textContent = text;
+            } else {
+                moon.classList.remove('filling');
+            }
+
+            // Show send ritual when enough words
+            if (words.length >= 10) {
+                sendRitual.classList.add('ready');
+                analyzeResonance(text);
+            } else {
+                sendRitual.classList.remove('ready');
+                resonancePreview.classList.remove('visible');
+            }
+
+            // Create constellations between key phrases
+            if (words.length % 5 === 0 && words.length > 0) {
+                createConstellation();
+            }
+        });
+
+        function analyzeResonance(text) {
+            const words = text.toLowerCase().split(/\s+/);
+            let resonanceScore = 0;
+            let foundWords = [];
+
+            Object.entries(emotionalWords).forEach(([category, wordList]) => {
+                wordList.forEach(word => {
+                    if (words.includes(word)) {
+                        resonanceScore += 10;
+                        foundWords.push({ word, category });
+                    }
+                });
+            });
+
+            resonanceScore = Math.min(resonanceScore, 100);
+            resonanceFill.style.width = resonanceScore + '%';
+
+            resonanceWords.innerHTML = '';
+            foundWords.slice(0, 5).forEach(({ word, category }) => {
+                const span = document.createElement('span');
+                span.className = 'resonance-word';
+                span.textContent = word;
+                span.style.background = `var(--emotional-${category})`;
+                resonanceWords.appendChild(span);
+            });
+
+            if (resonanceScore > 0) {
+                resonancePreview.classList.add('visible');
+            }
+        }
+
+        function createConstellation() {
+            const rect = moon.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 150 + Math.random() * 100;
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
+
+            // Add emotion node
+            const node = document.createElement('div');
+            node.className = 'emotion-node ' + ['warm', 'cool', 'intense'][Math.floor(Math.random() * 3)];
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            document.body.appendChild(node);
+
+            // Draw line if we have a previous point
+            if (constellationPoints.length > 0) {
+                const lastPoint = constellationPoints[constellationPoints.length - 1];
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('class', 'constellation-line');
+                line.setAttribute('x1', lastPoint.x);
+                line.setAttribute('y1', lastPoint.y);
+                line.setAttribute('x2', x);
+                line.setAttribute('y2', y);
+                constellationCanvas.appendChild(line);
+            }
+
+            constellationPoints.push({ x, y });
+        }
+
+        // Gesture tracking
+        const gestureArea = document.getElementById('gestureArea');
+        const userGesture = document.getElementById('userGesture');
+        const envelope = document.getElementById('envelope');
+        let isDrawing = false;
+        let gesturePath = '';
+
+        gestureArea.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = gestureArea.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            gesturePath = `M ${x} ${y}`;
+            userGesture.setAttribute('d', gesturePath);
+        });
+
+        gestureArea.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = gestureArea.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            gesturePath += ` L ${x} ${y}`;
+            userGesture.setAttribute('d', gesturePath);
+        });
+
+        gestureArea.addEventListener('mouseup', () => {
+            if (isDrawing && gesturePath.length > 50) {
+                // Seal the message
+                envelope.classList.add('sealed');
+                const moonRect = moon.getBoundingClientRect();
+                envelope.style.left = (moonRect.left + moonRect.width / 2) + 'px';
+                envelope.style.top = (moonRect.top + moonRect.height / 2) + 'px';
+                
+                // Clear input
+                setTimeout(() => {
+                    messageInput.value = '';
+                    moon.classList.remove('filling');
+                    liquidText.textContent = '';
+                    sendRitual.classList.remove('ready');
+                    userGesture.setAttribute('d', '');
+                    resonancePreview.classList.remove('visible');
+                }, 1000);
+            }
+            isDrawing = false;
+        });
+    </script>
+</body>
+</html>

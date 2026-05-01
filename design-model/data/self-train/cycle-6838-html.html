@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Reconstruction Chamber</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --deep-space: #141420;
+            --ghost-white: rgba(255, 255, 255, 0.03);
+            --memory-blue: #4a7c8f;
+            --decay-amber: #8f6a4a;
+            --whisper-violet: #6a4a8f;
+            --crystal-cyan: #4a8f8f;
+            --fade-rate: 0.996;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #cursor {
+            width: 24px;
+            height: 24px;
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: screen;
+            transition: transform 0.15s ease-out;
+        }
+
+        #cursor::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .chamber {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(74, 124, 143, 0.08) 0%, transparent 40%),
+                radial-gradient(ellipse at 80% 70%, rgba(106, 74, 143, 0.06) 0%, transparent 40%),
+                var(--deep-space);
+        }
+
+        .decay-timer {
+            position: absolute;
+            top: 3rem;
+            left: 3rem;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.75rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .memory-canvas {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reconstruction-zone {
+            width: 800px;
+            height: 600px;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .memory-shard {
+            position: absolute;
+            width: 280px;
+            height: 380px;
+            cursor: grab;
+            user-select: none;
+            transition: filter 0.3s ease;
+        }
+
+        .memory-shard.dragging {
+            cursor: grabbing;
+            z-index: 100;
+        }
+
+        .shard-content {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-origin: center;
+            clip-path: polygon(
+                15% 0%, 85% 0%, 100% 25%, 
+                100% 75%, 85% 100%, 15% 100%, 
+                0% 75%, 0% 25%
+            );
+        }
+
+        .shard-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.7;
+            mix-blend-mode: screen;
+            filter: blur(0.5px) saturate(0.8);
+        }
+
+        .shard-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                135deg,
+                transparent 40%,
+                rgba(255, 255, 255, 0.1) 50%,
+                transparent 60%
+            );
+            mix-blend-mode: overlay;
+        }
+
+        .sensory-data {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            right: 2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .memory-shard:hover .sensory-data {
+            opacity: 1;
+        }
+
+        .whisper {
+            font-size: 0.7rem;
+            color: rgba(106, 74, 143, 0.8);
+            font-style: italic;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .scent {
+            font-size: 0.65rem;
+            color: rgba(143, 106, 74, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+
+        .temperature {
+            font-size: 0.65rem;
+            color: rgba(74, 143, 143, 0.7);
+        }
+
+        .particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: float 8s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { 
+                transform: translateY(0) translateX(0); 
+                opacity: 0;
+            }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            50% { 
+                transform: translateY(-40px) translateX(20px); 
+            }
+        }
+
+        .decay-effect {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(
+                circle at var(--x, 50%) var(--y, 50%),
+                transparent 0%,
+                rgba(255, 255, 255, 0.02) 40%,
+                transparent 70%
+            );
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-shard.decaying .decay-effect {
+            opacity: 1;
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .constellation-map {
+            position: absolute;
+            top: 3rem;
+            right: 3rem;
+            width: 300px;
+            height: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .constellation-point {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(74, 143, 143, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(74, 143, 143, 0.6);
+            animation: twinkle 3s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.5); }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(74, 143, 143, 0.3),
+                transparent
+            );
+            transform-origin: left center;
+        }
+
+        .fragment-tray {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(20, 20, 32, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .fragment-slot {
+            width: 80px;
+            height: 100px;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .fragment-slot:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .mini-shard {
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(
+                20% 0%, 80% 0%, 100% 30%, 
+                100% 70%, 80% 100%, 20% 100%, 
+                0% 70%, 0% 30%
+            );
+            background: linear-gradient(135deg, var(--memory-blue), var(--whisper-violet));
+            opacity: 0.5;
+            cursor: grab;
+        }
+
+        .reconstruction-progress {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--crystal-cyan), var(--memory-blue));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .temporal-distortion {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            filter: url(#distortion);
+            opacity: 0.5;
+        }
+
+        .memory-label {
+            position: absolute;
+            top: -2rem;
+            left: 0;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-shard:hover .memory-label {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="cursor"></div>
+    
+    <div class="chamber">
+        <div class="decay-timer">Temporal Decay: Active</div>
+        
+        <div class="constellation-map">
+            <div class="constellation-point" style="top: 20%; left: 30%;"></div>
+            <div class="constellation-point" style="top: 60%; left: 70%;"></div>
+            <div class="constellation-point" style="top: 40%; left: 50%;"></div>
+            <div class="connection-line" style="top: 20%; left: 30%; width: 100px; transform: rotate(25deg);"></div>
+        </div>
+        
+        <div class="memory-canvas">
+            <div class="reconstruction-zone" id="dropZone">
+                <div class="temporal-distortion"></div>
+                
+                <div class="memory-shard" style="left: 10%; top: 15%;" draggable="true">
+                    <div class="memory-label">Fragment 001</div>
+                    <div class="shard-content">
+                        <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='380'%3E%3Cdefs%3E%3Cfilter id='noise'%3E%3CfeTurbulence baseFrequency='0.02' numOctaves='3'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%234a7c8f' filter='url(%23noise)' opacity='0.6'/%3E%3C/svg%3E" alt="">
+                        <div class="shard-overlay"></div>
+                        <div class="decay-effect"></div>
+                        <div class="sensory-data">
+                            <div class="whisper">"the sound of rain on autumn leaves"</div>
+                            <div class="scent">Petrichor • Wood smoke</div>
+                            <div class="temperature">15.2°C</div>
+                        </div>
+                    </div>
+                    <div class="particles">
+                        <div class="particle" style="left: 20%; animation-delay: 0s;"></div>
+                        <div class="particle" style="left: 50%; animation-delay: 1s;"></div>
+                        <div class="particle" style="left: 80%; animation-delay: 2s;"></div>
+                    </div>
+                </div>
+                
+                <div class="memory-shard decaying" style="right: 20%; top: 25%;" draggable="true">
+                    <div class="memory-label">Fragment 002</div>
+                    <div class="shard-content">
+                        <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='380'%3E%3Cdefs%3E%3Cfilter id='noise2'%3E%3CfeTurbulence baseFrequency='0.03' numOctaves='2'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%236a4a8f' filter='url(%23noise2)' opacity='0.6'/%3E%3C/svg%3E" alt="">
+                        <div class="shard-overlay"></div>
+                        <div class="decay-effect" style="--x: 60%; --y: 40%;"></div>
+                        <div class="sensory-data">
+                            <div class="whisper">"her laughter, like wind chimes"</div>
+                            <div class="scent">Lavender • Old paper</div>
+                            <div class="temperature">22.8°C</div>
+                        </div>
+                    </div>
+                    <div class="particles">
+                        <div class="particle" style="left: 30%; animation-delay: 0.5s;"></div>
+                        <div class="particle" style="left: 60%; animation-delay: 1.5s;"></div>
+                    </div>
+                </div>
+                
+                <div class="memory-shard" style="left: 35%; bottom: 10%;" draggable="true">
+                    <div class="memory-label">Fragment 003</div>
+                    <div class="shard-content">
+                        <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='380'%3E%3Cdefs%3E%3Cfilter id='noise3'%3E%3CfeTurbulence baseFrequency='0.025' numOctaves='4'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%238f6a4a' filter='url(%23noise3)' opacity='0.6'/%3E%3C/svg%3E" alt="">
+                        <div class="shard-overlay"></div>
+                        <div class="decay-effect"></div>
+                        <div class="sensory-data">
+                            <div class="whisper">"the weight of silence between words"</div>
+                            <div class="scent">Cedar • Sea salt</div>
+                            <div class="temperature">18.4°C</div>
+                        </div>
+                    </div>
+                    <div class="particles">
+                        <div class="particle" style="left: 40%; animation-delay: 0.3s;"></div>
+                        <div class="particle" style="left: 70%; animation-delay: 1.8s;"></div>
+                    </div>
+                </div>
+                
+                <div class="reconstruction-progress">
+                    <div class="progress-fill" style="width: 35%;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="fragment-tray">
+            <div class="fragment-slot">
+                <div class="mini-shard"></div>
+            </div>
+            <div class="fragment-slot"></div>
+            <div class="fragment-slot"></div>
+            <div class="fragment-slot"></div>
+            <div class="fragment-slot"></div>
+        </div>
+    </div>
+    
+    <svg width="0" height="0">
+        <defs>
+            <filter id="distortion">
+                <feTurbulence baseFrequency="0.001" numOctaves="1" seed="5" />
+                <feDisplacementMap in="SourceGraphic" scale="5" />
+            </filter>
+        </defs>
+    </svg>
+    
+    <script>
+        // Custom cursor
+        const cursor = document.getElementById('cursor');
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX - 12 + 'px';
+            cursor.style.top = e.clientY - 12 + 'px';
+        });
+        
+        // Dragging functionality
+        let draggedElement = null;
+        let offsetX, offsetY;
+        
+        document.querySelectorAll('.memory-shard').forEach(shard => {
+            shard.addEventListener('dragstart', (e) => {
+                draggedElement = shard;
+                shard.classList.add('dragging');
+                const rect = shard.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', e.target.innerHTML);
+            });
+            
+            shard.addEventListener('dragend', () => {
+                shard.classList.remove('dragging');
+            });
+            
+            // Touch support
+            shard.addEventListener('mousedown', (e) => {
+                draggedElement = shard;
+                shard.classList.add('dragging');
+                const rect = shard.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                
+                function onMouseMove(e) {
+                    if (draggedElement) {
+                        draggedElement.style.left = (e.clientX - offsetX - draggedElement.parentElement.getBoundingClientRect().left) + 'px';
+                        draggedElement.style.top = (e.clientY - offsetY - draggedElement.parentElement.getBoundingClientRect().top) + 'px';
+                    }
+                }
+                
+                function onMouseUp() {
+                    if (draggedElement) {
+                        draggedElement.classList.remove('dragging');
+                        draggedElement = null;
+                    }
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        });
+        
+        // Decay simulation
+        setInterval(() => {
+            document.querySelectorAll('.memory-shard').forEach(shard => {
+                if (Math.random() > 0.95) {
+                    shard.classList.add('decaying');
+                    setTimeout(() => {
+                        shard.classList.remove('decaying');
+                    }, 2000);
+                }
+            });
+        }, 3000);
+        
+        // Progress animation
+        const progressFill = document.querySelector('.progress-fill');
+        let progress = 35;
+        
+        setInterval(() => {
+            if (progress > 0) {
+                progress -= 0.1;
+                progressFill.style.width = progress + '%';
+            }
+        }, 100);
+    </script>
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linguistic Archaeology Tool</title>
+    <style>
+        :root {
+            --background: #1a1a1a;
+            --surface: #2a2a2a;
+            --surface-light: #3a3a3a;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent-proto: #ff6b35;
+            --accent-ancient: #c9184a;
+            --accent-classical: #7209b7;
+            --accent-modern: #4cc9f0;
+            --border: rgba(255, 255, 255, 0.1);
+            --glow: rgba(255, 107, 53, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Source Sans Pro', 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: var(--surface-light);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        button:focus {
+            outline: 2px solid var(--accent-modern);
+            outline-offset: 2px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .timeline-panel {
+            width: 320px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .timeline-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .era-filter {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .era-item {
+            padding: 12px 16px;
+            background: var(--surface-light);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .era-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .era-proto .era-indicator { background: var(--accent-proto); }
+        .era-ancient .era-indicator { background: var(--accent-ancient); }
+        .era-classical .era-indicator { background: var(--accent-classical); }
+        .era-modern .era-indicator { background: var(--accent-modern); }
+
+        .era-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .era-item.active {
+            border-color: var(--text-secondary);
+        }
+
+        .era-label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .era-date {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .exploration-area {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .word-display {
+            text-align: center;
+            max-width: 800px;
+        }
+
+        .current-word {
+            font-size: 72px;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            margin-bottom: 32px;
+            opacity: 0;
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .etymology-layers {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .etymology-item {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px 24px;
+            border: 1px solid var(--border);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideUp 0.5s ease forwards;
+            animation-delay: var(--delay);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .etymology-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+        }
+
+        .etymology-item.proto::before { background: var(--accent-proto); }
+        .etymology-item.ancient::before { background: var(--accent-ancient); }
+        .etymology-item.classical::before { background: var(--accent-classical); }
+        .etymology-item.modern::before { background: var(--accent-modern); }
+
+        @keyframes slideUp {
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .etymology-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .etymology-era {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.7;
+        }
+
+        .etymology-date {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .etymology-word {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .etymology-meaning {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .connection-line {
+            position: absolute;
+            width: 2px;
+            background: var(--border);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: -1;
+        }
+
+        .search-bar {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            background: var(--surface);
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="text"] {
+            padding: 12px 20px;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            width: 300px;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-modern);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .search-button {
+            padding: 12px 24px;
+            background: var(--accent-modern);
+            color: var(--background);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .search-button:hover {
+            background: #5dd9ff;
+            transform: translateY(-1px);
+        }
+
+        .info-tooltip {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 20px;
+            height: 20px;
+            background: var(--surface-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: help;
+            transition: all 0.2s ease;
+        }
+
+        .info-tooltip:hover {
+            background: var(--accent-modern);
+            color: var(--background);
+        }
+
+        @media (max-width: 768px) {
+            .timeline-panel {
+                display: none;
+            }
+
+            .current-word {
+                font-size: 48px;
+            }
+
+            .search-bar {
+                width: calc(100% - 32px);
+                left: 16px;
+                transform: none;
+            }
+
+            input[type="text"] {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Linguistic Archaeology</h1>
+        <div class="controls">
+            <button onclick="resetExploration()">Reset</button>
+            <button onclick="toggleView()">Switch View</button>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <aside class="timeline-panel">
+            <h2 class="timeline-header">Time Periods</h2>
+            <div class="era-filter">
+                <div class="era-item era-proto active">
+                    <div class="era-indicator"></div>
+                    <div>
+                        <div class="era-label">Proto-Indo-European</div>
+                        <div class="era-date">4500-2500 BCE</div>
+                    </div>
+                </div>
+                <div class="era-item era-ancient">
+                    <div class="era-indicator"></div>
+                    <div>
+                        <div class="era-label">Ancient Languages</div>
+                        <div class="era-date">2500-500 BCE</div>
+                    </div>
+                </div>
+                <div class="era-item era-classical">
+                    <div class="era-indicator"></div>
+                    <div>
+                        <div class="era-label">Classical Period</div>
+                        <div class="era-date">500 BCE-500 CE</div>
+                    </div>
+                </div>
+                <div class="era-item era-modern">
+                    <div class="era-indicator"></div>
+                    <div>
+                        <div class="era-label">Modern Languages</div>
+                        <div class="era-date">500 CE-Present</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="exploration-area">
+            <div class="word-display">
+                <h2 class="current-word">water</h2>
+                <div class="etymology-layers">
+                    <div class="etymology-item proto" style="--delay: 0.1s">
+                        <div class="etymology-header">
+                            <span class="etymology-era">Proto-Indo-European</span>
+                            <span class="etymology-date">~4000 BCE</span>
+                        </div>
+                        <div class="etymology-word">*wódr̥</div>
+                        <div class="etymology-meaning">The primordial root meaning "water" or "wet"</div>
+                        <span class="info-tooltip" title="More information">?</span>
+                    </div>
+                    <div class="connection-line" style="height: 24px; top: -24px;"></div>
+                    <div class="etymology-item ancient" style="--delay: 0.2s">
+                        <div class="etymology-header">
+                            <span class="etymology-era">Sanskrit</span>
+                            <span class="etymology-date">~1500 BCE</span>
+                        </div>
+                        <div class="etymology-word">उदन् (udan)</div>
+                        <div class="etymology-meaning">Water, liquid, fluid</div>
+                        <span class="info-tooltip" title="More information">?</span>
+                    </div>
+                    <div class="connection-line" style="height: 24px; top: -24px;"></div>
+                    <div class="etymology-item classical" style="--delay: 0.3s">
+                        <div class="etymology-header">
+                            <span class="etymology-era">Latin</span>
+                            <span class="etymology-date">~100 BCE</span>
+                        </div>
+                        <div class="etymology-word">aqua</div>
+                        <div class="etymology-meaning">Water, liquid, rain</div>
+                        <span class="info-tooltip" title="More information">?</span>
+                    </div>
+                    <div class="connection-line" style="height: 24px; top: -24px;"></div>
+                    <div class="etymology-item modern" style="--delay: 0.4s">
+                        <div class="etymology-header">
+                            <span class="etymology-era">Modern English</span>
+                            <span class="etymology-date">Present</span>
+                        </div>
+                        <div class="etymology-word">water</div>
+                        <div class="etymology-meaning">Clear liquid H₂O essential for life</div>
+                        <span class="info-tooltip" title="More information">?</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="search-bar">
+        <input type="text" placeholder="Enter a word to explore..." aria-label="Search word">
+        <button class="search-button" onclick="exploreWord()">Explore</button>
+    </div>
+
+    <script>
+        function resetExploration() {
+            location.reload();
+        }
+
+        function toggleView() {
+            alert('View toggled');
+        }
+
+        function exploreWord() {
+            alert('Exploring word...');
+        }
+
+        document.querySelectorAll('.era-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.era-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEFUSAL INTERFACE</title>
+    <style>
+        :root {
+            --bg-primary: #000000;
+            --bg-secondary: #0a0a0a;
+            --surface: #141414;
+            --wire-red: #ff3333;
+            --wire-blue: #3366ff;
+            --wire-yellow: #ffcc00;
+            --wire-green: #33cc33;
+            --text-primary: #ffffff;
+            --text-secondary: #999999;
+            --danger: #ff0000;
+            --success: #00ff00;
+            --grid: #1a1a1a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            user-select: none;
+        }
+
+        .interface {
+            width: 90vw;
+            max-width: 800px;
+            background: var(--surface);
+            border: 1px solid var(--grid);
+            padding: 40px;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--grid);
+        }
+
+        .timer {
+            font-size: 48px;
+            font-weight: 200;
+            letter-spacing: 0.1em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timer.critical {
+            color: var(--danger);
+        }
+
+        .status-indicator {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-light {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .status-light.safe {
+            background: var(--success);
+        }
+
+        .wire-container {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .wire-group {
+            display: grid;
+            grid-template-columns: 120px 1fr 120px;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--grid);
+            transition: border-color 0.2s ease;
+        }
+
+        .wire-group:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .wire-group.disabled {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .wire-label {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .wire {
+            height: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .wire:hover {
+            transform: scaleY(1.5);
+        }
+
+        .wire.red { background: var(--wire-red); }
+        .wire.blue { background: var(--wire-blue); }
+        .wire.yellow { background: var(--wire-yellow); }
+        .wire.green { background: var(--wire-green); }
+
+        .wire.cut {
+            background: var(--grid);
+            pointer-events: none;
+        }
+
+        .wire.cut::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 16px;
+            background: var(--surface);
+        }
+
+        .wire-status {
+            font-size: 12px;
+            text-align: right;
+            color: var(--text-secondary);
+        }
+
+        .wire-group.cut .wire-status {
+            color: var(--success);
+        }
+
+        .action-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid var(--grid);
+        }
+
+        .sequence-display {
+            display: flex;
+            gap: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .sequence-item {
+            padding: 4px 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--grid);
+        }
+
+        .sequence-item.active {
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+        }
+
+        .reset-button {
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid var(--text-secondary);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .reset-button:hover {
+            border-color: var(--text-primary);
+            color: var(--text-primary);
+        }
+
+        .instructions {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            max-width: 200px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .instructions h3 {
+            font-size: 14px;
+            font-weight: normal;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        @media (max-width: 768px) {
+            .interface {
+                width: 95vw;
+                padding: 20px;
+            }
+
+            .timer {
+                font-size: 36px;
+            }
+
+            .instructions {
+                position: static;
+                margin-bottom: 20px;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h3>Protocol</h3>
+        <p>Cut wires in correct sequence. Timer shows remaining time. Incorrect sequence triggers immediate failure.</p>
+    </div>
+
+    <main class="interface">
+        <div class="status-bar">
+            <div class="timer" id="timer">02:45</div>
+            <div class="status-indicator">
+                <div class="status-light" id="statusLight"></div>
+                <span id="statusText">ARMED</span>
+            </div>
+        </div>
+
+        <div class="wire-container">
+            <div class="wire-group" data-wire="red">
+                <div class="wire-label">Primary</div>
+                <div class="wire red" onclick="cutWire('red')"></div>
+                <div class="wire-status">ACTIVE</div>
+            </div>
+            <div class="wire-group" data-wire="blue">
+                <div class="wire-label">Secondary</div>
+                <div class="wire blue" onclick="cutWire('blue')"></div>
+                <div class="wire-status">ACTIVE</div>
+            </div>
+            <div class="wire-group" data-wire="yellow">
+                <div class="wire-label">Auxiliary</div>
+                <div class="wire yellow" onclick="cutWire('yellow')"></div>
+                <div class="wire-status">ACTIVE</div>
+            </div>
+            <div class="wire-group" data-wire="green">
+                <div class="wire-label">Ground</div>
+                <div class="wire green" onclick="cutWire('green')"></div>
+                <div class="wire-status">ACTIVE</div>
+            </div>
+        </div>
+
+        <div class="action-panel">
+            <div class="sequence-display">
+                <div class="sequence-item" data-step="1">1</div>
+                <div class="sequence-item" data-step="2">2</div>
+                <div class="sequence-item" data-step="3">3</div>
+                <div class="sequence-item" data-step="4">4</div>
+            </div>
+            <button class="reset-button" onclick="resetInterface()">Reset</button>
+        </div>
+    </main>
+
+    <script>
+        let timeRemaining = 165;
+        let timerInterval;
+        let currentStep = 0;
+        let isDefused = false;
+        const correctSequence = ['blue', 'red', 'green', 'yellow'];
+
+        function updateTimer() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('timer').textContent = display;
+            
+            if (timeRemaining <= 30) {
+                document.getElementById('timer').classList.add('critical');
+            }
+            
+            if (timeRemaining <= 0 && !isDefused) {
+                endGame(false);
+            }
+        }
+
+        function cutWire(color) {
+            if (isDefused) return;
+            
+            const wireGroup = document.querySelector(`[data-wire="${color}"]`);
+            if (wireGroup.classList.contains('cut')) return;
+            
+            if (correctSequence[currentStep] === color) {
+                wireGroup.classList.add('cut');
+                wireGroup.querySelector('.wire').classList.add('cut');
+                wireGroup.querySelector('.wire-status').textContent = 'CUT';
+                
+                currentStep++;
+                document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+                
+                if (currentStep === 4) {
+                    endGame(true);
+                }
+            } else {
+                endGame(false);
+            }
+        }
+
+        function endGame(success) {
+            clearInterval(timerInterval);
+            isDefused = success;
+            
+            const statusLight = document.getElementById('statusLight');
+            const statusText = document.getElementById('statusText');
+            
+            if (success) {
+                statusLight.classList.add('safe');
+                statusText.textContent = 'DEFUSED';
+                document.getElementById('timer').classList.remove('critical');
+            } else {
+                statusText.textContent = 'DETONATED';
+                document.querySelectorAll('.wire-group').forEach(group => {
+                    group.classList.add('disabled');
+                });
+            }
+        }
+
+        function resetInterface() {
+            timeRemaining = 165;
+            currentStep = 0;
+            isDefused = false;
+            
+            document.querySelectorAll('.wire-group').forEach(group => {
+                group.classList.remove('cut', 'disabled');
+                group.querySelector('.wire').classList.remove('cut');
+                group.querySelector('.wire-status').textContent = 'ACTIVE';
+            });
+            
+            document.querySelectorAll('.sequence-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            document.getElementById('timer').classList.remove('critical');
+            document.getElementById('statusLight').classList.remove('safe');
+            document.getElementById('statusText').textContent = 'ARMED';
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimer();
+            }, 1000);
+            
+            updateTimer();
+        }
+
+        timerInterval = setInterval(() => {
+            timeRemaining--;
+            updateTimer();
+        }, 1000);
+
+        updateTimer();
+    </script>
+</body>
+</html>

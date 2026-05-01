@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Origami</title>
+    <style>
+        :root {
+            --paper-white: #faf8f3;
+            --paper-shadow: #e8e2d5;
+            --crease-dark: #c4b5a0;
+            --fold-shadow: rgba(92, 76, 54, 0.15);
+            --time-compressed: #d4614e;
+            --time-expanded: #7eb09b;
+            --morning-tint: #f7e8d0;
+            --evening-tint: #e3d4e8;
+            --text-primary: #3d3226;
+            --text-secondary: #6b5d4f;
+            --hidden-time: #f0d896;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #f5f2ed;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            perspective: 2000px;
+        }
+
+        .workspace {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .paper-day {
+            width: 900px;
+            height: 600px;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(8deg) rotateY(-3deg);
+        }
+
+        .paper-base {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--paper-white) 0%, var(--paper-shadow) 100%);
+            box-shadow: 
+                0 20px 40px rgba(0,0,0,0.1),
+                inset 0 0 60px rgba(255,255,255,0.8);
+            border-radius: 3px;
+        }
+
+        .fold-section {
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Mountain fold - time compression */
+        .fold-morning {
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 300px;
+            transform-origin: bottom center;
+            background: linear-gradient(180deg, var(--morning-tint) 0%, transparent 100%);
+        }
+
+        .fold-morning::before {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--crease-dark) 20%, 
+                var(--time-compressed) 50%, 
+                var(--crease-dark) 80%, 
+                transparent 100%);
+            transform: translateZ(2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .fold-morning.active {
+            transform: rotateX(-45deg) translateZ(20px);
+        }
+
+        .fold-morning.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, transparent 0%, var(--fold-shadow) 100%);
+        }
+
+        /* Valley fold - time expansion */
+        .fold-evening {
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 300px;
+            transform-origin: top center;
+            background: linear-gradient(0deg, var(--evening-tint) 0%, transparent 100%);
+        }
+
+        .fold-evening::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--crease-dark) 20%, 
+                var(--time-expanded) 50%, 
+                var(--crease-dark) 80%, 
+                transparent 100%);
+            transform: translateZ(-2px);
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+        }
+
+        .fold-evening.active {
+            transform: rotateX(45deg) translateZ(-20px);
+        }
+
+        /* Time blocks with proper z-layering */
+        .time-content {
+            position: absolute;
+            padding: 20px;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .time-block {
+            position: absolute;
+            background: var(--paper-white);
+            border-radius: 2px;
+            padding: 15px;
+            cursor: pointer;
+            pointer-events: all;
+            transition: all 0.3s ease;
+        }
+
+        .time-block h3 {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .time-block p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .morning-block {
+            top: 80px;
+            left: 100px;
+            width: 200px;
+            transform: translateZ(10px);
+            box-shadow: 5px 5px 15px var(--fold-shadow);
+        }
+
+        .fold-morning.active .morning-block {
+            transform: translateZ(30px) translateY(-20px);
+            box-shadow: 10px 10px 30px var(--fold-shadow);
+        }
+
+        .hidden-time {
+            opacity: 0;
+            transform: scale(0.9) translateY(10px);
+            transition: all 0.4s ease 0.2s;
+        }
+
+        .fold-morning.active .hidden-time {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        .meetings-block {
+            top: 250px;
+            left: 300px;
+            width: 300px;
+            transform: translateZ(5px);
+            box-shadow: 5px 5px 15px var(--fold-shadow);
+        }
+
+        .evening-block {
+            top: 420px;
+            left: 200px;
+            width: 250px;
+            transform: translateZ(8px);
+            box-shadow: 5px 5px 15px var(--fold_shadow);
+        }
+
+        .fold-evening.active .evening-block {
+            transform: translateZ(25px) translateY(20px);
+            box-shadow: 10px 10px 30px var(--fold-shadow);
+        }
+
+        /* Fold controls */
+        .fold-controls {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .fold-btn {
+            padding: 10px 20px;
+            background: var(--paper-white);
+            border: 2px solid var(--crease-dark);
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .fold-btn:hover {
+            background: var(--crease-dark);
+            color: var(--paper-white);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .fold-btn.active {
+            background: var(--text-primary);
+            color: var(--paper-white);
+            border-color: var(--text-primary);
+        }
+
+        /* Time duration indicators */
+        .time-duration {
+            position: absolute;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 4px 8px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 2px;
+        }
+
+        .morning-block .time-duration {
+            top: -20px;
+            right: 15px;
+        }
+
+        .meetings-block .time-duration {
+            bottom: -20px;
+            left: 15px;
+        }
+
+        .evening-block .time-duration {
+            top: -20px;
+            left: 15px;
+        }
+
+        /* Responsive shadows based on fold state */
+        .fold-morning.active ~ .paper-base {
+            box-shadow: 
+                0 30px 60px rgba(0,0,0,0.15),
+                inset 0 -20px 40px rgba(0,0,0,0.05);
+        }
+
+        .fold-evening.active ~ .paper-base {
+            box-shadow: 
+                0 -30px 60px rgba(0,0,0,0.15),
+                inset 0 20px 40px rgba(0,0,0,0.05);
+        }
+
+        /* Temporal overlap indicator */
+        .overlap-indicator {
+            position: absolute;
+            top: 280px;
+            left: 250px;
+            width: 400px;
+            height: 40px;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                var(--hidden-time) 10px,
+                var(--hidden-time) 11px
+            );
+            opacity: 0;
+            transition: opacity 0.6s ease;
+            pointer-events: none;
+        }
+
+        .fold-morning.active ~ .overlap-indicator,
+        .fold-evening.active ~ .overlap-indicator {
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace">
+        <div class="paper-day">
+            <div class="fold-section fold-morning" id="morningFold">
+                <div class="time-content">
+                    <div class="time-block morning-block">
+                        <div class="time-duration">6:00 - 9:00</div>
+                        <h3>Morning Routine</h3>
+                        <p>Coffee, emails, planning</p>
+                        <div class="hidden-time">
+                            <p style="margin-top: 10px; font-size: 11px; color: var(--time-compressed);">
+                                + 30min meditation
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="fold-section fold-evening" id="eveningFold">
+                <div class="time-content">
+                    <div class="time-block evening-block">
+                        <div class="time-duration">17:00 - 22:00</div>
+                        <h3>Evening Wind-down</h3>
+                        <p>Personal time expanded</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overlap-indicator"></div>
+            
+            <div class="paper-base"></div>
+            
+            <div class="time-content" style="z-index: 5;">
+                <div class="time-block meetings-block">
+                    <div class="time-duration">10:00 - 16:00</div>
+                    <h3>Core Work Hours</h3>
+                    <p>Meetings, deep work, collaboration</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="fold-controls">
+            <button class="fold-btn" id="compressBtn">Compress Morning</button>
+            <button class="fold-btn" id="expandBtn">Expand Evening</button>
+        </div>
+    </div>
+    
+    <script>
+        const morningFold = document.getElementById('morningFold');
+        const eveningFold = document.getElementById('eveningFold');
+        const compressBtn = document.getElementById('compressBtn');
+        const expandBtn = document.getElementById('expandBtn');
+        
+        compressBtn.addEventListener('click', () => {
+            morningFold.classList.toggle('active');
+            compressBtn.classList.toggle('active');
+        });
+        
+        expandBtn.addEventListener('click', () => {
+            eveningFold.classList.toggle('active');
+            expandBtn.classList.toggle('active');
+        });
+        
+        // Add drag functionality for time blocks
+        const timeBlocks = document.querySelectorAll('.time-block');
+        
+        timeBlocks.forEach(block => {
+            let isDragging = false;
+            let startX, startY;
+            let initialX, initialY;
+            
+            block.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = block.offsetLeft;
+                initialY = block.offsetTop;
+                block.style.cursor = 'grabbing';
+                block.style.zIndex = '100';
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                block.style.left = initialX + dx + 'px';
+                block.style.top = initialY + dy + 'px';
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    block.style.cursor = 'pointer';
+                    block.style.zIndex = '';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

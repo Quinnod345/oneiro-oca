@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Logic Calculator</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --dream-mist: #1a1a2e;
+            --prime-purple: #7209b7;
+            --square-crystal: #4cc9f0;
+            --irrational-spiral: #f72585;
+            --stardust-trail: #ffd60a;
+            --memory-fade: #4a4e69;
+            --portal-cyan: #00f5ff;
+            --shy-seven: #e0aaff;
+            --reality-anchor: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(ellipse at center, var(--dream-mist) 0%, var(--void-black) 70%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .calculator {
+            background: rgba(26, 26, 46, 0.6);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 10;
+        }
+
+        .display {
+            background: rgba(10, 10, 15, 0.8);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            font-size: 36px;
+            font-weight: 100;
+            color: var(--stardust-trail);
+            text-shadow: 0 0 10px currentColor;
+            border: 1px solid rgba(255, 214, 10, 0.2);
+            letter-spacing: 2px;
+            overflow: hidden;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(74, 78, 105, 0.3);
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            font-size: 24px;
+            font-weight: 200;
+            color: var(--reality-anchor);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            background: rgba(74, 78, 105, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn.number {
+            background: rgba(76, 201, 240, 0.2);
+        }
+
+        .btn.number:hover {
+            background: rgba(76, 201, 240, 0.4);
+            color: var(--square-crystal);
+        }
+
+        .btn.operator {
+            background: rgba(114, 9, 183, 0.2);
+            color: var(--prime-purple);
+        }
+
+        .btn.operator:hover {
+            background: rgba(114, 9, 183, 0.4);
+            color: var(--reality-anchor);
+        }
+
+        .btn.special {
+            background: rgba(247, 37, 133, 0.2);
+            color: var(--irrational-spiral);
+        }
+
+        .btn.special:hover {
+            background: rgba(247, 37, 133, 0.4);
+            color: var(--reality-anchor);
+        }
+
+        .btn.equals {
+            background: rgba(255, 214, 10, 0.2);
+            color: var(--stardust-trail);
+            grid-column: span 2;
+        }
+
+        .btn.equals:hover {
+            background: rgba(255, 214, 10, 0.4);
+            color: var(--reality-anchor);
+        }
+
+        .btn.clear {
+            background: rgba(224, 170, 255, 0.2);
+            color: var(--shy-seven);
+        }
+
+        .btn.clear:hover {
+            background: rgba(224, 170, 255, 0.4);
+            color: var(--reality-anchor);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s ease, height 0.4s ease;
+        }
+
+        .btn:active::before {
+            width: 100px;
+            height: 100px;
+        }
+
+        .floating-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--portal-cyan);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.3;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .calculator::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, var(--portal-cyan), var(--prime-purple), var(--irrational-spiral), var(--stardust-trail));
+            border-radius: 24px;
+            opacity: 0.3;
+            z-index: -1;
+            animation: gradientShift 10s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% {
+                filter: hue-rotate(0deg);
+            }
+            50% {
+                filter: hue-rotate(180deg);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .calculator {
+                padding: 20px;
+                width: 90vw;
+                max-width: 400px;
+            }
+            
+            .display {
+                font-size: 28px;
+                padding: 16px;
+            }
+            
+            .btn {
+                padding: 16px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-particles">
+        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 20%; animation-delay: 2s;"></div>
+        <div class="particle" style="left: 30%; animation-delay: 4s;"></div>
+        <div class="particle" style="left: 40%; animation-delay: 6s;"></div>
+        <div class="particle" style="left: 50%; animation-delay: 8s;"></div>
+        <div class="particle" style="left: 60%; animation-delay: 10s;"></div>
+        <div class="particle" style="left: 70%; animation-delay: 12s;"></div>
+        <div class="particle" style="left: 80%; animation-delay: 14s;"></div>
+        <div class="particle" style="left: 90%; animation-delay: 16s;"></div>
+    </div>
+
+    <div class="calculator">
+        <div class="display" id="display">0</div>
+        <div class="buttons">
+            <button class="btn clear" onclick="clearDisplay()">C</button>
+            <button class="btn special" onclick="appendToDisplay('(')">(</button>
+            <button class="btn special" onclick="appendToDisplay(')')">)</button>
+            <button class="btn operator" onclick="appendToDisplay('/')">÷</button>
+            
+            <button class="btn number" onclick="appendToDisplay('7')">7</button>
+            <button class="btn number" onclick="appendToDisplay('8')">8</button>
+            <button class="btn number" onclick="appendToDisplay('9')">9</button>
+            <button class="btn operator" onclick="appendToDisplay('*')">×</button>
+            
+            <button class="btn number" onclick="appendToDisplay('4')">4</button>
+            <button class="btn number" onclick="appendToDisplay('5')">5</button>
+            <button class="btn number" onclick="appendToDisplay('6')">6</button>
+            <button class="btn operator" onclick="appendToDisplay('-')">−</button>
+            
+            <button class="btn number" onclick="appendToDisplay('1')">1</button>
+            <button class="btn number" onclick="appendToDisplay('2')">2</button>
+            <button class="btn number" onclick="appendToDisplay('3')">3</button>
+            <button class="btn operator" onclick="appendToDisplay('+')">+</button>
+            
+            <button class="btn number" onclick="appendToDisplay('0')">0</button>
+            <button class="btn number" onclick="appendToDisplay('.')">.</button>
+            <button class="btn equals" onclick="calculate()">=</button>
+        </div>
+    </div>
+
+    <script>
+        let display = document.getElementById('display');
+        let currentValue = '0';
+        let shouldResetDisplay = false;
+
+        function updateDisplay(value) {
+            currentValue = value;
+            display.textContent = value;
+        }
+
+        function clearDisplay() {
+            updateDisplay('0');
+            shouldResetDisplay = false;
+        }
+
+        function appendToDisplay(value) {
+            if (shouldResetDisplay || currentValue === '0') {
+                if (value === '.' && currentValue === '0') {
+                    currentValue = '0.';
+                } else if ('+-*/'.includes(value)) {
+                    currentValue += value;
+                } else {
+                    currentValue = value;
+                }
+                shouldResetDisplay = false;
+            } else {
+                currentValue += value;
+            }
+            updateDisplay(currentValue);
+        }
+
+        function calculate() {
+            try {
+                let result = eval(currentValue);
+                updateDisplay(result.toString());
+                shouldResetDisplay = true;
+            } catch (e) {
+                updateDisplay('Error');
+                shouldResetDisplay = true;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '0' && e.key <= '9') appendToDisplay(e.key);
+            else if (e.key === '.') appendToDisplay('.');
+            else if (e.key === '+') appendToDisplay('+');
+            else if (e.key === '-') appendToDisplay('-');
+            else if (e.key === '*') appendToDisplay('*');
+            else if (e.key === '/') appendToDisplay('/');
+            else if (e.key === '(') appendToDisplay('(');
+            else if (e.key === ')') appendToDisplay(')');
+            else if (e.key === 'Enter') calculate();
+            else if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') clearDisplay();
+            else if (e.key === 'Backspace') {
+                if (currentValue.length > 1) {
+                    currentValue = currentValue.slice(0, -1);
+                    updateDisplay(currentValue);
+                } else {
+                    clearDisplay();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

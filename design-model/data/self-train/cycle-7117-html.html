@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --warm-white: #FAF8F6;
+            --cool-white: #F7F9FB;
+            --light-gray: #E5E2DE;
+            --mid-gray: #C8C3BB;
+            --deep-gray: #8B857A;
+            --charcoal: #3A3632;
+            --sand-drift: #F4F0EA;
+            --emotional-warm: #FBF6F0;
+            --emotional-cool: #F5F8FC;
+            --particle-size: 2px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--warm-white);
+            color: var(--charcoal);
+            overflow: hidden;
+            width: 1440px;
+            height: 900px;
+            position: relative;
+        }
+
+        .grain-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            z-index: 1000;
+            pointer-events: none;
+            background-image: repeating-conic-gradient(from 45deg at 50% 50%, transparent 0deg, rgba(0,0,0,0.1) 1deg, transparent 2deg);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 380px 1fr 280px;
+            height: 100vh;
+            position: relative;
+        }
+
+        .sculpting-panel {
+            background: linear-gradient(175deg, var(--sand-drift) 0%, var(--warm-white) 100%);
+            padding: 48px 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sculpting-panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, transparent 0%, var(--warm-white) 70%);
+            opacity: 0.4;
+            animation: windDrift 20s ease-in-out infinite;
+        }
+
+        @keyframes windDrift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-10%, 5%) rotate(3deg); }
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--deep-gray);
+            margin-bottom: 36px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .memory-characteristic {
+            margin-bottom: 42px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .characteristic-label {
+            font-size: 14px;
+            color: var(--charcoal);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .haptic-indicator {
+            width: 6px;
+            height: 6px;
+            background: var(--mid-gray);
+            border-radius: 50%;
+            animation: hapticPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes hapticPulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        .sculpting-input {
+            width: 100%;
+            height: 120px;
+            background: rgba(255,255,255,0.6);
+            border: 1px solid var(--light-gray);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        .sculpting-input:active {
+            cursor: grabbing;
+        }
+
+        .sculpting-visualizer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .sculpting-path {
+            stroke: var(--deep-gray);
+            stroke-width: 1.5;
+            fill: none;
+            stroke-dasharray: 2 4;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .sculpting-input:hover .sculpting-path {
+            opacity: 0.3;
+        }
+
+        .pressure-point {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--deep-gray) 0%, transparent 70%);
+            opacity: 0;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .visualization-area {
+            background: linear-gradient(to bottom, var(--cool-white) 0%, var(--warm-white) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sand-sculpture-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+        }
+
+        .sculpture-base {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 300px;
+            background: conic-gradient(from 180deg at 50% 100%, var(--mid-gray) 0deg, var(--light-gray) 180deg, var(--mid-gray) 360deg);
+            clip-path: polygon(20% 100%, 80% 100%, 70% 0%, 30% 0%);
+            filter: blur(0.5px);
+        }
+
+        .memory-form {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 380px;
+            height: 280px;
+            opacity: 0.9;
+        }
+
+        .memory-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--sand-drift);
+            clip-path: polygon(25% 100%, 75% 100%, 65% 20%, 35% 20%);
+            mix-blend-mode: multiply;
+        }
+
+        .erosion-particle {
+            position: absolute;
+            width: var(--particle-size);
+            height: var(--particle-size);
+            background: var(--mid-gray);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: particleDrift 8s linear infinite;
+        }
+
+        @keyframes particleDrift {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.6;
+            }
+            100% {
+                transform: translate(400px, -200px) scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        .neural-grain {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            background: var(--deep-gray);
+            opacity: 0.4;
+            animation: neuralFlicker 2s ease-in-out infinite;
+        }
+
+        @keyframes neuralFlicker {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.1; }
+        }
+
+        .decay-timeline {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            height: 60px;
+        }
+
+        .timeline-axis {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            height: 1px;
+            background: var(--light-gray);
+        }
+
+        .timeline-marker {
+            position: absolute;
+            bottom: 15px;
+            width: 1px;
+            height: 10px;
+            background: var(--mid-gray);
+        }
+
+        .decay-analysis {
+            background: var(--sand-drift);
+            padding: 48px 28px;
+            overflow-y: auto;
+        }
+
+        .analysis-section {
+            margin-bottom: 36px;
+            padding-bottom: 36px;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        .analysis-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-header {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--deep-gray);
+            margin-bottom: 16px;
+        }
+
+        .decay-metric {
+            margin-bottom: 20px;
+        }
+
+        .metric-name {
+            font-size: 13px;
+            color: var(--charcoal);
+            margin-bottom: 8px;
+        }
+
+        .metric-visual {
+            height: 32px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .decay-progression {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: linear-gradient(90deg, var(--mid-gray) 0%, transparent 100%);
+            transition: width 1.5s ease-out;
+        }
+
+        .neural-pattern {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            height: 20px;
+            opacity: 0.3;
+        }
+
+        .pattern-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--deep-gray);
+            border-radius: 50%;
+        }
+
+        .pattern-connection {
+            position: absolute;
+            height: 1px;
+            background: var(--light-gray);
+            transform-origin: left center;
+        }
+
+        .control-buttons {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+            z-index: 100;
+        }
+
+        .control-btn {
+            padding: 12px 24px;
+            background: var(--warm-white);
+            border: 1px solid var(--light-gray);
+            color: var(--charcoal);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .control-btn:hover {
+            background: var(--sand-drift);
+            transform: translateY(-1px);
+        }
+
+        .control-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--light-gray);
+            opacity: 0.3;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.4s, height 0.4s;
+        }
+
+        .control-btn:active::after {
+            width: 100px;
+            height: 100px;
+        }
+
+        .wind-direction-indicator {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            opacity: 0.3;
+        }
+
+        .wind-arrow {
+            stroke: var(--mid-gray);
+            stroke-width: 1.5;
+            fill: none;
+            animation: windSway 4s ease-in-out infinite;
+        }
+
+        @keyframes windSway {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(5deg); }
+        }
+
+        .emotional-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s;
+            background: radial-gradient(ellipse at center, transparent 0%, var(--emotional-warm) 100%);
+        }
+
+        .emotional-overlay.cool {
+            background: radial-gradient(ellipse at center, transparent 0%, var(--emotional-cool) 100%);
+        }
+
+        .emotional-overlay.active {
+            opacity: 0.15;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 2px;
+            background: var(--light-gray);
+            outline: none;
+            margin-top: 8px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--warm-white);
+            border: 2px solid var(--mid-gray);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--warm-white);
+            border: 2px solid var(--mid-gray);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="grain-overlay"></div>
+    
+    <div class="container">
+        <div class="sculpting-panel">
+            <h2 class="panel-title">Memory Characteristics</h2>
+            
+            <div class="memory-characteristic">
+                <label class="characteristic-label">
+                    Emotional Intensity
+                    <span class="haptic-indicator"></span>
+                </label>
+                <div class="sculpting-input" id="emotional-input">
+                    <svg class="sculpting-visualizer">
+                        <path class="sculpting-path" d="M0,60 Q150,30 300,60" />
+                    </svg>
+                    <div class="pressure-point"></div>
+                </div>
+                <input type="range" min="0" max="100" value="50" />
+            </div>
+            
+            <div class="memory-characteristic">
+                <label class="characteristic-label">
+                    Rehearsal Frequency
+                    <span class="haptic-indicator" style="animation-delay: 1s"></span>
+                </label>
+                <div class="sculpting-input" id="rehearsal-input">
+                    <svg class="sculpting-visualizer">
+                        <path class="sculpting-path" d="M0,60 Q150,90 300,60" />
+                    </svg>
+                    <div class="pressure-point"></div>
+                </div>
+                <input type="range" min="0" max="100" value="30" />
+            </div>
+            
+            <div class="memory-characteristic">
+                <label class="characteristic-label">
+                    Sensory Detail Density
+                    <span class="haptic-indicator" style="animation-delay: 2s"></span>
+                </label>
+                <div class="sculpting-input" id="sensory-input">
+                    <svg class="sculpting-visualizer">
+                        <path class="sculpting-path" d="M0,60 Q150,40 300,60" />
+                    </svg>
+                    <div class="pressure-point"></div>
+                </div>
+                <input type="range" min="0" max="100" value="70" />
+            </div>
+        </div>
+        
+        <div class="visualization-area">
+            <div class="emotional-overlay"></div>
+            
+            <svg class="wind-direction-indicator" viewBox="0 0 60 60">
+                <path class="wind-arrow" d="M30,10 L30,40 M25,35 L30,40 L35,35" />
+                <circle cx="30" cy="30" r="25" fill="none" stroke="var(--light-gray)" stroke-width="0.5" opacity="0.5" />
+            </svg>
+            
+            <div class="sand-sculpture-container">
+                <div class="sculpture-base"></div>
+                <div class="memory-form">
+                    <div class="memory-layer" style="transform: scale(1.1); opacity: 0.3;"></div>
+                    <div class="memory-layer" style="transform: scale(1.05); opacity: 0.5;"></div>
+                    <div class="memory-layer" style="transform: scale(1); opacity: 0.7;"></div>
+                    <div class="memory-layer" style="transform: scale(0.95); opacity: 0.9;"></div>
+                </div>
+                
+                <div id="particle-field"></div>
+                <div id="neural-field"></div>
+            </div>
+            
+            <div class="decay-timeline">
+                <div class="timeline-axis"></div>
+                <div class="timeline-marker" style="left: 0;"></div>
+                <div class="timeline-marker" style="left: 25%;"></div>
+                <div class="timeline-marker" style="left: 50%;"></div>
+                <div class="timeline-marker" style="left: 75%;"></div>
+                <div class="timeline-marker" style="left: 100%;"></div>
+            </div>
+        </div>
+        
+        <div class="decay-analysis">
+            <h2 class="panel-title">Decay Analysis</h2>
+            
+            <div class="analysis-section">
+                <h3 class="section-header">Structural Integrity</h3>
+                <div class="decay-metric">
+                    <div class="metric-name">Core Memory Structure</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 75%;"></div>
+                        <div class="neural-pattern">
+                            <div class="pattern-node" style="left: 10%;"></div>
+                            <div class="pattern-node" style="left: 30%;"></div>
+                            <div class="pattern-node" style="left: 60%;"></div>
+                            <div class="pattern-connection" style="left: 10%; width: 20%;"></div>
+                            <div class="pattern-connection" style="left: 30%; width: 30%;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="decay-metric">
+                    <div class="metric-name">Peripheral Details</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 40%;"></div>
+                        <div class="neural-pattern">
+                            <div class="pattern-node" style="left: 20%;"></div>
+                            <div class="pattern-node" style="left: 50%;"></div>
+                            <div class="pattern-connection" style="left: 20%; width: 30%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="analysis-section">
+                <h3 class="section-header">Temporal Erosion</h3>
+                <div class="decay-metric">
+                    <div class="metric-name">First Hour</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 20%;"></div>
+                    </div>
+                </div>
+                <div class="decay-metric">
+                    <div class="metric-name">First Day</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 45%;"></div>
+                    </div>
+                </div>
+                <div class="decay-metric">
+                    <div class="metric-name">First Week</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 65%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="analysis-section">
+                <h3 class="section-header">Component Vulnerability</h3>
+                <div class="decay-metric">
+                    <div class="metric-name">Visual Elements</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 55%;"></div>
+                    </div>
+                </div>
+                <div class="decay-metric">
+                    <div class="metric-name">Emotional Context</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 25%;"></div>
+                    </div>
+                </div>
+                <div class="decay-metric">
+                    <div class="metric-name">Factual Information</div>
+                    <div class="metric-visual">
+                        <div class="decay-progression" style="width: 70%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="control-buttons">
+        <button class="control-btn" onclick="startErosion()">Begin Erosion</button>
+        <button class="control-btn" onclick="pauseErosion()">Pause</button>
+        <button class="control-btn" onclick="resetSculpture()">Reset Memory</button>
+    </div>
+    
+    <script>
+        // Generate erosion particles
+        const particleField = document.getElementById('particle-field');
+        for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'erosion-particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 8 + 's';
+            particle.style.animationDuration = (8 + Math.random() * 4) + 's';
+            particleField.appendChild(particle);
+        }
+        
+        // Generate neural grains
+        const neuralField = document.getElementById('neural-field');
+        for (let i = 0; i < 200; i++) {
+            const grain = document.createElement('div');
+            grain.className = 'neural-grain';
+            grain.style.left = (150 + Math.random() * 100) + 'px';
+            grain.style.top = (50 + Math.random() * 200) + 'px';
+            grain.style.animationDelay = Math.random() * 2 + 's';
+            neuralField.appendChild(grain);
+        }
+        
+        // Sculpting interaction
+        document.querySelectorAll('.sculpting-input').forEach(input => {
+            let isDrawing = false;
+            const pressurePoint = input.querySelector('.pressure-point');
+            
+            input.addEventListener('mousedown', () => isDrawing = true);
+            input.addEventListener('mouseup', () => isDrawing = false);
+            input.addEventListener('mouseleave', () => isDrawing = false);
+            
+            input.addEventListener('mousemove', (e) => {
+                const rect = input.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                pressurePoint.style.left = x + 'px';
+                pressurePoint.style.top = y + 'px';
+                pressurePoint.style.opacity = isDrawing ? '0.6' : '0.3';
+            });
+        });
+        
+        // Control functions
+        function startErosion() {
+            document.querySelectorAll('.erosion-particle').forEach(p => {
+                p.style.animationPlayState = 'running';
+            });
+        }
+        
+        function pauseErosion() {
+            document.querySelectorAll('.erosion-particle').forEach(p => {
+                p.style.animationPlayState = 'paused';
+            });
+        }
+        
+        function resetSculpture() {
+            document.querySelectorAll('.decay-progression').forEach(p => {
+                p.style.width = '0%';
+                setTimeout(() => {
+                    p.style.width = p.getAttribute('data-original-width') || '50%';
+                }, 100);
+            });
+        }
+        
+        // Emotional overlay based on input
+        const emotionalInput = document.querySelector('#emotional-input + input');
+        const overlay = document.querySelector('.emotional-overlay');
+        emotionalInput.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            overlay.classList.toggle('active', value > 30);
+            overlay.classList.toggle('cool', value < 50);
+        });
+    </script>
+</body>
+</html>

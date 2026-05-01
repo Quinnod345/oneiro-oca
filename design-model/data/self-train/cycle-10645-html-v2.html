@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Foam - Thought Impression Interface</title>
+    <style>
+        :root {
+            --foam-base: #1a1d26;
+            --foam-active: #2a3142;
+            --thought-imprint: #4a7c9e;
+            --text-primary: rgba(232, 233, 237, 0.95);
+            --text-ghost: rgba(232, 233, 237, 0.3);
+            --grid-line: rgba(74, 124, 158, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--foam-base);
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        .memory-container {
+            width: 90%;
+            max-width: 800px;
+            height: 600px;
+            position: relative;
+        }
+
+        .thought-layer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            max-width: 600px;
+            z-index: 10;
+            background: rgba(26, 29, 38, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 40px;
+            border-radius: 4px;
+        }
+
+        .thought-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            font-size: 24px;
+            line-height: 36px;
+            color: var(--text-primary);
+            width: 100%;
+            height: 200px;
+            resize: none;
+            font-weight: 300;
+            letter-spacing: 0.02em;
+            text-align: center;
+        }
+
+        .thought-input::placeholder {
+            color: var(--text-ghost);
+        }
+
+        .foam-mesh {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #foamCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .pressure-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 15;
+        }
+
+        .pressure-indicator.active {
+            opacity: 1;
+        }
+
+        .pressure-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--thought-imprint);
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            opacity: 0.3;
+            transition: opacity 0.2s ease;
+        }
+
+        .pressure-dot.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="memory-container">
+        <canvas id="foamCanvas" class="foam-mesh"></canvas>
+        <div class="thought-layer">
+            <textarea class="thought-input" placeholder="Press your thoughts into memory"></textarea>
+        </div>
+        <div class="pressure-indicator">
+            <span class="pressure-dot"></span>
+            <span class="pressure-dot"></span>
+            <span class="pressure-dot"></span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('foamCanvas');
+        const ctx = canvas.getContext('2d');
+        const input = document.querySelector('.thought-input');
+        const pressureIndicator = document.querySelector('.pressure-indicator');
+        const pressureDots = document.querySelectorAll('.pressure-dot');
+        
+        let width, height;
+        let gridSize = 30;
+        let points = [];
+        let mouseX = 0, mouseY = 0;
+        let typing = false;
+        let typingPressure = 0;
+        let impressions = [];
+        
+        function init() {
+            width = canvas.offsetWidth;
+            height = canvas.offsetHeight;
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Create grid points
+            for (let x = 0; x < width; x += gridSize) {
+                for (let y = 0; y < height; y += gridSize) {
+                    points.push({
+                        x: x,
+                        y: y,
+                        baseY: y,
+                        offset: 0,
+                        velocity: 0,
+                        damping: 0.92
+                    });
+                }
+            }
+        }
+        
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        function update() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Update points based on mouse and typing
+            points.forEach(point => {
+                let targetOffset = 0;
+                
+                // Mouse influence
+                const mouseDist = distance(mouseX, mouseY, point.x, point.y);
+                if (mouseDist < 150) {
+                    targetOffset += (150 - mouseDist) / 150 * 30;
+                }
+                
+                // Typing influence
+                if (typing) {
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+                    const typingDist = distance(centerX, centerY, point.x, point.y);
+                    if (typingDist < 200) {
+                        targetOffset += (200 - typingDist) / 200 * typingPressure * 40;
+                    }
+                }
+                
+                // Check impressions
+                impressions.forEach(imp => {
+                    const impDist = distance(imp.x, imp.y, point.x, point.y);
+                    if (impDist < imp.radius) {
+                        targetOffset += (imp.radius - impDist) / imp.radius * imp.depth;
+                    }
+                });
+                
+                // Spring physics
+                const force = (targetOffset - point.offset) * 0.1;
+                point.velocity += force;
+                point.velocity *= point.damping;
+                point.offset += point.velocity;
+                point.y = point.baseY + point.offset;
+            });
+            
+            // Draw mesh
+            ctx.strokeStyle = 'rgba(74, 124, 158, 0.15)';
+            ctx.lineWidth = 1;
+            
+            // Draw horizontal lines
+            for (let y = 0; y < height; y += gridSize) {
+                ctx.beginPath();
+                let started = false;
+                points.filter(p => Math.abs(p.baseY - y) < 1).forEach(point => {
+                    if (!started) {
+                        ctx.moveTo(point.x, point.y);
+                        started = true;
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                });
+                ctx.stroke();
+            }
+            
+            // Draw vertical lines
+            for (let x = 0; x < width; x += gridSize) {
+                ctx.beginPath();
+                let started = false;
+                points.filter(p => Math.abs(p.x - x) < 1).forEach(point => {
+                    if (!started) {
+                        ctx.moveTo(point.x, point.y);
+                        started = true;
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                });
+                ctx.stroke();
+            }
+            
+            requestAnimationFrame(update);
+        }
+        
+        // Event listeners
+        document.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+        
+        input.addEventListener('input', () => {
+            typing = true;
+            typingPressure = Math.min(input.value.length / 100, 1);
+            
+            if (typingPressure > 0) {
+                pressureIndicator.classList.add('active');
+                pressureDots.forEach((dot, i) => {
+                    if (i < Math.ceil(typingPressure * 3)) {
+                        dot.classList.add('active');
+                    } else {
+                        dot.classList.remove('active');
+                    }
+                });
+            }
+            
+            clearTimeout(window.typingTimeout);
+            window.typingTimeout = setTimeout(() => {
+                typing = false;
+                pressureIndicator.classList.remove('active');
+                
+                // Create lasting impression
+                if (input.value.trim()) {
+                    impressions.push({
+                        x: width / 2 + (Math.random() - 0.5) * 100,
+                        y: height / 2 + (Math.random() - 0.5) * 100,
+                        radius: 100 + typingPressure * 100,
+                        depth: typingPressure * 20
+                    });
+                    
+                    // Keep only last 5 impressions
+                    if (impressions.length > 5) {
+                        impressions.shift();
+                    }
+                }
+            }, 1000);
+        });
+        
+        // Initialize and start
+        init();
+        update();
+        
+        window.addEventListener('resize', () => {
+            init();
+        });
+    </script>
+</body>
+</html>

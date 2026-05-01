@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Argument Settler</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            background: #FFFFFF;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .blueprint-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .guide-lines {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .guide-lines.active {
+            opacity: 1;
+        }
+
+        .guide-line {
+            position: absolute;
+            background: #000;
+            opacity: 0.1;
+        }
+
+        .guide-line.horizontal {
+            width: 100%;
+            height: 1px;
+        }
+
+        .guide-line.vertical {
+            height: 100%;
+            width: 1px;
+        }
+
+        .person-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .person-layer.active {
+            pointer-events: all;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            cursor: move;
+            transition: transform 0.2s ease;
+        }
+
+        .memory-fragment:hover {
+            transform: scale(1.02);
+        }
+
+        .memory-fragment.dragging {
+            cursor: move;
+            z-index: 1000;
+            transition: none;
+        }
+
+        .memory-fragment.locked {
+            cursor: default;
+            transform: scale(1);
+        }
+
+        .memory-fragment.locked:hover {
+            transform: scale(1);
+        }
+
+        .fragment-shape {
+            stroke: #000;
+            fill: none;
+        }
+
+        .person-a .fragment-shape {
+            stroke-width: 1px;
+            stroke-dasharray: 4, 2;
+        }
+
+        .person-b .fragment-shape {
+            stroke-width: 1px;
+            stroke-dasharray: 2, 4;
+        }
+
+        .locked .fragment-shape {
+            stroke-width: 2px;
+            stroke-dasharray: none;
+            fill: #000;
+            fill-opacity: 0.03;
+        }
+
+        .fragment-label {
+            position: absolute;
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            color: #000;
+            opacity: 0.6;
+        }
+
+        .locked .fragment-label {
+            opacity: 1;
+            font-weight: 500;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 240px;
+            background: white;
+            border: 1px solid #000;
+        }
+
+        .panel-header {
+            padding: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            border-bottom: 1px solid #000;
+        }
+
+        .person-toggle {
+            display: flex;
+            margin: 20px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #000;
+            background: white;
+            font-size: 10px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .toggle-btn:first-child {
+            border-right: none;
+        }
+
+        .toggle-btn.active-a,
+        .toggle-btn.active-b {
+            background: #000;
+            color: white;
+        }
+
+        .consensus-indicator {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 200px;
+            height: 60px;
+            border: 1px solid #000;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .consensus-indicator.visible {
+            opacity: 1;
+        }
+
+        .consensus-text {
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .connection-line {
+            stroke: #000;
+            stroke-width: 1px;
+            stroke-dasharray: 1, 3;
+            fill: none;
+            opacity: 0.3;
+        }
+
+        .memory-timestamp {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            opacity: 0.4;
+            letter-spacing: 0.05em;
+        }
+
+        .locked .memory-timestamp {
+            opacity: 0.8;
+        }
+
+        .intersection-marker {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .intersection-marker.active {
+            opacity: 1;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="blueprint-canvas">
+        <div class="guide-lines" id="guide-lines">
+            <div class="guide-line horizontal" style="top: 300px;"></div>
+            <div class="guide-line horizontal" style="top: 600px;"></div>
+            <div class="guide-line vertical" style="left: 480px;"></div>
+            <div class="guide-line vertical" style="left: 960px;"></div>
+        </div>
+
+        <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
+            <path id="connection-1" class="connection-line" d="M 400 300 Q 600 350 800 300"></path>
+            <path id="connection-2" class="connection-line" d="M 640 500 L 640 700"></path>
+        </svg>
+
+        <div class="person-layer active" id="person-a-layer">
+            <div class="memory-fragment person-a" style="left: 350px; top: 250px;" data-person="a" data-id="1">
+                <svg width="100" height="100">
+                    <rect class="fragment-shape" x="10" y="10" width="80" height="80"></rect>
+                </svg>
+                <div class="fragment-label" style="left: 50px; top: 50px;">Context</div>
+                <div class="memory-timestamp">14:32</div>
+            </div>
+            
+            <div class="memory-fragment person-a" style="left: 590px; top: 450px;" data-person="a" data-id="2">
+                <svg width="100" height="100">
+                    <circle class="fragment-shape" cx="50" cy="50" r="40"></circle>
+                </svg>
+                <div class="fragment-label" style="left: 50px; top: 50px;">Statement</div>
+                <div class="memory-timestamp">14:45</div>
+            </div>
+        </div>
+
+        <div class="person-layer" id="person-b-layer">
+            <div class="memory-fragment person-b" style="left: 750px; top: 250px;" data-person="b" data-id="3">
+                <svg width="100" height="100">
+                    <polygon class="fragment-shape" points="50,10 90,90 10,90"></polygon>
+                </svg>
+                <div class="fragment-label" style="left: 50px; top: 50px;">Response</div>
+                <div class="memory-timestamp">14:47</div>
+            </div>
+            
+            <div class="memory-fragment person-b" style="left: 590px; top: 650px;" data-person="b" data-id="4">
+                <svg width="100" height="100">
+                    <rect class="fragment-shape" x="10" y="10" width="80" height="80"></rect>
+                </svg>
+                <div class="fragment-label" style="left: 50px; top: 50px;">Evidence</div>
+                <div class="memory-timestamp">14:52</div>
+            </div>
+        </div>
+
+        <div class="intersection-marker" style="left: 640px; top: 500px;"></div>
+        <div class="intersection-marker" style="left: 600px; top: 300px;"></div>
+    </div>
+
+    <div class="control-panel">
+        <div class="panel-header">Memory Fragments</div>
+        <div class="person-toggle">
+            <button class="toggle-btn active-a" id="toggle-a">Person A</button>
+            <button class="toggle-btn" id="toggle-b">Person B</button>
+        </div>
+    </div>
+
+    <div class="consensus-indicator" id="consensus">
+        <div class="consensus-text">Consensus Reached</div>
+    </div>
+
+    <script>
+        let activePerson = 'a';
+        let draggedElement = null;
+        let offset = { x: 0, y: 0 };
+        let alignedFragments = new Set();
+
+        const toggleA = document.getElementById('toggle-a');
+        const toggleB = document.getElementById('toggle-b');
+        const layerA = document.getElementById('person-a-layer');
+        const layerB = document.getElementById('person-b-layer');
+        const guideLines = document.getElementById('guide-lines');
+        const consensus = document.getElementById('consensus');
+
+        toggleA.addEventListener('click', () => {
+            activePerson = 'a';
+            toggleA.classList.add('active-a');
+            toggleB.classList.remove('active-b');
+            layerA.classList.add('active');
+            layerB.classList.remove('active');
+        });
+
+        toggleB.addEventListener('click', () => {
+            activePerson = 'b';
+            toggleB.classList.add('active-b');
+            toggleA.classList.remove('active-a');
+            layerB.classList.add('active');
+            layerA.classList.remove('active');
+        });
+
+        document.querySelectorAll('.memory-fragment').forEach(fragment => {
+            fragment.addEventListener('mousedown', startDrag);
+        });
+
+        function startDrag(e) {
+            if (this.classList.contains('locked')) return;
+            
+            draggedElement = this;
+            const rect = this.getBoundingClientRect();
+            offset.x = e.clientX - rect.left;
+            offset.y = e.clientY - rect.top;
+            
+            this.classList.add('dragging');
+            guideLines.classList.add('active');
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!draggedElement) return;
+            
+            let x = e.clientX - offset.x;
+            let y = e.clientY - offset.y;
+            
+            // Snap to grid
+            const gridSize = 10;
+            x = Math.round(x / gridSize) * gridSize;
+            y = Math.round(y / gridSize) * gridSize;
+            
+            draggedElement.style.left = x + 'px';
+            draggedElement.style.top = y + 'px';
+            
+            checkIntersections();
+        }
+
+        function stopDrag() {
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+                guideLines.classList.remove('active');
+                draggedElement = null;
+            }
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        function checkIntersections() {
+            const fragments = document.querySelectorAll('.memory-fragment');
+            const threshold = 50;
+            let intersectionCount = 0;
+            
+            fragments.forEach((f1, i) => {
+                fragments.forEach((f2, j) => {
+                    if (i >= j) return;
+                    
+                    const r1 = f1.getBoundingClientRect();
+                    const r2 = f2.getBoundingClientRect();
+                    
+                    const dx = Math.abs((r1.left + r1.width/2) - (r2.left + r2.width/2));
+                    const dy = Math.abs((r1.top + r1.height/2) - (r2.top + r2.height/2));
+                    
+                    if (dx < threshold && dy < threshold && f1.dataset.person !== f2.dataset.person) {
+                        f1.classList.add('locked');
+                        f2.classList.add('locked');
+                        alignedFragments.add(f1.dataset.id);
+                        alignedFragments.add(f2.dataset.id);
+                        intersectionCount++;
+                        
+                        const markers = document.querySelectorAll('.intersection-marker');
+                        if (markers[intersectionCount - 1]) {
+                            markers[intersectionCount - 1].classList.add('active');
+                        }
+                    }
+                });
+            });
+            
+            if (alignedFragments.size >= 3) {
+                consensus.classList.add('visible');
+            }
+        }
+    </script>
+</body>
+</html>

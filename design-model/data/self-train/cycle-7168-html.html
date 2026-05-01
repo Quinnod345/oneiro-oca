@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Auction House - Bid on Abandoned Aspirations</title>
+    <style>
+        :root {
+            --depth-surface: #001f3f;
+            --depth-shallow: #001629;
+            --depth-mid: #000d1a;
+            --depth-deep: #00040a;
+            --depth-abyss: #000000;
+            --aurora-cyan: #00ffff;
+            --aurora-magenta: #ff00ff;
+            --aurora-yellow: #ffff00;
+            --vessel-glow: rgba(0, 255, 255, 0.2);
+            --bid-pulse: #ff6b4a;
+            --text-primary: #e0f2ff;
+            --text-secondary: #7ca9cc;
+            --bridge-light: rgba(255, 255, 255, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(to bottom, var(--depth-surface) 0%, var(--depth-shallow) 20%, var(--depth-mid) 50%, var(--depth-deep) 80%, var(--depth-abyss) 100%);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .depth-container {
+            position: relative;
+            width: 100%;
+            height: 4500px;
+        }
+
+        .surface-ripple {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(to bottom, rgba(0, 255, 255, 0.1), transparent);
+            pointer-events: none;
+            animation: ripple 8s ease-in-out infinite;
+        }
+
+        @keyframes ripple {
+            0%, 100% { transform: scaleY(1); opacity: 0.3; }
+            50% { transform: scaleY(1.2); opacity: 0.5; }
+        }
+
+        .depth-indicator {
+            position: fixed;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 300px;
+            background: linear-gradient(to bottom, var(--aurora-cyan), var(--aurora-magenta));
+            opacity: 0.3;
+            border-radius: 2px;
+        }
+
+        .depth-marker {
+            position: absolute;
+            width: 20px;
+            height: 2px;
+            background: var(--text-secondary);
+            right: -8px;
+            font-size: 11px;
+            text-align: right;
+            padding-right: 30px;
+            line-height: 2px;
+            opacity: 0.6;
+        }
+
+        .dream-vessel {
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .vessel-container {
+            width: 240px;
+            height: 280px;
+            position: relative;
+        }
+
+        .vessel-body {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .vessel-body.career {
+            clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+        }
+
+        .vessel-body.relationship {
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+
+        .vessel-body.creative {
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+        }
+
+        .dream-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--aurora-cyan);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float-particle 10s infinite;
+        }
+
+        @keyframes float-particle {
+            0% { transform: translate(0, 100%) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { transform: translate(100px, -100%) rotate(360deg); opacity: 0; }
+        }
+
+        .vessel-glow {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--vessel-glow) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .dream-vessel:hover .vessel-glow {
+            opacity: 1;
+        }
+
+        .dream-info {
+            position: absolute;
+            bottom: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            width: 200px;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .dream-vessel:hover .dream-info {
+            opacity: 1;
+        }
+
+        .dream-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .dream-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .bid-indicator {
+            position: absolute;
+            top: -30px;
+            right: -10px;
+            background: var(--bid-pulse);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            animation: pulse-bid 2s infinite;
+        }
+
+        @keyframes pulse-bid {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        .resonance-bridge {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--bridge-light), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .aurora-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 40%;
+            pointer-events: none;
+            opacity: 0.15;
+            mix-blend-mode: screen;
+            background: linear-gradient(45deg, var(--aurora-cyan), var(--aurora-magenta), var(--aurora-yellow));
+            filter: blur(100px);
+            animation: aurora-shift 20s ease-in-out infinite;
+        }
+
+        @keyframes aurora-shift {
+            0%, 100% { transform: translateX(0) translateY(0); }
+            33% { transform: translateX(100px) translateY(-50px); }
+            66% { transform: translateX(-100px) translateY(50px); }
+        }
+
+        .navigation-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 31, 63, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px 40px;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 30px;
+        }
+
+        .filter-tab {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .filter-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .filter-tab.active {
+            color: var(--aurora-cyan);
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .depth-legend {
+            position: fixed;
+            right: 80px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: right;
+            line-height: 1.8;
+        }
+
+        .legend-item {
+            margin: 20px 0;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .legend-item:hover {
+            opacity: 1;
+        }
+
+        .abandoned-date {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .vessel-body.active-bidding {
+            animation: rise-up 0.6s ease-out;
+        }
+
+        @keyframes rise-up {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0); }
+        }
+
+        .particle-trail {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .trail-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--aurora-cyan);
+            border-radius: 50%;
+            opacity: 0;
+            animation: trail-fade 1s ease-out;
+        }
+
+        @keyframes trail-fade {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.5); }
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora-layer"></div>
+    <div class="surface-ripple"></div>
+    
+    <nav class="navigation-panel">
+        <div class="nav-content">
+            <h1 class="logo">DREAM AUCTION</h1>
+            <div class="filter-tabs">
+                <button class="filter-tab active">All Dreams</button>
+                <button class="filter-tab">Career</button>
+                <button class="filter-tab">Relationships</button>
+                <button class="filter-tab">Creative</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="depth-container">
+        <!-- Career Dream - Near Surface -->
+        <div class="dream-vessel" style="left: 200px; top: 200px;">
+            <div class="vessel-container">
+                <div class="vessel-body career">
+                    <span class="abandoned-date">2 days ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 0s; left: 20%; top: 80%;"></div>
+                        <div class="particle" style="animation-delay: 2s; left: 50%; top: 90%; background: var(--aurora-magenta);"></div>
+                        <div class="particle" style="animation-delay: 4s; left: 80%; top: 85%;"></div>
+                        <div class="particle" style="animation-delay: 6s; left: 30%; top: 95%; background: var(--aurora-yellow);"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="bid-indicator">17 bids</div>
+                <div class="dream-info">
+                    <div class="dream-title">Silicon Valley Startup</div>
+                    <div class="dream-meta">Tech • Abandoned by Alex K.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relationship Dream - Shallow -->
+        <div class="dream-vessel" style="left: 600px; top: 400px;">
+            <div class="vessel-container">
+                <div class="vessel-body relationship">
+                    <span class="abandoned-date">1 week ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 1s; left: 40%; top: 70%; background: var(--aurora-magenta);"></div>
+                        <div class="particle" style="animation-delay: 3s; left: 60%; top: 80%;"></div>
+                        <div class="particle" style="animation-delay: 5s; left: 25%; top: 75%;"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="bid-indicator">8 bids</div>
+                <div class="dream-info">
+                    <div class="dream-title">Paris Love Story</div>
+                    <div class="dream-meta">Romance • Abandoned by Marie L.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Creative Dream - Mid-depth -->
+        <div class="dream-vessel" style="left: 900px; top: 800px; opacity: 0.85;">
+            <div class="vessel-container">
+                <div class="vessel-body creative">
+                    <span class="abandoned-date">3 months ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 0.5s; left: 50%; top: 60%; background: var(--aurora-yellow);"></div>
+                        <div class="particle" style="animation-delay: 2.5s; left: 35%; top: 85%;"></div>
+                        <div class="particle" style="animation-delay: 4.5s; left: 65%; top: 70%; background: var(--aurora-cyan);"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="dream-info">
+                    <div class="dream-title">Broadway Musical</div>
+                    <div class="dream-meta">Arts • Abandoned by James T.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Career Dream - Deep -->
+        <div class="dream-vessel" style="left: 350px; top: 1400px; opacity: 0.7;">
+            <div class="vessel-container">
+                <div class="vessel-body career">
+                    <span class="abandoned-date">1 year ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 1.5s; left: 45%; top: 90%; opacity: 0.4;"></div>
+                        <div class="particle" style="animation-delay: 3.5s; left: 20%; top: 80%; opacity: 0.4;"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="dream-info">
+                    <div class="dream-title">NASA Engineer</div>
+                    <div class="dream-meta">Science • Abandoned by Chen W.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relationship Dream - Very Deep -->
+        <div class="dream-vessel" style="left: 700px; top: 2000px; opacity: 0.5;">
+            <div class="vessel-container">
+                <div class="vessel-body relationship">
+                    <span class="abandoned-date">3 years ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 2s; left: 50%; top: 95%; opacity: 0.3;"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="dream-info">
+                    <div class="dream-title">Forever Home</div>
+                    <div class="dream-meta">Family • Abandoned by Unknown</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Creative Dream - Abyss -->
+        <div class="dream-vessel" style="left: 450px; top: 3000px; opacity: 0.3;">
+            <div class="vessel-container">
+                <div class="vessel-body creative">
+                    <span class="abandoned-date">7 years ago</span>
+                    <div class="dream-particles">
+                        <div class="particle" style="animation-delay: 5s; left: 50%; top: 50%; opacity: 0.2;"></div>
+                    </div>
+                    <div class="vessel-glow"></div>
+                </div>
+                <div class="dream-info">
+                    <div class="dream-title">Great American Novel</div>
+                    <div class="dream-meta">Literature • Abandoned by R.F.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="depth-indicator">
+        <div class="depth-marker" style="top: 0;">Surface</div>
+        <div class="depth-marker" style="top: 25%;">-100m</div>
+        <div class="depth-marker" style="top: 50%;">-500m</div>
+        <div class="depth-marker" style="top: 75%;">-1000m</div>
+        <div class="depth-marker" style="top: 100%;">Abyss</div>
+    </div>
+
+    <div class="depth-legend">
+        <div class="legend-item">Fresh Dreams ↑</div>
+        <div class="legend-item">Recent Abandonment</div>
+        <div class="legend-item">Fading Memories</div>
+        <div class="legend-item">Lost Aspirations</div>
+        <div class="legend-item">Forgotten Dreams ↓</div>
+    </div>
+
+    <div class="resonance-bridge" id="bridge-1"></div>
+    <div class="particle-trail" id="trail-container"></div>
+
+    <script>
+        // Parallax scrolling effect
+        window.addEventListener('scroll', () => {
+            const scrolled = window.scrollY;
+            const vessels = document.querySelectorAll('.dream-vessel');
+            vessels.forEach((vessel, index) => {
+                const speed = 0.5 + (index * 0.1);
+                vessel.style.transform = `translateY(${scrolled * speed * 0.2}px)`;
+            });
+        });
+
+        // Vessel hover resonance
+        const vessels = document.querySelectorAll('.dream-vessel');
+        vessels.forEach((vessel, index) => {
+            vessel.addEventListener('mouseenter', () => {
+                vessel.querySelector('.vessel-body').classList.add('active-bidding');
+                
+                // Create particle trail
+                const trail = document.getElementById('trail-container');
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        const particle = document.createElement('div');
+                        particle.className = 'trail-particle';
+                        particle.style.left = Math.random() * 100 + '%';
+                        particle.style.top = Math.random() * 100 + '%';
+                        trail.appendChild(particle);
+                        setTimeout(() => particle.remove(), 1000);
+                    }, i * 100);
+                }
+            });
+
+            vessel.addEventListener('mouseleave', () => {
+                setTimeout(() => {
+                    vessel.querySelector('.vessel-body').classList.remove('active-bidding');
+                }, 600);
+            });
+        });
+
+        // Simulate active bidding
+        setInterval(() => {
+            const randomVessel = vessels[Math.floor(Math.random() * vessels.length)];
+            const bidIndicator = randomVessel.querySelector('.bid-indicator');
+            if (bidIndicator) {
+                const currentBids = parseInt(bidIndicator.textContent);
+                bidIndicator.textContent = `${currentBids + 1} bids`;
+                randomVessel.querySelector('.vessel-body').classList.add('active-bidding');
+                setTimeout(() => {
+                    randomVessel.querySelector('.vessel-body').classList.remove('active-bidding');
+                }, 600);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

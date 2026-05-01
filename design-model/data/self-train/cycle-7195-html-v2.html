@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Residue Collector</title>
+    <style>
+        :root {
+            --twilight: #1a1825;
+            --deep-void: #0f0e13;
+            --shard-edge: rgba(147, 129, 255, 0.3);
+            --anxiety-red: rgba(255, 71, 87, 0.4);
+            --calm-amber: rgba(255, 193, 7, 0.6);
+            --dissolve-blue: rgba(64, 169, 255, 0.5);
+            --mist: rgba(255, 255, 255, 0.02);
+            --wake: rgba(255, 255, 255, 0.08);
+            --sleep: rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--deep-void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .liminal-space {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(ellipse at 50% 50%, var(--twilight) 0%, var(--deep-void) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vortex-container {
+            position: relative;
+            width: min(80vw, 400px);
+            height: min(80vw, 400px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vortex {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            animation: vortexRotate 30s linear infinite;
+        }
+
+        @keyframes vortexRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .vortex-ring {
+            position: absolute;
+            border: 2px solid;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease-out;
+        }
+
+        .vortex-ring:nth-child(1) {
+            width: 100%;
+            height: 100%;
+            border-color: var(--dissolve-blue);
+            opacity: 0.4;
+        }
+
+        .vortex-ring:nth-child(2) {
+            width: 60%;
+            height: 60%;
+            border-color: var(--calm-amber);
+            opacity: 0.5;
+        }
+
+        .vortex-core {
+            position: absolute;
+            width: 20%;
+            height: 20%;
+            background: radial-gradient(circle, var(--wake) 0%, transparent 70%);
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: transform 0.3s ease-out;
+        }
+
+        .vortex-core:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .vortex-container:hover .vortex-ring {
+            opacity: 0.8;
+        }
+
+        .nightmare-shards {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .shard {
+            position: absolute;
+            width: clamp(60px, 8vw, 100px);
+            height: clamp(80px, 10vw, 120px);
+            background: linear-gradient(135deg, var(--shard-edge) 0%, transparent 50%);
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            opacity: 0.6;
+            animation: float 6s ease-in-out infinite;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.3s ease-out;
+        }
+
+        .shard::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 50%, transparent 30%, var(--anxiety-red) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .shard:hover {
+            transform: scale(1.1);
+            opacity: 1;
+        }
+
+        .shard:hover::before {
+            opacity: 0.4;
+        }
+
+        .shard:nth-child(1) { 
+            left: 10%; 
+            top: 20%; 
+            animation-delay: 0s;
+        }
+
+        .shard:nth-child(2) { 
+            right: 15%; 
+            top: 30%; 
+            animation-delay: 1s;
+        }
+
+        .shard:nth-child(3) { 
+            left: 20%; 
+            bottom: 25%; 
+            animation-delay: 2s;
+        }
+
+        .shard:nth-child(4) { 
+            right: 10%; 
+            bottom: 20%; 
+            animation-delay: 3s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+
+        .dream-text {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: var(--wake);
+            font-size: clamp(0.875rem, 2vw, 1.125rem);
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            opacity: 0.7;
+        }
+
+        .dream-text h1 {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 100;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .vortex-container {
+                width: min(90vw, 300px);
+                height: min(90vw, 300px);
+            }
+            
+            .shard {
+                width: 60px;
+                height: 80px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .vortex,
+            .shard {
+                animation: none;
+            }
+            
+            .vortex-ring,
+            .vortex-core,
+            .shard {
+                transition: none;
+            }
+        }
+
+        .shard-tooltip {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .shard:hover .shard-tooltip {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="liminal-space">
+        <div class="vortex-container">
+            <div class="vortex">
+                <div class="vortex-ring"></div>
+                <div class="vortex-ring"></div>
+                <div class="vortex-core" role="button" aria-label="Dream vortex core"></div>
+            </div>
+        </div>
+        
+        <div class="nightmare-shards">
+            <div class="shard" role="button" aria-label="Collect nightmare fragment">
+                <span class="shard-tooltip">Click to dissolve</span>
+            </div>
+            <div class="shard" role="button" aria-label="Collect nightmare fragment">
+                <span class="shard-tooltip">Click to dissolve</span>
+            </div>
+            <div class="shard" role="button" aria-label="Collect nightmare fragment">
+                <span class="shard-tooltip">Click to dissolve</span>
+            </div>
+            <div class="shard" role="button" aria-label="Collect nightmare fragment">
+                <span class="shard-tooltip">Click to dissolve</span>
+            </div>
+        </div>
+        
+        <div class="dream-text">
+            <h1>Dream Residue</h1>
+            <p>Collect the fragments before waking</p>
+        </div>
+    </div>
+    
+    <script>
+        document.querySelectorAll('.shard').forEach(shard => {
+            shard.addEventListener('click', function() {
+                this.style.transition = 'all 0.6s ease-out';
+                this.style.transform = 'scale(0) rotate(180deg)';
+                this.style.opacity = '0';
+                setTimeout(() => this.remove(), 600);
+            });
+        });
+        
+        document.querySelector('.vortex-core').addEventListener('click', function() {
+            const shards = document.querySelectorAll('.shard');
+            if (shards.length === 0) {
+                this.style.background = 'radial-gradient(circle, var(--calm-amber) 0%, transparent 70%)';
+                document.querySelector('.dream-text p').textContent = 'The dreams have dissolved';
+            }
+        });
+    </script>
+</body>
+</html>

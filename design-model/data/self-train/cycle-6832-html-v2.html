@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --ash: #1a1a1a;
+            --carbon: #2a2a2a;
+            --silver: #c0c0c0;
+            --ghost: #f0f0f0;
+            --prism: #ffffff;
+            --accent: #4a69bd;
+            --accent-light: #6c7fd8;
+            --accent-dark: #3c5aa6;
+            --decay-glow: #8854d0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--silver);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .interface {
+            display: grid;
+            grid-template-columns: minmax(320px, 1fr) minmax(400px, 2fr);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            .interface {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+            }
+        }
+
+        .control-panel {
+            background: linear-gradient(to right, var(--void), var(--ash));
+            border-right: 1px solid var(--carbon);
+            padding: 3rem 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        @media (max-width: 768px) {
+            .control-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--carbon);
+                padding: 2rem 1.5rem;
+            }
+        }
+
+        .title {
+            font-size: 0.875rem;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            margin-bottom: 3rem;
+            opacity: 0.9;
+        }
+
+        .parameter {
+            margin-bottom: 2.5rem;
+        }
+
+        .parameter-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--silver);
+            opacity: 0.6;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .parameter-value {
+            font-size: 0.875rem;
+            font-weight: 300;
+            opacity: 1;
+            color: var(--accent-light);
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 2px;
+            background: var(--carbon);
+            outline: none;
+            position: relative;
+            border-radius: 1px;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            cursor: pointer;
+            border-radius: 50%;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .slider:hover::-webkit-slider-thumb {
+            background: var(--accent-light);
+            box-shadow: 0 0 12px rgba(74, 105, 189, 0.5);
+            transform: scale(1.1);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .visualization {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(ellipse at center, var(--ash), var(--void));
+            min-height: 100vh;
+        }
+
+        @media (max-width: 768px) {
+            .visualization {
+                min-height: 60vh;
+            }
+        }
+
+        .crystal-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1000px;
+            padding: 2rem;
+        }
+
+        .memory-crystal {
+            width: min(280px, 70vw);
+            height: min(280px, 70vw);
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateY(0deg) rotateX(-15deg);
+            transition: opacity 0.5s ease;
+        }
+
+        .crystal-core {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0.3;
+            filter: blur(20px);
+            transition: all 0.5s ease;
+        }
+
+        .memory-fragments {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+        }
+
+        .fragment {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-light);
+            border-radius: 50%;
+            opacity: 0.8;
+            transition: all 0.5s ease;
+            box-shadow: 0 0 4px var(--accent-light);
+        }
+
+        .data-display {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            right: 2rem;
+            background: rgba(26, 26, 26, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--carbon);
+            border-radius: 4px;
+            padding: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .data-display {
+                position: relative;
+                bottom: auto;
+                margin: 1rem;
+            }
+        }
+
+        .data-item {
+            text-align: center;
+        }
+
+        .data-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            opacity: 0.6;
+            margin-bottom: 0.5rem;
+        }
+
+        .data-value {
+            font-size: 1.5rem;
+            font-weight: 300;
+            color: var(--accent-light);
+        }
+
+        .calculate-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--accent-dark);
+            border: none;
+            color: var(--ghost);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 2rem;
+            border-radius: 2px;
+        }
+
+        .calculate-btn:hover {
+            background: var(--accent);
+            box-shadow: 0 4px 12px rgba(74, 105, 189, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .calculate-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="interface">
+        <div class="control-panel">
+            <h1 class="title">Memory Decay Calculator</h1>
+            
+            <div class="parameter">
+                <div class="parameter-label">
+                    Initial Strength
+                    <span class="parameter-value" id="strength-value">100</span>
+                </div>
+                <input type="range" class="slider" id="strength" min="0" max="100" value="100">
+            </div>
+
+            <div class="parameter">
+                <div class="parameter-label">
+                    Time Elapsed (days)
+                    <span class="parameter-value" id="time-value">0</span>
+                </div>
+                <input type="range" class="slider" id="time" min="0" max="365" value="0">
+            </div>
+
+            <div class="parameter">
+                <div class="parameter-label">
+                    Decay Rate
+                    <span class="parameter-value" id="decay-value">0.1</span>
+                </div>
+                <input type="range" class="slider" id="decay" min="0.01" max="1" step="0.01" value="0.1">
+            </div>
+
+            <div class="parameter">
+                <div class="parameter-label">
+                    Interference Factor
+                    <span class="parameter-value" id="interference-value">0</span>
+                </div>
+                <input type="range" class="slider" id="interference" min="0" max="100" value="0">
+            </div>
+
+            <button class="calculate-btn" onclick="calculateDecay()">Calculate Decay</button>
+        </div>
+
+        <div class="visualization">
+            <div class="crystal-container">
+                <div class="memory-crystal" id="crystal">
+                    <div class="crystal-core" id="core"></div>
+                    <div class="memory-fragments" id="fragments"></div>
+                </div>
+            </div>
+            
+            <div class="data-display">
+                <div class="data-item">
+                    <div class="data-label">Retention</div>
+                    <div class="data-value" id="retention">100%</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Half-Life</div>
+                    <div class="data-value" id="halflife">∞</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Integrity</div>
+                    <div class="data-value" id="integrity">100%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize fragments
+        function initializeFragments() {
+            const container = document.getElementById('fragments');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 100; i++) {
+                const fragment = document.createElement('div');
+                fragment.className = 'fragment';
+                
+                const theta = (i / 100) * Math.PI * 2;
+                const phi = Math.acos(1 - 2 * (i / 100));
+                const r = 100;
+                
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.sin(phi) * Math.sin(theta);
+                const z = r * Math.cos(phi);
+                
+                fragment.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
+                fragment.dataset.x = x;
+                fragment.dataset.y = y;
+                fragment.dataset.z = z;
+                
+                container.appendChild(fragment);
+            }
+        }
+
+        // Update slider values
+        document.querySelectorAll('.slider').forEach(slider => {
+            slider.addEventListener('input', function() {
+                const valueSpan = document.querySelector(`#${this.id}-value`);
+                valueSpan.textContent = this.value;
+                updateVisualization();
+            });
+        });
+
+        // Calculate decay
+        function calculateDecay() {
+            const strength = parseFloat(document.getElementById('strength').value);
+            const time = parseFloat(document.getElementById('time').value);
+            const decayRate = parseFloat(document.getElementById('decay').value);
+            const interference = parseFloat(document.getElementById('interference').value);
+            
+            const adjustedDecay = decayRate * (1 + interference / 100);
+            const retention = strength * Math.exp(-adjustedDecay * time / 30);
+            const halfLife = time === 0 ? Infinity : (0.693 / adjustedDecay) * 30;
+            const integrity = Math.max(0, 100 - interference);
+            
+            document.getElementById('retention').textContent = retention.toFixed(1) + '%';
+            document.getElementById('halflife').textContent = halfLife === Infinity ? '∞' : halfLife.toFixed(0) + 'd';
+            document.getElementById('integrity').textContent = integrity.toFixed(0) + '%';
+            
+            updateVisualization();
+        }
+
+        // Update visualization
+        function updateVisualization() {
+            const time = parseFloat(document.getElementById('time').value);
+            const decayRate = parseFloat(document.getElementById('decay').value);
+            const interference = parseFloat(document.getElementById('interference').value);
+            const strength = parseFloat(document.getElementById('strength').value);
+            
+            const retention = strength * Math.exp(-decayRate * time / 30);
+            const opacity = retention / 100;
+            
+            // Update core
+            const core = document.getElementById('core');
+            core.style.opacity = opacity * 0.5;
+            core.style.transform = `translate(-50%, -50%) scale(${0.5 + opacity * 0.5})`;
+            
+            // Update fragments
+            const fragments = document.querySelectorAll('.fragment');
+            fragments.forEach((fragment, i) => {
+                const scatter = (100 - retention) / 100;
+                const drift = interference / 100;
+                
+                const baseX = parseFloat(fragment.dataset.x);
+                const baseY = parseFloat(fragment.dataset.y);
+                const baseZ = parseFloat(fragment.dataset.z);
+                
+                const x = baseX + (Math.random() - 0.5) * scatter * 100 * drift;
+                const y = baseY + (Math.random() - 0.5) * scatter * 100 * drift;
+                const z = baseZ + (Math.random() - 0.5) * scatter * 100 * drift;
+                
+                fragment.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
+                fragment.style.opacity = opacity * 0.8;
+                
+                if (i < interference) {
+                    fragment.style.background = var('--decay-glow');
+                    fragment.style.boxShadow = `0 0 8px var(--decay-glow)`;
+                }
+            });
+            
+            // Update crystal opacity
+            document.getElementById('crystal').style.opacity = 0.5 + opacity * 0.5;
+        }
+
+        // Initialize
+        initializeFragments();
+        calculateDecay();
+    </script>
+</body>
+</html>

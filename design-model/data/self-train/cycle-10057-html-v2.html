@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --void-black: #0a0a0c;
+            --memory-glass: rgba(224, 231, 255, 0.08);
+            --emotional-gold: #ffd700;
+            --bid-crimson: #dc143c;
+            --bid-azure: #1e90ff;
+            --bid-emerald: #2ecc40;
+            --particle-glow: #fff8dc;
+            --breath-fog: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--void-black);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-rows: 120px 1fr 120px;
+            gap: 40px;
+            padding: 40px;
+        }
+
+        .auction-header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #emotion-reserve {
+            width: 240px;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(255, 255, 255, 0.02));
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .emotion-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            background: linear-gradient(to top, rgba(255, 215, 0, 0.3), transparent);
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #reserve-count {
+            position: relative;
+            color: var(--emotional-gold);
+            font-size: 32px;
+            font-weight: 200;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            z-index: 2;
+        }
+
+        .auction-timer {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 18px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .timer-segment {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .timer-value {
+            font-size: 36px;
+            font-weight: 100;
+            color: white;
+        }
+
+        .timer-label {
+            font-size: 12px;
+            opacity: 0.5;
+        }
+
+        .memory-gallery {
+            grid-column: 2;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 60px;
+            place-items: center;
+            position: relative;
+        }
+
+        #central-void {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, transparent 20%, rgba(0, 0, 0, 0.8) 60%, var(--void-black) 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 100px rgba(0, 0, 0, 0.9) inset;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .memory-orb {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: var(--memory-glass);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-orb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+        }
+
+        .memory-content {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .memory-title {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 300;
+            margin-bottom: 8px;
+        }
+
+        .memory-value {
+            color: var(--emotional-gold);
+            font-size: 24px;
+            font-weight: 100;
+            margin-bottom: 12px;
+        }
+
+        .bid-indicator {
+            position: absolute;
+            bottom: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .bid-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .bid-dot.active { opacity: 1; }
+        .bid-dot.crimson { background: var(--bid-crimson); }
+        .bid-dot.azure { background: var(--bid-azure); }
+        .bid-dot.emerald { background: var(--bid-emerald); }
+
+        .bidder-panel {
+            grid-row: 2;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .bidder-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .bidder-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+        }
+
+        .bidder-avatar.crimson { background: var(--bid-crimson); }
+        .bidder-avatar.azure { background: var(--bid-azure); }
+        .bidder-avatar.emerald { background: var(--bid-emerald); }
+
+        .bidder-name {
+            color: white;
+            font-size: 18px;
+            font-weight: 300;
+        }
+
+        .bid-history {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bid-entry {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            opacity: 0;
+            animation: fadeInSlide 0.4s ease forwards;
+        }
+
+        @keyframes fadeInSlide {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .bid-memory-name {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+        }
+
+        .bid-amount {
+            color: var(--emotional-gold);
+            font-weight: 300;
+        }
+
+        .auction-controls {
+            grid-column: 1 / -1;
+            grid-row: 3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .breath-indicator {
+            width: 200px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .breath-wave {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: breathFlow 3s ease-in-out infinite;
+        }
+
+        @keyframes breathFlow {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .breath-text {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            letter-spacing: 1px;
+            z-index: 2;
+            position: relative;
+        }
+
+        .memory-detail {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 400px;
+            height: 400px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            z-index: 100;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: none;
+        }
+
+        .memory-detail.active {
+            display: block;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--particle-glow);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .particle.active {
+            opacity: 1;
+            animation: particleFloat 2s ease-out forwards;
+        }
+
+        @keyframes particleFloat {
+            to {
+                transform: translate(var(--dx), var(--dy));
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="auction-header">
+        <div id="emotion-reserve">
+            <div class="emotion-fill"></div>
+            <div id="reserve-count">1,347</div>
+        </div>
+        
+        <div class="auction-timer">
+            <div class="timer-segment">
+                <div class="timer-value">02</div>
+                <div class="timer-label">HOURS</div>
+            </div>
+            <div class="timer-segment">
+                <div class="timer-value">47</div>
+                <div class="timer-label">MINUTES</div>
+            </div>
+            <div class="timer-segment">
+                <div class="timer-value">23</div>
+                <div class="timer-label">SECONDS</div>
+            </div>
+        </div>
+    </header>
+
+    <aside class="bidder-panel">
+        <div class="bidder-header">
+            <div class="bidder-avatar crimson">❤️</div>
+            <div class="bidder-name">Passion Collector</div>
+        </div>
+        <div class="bid-history">
+            <div class="bid-entry">
+                <span class="bid-memory-name">First Kiss</span>
+                <span class="bid-amount">234</span>
+            </div>
+            <div class="bid-entry">
+                <span class="bid-memory-name">Summer Rain</span>
+                <span class="bid-amount">189</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="memory-gallery">
+        <div id="central-void"></div>
+        
+        <div class="memory-orb" data-memory="first-kiss">
+            <div class="memory-content">
+                <div class="memory-title">First Kiss</div>
+                <div class="memory-value">234</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson active"></div>
+                    <div class="bid-dot azure"></div>
+                    <div class="bid-dot emerald"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-orb" data-memory="childhood-home">
+            <div class="memory-content">
+                <div class="memory-title">Childhood Home</div>
+                <div class="memory-value">567</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson"></div>
+                    <div class="bid-dot azure active"></div>
+                    <div class="bid-dot emerald active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-orb" data-memory="last-goodbye">
+            <div class="memory-content">
+                <div class="memory-title">Last Goodbye</div>
+                <div class="memory-value">892</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson active"></div>
+                    <div class="bid-dot azure active"></div>
+                    <div class="bid-dot emerald"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-orb" data-memory="summer-rain">
+            <div class="memory-content">
+                <div class="memory-title">Summer Rain</div>
+                <div class="memory-value">189</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson"></div>
+                    <div class="bid-dot azure"></div>
+                    <div class="bid-dot emerald active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-orb" data-memory="mothers-voice">
+            <div class="memory-content">
+                <div class="memory-title">Mother's Voice</div>
+                <div class="memory-value">1,204</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson active"></div>
+                    <div class="bid-dot azure active"></div>
+                    <div class="bid-dot emerald active"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="memory-orb" data-memory="forgotten-dream">
+            <div class="memory-content">
+                <div class="memory-title">Forgotten Dream</div>
+                <div class="memory-value">423</div>
+                <div class="bid-indicator">
+                    <div class="bid-dot crimson"></div>
+                    <div class="bid-dot azure active"></div>
+                    <div class="bid-dot emerald"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <aside class="bidder-panel">
+        <div class="bidder-header">
+            <div class="bidder-avatar azure">💙</div>
+            <div class="bidder-name">Nostalgia Seeker</div>
+        </div>
+        <div class="bid-history">
+            <div class="bid-entry">
+                <span class="bid-memory-name">Childhood Home</span>
+                <span class="bid-amount">567</span>
+            </div>
+            <div class="bid-entry">
+                <span class="bid-memory-name">Mother's Voice</span>
+                <span class="bid-amount">1,204</span>
+            </div>
+        </div>
+    </aside>
+
+    <footer class="auction-controls">
+        <div class="breath-indicator">
+            <div class="breath-wave"></div>
+            <span class="breath-text">BREATHE TO REVEAL</span>
+        </div>
+    </footer>
+
+    <div class="memory-detail" id="memory-detail">
+        <!-- Memory details populated dynamically -->
+    </div>
+
+    <script>
+        // Create particles on emotion spend
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.memory-orb')) {
+                createParticles(e.pageX, e.pageY);
+                updateReserve();
+            }
+        });
+
+        function createParticles(x, y) {
+            for (let i = 0; i < 8; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle active';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.setProperty('--dx', (Math.random() - 0.5) * 100 + 'px');
+                particle.style.setProperty('--dy', (Math.random() - 0.5) * 100 + 'px');
+                document.body.appendChild(particle);
+                
+                setTimeout(() => particle.remove(), 2000);
+            }
+        }
+
+        function updateReserve() {
+            const count = document.getElementById('reserve-count');
+            const current = parseInt(count.textContent.replace(',', ''));
+            const newValue = Math.max(0, current - Math.floor(Math.random() * 50 + 10));
+            count.textContent = newValue.toLocaleString();
+            
+            const fill = document.querySelector('.emotion-fill');
+            fill.style.height = (newValue / 2000 * 100) + '%';
+        }
+
+        // Timer countdown
+        setInterval(() => {
+            const timers = document.querySelectorAll('.timer-value');
+            let seconds = parseInt(timers[2].textContent);
+            let minutes = parseInt(timers[1].textContent);
+            let hours = parseInt(timers[0].textContent);
+            
+            seconds--;
+            if (seconds < 0) {
+                seconds = 59;
+                minutes--;
+                if (minutes < 0) {
+                    minutes = 59;
+                    hours--;
+                    if (hours < 0) {
+                        hours = 0;
+                        minutes = 0;
+                        seconds = 0;
+                    }
+                }
+            }
+            
+            timers[0].textContent = hours.toString().padStart(2, '0');
+            timers[1].textContent = minutes.toString().padStart(2, '0');
+            timers[2].textContent = seconds.toString().padStart(2, '0');
+        }, 1000);
+
+        // Breath detection simulation
+        let breathIntensity = 0;
+        setInterval(() => {
+            breathIntensity = Math.sin(Date.now() * 0.001) * 0.5 + 0.5;
+            document.querySelectorAll('.memory-orb').forEach(orb => {
+                orb.style.opacity = 0.5 + breathIntensity * 0.5;
+                orb.style.transform = `scale(${1 + breathIntensity * 0.1})`;
+            });
+        }, 50);
+    </script>
+</body>
+</html>

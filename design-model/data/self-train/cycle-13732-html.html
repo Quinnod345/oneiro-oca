@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Decay Radio</title>
+    <style>
+        :root {
+            --decade-1920: #3a2f28;
+            --decade-1940: #4a3d35;
+            --decade-1960: #5a4b42;
+            --decade-1980: #6a594f;
+            --decade-2000: #7a675c;
+            --decade-2020: #8a7569;
+            --signal-amber: #ff9500;
+            --signal-green: #34c759;
+            --noise-white: #f2f2f7;
+            --static-gray: #8e8e93;
+            --tube-glow: #ffcc00;
+            --decay-brown: #5c4033;
+            --fragment-blue: #007aff;
+            --distortion-red: #ff3b30;
+            --timeline-track: #1c1c1e;
+            --text-primary: #f2f2f7;
+            --text-fading: #8e8e93;
+            --text-ghost: #48484a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(to bottom, #0a0a0c, #1c1c1e);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .temporal-static {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(255, 255, 255, 0.03) 2px,
+                    rgba(255, 255, 255, 0.03) 4px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(255, 255, 255, 0.02) 2px,
+                    rgba(255, 255, 255, 0.02) 4px
+                );
+            opacity: 0.4;
+            animation: staticShift 0.1s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes staticShift {
+            0% { transform: translate(0, 0); }
+            50% { transform: translate(-2px, 1px); }
+            100% { transform: translate(1px, -1px); }
+        }
+
+        .radio-chassis {
+            position: absolute;
+            top: 40px;
+            left: 120px;
+            width: 1200px;
+            height: 180px;
+            background: linear-gradient(to bottom, #2a2a2c, #1a1a1c);
+            border-radius: 12px 12px 0 0;
+            box-shadow: 
+                inset 0 2px 4px rgba(0, 0, 0, 0.8),
+                0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .frequency-display {
+            position: absolute;
+            top: 20px;
+            left: 40px;
+            width: 320px;
+            height: 80px;
+            background: radial-gradient(ellipse at center, var(--tube-glow) 0%, transparent 70%);
+            opacity: 0.6;
+            filter: blur(40px);
+        }
+
+        .frequency-readout {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            font-size: 48px;
+            font-weight: 300;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.05em;
+            color: var(--signal-amber);
+            text-shadow: 
+                0 0 20px var(--tube-glow),
+                0 0 40px var(--tube-glow);
+            animation: flicker 3s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            92% { opacity: 0.9; }
+            94% { opacity: 1; }
+            96% { opacity: 0.85; }
+        }
+
+        .decade-indicator {
+            position: absolute;
+            top: 100px;
+            left: 60px;
+            font-size: 14px;
+            letter-spacing: 0.2em;
+            color: var(--text-fading);
+            text-transform: uppercase;
+            transition: all 0.6s ease;
+        }
+
+        .waveform-viewport {
+            position: absolute;
+            top: 20px;
+            right: 40px;
+            width: 720px;
+            height: 140px;
+            background: #0a0a0c;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .waveform-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .waveform-line {
+            position: absolute;
+            height: 2px;
+            background: var(--signal-green);
+            top: 50%;
+            transform-origin: left center;
+            opacity: 0.8;
+            animation: waveDecay 2s infinite ease-in-out;
+        }
+
+        @keyframes waveDecay {
+            0% { transform: scaleX(1) translateY(0); opacity: 0.8; }
+            50% { transform: scaleX(0.6) translateY(-20px); opacity: 0.4; }
+            100% { transform: scaleX(1) translateY(0); opacity: 0.8; }
+        }
+
+        .timeline-shaft {
+            position: absolute;
+            top: 220px;
+            left: 120px;
+            width: 1200px;
+            height: 640px;
+            background: linear-gradient(to bottom, 
+                rgba(28, 28, 30, 0.95) 0%,
+                rgba(28, 28, 30, 0.7) 50%,
+                rgba(28, 28, 30, 0.3) 100%
+            );
+            overflow-y: scroll;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        .timeline-shaft::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        .timeline-shaft::-webkit-scrollbar-track {
+            background: var(--timeline-track);
+        }
+
+        .timeline-shaft::-webkit-scrollbar-thumb {
+            background: var(--static-gray);
+            border-radius: 6px;
+        }
+
+        .decade-layer {
+            position: relative;
+            height: 800px;
+            width: 100%;
+            transition: all 0.8s ease;
+        }
+
+        .decade-layer[data-decade="2020"] {
+            background: linear-gradient(to bottom, transparent, rgba(138, 117, 105, 0.1));
+        }
+
+        .decade-layer[data-decade="2000"] {
+            background: linear-gradient(to bottom, rgba(138, 117, 105, 0.1), rgba(122, 103, 92, 0.2));
+        }
+
+        .decade-layer[data-decade="1980"] {
+            background: linear-gradient(to bottom, rgba(122, 103, 92, 0.2), rgba(106, 89, 79, 0.3));
+        }
+
+        .decade-layer[data-decade="1960"] {
+            background: linear-gradient(to bottom, rgba(106, 89, 79, 0.3), rgba(90, 75, 66, 0.4));
+        }
+
+        .decade-layer[data-decade="1940"] {
+            background: linear-gradient(to bottom, rgba(90, 75, 66, 0.4), rgba(74, 61, 53, 0.5));
+        }
+
+        .decade-layer[data-decade="1920"] {
+            background: linear-gradient(to bottom, rgba(74, 61, 53, 0.5), rgba(58, 47, 40, 0.6));
+        }
+
+        .time-marker {
+            position: absolute;
+            left: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 72px;
+            font-weight: 100;
+            color: var(--text-ghost);
+            opacity: 0.3;
+            letter-spacing: -0.02em;
+        }
+
+        .audio-fragment {
+            position: absolute;
+            background: rgba(255, 149, 0, 0.1);
+            border: 1px solid var(--signal-amber);
+            border-radius: 4px;
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            transform-origin: center;
+        }
+
+        .audio-fragment:hover {
+            background: rgba(255, 149, 0, 0.2);
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(255, 149, 0, 0.3);
+        }
+
+        .fragment-title {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .fragment-meta {
+            font-size: 12px;
+            color: var(--text-fading);
+            opacity: 0.8;
+        }
+
+        .decay-particles {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--signal-amber);
+            opacity: 0;
+            animation: particleDrift 4s infinite ease-out;
+        }
+
+        @keyframes particleDrift {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0);
+            }
+            20% {
+                opacity: 0.8;
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--drift-x), var(--drift-y));
+            }
+        }
+
+        .control-degradation {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .control-knob {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 30% 30%, #3a3a3c, #1a1a1c);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.5),
+                inset -2px -2px 4px rgba(0, 0, 0, 0.8);
+            transition: all 0.3s ease;
+        }
+
+        .control-knob::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 20px;
+            background: var(--signal-amber);
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 2px;
+            box-shadow: 0 0 10px var(--tube-glow);
+        }
+
+        .control-knob:hover {
+            transform: scale(1.05);
+        }
+
+        .signal-indicator {
+            position: absolute;
+            top: 140px;
+            left: 420px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .signal-bar {
+            width: 4px;
+            height: 20px;
+            background: var(--static-gray);
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .signal-bar.active {
+            background: var(--signal-green);
+            box-shadow: 0 0 8px var(--signal-green);
+        }
+
+        .interference-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 4px,
+                rgba(255, 59, 48, 0.05) 4px,
+                rgba(255, 59, 48, 0.05) 8px
+            );
+            opacity: 0;
+            pointer-events: none;
+            animation: interference 8s infinite ease-in-out;
+        }
+
+        @keyframes interference {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.3; }
+        }
+
+        .deep-past-distortion {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(to top, 
+                rgba(58, 47, 40, 0.8),
+                transparent
+            );
+            pointer-events: none;
+            filter: blur(20px);
+        }
+
+        .decade-layer[data-decade="1920"] .fragment-title,
+        .decade-layer[data-decade="1940"] .fragment-title {
+            font-family: Georgia, serif;
+            letter-spacing: 0.05em;
+            filter: blur(0.5px);
+        }
+
+        .decade-layer[data-decade="1920"] .audio-fragment,
+        .decade-layer[data-decade="1940"] .audio-fragment {
+            border-style: dashed;
+            animation: fragmentGlitch 5s infinite;
+        }
+
+        @keyframes fragmentGlitch {
+            0%, 100% { transform: skew(0deg); }
+            92% { transform: skew(-0.5deg); }
+            94% { transform: skew(0.5deg); }
+            96% { transform: skew(-0.3deg); }
+        }
+
+        .tuning-feedback {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: var(--signal-amber);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .tuning-feedback.show {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-static"></div>
+    
+    <div class="radio-chassis">
+        <div class="frequency-display"></div>
+        <div class="frequency-readout">102.7</div>
+        <div class="decade-indicator">SCANNING 2020s</div>
+        
+        <div class="signal-indicator">
+            <div class="signal-bar active"></div>
+            <div class="signal-bar active"></div>
+            <div class="signal-bar active"></div>
+            <div class="signal-bar"></div>
+            <div class="signal-bar"></div>
+        </div>
+        
+        <div class="waveform-viewport">
+            <div class="waveform-canvas">
+                <div class="waveform-line" style="width: 120px; left: 10px; animation-delay: 0s;"></div>
+                <div class="waveform-line" style="width: 80px; left: 140px; animation-delay: 0.2s;"></div>
+                <div class="waveform-line" style="width: 150px; left: 230px; animation-delay: 0.4s;"></div>
+                <div class="waveform-line" style="width: 100px; left: 390px; animation-delay: 0.6s;"></div>
+                <div class="waveform-line" style="width: 140px; left: 500px; animation-delay: 0.8s;"></div>
+            </div>
+        </div>
+        
+        <div class="control-degradation">
+            <div class="control-knob" title="Compression"></div>
+            <div class="control-knob" title="Isolation"></div>
+            <div class="control-knob" title="Decay Rate"></div>
+        </div>
+    </div>
+    
+    <div class="timeline-shaft" id="timelineShaft">
+        <div class="decade-layer" data-decade="2020">
+            <div class="time-marker">2020</div>
+            <div class="audio-fragment" style="left: 200px; top: 100px;">
+                <div class="fragment-title">Pandemic Broadcast</div>
+                <div class="fragment-meta">Emergency Alert • 2:34</div>
+            </div>
+            <div class="audio-fragment" style="left: 500px; top: 200px;">
+                <div class="fragment-title">Zoom Meeting Echo</div>
+                <div class="fragment-meta">Corporate Memory • 0:47</div>
+            </div>
+            <div class="audio-fragment" style="left: 800px; top: 350px;">
+                <div class="fragment-title">TikTok Remnant</div>
+                <div class="fragment-meta">Viral Fragment • 0:15</div>
+            </div>
+        </div>
+        
+        <div class="decade-layer" data-decade="2000">
+            <div class="time-marker">2000</div>
+            <div class="audio-fragment" style="left: 300px; top: 150px;">
+                <div class="fragment-title">Y2K Countdown</div>
+                <div class="fragment-meta">News Archive • 3:21</div>
+            </div>
+            <div class="audio-fragment" style="left: 700px; top: 300px;">
+                <div class="fragment-title">Dial-Up Symphony</div>
+                <div class="fragment-meta">Internet Artifact • 0:28</div>
+            </div>
+        </div>
+        
+        <div class="decade-layer" data-decade="1980">
+            <div class="time-marker">1980</div>
+            <div class="audio-fragment" style="left: 250px; top: 200px;">
+                <div class="fragment-title">MTV Launch Signal</div>
+                <div class="fragment-meta">Broadcast History • 1:03</div>
+            </div>
+            <div class="audio-fragment" style="left: 600px; top: 400px;">
+                <div class="fragment-title">Cold War Static</div>
+                <div class="fragment-meta">Encrypted Message • 4:17</div>
+            </div>
+        </div>
+        
+        <div class="decade-layer" data-decade="1960">
+            <div class="time-marker">1960</div>
+            <div class="audio-fragment" style="left: 400px; top: 250px;">
+                <div class="fragment-title">Moon Landing Feed</div>
+                <div class="fragment-meta">NASA Archive • 2:44</div>
+            </div>
+            <div class="audio-fragment" style="left: 750px; top: 150px;">
+                <div class="fragment-title">Woodstock Echo</div>
+                <div class="fragment-meta">Cultural Memory • 5:32</div>
+            </div>
+        </div>
+        
+        <div class="decade-layer" data-decade="1940">
+            <div class="time-marker">1940</div>
+            <div class="audio-fragment" style="left: 350px; top: 300px;">
+                <div class="fragment-title">War Report</div>
+                <div class="fragment-meta">BBC Transmission • 7:23</div>
+            </div>
+            <div class="audio-fragment" style="left: 650px; top: 450px;">
+                <div class="fragment-title">Victory Broadcast</div>
+                <div class="fragment-meta">Celebration Archive • 1:45</div>
+            </div>
+        </div>
+        
+        <div class="decade-layer" data-decade="1920">
+            <div class="time-marker">1920</div>
+            <div class="audio-fragment" style="left: 450px; top: 350px;">
+                <div class="fragment-title">Jazz Age Whisper</div>
+                <div class="fragment-meta">Cotton Club • ???</div>
+            </div>
+            <div class="audio-fragment" style="left: 200px; top: 500px;">
+                <div class="fragment-title">Radio Birth Cry</div>
+                <div class="fragment-meta">First Broadcast • ???</div>
+            </div>
+        </div>
+        
+        <div class="deep-past-distortion"></div>
+    </div>
+    
+    <div class="interference-overlay"></div>
+    <div class="tuning-feedback">LOCKING SIGNAL...</div>
+    
+    <div class="decay-particles">
+        <div class="particle" style="--drift-x: 50px; --drift-y: -80px; left: 20%; top: 40%; animation-delay: 0s;"></div>
+        <div class="particle" style="--drift-x: -70px; --drift-y: -100px; left: 40%; top: 60%; animation-delay: 0.5s;"></div>
+        <div class="particle" style="--drift-x: 80px; --drift-y: -120px; left: 60%; top: 30%; animation-delay: 1s;"></div>
+        <div class="particle" style="--drift-x: -60px; --drift-y: -90px; left: 80%; top: 50%; animation-delay: 1.5s;"></div>
+        <div class="particle" style="--drift-x: 40px; --drift-y: -110px; left: 30%; top: 70%; animation-delay: 2s;"></div>
+    </div>
+    
+    <script>
+        const timelineShaft = document.getElementById('timelineShaft');
+        const frequencyDisplay = document.querySelector('.frequency-readout');
+        const decadeIndicator = document.querySelector('.decade-indicator');
+        const signalBars = document.querySelectorAll('.signal-bar');
+        const tuningFeedback = document.querySelector('.tuning-feedback');
+        
+        const decades = [
+            { year: 2020, freq: 102.7, signal: 5 },
+            { year: 2000, freq: 98.3, signal: 4 },
+            { year: 1980, freq: 91.1, signal: 3 },
+            { year: 1960, freq: 83.5, signal: 3 },
+            { year: 1940, freq: 74.2, signal: 2 },
+            { year: 1920, freq: 65.8, signal: 1 }
+        ];
+        
+        timelineShaft.addEventListener('scroll', () => {
+            const scrollPercentage = timelineShaft.scrollTop / (timelineShaft.scrollHeight - timelineShaft.clientHeight);
+            const decadeIndex = Math.floor(scrollPercentage * decades.length);
+            const currentDecade = decades[Math.min(decadeIndex, decades.length - 1)];
+            
+            frequencyDisplay.textContent = currentDecade.freq.toFixed(1);
+            decadeIndicator.textContent = `SCANNING ${currentDecade.year}s`;
+            
+            signalBars.forEach((bar, index) => {
+                if (index < currentDecade.signal) {
+                    bar.classList.add('active');
+                } else {
+                    bar.classList.remove('active');
+                }
+            });
+            
+            document.querySelectorAll('.decade-layer').forEach(layer => {
+                const rect = layer.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+                const visibilityRatio = Math.max(0, Math.min(1, 
+                    (viewportHeight - rect.top) / viewportHeight
+                ));
+                
+                layer.style.opacity = 0.4 + (visibilityRatio * 0.6);
+                layer.style.filter = `blur(${(1 - visibilityRatio) * 2}px)`;
+            });
+        });
+        
+        document.querySelectorAll('.audio-fragment').forEach(fragment => {
+            fragment.addEventListener('click', function() {
+                tuningFeedback.classList.add('show');
+                setTimeout(() => tuningFeedback.classList.remove('show'), 2000);
+                
+                this.style.animation = 'fragmentGlitch 0.5s';
+                setTimeout(() => this.style.animation = '', 500);
+            });
+        });
+        
+        document.querySelectorAll('.control-knob').forEach(knob => {
+            let rotation = 0;
+            let isDragging = false;
+            
+            knob.addEventListener('mousedown', () => isDragging = true);
+            document.addEventListener('mouseup', () => isDragging = false);
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    rotation += e.movementX;
+                    knob.style.transform = `rotate(${rotation}deg)`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
