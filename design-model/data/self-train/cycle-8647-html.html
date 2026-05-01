@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --mist: #1a1a2e;
+            --glow: #4a7c7e;
+            --pulse: #7ec8e3;
+            --drain: #ff6b6b;
+            --crystal: #e0f7fa;
+            --time: #ffd93d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .time-balance {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+            color: var(--time);
+            font-size: 14px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .time-value {
+            font-size: 48px;
+            font-weight: 100;
+            display: block;
+            margin-top: 5px;
+            transition: color 0.3s;
+        }
+
+        .time-value.draining {
+            color: var(--drain);
+        }
+
+        .constellation-map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .constellation-line {
+            stroke: var(--crystal);
+            stroke-width: 0.5;
+            opacity: 0;
+            animation: constellationPulse 4s infinite;
+        }
+
+        @keyframes constellationPulse {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.3; }
+        }
+
+        .memory-field {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .memory-orb {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(126, 200, 227, 0.1), transparent 70%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(126, 200, 227, 0.2);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .memory-orb::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, transparent, rgba(74, 124, 126, 0.1) 70%);
+            animation: orbFloat 20s infinite linear;
+        }
+
+        @keyframes orbFloat {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .memory-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.2;
+            filter: blur(8px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            background-size: cover;
+            background-position: center;
+            border-radius: 50%;
+        }
+
+        .memory-orb:hover {
+            width: 200px;
+            height: 200px;
+            border-color: rgba(126, 200, 227, 0.8);
+            box-shadow: 0 0 40px rgba(126, 200, 227, 0.4);
+        }
+
+        .memory-orb:hover .memory-content {
+            opacity: 0.8;
+            filter: blur(0);
+        }
+
+        .memory-price {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--time);
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .memory-orb:hover .memory-price {
+            opacity: 1;
+        }
+
+        .proximity-field {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            pointer-events: none;
+            background: radial-gradient(circle, rgba(255, 217, 61, 0.05), transparent 70%);
+            mix-blend-mode: screen;
+            transition: all 0.1s linear;
+        }
+
+        .drift-indicator {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            color: var(--pulse);
+            font-size: 12px;
+            text-align: right;
+            opacity: 0.6;
+        }
+
+        .crystallized-memory {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--crystal);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--crystal);
+            pointer-events: none;
+        }
+
+        .bid-interface {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .bid-interface.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .bid-button {
+            padding: 15px 40px;
+            background: transparent;
+            border: 1px solid var(--pulse);
+            color: var(--pulse);
+            font-size: 14px;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .bid-button:hover {
+            background: var(--pulse);
+            color: var(--void);
+            box-shadow: 0 0 20px rgba(126, 200, 227, 0.5);
+        }
+
+        .memory-1 { top: 150px; left: 200px; animation: drift1 30s infinite linear; }
+        .memory-2 { top: 300px; left: 500px; animation: drift2 35s infinite linear; }
+        .memory-3 { top: 200px; left: 800px; animation: drift3 40s infinite linear; }
+        .memory-4 { top: 400px; left: 300px; animation: drift4 32s infinite linear; }
+        .memory-5 { top: 500px; left: 600px; animation: drift5 38s infinite linear; }
+        .memory-6 { top: 350px; left: 1000px; animation: drift6 36s infinite linear; }
+
+        @keyframes drift1 {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(50px, -30px); }
+            50% { transform: translate(-30px, -50px); }
+            75% { transform: translate(-60px, 20px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes drift2 {
+            0% { transform: translate(0, 0); }
+            33% { transform: translate(-40px, 40px); }
+            66% { transform: translate(60px, -20px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes drift3 {
+            0% { transform: translate(0, 0); }
+            50% { transform: translate(-80px, 30px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes drift4 {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(30px, 50px); }
+            75% { transform: translate(-50px, -40px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes drift5 {
+            0% { transform: translate(0, 0); }
+            40% { transform: translate(70px, -60px); }
+            80% { transform: translate(-30px, 40px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        @keyframes drift6 {
+            0% { transform: translate(0, 0); }
+            60% { transform: translate(-90px, -30px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        .fade-warning {
+            position: absolute;
+            top: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--drain);
+            font-size: 11px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+
+        .memory-orb.fading {
+            opacity: 0.3;
+            animation: fadeWarning 2s infinite;
+        }
+
+        @keyframes fadeWarning {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .memory-orb.fading .fade-warning {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="time-balance">
+        Present Moment
+        <span class="time-value" id="timeValue">847</span>
+    </div>
+
+    <svg class="constellation-map" id="constellationMap">
+        <line class="constellation-line" x1="0" y1="0" x2="0" y2="0" id="constLine1" />
+        <line class="constellation-line" x1="0" y1="0" x2="0" y2="0" id="constLine2" />
+        <line class="constellation-line" x1="0" y1="0" x2="0" y2="0" id="constLine3" />
+    </svg>
+
+    <div class="memory-field">
+        <div class="memory-orb memory-1" data-cost="32">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
+            <div class="memory-price">-32 moments</div>
+            <div class="fade-warning">Drifting away in 0:47</div>
+        </div>
+        
+        <div class="memory-orb memory-2 fading" data-cost="45">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"></div>
+            <div class="memory-price">-45 moments</div>
+            <div class="fade-warning">Drifting away in 0:12</div>
+        </div>
+        
+        <div class="memory-orb memory-3" data-cost="28">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"></div>
+            <div class="memory-price">-28 moments</div>
+            <div class="fade-warning">Drifting away in 1:23</div>
+        </div>
+        
+        <div class="memory-orb memory-4" data-cost="51">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"></div>
+            <div class="memory-price">-51 moments</div>
+            <div class="fade-warning">Drifting away in 2:05</div>
+        </div>
+        
+        <div class="memory-orb memory-5" data-cost="37">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #fa709a 0%, #fee140 100%)"></div>
+            <div class="memory-price">-37 moments</div>
+            <div class="fade-warning">Drifting away in 0:33</div>
+        </div>
+        
+        <div class="memory-orb memory-6" data-cost="42">
+            <div class="memory-content" style="background-image: linear-gradient(135deg, #30cfd0 0%, #330867 100%)"></div>
+            <div class="memory-price">-42 moments</div>
+            <div class="fade-warning">Drifting away in 1:56</div>
+        </div>
+    </div>
+
+    <div class="proximity-field" id="proximityField"></div>
+
+    <div class="bid-interface" id="bidInterface">
+        <button class="bid-button">Claim Memory</button>
+    </div>
+
+    <div class="drift-indicator">
+        <div>Memories drifting: 6</div>
+        <div style="opacity: 0.8; margin-top: 5px">Next loss: 0:12</div>
+    </div>
+
+    <script>
+        let timeBalance = 847;
+        let isDraining = false;
+        let currentOrb = null;
+        let crystallizedMemories = [];
+
+        const proximityField = document.getElementById('proximityField');
+        const timeValue = document.getElementById('timeValue');
+        const bidInterface = document.getElementById('bidInterface');
+        const constellationMap = document.getElementById('constellationMap');
+
+        document.addEventListener('mousemove', (e) => {
+            proximityField.style.left = e.clientX - 150 + 'px';
+            proximityField.style.top = e.clientY - 150 + 'px';
+
+            const orbs = document.querySelectorAll('.memory-orb');
+            let nearOrb = false;
+
+            orbs.forEach(orb => {
+                const rect = orb.getBoundingClientRect();
+                const orbX = rect.left + rect.width / 2;
+                const orbY = rect.top + rect.height / 2;
+                const distance = Math.sqrt(Math.pow(e.clientX - orbX, 2) + Math.pow(e.clientY - orbY, 2));
+
+                if (distance < 150) {
+                    nearOrb = true;
+                    currentOrb = orb;
+                    if (!isDraining) {
+                        isDraining = true;
+                        timeValue.classList.add('draining');
+                        drainTime();
+                    }
+                    bidInterface.classList.add('active');
+                }
+            });
+
+            if (!nearOrb) {
+                isDraining = false;
+                timeValue.classList.remove('draining');
+                bidInterface.classList.remove('active');
+                currentOrb = null;
+            }
+        });
+
+        function drainTime() {
+            if (isDraining && timeBalance > 0) {
+                timeBalance--;
+                timeValue.textContent = timeBalance;
+                setTimeout(drainTime, 100);
+            }
+        }
+
+        document.querySelector('.bid-button').addEventListener('click', () => {
+            if (currentOrb && timeBalance >= parseInt(currentOrb.dataset.cost)) {
+                timeBalance -= parseInt(currentOrb.dataset.cost);
+                timeValue.textContent = timeBalance;
+                
+                const rect = currentOrb.getBoundingClientRect();
+                const crystal = document.createElement('div');
+                crystal.className = 'crystallized-memory';
+                crystal.style.left = rect.left + rect.width / 2 + 'px';
+                crystal.style.top = rect.top + rect.height / 2 + 'px';
+                document.body.appendChild(crystal);
+                
+                crystallizedMemories.push({
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2,
+                    element: crystal
+                });
+                
+                currentOrb.style.opacity = '0';
+                setTimeout(() => currentOrb.remove(), 600);
+                
+                updateConstellation();
+                bidInterface.classList.remove('active');
+            }
+        });
+
+        function updateConstellation() {
+            if (crystallizedMemories.length >= 2) {
+                const lines = constellationMap.querySelectorAll('.constellation-line');
+                for (let i = 0; i < Math.min(3, crystallizedMemories.length - 1); i++) {
+                    lines[i].setAttribute('x1', crystallizedMemories[i].x);
+                    lines[i].setAttribute('y1', crystallizedMemories[i].y);
+                    lines[i].setAttribute('x2', crystallizedMemories[i + 1].x);
+                    lines[i].setAttribute('y2', crystallizedMemories[i + 1].y);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

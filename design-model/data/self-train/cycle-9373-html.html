@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Constellation</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --nebula: #1a1a2e;
+            --stardust: #eef2ff;
+            --pulse: #4a7c7e;
+            --ember: #ff6b6b;
+            --whisper: rgba(238, 242, 255, 0.1);
+            --fragment-size: 120px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(ellipse at 30% 20%, #16213e 0%, var(--void) 50%);
+            height: 100vh;
+            overflow: hidden;
+            cursor: crosshair;
+            position: relative;
+        }
+
+        #constellation {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: var(--fragment-size);
+            height: var(--fragment-size);
+            transform-style: preserve-3d;
+            transition: all 0.8s cubic-bezier(0.23, 1, 0.320, 1);
+            cursor: grab;
+        }
+
+        .memory-fragment:active {
+            cursor: grabbing;
+        }
+
+        .fragment-core {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: float 6s infinite ease-in-out;
+        }
+
+        .memory-content {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 20% 30% 40% 50%;
+            background: var(--whisper);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--stardust);
+            text-align: center;
+            padding: 15px;
+            box-shadow: 
+                inset 0 0 30px rgba(255, 255, 255, 0.05),
+                0 0 40px rgba(74, 124, 126, 0.2);
+        }
+
+        .heavy {
+            --weight: 0.9;
+            animation-duration: 8s;
+        }
+
+        .medium {
+            --weight: 0.5;
+            animation-duration: 6s;
+        }
+
+        .light {
+            --weight: 0.1;
+            animation-duration: 4s;
+        }
+
+        .memory-glow {
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: radial-gradient(circle, var(--pulse) 0%, transparent 70%);
+            opacity: 0;
+            filter: blur(20px);
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-fragment:hover .memory-glow {
+            opacity: 0.3;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(74, 124, 126, 0.3), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .connection-line.active {
+            opacity: 1;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotateX(5deg) rotateY(5deg);
+            }
+            25% {
+                transform: translateY(-20px) rotateX(-5deg) rotateY(10deg);
+            }
+            50% {
+                transform: translateY(10px) rotateX(10deg) rotateY(-5deg);
+            }
+            75% {
+                transform: translateY(-10px) rotateX(-10deg) rotateY(-10deg);
+            }
+        }
+
+        .memory-type-photo {
+            border-color: rgba(255, 107, 107, 0.3);
+        }
+
+        .memory-type-message {
+            border-color: rgba(74, 124, 126, 0.3);
+        }
+
+        .memory-type-voice {
+            border-color: rgba(238, 242, 255, 0.3);
+        }
+
+        .gravity-well {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(74, 124, 126, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .control-panel {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            z-index: 100;
+            color: var(--stardust);
+        }
+
+        .control-title {
+            font-size: 14px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+
+        .emotional-scale {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .scale-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0.5;
+            transition: opacity 0.2s ease;
+        }
+
+        .scale-indicator:hover {
+            opacity: 0.8;
+        }
+
+        .scale-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--stardust);
+        }
+
+        .mythology-map {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 200px;
+            height: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(10, 10, 10, 0.5);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .merge-indicator {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px dashed rgba(74, 124, 126, 0.5);
+            border-radius: 50%;
+            animation: pulse-border 2s infinite;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .memory-fragment.merge-ready .merge-indicator {
+            opacity: 1;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 1;
+            }
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--stardust);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @keyframes drift {
+            0% {
+                transform: translate(0, 0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.5;
+            }
+            100% {
+                transform: translate(var(--drift-x), var(--drift-y));
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="constellation">
+        <div class="gravity-well" id="gravityWell"></div>
+        
+        <div class="memory-fragment light" style="left: 20%; top: 15%;" data-type="photo">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-photo">
+                    Summer '18<br>Beach sunset
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="memory-fragment heavy" style="left: 60%; top: 70%;" data-type="message">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-message">
+                    "I'll always remember this"<br>- Mom
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="memory-fragment medium" style="left: 35%; top: 45%;" data-type="voice">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-voice">
+                    Dad's laughter<br>Birthday party
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="memory-fragment light" style="left: 75%; top: 25%;" data-type="photo">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-photo">
+                    First apartment<br>Empty rooms
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="memory-fragment heavy" style="left: 15%; top: 60%;" data-type="message">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-message">
+                    "Goodbye"<br>Last text
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="memory-fragment medium" style="left: 50%; top: 30%;" data-type="voice">
+            <div class="fragment-core">
+                <div class="memory-glow"></div>
+                <div class="memory-content memory-type-voice">
+                    Song from<br>road trip
+                </div>
+                <div class="merge-indicator"></div>
+            </div>
+        </div>
+
+        <div class="connection-line" id="connection1"></div>
+        <div class="connection-line" id="connection2"></div>
+        <div class="connection-line" id="connection3"></div>
+    </div>
+
+    <div class="control-panel">
+        <div class="control-title">EMOTIONAL WEIGHT</div>
+        <div class="emotional-scale">
+            <div class="scale-indicator">
+                <div class="scale-dot" style="opacity: 0.3;"></div>
+                <span>Light memories rise</span>
+            </div>
+            <div class="scale-indicator">
+                <div class="scale-dot" style="opacity: 0.6;"></div>
+                <span>Neutral drift</span>
+            </div>
+            <div class="scale-indicator">
+                <div class="scale-dot" style="opacity: 1;"></div>
+                <span>Heavy memories sink</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mythology-map">
+        Personal constellation<br>forming...
+    </div>
+
+    <script>
+        const memories = document.querySelectorAll('.memory-fragment');
+        const gravityWell = document.getElementById('gravityWell');
+        const constellation = document.getElementById('constellation');
+        let isDragging = false;
+        let currentMemory = null;
+        let mouseX = 0, mouseY = 0;
+
+        // Gravity simulation
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            gravityWell.style.left = mouseX + 'px';
+            gravityWell.style.top = mouseY + 'px';
+            gravityWell.style.opacity = '1';
+
+            if (!isDragging) {
+                memories.forEach(memory => {
+                    const rect = memory.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    
+                    const distance = Math.sqrt(Math.pow(mouseX - centerX, 2) + Math.pow(mouseY - centerY, 2));
+                    const maxDistance = 300;
+                    
+                    if (distance < maxDistance) {
+                        const force = (1 - distance / maxDistance) * 20;
+                        const angle = Math.atan2(mouseY - centerY, mouseX - centerX);
+                        const weight = memory.classList.contains('heavy') ? 0.3 : 
+                                      memory.classList.contains('medium') ? 0.6 : 1;
+                        
+                        const offsetX = Math.cos(angle) * force * weight;
+                        const offsetY = Math.sin(angle) * force * weight;
+                        
+                        memory.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+                    } else {
+                        memory.style.transform = 'translate(0, 0)';
+                    }
+                });
+            }
+        });
+
+        // Drag functionality
+        memories.forEach(memory => {
+            memory.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                currentMemory = memory;
+                memory.style.zIndex = '100';
+            });
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging && currentMemory) {
+                currentMemory.style.zIndex = '1';
+                checkCollisions(currentMemory);
+            }
+            isDragging = false;
+            currentMemory = null;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && currentMemory) {
+                currentMemory.style.left = (e.clientX - 60) + 'px';
+                currentMemory.style.top = (e.clientY - 60) + 'px';
+                checkProximity(currentMemory);
+            }
+        });
+
+        // Check for merge proximity
+        function checkProximity(draggedMemory) {
+            memories.forEach(memory => {
+                if (memory !== draggedMemory) {
+                    const rect1 = draggedMemory.getBoundingClientRect();
+                    const rect2 = memory.getBoundingClientRect();
+                    const distance = Math.sqrt(
+                        Math.pow(rect1.left - rect2.left, 2) + 
+                        Math.pow(rect1.top - rect2.top, 2)
+                    );
+                    
+                    if (distance < 100) {
+                        memory.classList.add('merge-ready');
+                        draggedMemory.classList.add('merge-ready');
+                    } else {
+                        memory.classList.remove('merge-ready');
+                    }
+                }
+            });
+        }
+
+        // Check for collisions
+        function checkCollisions(memory) {
+            memories.forEach(other => {
+                if (other !== memory && other.classList.contains('merge-ready')) {
+                    mergeMemories(memory, other);
+                }
+            });
+            memory.classList.remove('merge-ready');
+        }
+
+        // Merge memories
+        function mergeMemories(memory1, memory2) {
+            const rect1 = memory1.getBoundingClientRect();
+            const rect2 = memory2.getBoundingClientRect();
+            
+            const centerX = (rect1.left + rect2.left) / 2;
+            const centerY = (rect1.top + rect2.top) / 2;
+            
+            // Create particles effect
+            for (let i = 0; i < 20; i++) {
+                createParticle(centerX + rect1.width/2, centerY + rect1.height/2);
+            }
+            
+            // Move memories together
+            memory1.style.left = centerX + 'px';
+            memory1.style.top = centerY + 'px';
+            
+            // Update content
+            const content1 = memory1.querySelector('.memory-content');
+            content1.innerHTML = 'Merged memory<br>New connection found';
+            
+            // Remove second memory after animation
+            setTimeout(() => {
+                memory2.style.opacity = '0';
+                setTimeout(() => memory2.remove(), 800);
+            }, 100);
+            
+            // Draw connection line
+            drawConnection(memory1, memories[Math.floor(Math.random() * memories.length)]);
+        }
+
+        // Create particle effect
+        function createParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            particle.style.setProperty('--drift-x', (Math.random() - 0.5) * 100 + 'px');
+            particle.style.setProperty('--drift-y', (Math.random() - 0.5) * 100 + 'px');
+            particle.style.animation = 'drift 2s ease-out forwards';
+            
+            constellation.appendChild(particle);
+            setTimeout(() => particle.remove(), 2000);
+        }
+
+        // Draw connections
+        function drawConnection(memory1, memory2) {
+            if (memory1 === memory2) return;
+            
+            const line = document.querySelector('.connection-line:not(.active)');
+            if (!line) return;
+            
+            const rect1 = memory1.getBoundingClientRect();
+            const rect2 = memory2.getBoundingClientRect();
+            
+            const x1 = rect1.left + rect1.width / 2;
+            const y1 = rect1.top + rect1.height / 2;
+            const x2 = rect2.left + rect2.width / 2;
+            const y2 = rect2.top + rect2.height / 2;
+            
+            const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+            const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+            
+            line.style.width = length + 'px';
+            line.style.left = x1 + 'px';
+            line.style.top = y1 + 'px';
+            line.style.transform = `rotate(${angle}deg)`;
+            line.classList.add('active');
+        }
+
+        // Ambient floating
+        memories.forEach((memory, index) => {
+            memory.querySelector('.fragment-core').style.animationDelay = `${index * 0.5}s`;
+        });
+
+        // Weight-based vertical drift
+        setInterval(() => {
+            memories.forEach(memory => {
+                const current = parseFloat(memory.style.top) || 0;
+                const weight = memory.classList.contains('heavy') ? 0.5 : 
+                              memory.classList.contains('medium') ? 0 : -0.5;
+                
+                if (!isDragging || memory !== currentMemory) {
+                    const newTop = current + weight;
+                    if (newTop > 0 && newTop < window.innerHeight - 120) {
+                        memory.style.top = newTop + 'px';
+                    }
+                }
+            });
+        }, 100);
+    </script>
+</body>
+</html>

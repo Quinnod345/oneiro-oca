@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weatherbound Messages</title>
+    <style>
+        :root {
+            --parchment: #faf8f3;
+            --ink-wash: #2a2833;
+            --pressed-lavender: #9b8aa3;
+            --dried-rose: #c49a9a;
+            --moss-shadow: #6b7c6b;
+            --water-stain: #e8e3d8;
+            --glass-fog: rgba(250, 248, 243, 0.08);
+            --condensation: rgba(255, 255, 255, 0.12);
+            --frost-edge: #f0f4ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--parchment);
+            color: var(--ink-wash);
+            font-family: Georgia, serif;
+            overflow-x: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        .botanical-paper {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 23% 47%, var(--water-stain) 0%, transparent 40%),
+                radial-gradient(ellipse at 78% 12%, rgba(155, 138, 163, 0.05) 0%, transparent 30%),
+                radial-gradient(ellipse at 91% 89%, rgba(196, 154, 154, 0.04) 0%, transparent 35%),
+                var(--parchment);
+            filter: contrast(0.95);
+        }
+
+        .weather-veil {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100vh;
+            padding: 42px 28px;
+            border-left: 1px solid rgba(42, 40, 51, 0.08);
+            background: linear-gradient(to right, transparent, var(--glass-fog));
+        }
+
+        .current-conditions {
+            font-size: 13px;
+            letter-spacing: 0.08em;
+            color: var(--moss-shadow);
+            margin-bottom: 24px;
+            font-style: italic;
+        }
+
+        .meteorological-reading {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            margin-top: 32px;
+        }
+
+        .weather-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0.4;
+            transition: opacity 0.8s ease;
+        }
+
+        .weather-indicator.active {
+            opacity: 1;
+        }
+
+        .weather-glyph {
+            width: 32px;
+            height: 32px;
+            position: relative;
+        }
+
+        .rain-drops {
+            position: absolute;
+            inset: 0;
+        }
+
+        .rain-drops::before,
+        .rain-drops::after {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 8px;
+            background: var(--pressed-lavender);
+            opacity: 0.6;
+            animation: rainfall 1.2s ease-in-out infinite;
+        }
+
+        .rain-drops::before {
+            left: 8px;
+            top: 4px;
+        }
+
+        .rain-drops::after {
+            left: 16px;
+            top: 8px;
+            animation-delay: 0.3s;
+        }
+
+        @keyframes rainfall {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateY(16px); opacity: 0; }
+        }
+
+        .specimen-chamber {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            right: 320px;
+            padding: 64px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .compose-area {
+            position: relative;
+            margin-bottom: 48px;
+        }
+
+        .message-input {
+            width: 100%;
+            min-height: 120px;
+            background: transparent;
+            border: none;
+            color: var(--ink-wash);
+            font-family: Georgia, serif;
+            font-size: 16px;
+            line-height: 1.8;
+            resize: none;
+            padding: 24px;
+            outline: none;
+            position: relative;
+            z-index: 2;
+        }
+
+        .input-underlay {
+            position: absolute;
+            inset: 0;
+            background: var(--glass-fog);
+            border: 1px solid rgba(42, 40, 51, 0.08);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .pressed-texture {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: var(--dried-rose);
+            opacity: 0.03;
+            transform: rotate(-15deg);
+            top: 20px;
+            right: 40px;
+            border-radius: 40% 60% 70% 30% / 60% 40% 60% 40%;
+        }
+
+        .weather-selector {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 32px;
+            padding: 20px 24px;
+            background: var(--glass-fog);
+            border: 1px solid rgba(42, 40, 51, 0.06);
+            border-radius: 3px;
+            align-items: center;
+        }
+
+        .selector-label {
+            font-size: 14px;
+            color: var(--moss-shadow);
+            font-style: italic;
+            margin-right: 16px;
+        }
+
+        .condition-option {
+            padding: 8px 16px;
+            border: 1px solid rgba(42, 40, 51, 0.12);
+            background: transparent;
+            color: var(--ink-wash);
+            font-family: Georgia, serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .condition-option:hover {
+            background: var(--condensation);
+            border-color: var(--pressed-lavender);
+        }
+
+        .condition-option.selected {
+            background: var(--pressed-lavender);
+            color: var(--parchment);
+            border-color: var(--pressed-lavender);
+        }
+
+        .terrarium-collection {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 32px;
+            align-content: start;
+        }
+
+        .terrarium {
+            position: relative;
+            height: 320px;
+            background: var(--glass-fog);
+            border: 1px solid rgba(42, 40, 51, 0.08);
+            border-radius: 8px 8px 4px 4px;
+            overflow: hidden;
+            transition: all 0.6s ease;
+        }
+
+        .terrarium:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(42, 40, 51, 0.08);
+        }
+
+        .glass-dome {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at top left, var(--condensation), transparent 40%),
+                radial-gradient(ellipse at bottom right, rgba(255, 255, 255, 0.03), transparent 50%);
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
+        .botanical-content {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+        }
+
+        .specimen-status {
+            font-size: 12px;
+            color: var(--moss-shadow);
+            font-style: italic;
+            margin-bottom: 12px;
+            opacity: 0.7;
+        }
+
+        .message-preview {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .encrypted-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--ink-wash);
+            opacity: 0.15;
+            filter: blur(3px);
+            transition: all 1.2s ease;
+        }
+
+        .terrarium.blooming .encrypted-text {
+            opacity: 1;
+            filter: blur(0);
+        }
+
+        .botanical-element {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            bottom: 20px;
+            right: 20px;
+            opacity: 0.2;
+            transition: all 1s ease;
+        }
+
+        .petal {
+            position: absolute;
+            width: 12px;
+            height: 16px;
+            background: var(--dried-rose);
+            border-radius: 0 100% 0 100%;
+            transform-origin: bottom center;
+        }
+
+        .petal:nth-child(1) { transform: rotate(0deg); }
+        .petal:nth-child(2) { transform: rotate(72deg); }
+        .petal:nth-child(3) { transform: rotate(144deg); }
+        .petal:nth-child(4) { transform: rotate(216deg); }
+        .petal:nth-child(5) { transform: rotate(288deg); }
+
+        .terrarium.blooming .botanical-element {
+            opacity: 0.6;
+            transform: scale(1.2);
+        }
+
+        .terrarium.blooming .petal {
+            background: var(--pressed-lavender);
+        }
+
+        .send-vessel {
+            position: fixed;
+            bottom: 48px;
+            right: 380px;
+            padding: 16px 32px;
+            background: var(--moss-shadow);
+            color: var(--parchment);
+            border: none;
+            font-family: Georgia, serif;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+        }
+
+        .send-vessel:hover {
+            background: var(--ink-wash);
+            transform: translateY(-2px);
+        }
+
+        .condensation-pattern {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 2s ease;
+            pointer-events: none;
+            background: 
+                radial-gradient(circle at 20% 30%, var(--condensation) 0%, transparent 20%),
+                radial-gradient(circle at 70% 60%, var(--condensation) 0%, transparent 25%),
+                radial-gradient(circle at 40% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 15%);
+        }
+
+        .terrarium.rain-condition .condensation-pattern {
+            opacity: 1;
+            animation: condense 4s ease-in-out infinite;
+        }
+
+        @keyframes condense {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        .frost-formation {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+            background: 
+                linear-gradient(135deg, transparent 40%, var(--frost-edge) 50%, transparent 60%),
+                linear-gradient(45deg, transparent 30%, rgba(240, 244, 255, 0.1) 50%, transparent 70%);
+            mix-blend-mode: overlay;
+        }
+
+        .terrarium.snow-condition .frost-formation {
+            opacity: 0.4;
+        }
+
+        .weather-timer {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            font-size: 12px;
+            color: var(--moss-shadow);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(42, 40, 51, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(42, 40, 51, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="botanical-paper"></div>
+    
+    <div class="specimen-chamber">
+        <div class="compose-area">
+            <div class="input-underlay">
+                <div class="pressed-texture"></div>
+            </div>
+            <textarea class="message-input" placeholder="Write a message that will only reveal itself when nature permits..."></textarea>
+        </div>
+        
+        <div class="weather-selector">
+            <span class="selector-label">Reveal condition:</span>
+            <button class="condition-option selected">Rain</button>
+            <button class="condition-option">Snow</button>
+            <button class="condition-option">Fog</button>
+            <button class="condition-option">Thunder</button>
+        </div>
+        
+        <div class="terrarium-collection">
+            <div class="terrarium rain-condition blooming">
+                <div class="glass-dome"></div>
+                <div class="condensation-pattern"></div>
+                <div class="botanical-content">
+                    <div class="specimen-status">Awaiting rain • Sent 3 days ago</div>
+                    <div class="message-preview">
+                        <div class="encrypted-text">
+                            I've been thinking about that summer we spent by the coast, 
+                            when the storms would roll in every afternoon...
+                        </div>
+                    </div>
+                    <div class="botanical-element">
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                    </div>
+                </div>
+                <div class="weather-timer">Next rain: 2 hours</div>
+            </div>
+            
+            <div class="terrarium snow-condition">
+                <div class="glass-dome"></div>
+                <div class="frost-formation"></div>
+                <div class="botanical-content">
+                    <div class="specimen-status">Sealed until snow • Sent 1 week ago</div>
+                    <div class="message-preview">
+                        <div class="encrypted-text">
+                            Remember to wear your warmest coat. The one with the missing button 
+                            that we never fixed because it gave it character...
+                        </div>
+                    </div>
+                    <div class="botanical-element">
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                    </div>
+                </div>
+                <div class="weather-timer">Snow possible: Thursday</div>
+            </div>
+            
+            <div class="terrarium fog-condition">
+                <div class="glass-dome"></div>
+                <div class="botanical-content">
+                    <div class="specimen-status">Waiting for fog • Sent 12 hours ago</div>
+                    <div class="message-preview">
+                        <div class="encrypted-text">
+                            The world feels softer when it's wrapped in mist, 
+                            don't you think? Like everything is a secret waiting to be discovered...
+                        </div>
+                    </div>
+                    <div class="botanical-element">
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                        <div class="petal"></div>
+                    </div>
+                </div>
+                <div class="weather-timer">Fog likely: Dawn</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="weather-veil">
+        <div class="current-conditions">Currently: Partly cloudy, 18°C</div>
+        
+        <div class="meteorological-reading">
+            <div class="weather-indicator">
+                <div class="weather-glyph">
+                    <div class="rain-drops"></div>
+                </div>
+                <span>Rain expected in 2 hours</span>
+            </div>
+            
+            <div class="weather-indicator">
+                <div class="weather-glyph"></div>
+                <span>No snow forecast</span>
+            </div>
+            
+            <div class="weather-indicator active">
+                <div class="weather-glyph"></div>
+                <span>Morning fog likely</span>
+            </div>
+            
+            <div class="weather-indicator">
+                <div class="weather-glyph"></div>
+                <span>Thunder possible Tuesday</span>
+            </div>
+        </div>
+    </div>
+    
+    <button class="send-vessel">Seal Message</button>
+    
+    <script>
+        const conditionOptions = document.querySelectorAll('.condition-option');
+        const terrariums = document.querySelectorAll('.terrarium');
+        
+        conditionOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                conditionOptions.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+            });
+        });
+        
+        // Simulate weather changes
+        setInterval(() => {
+            const randomTerrarium = terrariums[Math.floor(Math.random() * terrariums.length)];
+            if (Math.random() > 0.7) {
+                randomTerrarium.classList.add('blooming');
+            }
+        }, 5000);
+        
+        document.querySelector('.send-vessel').addEventListener('click', () => {
+            const input = document.querySelector('.message-input');
+            if (input.value) {
+                input.value = '';
+                // Animation for sending would go here
+            }
+        });
+    </script>
+</body>
+</html>

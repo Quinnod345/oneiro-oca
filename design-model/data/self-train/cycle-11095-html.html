@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Forensics Lab</title>
+    <style>
+        :root {
+            --lab-bg: #0a0e14;
+            --petri-glass: rgba(201, 219, 232, 0.08);
+            --membrane: rgba(147, 197, 253, 0.12);
+            --bio-cyan: #00d9ff;
+            --bio-green: #00ff88;
+            --bio-purple: #8b5cf6;
+            --error-red: #ff3366;
+            --static-white: rgba(255, 255, 255, 0.03);
+            --grid-lines: rgba(100, 145, 189, 0.15);
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --growth-pulse: #22d3ee;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Monaco', monospace;
+            background: var(--lab-bg);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            user-select: none;
+        }
+
+        .microscope-view {
+            position: absolute;
+            width: 840px;
+            height: 840px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, var(--petri-glass) 0%, transparent 60%);
+            box-shadow: 
+                inset 0 0 120px rgba(0, 217, 255, 0.1),
+                inset 0 0 60px rgba(139, 92, 246, 0.05),
+                0 0 80px rgba(0, 217, 255, 0.05);
+        }
+
+        .petri-dish {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: 
+                radial-gradient(circle at 60% 40%, transparent 30%, var(--membrane) 70%),
+                radial-gradient(circle at 20% 80%, var(--static-white) 0%, transparent 40%);
+            border: 2px solid rgba(147, 197, 253, 0.2);
+            overflow: hidden;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(0deg, var(--grid-lines) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-lines) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.3;
+            animation: grid-drift 20s linear infinite;
+        }
+
+        @keyframes grid-drift {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(40px, 40px); }
+        }
+
+        .memory-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        .shard {
+            position: absolute;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.02) 0%, 
+                rgba(255, 255, 255, 0.08) 40%,
+                rgba(255, 255, 255, 0.02) 100%);
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+            overflow: hidden;
+        }
+
+        .shard::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--bio-cyan) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.6s;
+            animation: none;
+        }
+
+        .shard.aligned::before {
+            opacity: 0.3;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { transform: scale(0.8); opacity: 0.3; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+        }
+
+        .shard-1 {
+            width: 240px;
+            height: 180px;
+            left: 20%;
+            top: 25%;
+            transform: rotate(-12deg) translateZ(20px);
+            clip-path: polygon(10% 0%, 100% 15%, 95% 100%, 0% 85%);
+        }
+
+        .shard-2 {
+            width: 200px;
+            height: 220px;
+            left: 45%;
+            top: 15%;
+            transform: rotate(23deg) translateZ(-10px);
+            clip-path: polygon(20% 0%, 100% 20%, 80% 100%, 0% 80%);
+        }
+
+        .shard-3 {
+            width: 180px;
+            height: 160px;
+            left: 60%;
+            top: 40%;
+            transform: rotate(-35deg) translateZ(30px);
+            clip-path: polygon(0% 20%, 85% 0%, 100% 70%, 15% 100%);
+        }
+
+        .shard-4 {
+            width: 220px;
+            height: 200px;
+            left: 30%;
+            top: 50%;
+            transform: rotate(45deg) translateZ(-20px);
+            clip-path: polygon(25% 0%, 100% 25%, 75% 100%, 0% 75%);
+        }
+
+        .shard-5 {
+            width: 160px;
+            height: 180px;
+            left: 50%;
+            top: 65%;
+            transform: rotate(-8deg) translateZ(15px);
+            clip-path: polygon(0% 0%, 70% 10%, 100% 90%, 30% 100%);
+        }
+
+        .shard:hover {
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.05) 0%, 
+                rgba(255, 255, 255, 0.15) 40%,
+                rgba(255, 255, 255, 0.05) 100%);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateZ(40px) scale(1.05);
+            box-shadow: 0 20px 40px rgba(0, 217, 255, 0.2);
+        }
+
+        .shard:active {
+            cursor: grabbing;
+        }
+
+        .memory-content {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            padding: 15px;
+            color: var(--text-primary);
+            font-size: 11px;
+            line-height: 1.4;
+            opacity: 0.7;
+        }
+
+        .data-stream {
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 10px;
+            color: var(--bio-cyan);
+            opacity: 0.6;
+            white-space: nowrap;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .static-interference {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(0deg, 
+                    transparent, 
+                    transparent 2px, 
+                    rgba(255, 255, 255, 0.03) 2px, 
+                    rgba(255, 255, 255, 0.03) 4px),
+                repeating-linear-gradient(90deg, 
+                    transparent, 
+                    transparent 2px, 
+                    rgba(255, 255, 255, 0.03) 2px, 
+                    rgba(255, 255, 255, 0.03) 4px);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .shard.error .static-interference {
+            opacity: 1;
+            animation: static-noise 0.2s steps(10) infinite;
+        }
+
+        @keyframes static-noise {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-2px, 1px); }
+            20% { transform: translate(2px, -1px); }
+            30% { transform: translate(-1px, 2px); }
+            40% { transform: translate(1px, -2px); }
+            50% { transform: translate(-2px, -1px); }
+            60% { transform: translate(2px, 1px); }
+            70% { transform: translate(-1px, -2px); }
+            80% { transform: translate(1px, 2px); }
+            90% { transform: translate(2px, -1px); }
+        }
+
+        .growth-cluster {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--bio-green) 0%, transparent 60%);
+            filter: blur(20px);
+            opacity: 0;
+            pointer-events: none;
+            animation: organic-growth 8s ease-in-out infinite;
+        }
+
+        @keyframes organic-growth {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 0.3; }
+            100% { transform: scale(0.3); opacity: 0; }
+        }
+
+        .control-panel {
+            position: absolute;
+            left: 30px;
+            top: 30px;
+            width: 200px;
+            background: rgba(10, 14, 20, 0.8);
+            border: 1px solid rgba(147, 197, 253, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--bio-cyan);
+            animation: status-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes status-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric {
+            margin: 12px 0;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            color: var(--text-primary);
+            font-weight: 500;
+            float: right;
+        }
+
+        .decay-indicator {
+            position: absolute;
+            right: 30px;
+            bottom: 30px;
+            width: 180px;
+            height: 60px;
+            background: rgba(10, 14, 20, 0.8);
+            border: 1px solid rgba(255, 51, 102, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .decay-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .decay-progress {
+            height: 100%;
+            width: 65%;
+            background: linear-gradient(90deg, var(--error-red) 0%, var(--bio-purple) 100%);
+            border-radius: 3px;
+            animation: decay-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes decay-pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .fragment-label {
+            position: absolute;
+            font-size: 9px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .shard:hover .fragment-label {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="microscope-view">
+        <div class="petri-dish">
+            <div class="grid-overlay"></div>
+            
+            <div class="memory-field">
+                <div class="growth-cluster" style="left: 20%; top: 30%;"></div>
+                <div class="growth-cluster" style="left: 60%; top: 50%; animation-delay: 2s;"></div>
+                <div class="growth-cluster" style="left: 40%; top: 70%; animation-delay: 4s;"></div>
+                
+                <div class="shard shard-1" draggable="true">
+                    <div class="memory-content">
+                        neural pathway established<br>
+                        timestamp: 2157.3.14
+                        <div class="data-stream">0x7F3A...SYNC...4B21</div>
+                    </div>
+                    <div class="fragment-label" style="top: 10px; left: 10px;">FRAGMENT A-01</div>
+                    <div class="static-interference"></div>
+                </div>
+                
+                <div class="shard shard-2 aligned" draggable="true">
+                    <div class="memory-content">
+                        emotional residue detected<br>
+                        amplitude: 0.734
+                        <div class="data-stream">PATTERN_MATCH_87%</div>
+                    </div>
+                    <div class="fragment-label" style="top: 10px; left: 10px;">FRAGMENT B-03</div>
+                    <div class="static-interference"></div>
+                </div>
+                
+                <div class="shard shard-3" draggable="true">
+                    <div class="memory-content">
+                        ...consciousness overflow...<br>
+                        recursive loop #4421
+                        <div class="data-stream">ERR_STACK_TRACE</div>
+                    </div>
+                    <div class="fragment-label" style="top: 10px; left: 10px;">FRAGMENT C-07</div>
+                    <div class="static-interference"></div>
+                </div>
+                
+                <div class="shard shard-4 error" draggable="true">
+                    <div class="memory-content">
+                        [CORRUPTED DATA]<br>
+                        recovery failed
+                        <div class="data-stream">NULL_REF_EXCEPTION</div>
+                    </div>
+                    <div class="fragment-label" style="top: 10px; left: 10px;">FRAGMENT D-12</div>
+                    <div class="static-interference"></div>
+                </div>
+                
+                <div class="shard shard-5" draggable="true">
+                    <div class="memory-content">
+                        identity matrix found<br>
+                        coherence: rising
+                        <div class="data-stream">MERGE_CANDIDATE</div>
+                    </div>
+                    <div class="fragment-label" style="top: 10px; left: 10px;">FRAGMENT E-09</div>
+                    <div class="static-interference"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="control-panel">
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <div class="status-text">Active Scan</div>
+        </div>
+        
+        <div class="metric">
+            Fragments Detected
+            <span class="metric-value">17</span>
+        </div>
+        <div class="metric">
+            Alignment Success
+            <span class="metric-value">23.5%</span>
+        </div>
+        <div class="metric">
+            Memory Coherence
+            <span class="metric-value">0.412</span>
+        </div>
+        <div class="metric">
+            Growth Rate
+            <span class="metric-value">+0.03/s</span>
+        </div>
+    </div>
+    
+    <div class="decay-indicator">
+        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">
+            Memory Decay Rate
+        </div>
+        <div class="decay-bar">
+            <div class="decay-progress"></div>
+        </div>
+    </div>
+    
+    <script>
+        const shards = document.querySelectorAll('.shard');
+        let draggedShard = null;
+        let offsetX, offsetY;
+        
+        shards.forEach(shard => {
+            shard.addEventListener('dragstart', (e) => {
+                draggedShard = shard;
+                const rect = shard.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                shard.style.opacity = '0.6';
+            });
+            
+            shard.addEventListener('dragend', (e) => {
+                shard.style.opacity = '1';
+                checkAlignment();
+            });
+        });
+        
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedShard) {
+                const petriDish = document.querySelector('.petri-dish');
+                const petriRect = petriDish.getBoundingClientRect();
+                const newX = e.clientX - petriRect.left - offsetX;
+                const newY = e.clientY - petriRect.top - offsetY;
+                
+                draggedShard.style.left = `${newX}px`;
+                draggedShard.style.top = `${newY}px`;
+            }
+        });
+        
+        function checkAlignment() {
+            shards.forEach((shard, index) => {
+                const rand = Math.random();
+                if (rand > 0.7) {
+                    shard.classList.add('aligned');
+                    shard.classList.remove('error');
+                } else if (rand < 0.3) {
+                    shard.classList.add('error');
+                    shard.classList.remove('aligned');
+                    setTimeout(() => {
+                        shard.classList.remove('error');
+                    }, 2000);
+                }
+            });
+        }
+        
+        setInterval(() => {
+            const coherence = document.querySelector('.metric-value');
+            const currentValue = parseFloat(coherence.textContent);
+            const change = (Math.random() - 0.5) * 0.05;
+            const newValue = Math.max(0, Math.min(1, currentValue + change));
+            coherence.textContent = newValue.toFixed(3);
+        }, 2000);
+    </script>
+</body>
+</html>

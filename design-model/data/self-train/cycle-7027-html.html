@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Reconstructor</title>
+    <style>
+        :root {
+            --membrane: #faf7f3;
+            --bone: #e8e2d9;
+            --marrow: #d4c5b3;
+            --umami: #4a3a5f;
+            --sweet: #f4d47c;
+            --acid: #7fb069;
+            --salt: #e8e8e8;
+            --bitter: #3e2f2f;
+            --smoke: rgba(45, 35, 35, 0.03);
+            --memory: rgba(74, 58, 95, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--membrane);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .interface {
+            display: grid;
+            grid-template-columns: 380px 1fr 320px;
+            height: 100vh;
+            position: relative;
+        }
+
+        .taste-palette {
+            background: linear-gradient(to bottom, var(--membrane), var(--bone));
+            padding: 2.5rem;
+            overflow-y: auto;
+            border-right: 1px solid var(--marrow);
+        }
+
+        .palette-header {
+            font-size: 0.875rem;
+            letter-spacing: 0.15em;
+            color: var(--bitter);
+            margin-bottom: 3rem;
+            font-weight: normal;
+            text-transform: uppercase;
+        }
+
+        .taste-element {
+            margin-bottom: 2.5rem;
+            cursor: move;
+            transition: transform 0.2s;
+        }
+
+        .taste-element:hover {
+            transform: translateX(8px);
+        }
+
+        .taste-label {
+            font-size: 0.8125rem;
+            color: var(--bitter);
+            margin-bottom: 0.75rem;
+            font-style: italic;
+        }
+
+        .taste-visual {
+            height: 80px;
+            border-radius: 0;
+            position: relative;
+            overflow: hidden;
+            opacity: 0.9;
+        }
+
+        .umami-wave {
+            background: linear-gradient(135deg, var(--umami) 0%, #6a5580 50%, var(--umami) 100%);
+            position: relative;
+        }
+
+        .umami-wave::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255,255,255,0.05) 10px,
+                rgba(255,255,255,0.05) 20px
+            );
+            animation: drift 20s linear infinite;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(-50%, -50%); }
+            100% { transform: translate(0%, 0%); }
+        }
+
+        .sweet-spiral {
+            background: radial-gradient(circle at 30% 50%, var(--sweet), #f9e5a8);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sweet-spiral::after {
+            content: '';
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            top: 10px;
+            left: 20px;
+            animation: expand 3s ease-out infinite;
+        }
+
+        @keyframes expand {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .acid-fractal {
+            background: linear-gradient(60deg, var(--acid), #95c983);
+            position: relative;
+            clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+        }
+
+        .salt-crystal {
+            background: linear-gradient(to right, var(--salt), #f5f5f5);
+            position: relative;
+            transform: skewY(-3deg);
+        }
+
+        .bitter-depth {
+            background: linear-gradient(to bottom, var(--bitter), #2a1f1f);
+            position: relative;
+            border-radius: 50% 0 50% 0;
+        }
+
+        .canvas-area {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--membrane);
+        }
+
+        .memory-canvas {
+            width: 560px;
+            height: 560px;
+            background: white;
+            box-shadow: 0 0 60px var(--smoke);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .memory-canvas.active {
+            box-shadow: 0 0 80px var(--memory);
+        }
+
+        .canvas-content {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--marrow);
+            font-style: italic;
+            font-size: 1.125rem;
+            line-height: 1.8;
+            padding: 3rem;
+        }
+
+        .flavor-composition {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .flavor-composition.visible {
+            opacity: 1;
+        }
+
+        .flavor-layer {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+            mix-blend-mode: multiply;
+            animation: breathe 6s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .sound-ripple {
+            position: absolute;
+            border: 2px solid var(--marrow);
+            border-radius: 50%;
+            opacity: 0;
+            animation: ripple-out 2s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-out {
+            0% { 
+                width: 20px; 
+                height: 20px; 
+                opacity: 0.8;
+            }
+            100% { 
+                width: 300px; 
+                height: 300px; 
+                opacity: 0;
+                transform: translate(-140px, -140px);
+            }
+        }
+
+        .recipe-suggestions {
+            background: linear-gradient(to bottom, var(--bone), var(--membrane));
+            padding: 2.5rem;
+            border-left: 1px solid var(--marrow);
+            overflow-y: auto;
+        }
+
+        .suggestions-header {
+            font-size: 0.875rem;
+            letter-spacing: 0.15em;
+            color: var(--bitter);
+            margin-bottom: 2.5rem;
+            font-weight: normal;
+            text-transform: uppercase;
+        }
+
+        .ingredient-suggestion {
+            margin-bottom: 2rem;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fade-up 0.6s ease forwards;
+        }
+
+        .ingredient-suggestion:nth-child(2) { animation-delay: 0.1s; }
+        .ingredient-suggestion:nth-child(3) { animation-delay: 0.2s; }
+        .ingredient-suggestion:nth-child(4) { animation-delay: 0.3s; }
+
+        @keyframes fade-up {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .ingredient-name {
+            font-size: 1.125rem;
+            color: var(--bitter);
+            margin-bottom: 0.5rem;
+        }
+
+        .ingredient-memory {
+            font-size: 0.875rem;
+            color: var(--marrow);
+            font-style: italic;
+            line-height: 1.6;
+        }
+
+        .visual-cookbook {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .cookbook-recipe {
+            width: 60px;
+            height: 60px;
+            background: white;
+            border: 1px solid var(--marrow);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cookbook-recipe:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px var(--smoke);
+        }
+
+        .recipe-painting {
+            position: absolute;
+            inset: 0;
+            opacity: 0.8;
+        }
+
+        .dragging {
+            opacity: 0.6;
+            cursor: grabbing;
+        }
+
+        .drop-zone {
+            position: absolute;
+            inset: 0;
+            pointer-events: all;
+        }
+    </style>
+</head>
+<body>
+    <div class="interface">
+        <section class="taste-palette">
+            <h2 class="palette-header">Taste Memories</h2>
+            
+            <div class="taste-element" draggable="true" data-taste="umami">
+                <div class="taste-label">Deep Comfort</div>
+                <div class="taste-visual umami-wave"></div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="sweet">
+                <div class="taste-label">Golden Moments</div>
+                <div class="taste-visual sweet-spiral"></div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="acid">
+                <div class="taste-label">Sharp Brightness</div>
+                <div class="taste-visual acid-fractal"></div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="salt">
+                <div class="taste-label">Essential Ground</div>
+                <div class="taste-visual salt-crystal"></div>
+            </div>
+            
+            <div class="taste-element" draggable="true" data-taste="bitter">
+                <div class="taste-label">Complex Depth</div>
+                <div class="taste-visual bitter-depth"></div>
+            </div>
+        </section>
+        
+        <section class="canvas-area">
+            <div class="memory-canvas" id="canvas">
+                <div class="canvas-content">
+                    <div class="empty-state">
+                        Draw the shape of your memory<br>
+                        with colors of taste
+                    </div>
+                    <div class="flavor-composition" id="composition"></div>
+                </div>
+                <div class="drop-zone" id="dropZone"></div>
+            </div>
+        </section>
+        
+        <section class="recipe-suggestions">
+            <h2 class="suggestions-header">Emerging Ingredients</h2>
+            <div id="suggestions"></div>
+        </section>
+    </div>
+    
+    <div class="visual-cookbook">
+        <div class="cookbook-recipe">
+            <div class="recipe-painting" style="background: radial-gradient(circle at 30% 70%, rgba(74,58,95,0.6), rgba(244,212,124,0.4));"></div>
+        </div>
+        <div class="cookbook-recipe">
+            <div class="recipe-painting" style="background: linear-gradient(45deg, rgba(127,176,105,0.5), rgba(62,47,47,0.3));"></div>
+        </div>
+        <div class="cookbook-recipe">
+            <div class="recipe-painting" style="background: conic-gradient(from 180deg, rgba(244,212,124,0.4), rgba(232,232,232,0.6), rgba(74,58,95,0.5));"></div>
+        </div>
+    </div>
+    
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const canvas = document.getElementById('canvas');
+        const composition = document.getElementById('composition');
+        const suggestions = document.getElementById('suggestions');
+        
+        const flavorMap = {
+            umami: { color: '#4a3a5f', ingredients: ['mushrooms', 'aged cheese', 'tomato paste', 'soy sauce'] },
+            sweet: { color: '#f4d47c', ingredients: ['caramelized onions', 'roasted carrots', 'honey', 'vanilla'] },
+            acid: { color: '#7fb069', ingredients: ['lemon zest', 'vinegar', 'fresh herbs', 'yogurt'] },
+            salt: { color: '#e8e8e8', ingredients: ['sea salt', 'anchovies', 'olives', 'preserved lemons'] },
+            bitter: { color: '#3e2f2f', ingredients: ['dark chocolate', 'coffee', 'radicchio', 'walnuts'] }
+        };
+        
+        const memories = {
+            mushrooms: "Sunday mornings in grandmother's kitchen",
+            'aged cheese': "The wooden board father carved",
+            'tomato paste': "Stirring the pot as steam rose",
+            'caramelized onions': "Patience rewarded with sweetness",
+            honey: "The jar on the highest shelf",
+            'lemon zest': "Bright moments cutting through",
+            'sea salt': "The foundation of everything",
+            'dark chocolate': "Secret ingredient in the sauce"
+        };
+        
+        let activeFlavors = [];
+        
+        document.querySelectorAll('.taste-element').forEach(element => {
+            element.addEventListener('dragstart', (e) => {
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('taste', element.dataset.taste);
+            });
+            
+            element.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+            });
+        });
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            canvas.classList.add('active');
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            canvas.classList.remove('active');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            canvas.classList.remove('active');
+            
+            const taste = e.dataTransfer.getData('taste');
+            const rect = dropZone.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            addFlavor(taste, x, y);
+            createRipple(e.clientX - rect.left, e.clientY - rect.top);
+            updateSuggestions();
+        });
+        
+        function addFlavor(taste, x, y) {
+            if (!activeFlavors.includes(taste)) {
+                activeFlavors.push(taste);
+            }
+            
+            document.querySelector('.empty-state').style.display = 'none';
+            composition.classList.add('visible');
+            
+            const layer = document.createElement('div');
+            layer.className = 'flavor-layer';
+            layer.style.background = flavorMap[taste].color;
+            layer.style.width = `${150 + Math.random() * 100}px`;
+            layer.style.height = `${150 + Math.random() * 100}px`;
+            layer.style.left = `${x}%`;
+            layer.style.top = `${y}%`;
+            layer.style.transform = 'translate(-50%, -50%)';
+            layer.style.animationDelay = `${Math.random() * 2}s`;
+            
+            composition.appendChild(layer);
+        }
+        
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'sound-ripple';
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            
+            canvas.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 2000);
+        }
+        
+        function updateSuggestions() {
+            suggestions.innerHTML = '';
+            const ingredientSet = new Set();
+            
+            activeFlavors.forEach(flavor => {
+                flavorMap[flavor].ingredients.forEach(ing => ingredientSet.add(ing));
+            });
+            
+            Array.from(ingredientSet).slice(0, 4).forEach(ingredient => {
+                const div = document.createElement('div');
+                div.className = 'ingredient-suggestion';
+                div.innerHTML = `
+                    <div class="ingredient-name">${ingredient}</div>
+                    <div class="ingredient-memory">${memories[ingredient] || 'A taste waiting to be remembered'}</div>
+                `;
+                suggestions.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

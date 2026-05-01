@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fragrance Composer</title>
+    <style>
+        :root {
+            --ink: #1a1a1a;
+            --parchment: #faf8f3;
+            --primary: #ff6b9d;
+            --primary-light: rgba(255, 107, 157, 0.2);
+            --primary-dark: rgba(255, 107, 157, 0.8);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--parchment);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+            display: grid;
+            grid-template-columns: minmax(200px, 1fr) minmax(600px, 4fr) minmax(280px, 1.5fr);
+            gap: clamp(1rem, 3vw, 3rem);
+            padding: clamp(1rem, 3vw, 3rem);
+        }
+
+        .note-palette {
+            background: white;
+            padding: clamp(1.5rem, 3vw, 2.5rem);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            overflow-y: auto;
+            max-height: calc(100vh - 6rem);
+        }
+
+        .palette-title {
+            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--ink);
+            margin-bottom: 2rem;
+            font-weight: 600;
+            opacity: 0.4;
+        }
+
+        .note-item {
+            margin-bottom: 3rem;
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .note-item:hover {
+            transform: translateX(12px) scale(1.05);
+        }
+
+        .note-item:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .note-item.dragging {
+            opacity: 0.5;
+        }
+
+        .note-shape {
+            width: clamp(60px, 8vw, 80px);
+            height: clamp(60px, 8vw, 80px);
+            margin-bottom: 1rem;
+            position: relative;
+            transition: filter 0.3s ease;
+        }
+
+        .note-item:hover .note-shape {
+            filter: drop-shadow(0 8px 24px rgba(255, 107, 157, 0.3));
+        }
+
+        .triangle {
+            width: 0;
+            height: 0;
+            border-left: clamp(30px, 4vw, 40px) solid transparent;
+            border-right: clamp(30px, 4vw, 40px) solid transparent;
+            border-bottom: clamp(52px, 7vw, 70px) solid var(--primary);
+            filter: hue-rotate(-45deg);
+        }
+
+        .circle {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--primary);
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            filter: hue-rotate(45deg) brightness(0.8);
+        }
+
+        .note-label {
+            font-size: clamp(0.875rem, 1.5vw, 1rem);
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .note-description {
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+            color: var(--ink);
+            opacity: 0.6;
+            line-height: 1.5;
+        }
+
+        .staff-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .evolution-labels {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .evolution-label {
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--ink);
+            text-align: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .evolution-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+
+        .musical-staff {
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            overflow: visible;
+            display: grid;
+            grid-template-rows: repeat(5, 1fr);
+            padding: 2rem;
+        }
+
+        .staff-line {
+            border-bottom: 2px solid var(--primary-light);
+            position: relative;
+        }
+
+        .staff-line:last-child {
+            border-bottom: none;
+        }
+
+        .intensity-axis {
+            position: absolute;
+            left: -4rem;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: clamp(0.625rem, 1vw, 0.75rem);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--ink);
+            opacity: 0.4;
+        }
+
+        .placed-note {
+            position: absolute;
+            cursor: move;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: placeNote 0.6s ease-out;
+        }
+
+        @keyframes placeNote {
+            0% {
+                transform: scale(0) rotate(180deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) rotate(90deg);
+            }
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .placed-note:hover {
+            transform: scale(1.1);
+            filter: brightness(1.1) drop-shadow(0 12px 24px rgba(255, 107, 157, 0.4));
+            z-index: 10;
+        }
+
+        .placed-note.dragging {
+            opacity: 0.8;
+            transform: scale(1.2);
+            z-index: 100;
+        }
+
+        .drop-zone-highlight {
+            position: absolute;
+            inset: -8px;
+            background: var(--primary-light);
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .drop-ready .drop-zone-highlight {
+            opacity: 1;
+        }
+
+        .trail {
+            position: absolute;
+            pointer-events: none;
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: fadeTrail 1s ease-out forwards;
+        }
+
+        @keyframes fadeTrail {
+            to {
+                transform: scale(0);
+                opacity: 0;
+            }
+        }
+
+        .blend-indicator {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            mix-blend-mode: multiply;
+        }
+
+        .overlapping .blend-indicator {
+            opacity: 0.3;
+        }
+
+        .output-panel {
+            background: white;
+            padding: clamp(1.5rem, 3vw, 2.5rem);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .panel-title {
+            font-size: clamp(1.125rem, 2vw, 1.5rem);
+            color: var(--ink);
+            font-weight: 300;
+            letter-spacing: -0.02em;
+        }
+
+        .fragrance-name {
+            font-size: clamp(1.5rem, 2.5vw, 2rem);
+            color: var(--primary-dark);
+            font-weight: 300;
+            font-style: italic;
+            text-align: center;
+            padding: 2rem;
+            background: var(--primary-light);
+            border-radius: 12px;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-buttons {
+            display: grid;
+            gap: 1rem;
+            margin-top: auto;
+        }
+
+        button {
+            padding: 1rem 2rem;
+            background: var(--ink);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: clamp(0.875rem, 1.5vw, 1rem);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(255, 107, 157, 0.3);
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--ink);
+            border: 2px solid var(--ink);
+        }
+
+        button.secondary:hover {
+            background: var(--ink);
+            color: white;
+        }
+
+        @media (max-width: 1024px) {
+            body {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+            }
+
+            .note-palette {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 1.5rem;
+                max-height: none;
+            }
+
+            .palette-title {
+                grid-column: 1 / -1;
+            }
+
+            .note-item {
+                margin-bottom: 0;
+            }
+
+            .intensity-axis {
+                display: none;
+            }
+        }
+
+        .magnetic-guide {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background: var(--primary-light);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .magnetic-active {
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <section class="note-palette">
+        <h2 class="palette-title">Scent Notes</h2>
+        <div class="note-item" draggable="true" data-note="citrus" data-shape="triangle">
+            <div class="note-shape triangle"></div>
+            <h3 class="note-label">Bergamot & Lemon</h3>
+            <p class="note-description">Bright, sparkling top notes</p>
+        </div>
+        <div class="note-item" draggable="true" data-note="floral" data-shape="circle">
+            <div class="note-shape circle"></div>
+            <h3 class="note-label">Rose & Jasmine</h3>
+            <p class="note-description">Romantic heart notes</p>
+        </div>
+        <div class="note-item" draggable="true" data-note="woody" data-shape="square">
+            <div class="note-shape square"></div>
+            <h3 class="note-label">Sandalwood & Cedar</h3>
+            <p class="note-description">Grounding base notes</p>
+        </div>
+    </section>
+
+    <section class="staff-container">
+        <div class="evolution-labels">
+            <div class="evolution-label">Opening</div>
+            <div class="evolution-label">Heart</div>
+            <div class="evolution-label">Dry Down</div>
+        </div>
+        <div class="musical-staff" id="staff">
+            <div class="drop-zone-highlight"></div>
+            <div class="blend-indicator"></div>
+            <div class="staff-line" data-intensity="5"></div>
+            <div class="staff-line" data-intensity="4"></div>
+            <div class="staff-line" data-intensity="3"></div>
+            <div class="staff-line" data-intensity="2"></div>
+            <div class="staff-line" data-intensity="1"></div>
+            <div class="magnetic-guide"></div>
+            <div class="intensity-axis">
+                <span>Intense</span>
+                <span>Strong</span>
+                <span>Moderate</span>
+                <span>Soft</span>
+                <span>Whisper</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="output-panel">
+        <h2 class="panel-title">Your Composition</h2>
+        <div class="fragrance-name" id="fragranceName">
+            Begin composing...
+        </div>
+        <div class="action-buttons">
+            <button id="playBtn">Play Composition</button>
+            <button class="secondary" id="clearBtn">Clear All</button>
+        </div>
+    </section>
+
+    <script>
+        let draggedElement = null;
+        let currentDropZone = null;
+        let placedNotes = [];
+        let noteIdCounter = 0;
+
+        // Drag and drop functionality
+        document.querySelectorAll('.note-item').forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragend', handleDragEnd);
+        });
+
+        const staff = document.getElementById('staff');
+        const magneticGuide = document.querySelector('.magnetic-guide');
+        
+        staff.addEventListener('dragover', handleDragOver);
+        staff.addEventListener('drop', handleDrop);
+        staff.addEventListener('dragleave', handleDragLeave);
+
+        function handleDragStart(e) {
+            draggedElement = e.target;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('text/html', e.target.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            staff.classList.remove('drop-ready');
+            magneticGuide.classList.remove('magnetic-active');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            
+            staff.classList.add('drop-ready');
+            
+            // Magnetic snapping to staff lines
+            const rect = staff.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            const lineHeight = rect.height / 5;
+            const nearestLine = Math.round(y / lineHeight) * lineHeight;
+            
+            magneticGuide.style.top = `${nearestLine - 20}px`;
+            magneticGuide.classList.add('magnetic-active');
+            
+            // Create trail effect
+            createTrail(e.clientX, e.clientY);
+        }
+
+        function handleDragLeave(e) {
+            if (e.target === staff && !staff.contains(e.relatedTarget)) {
+                staff.classList.remove('drop-ready');
+                magneticGuide.classList.remove('magnetic-active');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            if (!draggedElement) return;
+            
+            const rect = staff.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Snap to nearest staff line
+            const lineHeight = rect.height / 5;
+            const snappedY = Math.round(y / lineHeight) * lineHeight;
+            
+            // Create new note
+            const noteType = draggedElement.dataset.note;
+            const shapeType = draggedElement.dataset.shape;
+            const noteId = `note-${noteIdCounter++}`;
+            
+            const newNote = document.createElement('div');
+            newNote.className = `placed-note ${shapeType}`;
+            newNote.id = noteId;
+            newNote.dataset.note = noteType;
+            newNote.style.left = `${x - 30}px`;
+            newNote.style.top = `${snappedY - 30}px`;
+            newNote.style.width = '60px';
+            newNote.style.height = '60px';
+            newNote.draggable = true;
+            
+            // Create shape based on type
+            if (shapeType === 'triangle') {
+                newNote.style.width = '0';
+                newNote.style.height = '0';
+                newNote.style.borderLeft = '30px solid transparent';
+                newNote.style.borderRight = '30px solid transparent';
+                newNote.style.borderBottom = '52px solid var(--primary)';
+                newNote.style.filter = 'hue-rotate(-45deg)';
+            } else if (shapeType === 'circle') {
+                newNote.style.borderRadius = '50%';
+                newNote.style.background = 'var(--primary)';
+            } else if (shapeType === 'square') {
+                newNote.style.background = 'var(--primary)';
+                newNote.style.filter = 'hue-rotate(45deg) brightness(0.8)';
+            }
+            
+            staff.appendChild(newNote);
+            
+            // Track placed notes
+            placedNotes.push({
+                id: noteId,
+                type: noteType,
+                x: x,
+                y: snappedY,
+                intensity: 5 - Math.floor(snappedY / lineHeight)
+            });
+            
+            // Enable dragging of placed notes
+            newNote.addEventListener('dragstart', handleNoteDragStart);
+            newNote.addEventListener('dragend', handleDragEnd);
+            
+            // Check for overlaps and update composition
+            checkOverlaps();
+            updateComposition();
+            
+            staff.classList.remove('drop-ready');
+            magneticGuide.classList.remove('magnetic-active');
+        }
+
+        function handleNoteDragStart(e) {
+            draggedElement = e.target;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            
+            // Remove from placedNotes array
+            placedNotes = placedNotes.filter(note => note.id !== e.target.id);
+        }
+
+        function createTrail(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'trail';
+            trail.style.left = `${x - 20}px`;
+            trail.style.top = `${y - 20}px`;
+            document.body.appendChild(trail);
+            
+            setTimeout(() => trail.remove(), 1000);
+        }
+
+        function checkOverlaps() {
+            const notes = document.querySelectorAll('.placed-note');
+            let hasOverlap = false;
+            
+            notes.forEach((note1, i) => {
+                notes.forEach((note2, j) => {
+                    if (i !== j) {
+                        const rect1 = note1.getBoundingClientRect();
+                        const rect2 = note2.getBoundingClientRect();
+                        
+                        if (!(rect1.right < rect2.left || 
+                              rect1.left > rect2.right || 
+                              rect1.bottom < rect2.top || 
+                              rect1.top > rect2.bottom)) {
+                            hasOverlap = true;
+                        }
+                    }
+                });
+            });
+            
+            staff.classList.toggle('overlapping', hasOverlap);
+        }
+
+        function updateComposition() {
+            const nameElement = document.getElementById('fragranceName');
+            
+            if (placedNotes.length === 0) {
+                nameElement.textContent = 'Begin composing...';
+                return;
+            }
+            
+            // Generate poetic fragrance name based on notes
+            const noteTypes = placedNotes.map(n => n.type);
+            const uniqueNotes = [...new Set(noteTypes)];
+            
+            let name = '';
+            if (uniqueNotes.includes('citrus')) name += 'Sparkling ';
+            if (uniqueNotes.includes('floral')) name += 'Velvet ';
+            if (uniqueNotes.includes('woody')) name += 'Midnight ';
+            
+            if (placedNotes.length > 3) name += 'Symphony';
+            else if (placedNotes.length > 1) name += 'Duet';
+            else name += 'Solo';
+            
+            nameElement.textContent = name || 'Untitled Composition';
+        }
+
+        // Clear button functionality
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.querySelectorAll('.placed-note').forEach(note => note.remove());
+            placedNotes = [];
+            updateComposition();
+            staff.classList.remove('overlapping');
+        });
+
+        // Play button functionality
+        document.getElementById('playBtn').addEventListener('click', () => {
+            const notes = document.querySelectorAll('.placed-note');
+            notes.forEach((note, index) => {
+                setTimeout(() => {
+                    note.style.animation = 'none';
+                    void note.offsetHeight; // Trigger reflow
+                    note.style.animation = 'placeNote 0.6s ease-out';
+                }, index * 200);
+            });
+        });
+    </script>
+</body>
+</html>

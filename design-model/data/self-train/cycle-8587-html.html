@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Origami</title>
+    <style>
+        :root {
+            --rice-paper: #fefdf8;
+            --ink-black: #1a1a1a;
+            --fold-shadow: rgba(0, 0, 0, 0.05);
+            --crease-line: #d4d0c7;
+            --future-blue: #4a5d7a;
+            --past-sepia: #8b7355;
+            --present-red: #c94d3f;
+            --ghost-fold: rgba(74, 93, 122, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--rice-paper);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .timeline-canvas {
+            position: absolute;
+            width: 200%;
+            height: 100vh;
+            left: -50%;
+            background: 
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 39px,
+                    var(--crease-line) 40px
+                ),
+                linear-gradient(
+                    to right,
+                    var(--rice-paper) 0%,
+                    rgba(254, 253, 248, 0.95) 50%,
+                    var(--rice-paper) 100%
+                );
+            transform-origin: center center;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .timeline-canvas::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 30% 40%, var(--ghost-fold) 0%, transparent 50%),
+                radial-gradient(circle at 70% 60%, var(--ghost-fold) 0%, transparent 40%),
+                radial-gradient(circle at 45% 80%, var(--ghost-fold) 0%, transparent 35%);
+            opacity: 0.3;
+        }
+
+        .fold-diagram {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 120px;
+            height: 120px;
+            opacity: 0.4;
+        }
+
+        .fold-line {
+            stroke: var(--ink-black);
+            stroke-width: 1;
+            stroke-dasharray: 2 2;
+            fill: none;
+        }
+
+        .age-markers {
+            position: absolute;
+            bottom: 80px;
+            width: 100%;
+            height: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .age-marker {
+            position: absolute;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .age-marker span {
+            font-size: 11px;
+            color: var(--ink-black);
+            opacity: 0.5;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .age-marker::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 15px;
+            background: var(--ink-black);
+            opacity: 0.2;
+        }
+
+        .message-composer {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: rgba(254, 253, 248, 0.9);
+            border: 1px solid var(--crease-line);
+            box-shadow: 
+                0 2px 20px var(--fold-shadow),
+                inset 0 0 40px rgba(255, 255, 255, 0.5);
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .composer-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .crane-icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 15px;
+            opacity: 0.6;
+        }
+
+        .temporal-selector {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .age-input {
+            width: 60px;
+            padding: 8px;
+            border: 1px solid var(--crease-line);
+            background: var(--rice-paper);
+            font-size: 14px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .age-input:focus {
+            outline: none;
+            border-color: var(--future-blue);
+            box-shadow: 0 0 0 3px rgba(74, 93, 122, 0.1);
+        }
+
+        .fold-type {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .fold-option {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--crease-line);
+            background: var(--rice-paper);
+            cursor: pointer;
+            text-align: center;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fold-option:hover {
+            border-color: var(--future-blue);
+            transform: translateY(-2px);
+        }
+
+        .fold-option.active {
+            background: var(--ghost-fold);
+            border-color: var(--future-blue);
+        }
+
+        .fold-option::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--ghost-fold) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .fold-option:hover::before {
+            opacity: 1;
+        }
+
+        .message-input {
+            width: 100%;
+            height: 120px;
+            padding: 15px;
+            border: 1px solid var(--crease-line);
+            background: var(--rice-paper);
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            font-family: inherit;
+            margin-bottom: 20px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: var(--future-blue);
+        }
+
+        .echo-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: var(--ghost-fold);
+            border-radius: 3px;
+        }
+
+        .echo-checkbox {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .echo-age {
+            width: 50px;
+            padding: 5px;
+            border: 1px solid var(--crease-line);
+            background: var(--rice-paper);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .send-button {
+            width: 100%;
+            padding: 12px;
+            background: var(--ink-black);
+            color: var(--rice-paper);
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .send-button:hover {
+            background: var(--future-blue);
+            transform: translateY(-1px);
+        }
+
+        .floating-cranes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .crane {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            opacity: 0.1;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(30px, -40px) rotate(10deg); }
+            50% { transform: translate(-20px, -60px) rotate(-5deg); }
+            75% { transform: translate(40px, -30px) rotate(15deg); }
+        }
+
+        .temporal-echo {
+            position: absolute;
+            width: 300px;
+            height: 1px;
+            background: var(--future-blue);
+            opacity: 0.2;
+            transform-origin: left center;
+            pointer-events: none;
+        }
+
+        .fold-preview {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+            background: rgba(254, 253, 248, 0.8);
+            border: 1px solid var(--crease-line);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 11px;
+            color: var(--ink-black);
+            opacity: 0.7;
+        }
+
+        .fold-preview svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+
+        .nested-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--crease-line);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: var(--ink-black);
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="timeline-canvas"></div>
+    
+    <div class="age-markers">
+        <div class="age-marker" style="left: 20%"><span>25</span></div>
+        <div class="age-marker" style="left: 35%"><span>30</span></div>
+        <div class="age-marker" style="left: 50%"><span>35</span></div>
+        <div class="age-marker" style="left: 65%"><span>40</span></div>
+        <div class="age-marker" style="left: 80%"><span>45</span></div>
+    </div>
+
+    <div class="message-composer">
+        <div class="composer-header">
+            <svg class="crane-icon" viewBox="0 0 30 30">
+                <path d="M15 5 L10 10 L15 15 L20 10 Z" fill="none" stroke="currentColor" stroke-width="1"/>
+                <path d="M15 15 L12 20 L15 25 L18 20 Z" fill="none" stroke="currentColor" stroke-width="1"/>
+                <path d="M15 5 L15 25" stroke="currentColor" stroke-width="0.5" opacity="0.5"/>
+            </svg>
+            <h2 style="font-size: 18px; font-weight: 500; color: var(--ink-black);">Fold Time</h2>
+        </div>
+
+        <div class="temporal-selector">
+            <label style="font-size: 13px; color: var(--ink-black); opacity: 0.7;">Deliver at age</label>
+            <input type="number" class="age-input" value="40" min="18" max="100">
+        </div>
+
+        <div class="fold-type">
+            <div class="fold-option active">Valley Fold</div>
+            <div class="fold-option">Mountain Fold</div>
+            <div class="fold-option">Petal Fold</div>
+        </div>
+
+        <textarea class="message-input" placeholder="Write to your future self..."></textarea>
+
+        <div class="echo-settings">
+            <input type="checkbox" class="echo-checkbox" id="echo">
+            <label for="echo" style="font-size: 13px;">Echo to age</label>
+            <input type="number" class="echo-age" value="25" min="18" max="100">
+        </div>
+
+        <button class="send-button">Fold & Send</button>
+
+        <div class="nested-indicator">3</div>
+    </div>
+
+    <div class="fold-preview">
+        <svg viewBox="0 0 80 80">
+            <path d="M20 20 L40 40 L60 20" fill="none" stroke="var(--ink-black)" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>
+            <path d="M40 40 L40 60" fill="none" stroke="var(--ink-black)" stroke-width="1" opacity="0.3"/>
+            <circle cx="40" cy="40" r="3" fill="var(--present-red)" opacity="0.6"/>
+        </svg>
+        <span>Valley Fold Active</span>
+    </div>
+
+    <div class="floating-cranes">
+        <svg class="crane" style="top: 10%; left: 15%;" viewBox="0 0 40 40">
+            <path d="M20 5 L10 15 L20 25 L30 15 Z" fill="var(--ink-black)"/>
+            <path d="M20 25 L15 30 L20 35 L25 30 Z" fill="var(--ink-black)"/>
+        </svg>
+        <svg class="crane" style="top: 70%; right: 20%; animation-delay: -5s;" viewBox="0 0 40 40">
+            <path d="M20 5 L10 15 L20 25 L30 15 Z" fill="var(--ink-black)"/>
+            <path d="M20 25 L15 30 L20 35 L25 30 Z" fill="var(--ink-black)"/>
+        </svg>
+        <svg class="crane" style="top: 40%; left: 70%; animation-delay: -10s;" viewBox="0 0 40 40">
+            <path d="M20 5 L10 15 L20 25 L30 15 Z" fill="var(--ink-black)"/>
+            <path d="M20 25 L15 30 L20 35 L25 30 Z" fill="var(--ink-black)"/>
+        </svg>
+    </div>
+
+    <div class="temporal-echo" style="top: 45%; left: 35%; width: 200px; transform: rotate(-15deg);"></div>
+    <div class="temporal-echo" style="top: 55%; left: 50%; width: 150px; transform: rotate(10deg); opacity: 0.1;"></div>
+
+    <svg class="fold-diagram" viewBox="0 0 120 120">
+        <path class="fold-line" d="M20 20 L60 60 L100 20"/>
+        <path class="fold-line" d="M60 60 L60 100"/>
+        <circle cx="60" cy="60" r="4" fill="var(--present-red)" opacity="0.6"/>
+    </svg>
+</body>
+</html>

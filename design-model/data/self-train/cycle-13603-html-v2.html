@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River of Unsent Words</title>
+    <style>
+        :root {
+            --river-deep: #0a1628;
+            --river-surface: #1e3a5f;
+            --moon-glow: #f5f3f0;
+            --paper: #faf8f3;
+            --ink: #2c3e50;
+            --ink-faded: #7f8c8d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: linear-gradient(180deg, var(--river-deep) 0%, var(--river-surface) 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .moon {
+            position: absolute;
+            width: 8rem;
+            height: 8rem;
+            background: radial-gradient(circle, var(--moon-glow) 0%, rgba(245, 243, 240, 0.4) 100%);
+            border-radius: 50%;
+            top: 10%;
+            right: 15%;
+            filter: blur(2px);
+            box-shadow: 0 0 4rem 1.5rem rgba(245, 243, 240, 0.2);
+        }
+
+        .writing-area {
+            position: relative;
+            z-index: 10;
+            width: 90%;
+            max-width: 32rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .letter-input {
+            width: 100%;
+            min-height: 12rem;
+            background: var(--paper);
+            border: none;
+            padding: 2rem;
+            font-family: inherit;
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: var(--ink);
+            resize: none;
+            box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.3);
+            border-radius: 0.125rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .letter-input:focus {
+            outline: none;
+            transform: translateY(-0.125rem);
+            box-shadow: 0 0.75rem 3rem rgba(0, 0, 0, 0.4);
+        }
+
+        .letter-input::placeholder {
+            color: var(--ink-faded);
+            font-style: italic;
+        }
+
+        .release-button {
+            padding: 0.75rem 2.5rem;
+            background: transparent;
+            border: 1px solid var(--moon-glow);
+            color: var(--moon-glow);
+            font-family: inherit;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.125rem;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .release-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(245, 243, 240, 0.1);
+            transition: left 0.3s ease;
+        }
+
+        .release-button:hover::before {
+            left: 0;
+        }
+
+        .release-button:hover {
+            box-shadow: 0 0 1.5rem rgba(245, 243, 240, 0.3);
+        }
+
+        .floating-letter {
+            position: absolute;
+            background: var(--paper);
+            padding: 1rem;
+            box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.3);
+            transform-origin: center;
+            animation: float-away 8s ease-out forwards;
+            pointer-events: none;
+            font-size: 0.875rem;
+            color: var(--ink);
+            max-width: 20rem;
+            opacity: 0.9;
+        }
+
+        @keyframes float-away {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg) scale(1);
+                opacity: 0.9;
+            }
+            50% {
+                transform: translate(calc(-50% + 5rem), calc(-50% - 10rem)) rotate(5deg) scale(0.9);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translate(calc(-50% + 15rem), calc(-50% - 30rem)) rotate(10deg) scale(0.7);
+                opacity: 0;
+            }
+        }
+
+        .ripple {
+            position: absolute;
+            border: 2px solid rgba(245, 243, 240, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: ripple-out 3s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-out {
+            0% {
+                width: 2rem;
+                height: 2rem;
+                opacity: 0.6;
+            }
+            100% {
+                width: 8rem;
+                height: 8rem;
+                opacity: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .moon {
+                width: 6rem;
+                height: 6rem;
+                top: 5%;
+                right: 10%;
+            }
+            
+            .writing-area {
+                width: 95%;
+            }
+            
+            .letter-input {
+                font-size: 1rem;
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="moon"></div>
+    
+    <div class="writing-area">
+        <textarea class="letter-input" placeholder="Write the words you'll never send..."></textarea>
+        <button class="release-button" onclick="releaseLetter()">Release to the River</button>
+    </div>
+
+    <script>
+        function releaseLetter() {
+            const input = document.querySelector('.letter-input');
+            const text = input.value.trim();
+            
+            if (!text) return;
+            
+            const letter = document.createElement('div');
+            letter.className = 'floating-letter';
+            letter.textContent = text.substring(0, 100) + (text.length > 100 ? '...' : '');
+            letter.style.left = '50%';
+            letter.style.top = '50%';
+            
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.left = '50%';
+            ripple.style.top = '60%';
+            
+            document.body.appendChild(letter);
+            document.body.appendChild(ripple);
+            
+            input.value = '';
+            input.focus();
+            
+            setTimeout(() => {
+                letter.remove();
+                ripple.remove();
+            }, 8000);
+        }
+
+        document.querySelector('.letter-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                releaseLetter();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silence Composer</title>
+    <style>
+        :root {
+            --void-black: #0a0a0a;
+            --void-gray: #1a1a1a;
+            --field-subtle: rgba(255, 255, 255, 0.03);
+            --field-active: rgba(255, 255, 255, 0.08);
+            --notation-mark: #888;
+            --notation-active: #fff;
+            --form-idle: rgba(255, 255, 255, 0.15);
+            --form-hover: rgba(255, 255, 255, 0.25);
+            --gravity-near: rgba(255, 255, 255, 0.02);
+            --gravity-mid: rgba(255, 255, 255, 0.01);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .composition-space {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 30% 40%, var(--field-subtle) 0%, transparent 50%);
+        }
+
+        .form {
+            position: absolute;
+            transition: transform 8s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: grab;
+            mix-blend-mode: screen;
+        }
+
+        .form:active {
+            cursor: grabbing;
+        }
+
+        .form-circle {
+            width: 80px;
+            height: 80px;
+            border: 1px solid var(--form-idle);
+            border-radius: 50%;
+            background: radial-gradient(circle at center, transparent 70%, var(--form-idle) 100%);
+        }
+
+        .form-triangle {
+            width: 0;
+            height: 0;
+            border-left: 40px solid transparent;
+            border-right: 40px solid transparent;
+            border-bottom: 70px solid var(--form-idle);
+            opacity: 0.3;
+        }
+
+        .form-square {
+            width: 60px;
+            height: 60px;
+            border: 1px solid var(--form-idle);
+            background: linear-gradient(135deg, transparent 50%, var(--form-idle) 100%);
+            opacity: 0.4;
+        }
+
+        .form-line {
+            width: 120px;
+            height: 1px;
+            background: var(--form-idle);
+            transform-origin: left center;
+        }
+
+        .gravity-field {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, 
+                var(--gravity-near) 0%, 
+                var(--gravity-mid) 30%, 
+                transparent 70%);
+            transform: translate(-50%, -50%);
+            transition: all 0.5s ease;
+        }
+
+        .notation-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 180px;
+            background: linear-gradient(to top, var(--void-gray) 0%, transparent 100%);
+            border-top: 1px solid var(--field-subtle);
+            padding: 40px 60px;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .notation-mark {
+            width: 2px;
+            height: 40px;
+            background: var(--notation-mark);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .notation-mark.active {
+            background: var(--notation-active);
+            height: 60px;
+        }
+
+        .notation-mark::before {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: -1px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: inherit;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .notation-mark.active::before {
+            opacity: 1;
+        }
+
+        .tool-palette {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tool {
+            width: 48px;
+            height: 48px;
+            background: var(--field-subtle);
+            border: 1px solid var(--field-subtle);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .tool:hover {
+            background: var(--field-active);
+            border-color: var(--form-idle);
+        }
+
+        .tool.active {
+            background: var(--field-active);
+            border-color: var(--form-hover);
+        }
+
+        .tool-shape {
+            width: 20px;
+            height: 20px;
+            opacity: 0.6;
+        }
+
+        .tool-circle .tool-shape {
+            border: 1px solid var(--form-idle);
+            border-radius: 50%;
+        }
+
+        .tool-triangle .tool-shape {
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 18px solid var(--form-idle);
+        }
+
+        .tool-square .tool-shape {
+            border: 1px solid var(--form-idle);
+        }
+
+        .tool-line .tool-shape {
+            width: 24px;
+            height: 1px;
+            background: var(--form-idle);
+        }
+
+        .frequency-display {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            color: var(--notation-mark);
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .frequency-value {
+            font-size: 28px;
+            color: var(--notation-active);
+            font-weight: 200;
+            letter-spacing: -0.02em;
+            margin-top: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .playback-control {
+            position: fixed;
+            bottom: 220px;
+            right: 40px;
+            width: 48px;
+            height: 48px;
+            background: var(--field-subtle);
+            border: 1px solid var(--field-subtle);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .playback-control:hover {
+            background: var(--field-active);
+            border-color: var(--form-idle);
+        }
+
+        .play-icon {
+            width: 0;
+            height: 0;
+            border-left: 12px solid var(--form-idle);
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            margin-left: 2px;
+        }
+
+        .pause-icon {
+            width: 12px;
+            height: 16px;
+            position: relative;
+        }
+
+        .pause-icon::before,
+        .pause-icon::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 4px;
+            height: 16px;
+            background: var(--form-idle);
+        }
+
+        .pause-icon::before {
+            left: 0;
+        }
+
+        .pause-icon::after {
+            right: 0;
+        }
+
+        .share-button {
+            position: fixed;
+            top: 40px;
+            right: 240px;
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid var(--field-subtle);
+            color: var(--notation-mark);
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .share-button:hover {
+            border-color: var(--form-idle);
+            color: var(--notation-active);
+        }
+
+        @keyframes drift {
+            from {
+                transform: translate(0, 0) rotate(0deg);
+            }
+            to {
+                transform: translate(var(--drift-x), var(--drift-y)) rotate(var(--drift-r));
+            }
+        }
+
+        .drifting {
+            animation: drift 20s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="composition-space" id="compositionSpace"></div>
+    
+    <div class="tool-palette">
+        <div class="tool tool-circle active" data-shape="circle">
+            <div class="tool-shape"></div>
+        </div>
+        <div class="tool tool-triangle" data-shape="triangle">
+            <div class="tool-shape"></div>
+        </div>
+        <div class="tool tool-square" data-shape="square">
+            <div class="tool-shape"></div>
+        </div>
+        <div class="tool tool-line" data-shape="line">
+            <div class="tool-shape"></div>
+        </div>
+    </div>
+
+    <div class="frequency-display">
+        <div>Silence Frequency</div>
+        <div class="frequency-value" id="frequencyValue">0.000</div>
+    </div>
+
+    <button class="share-button">Share Composition</button>
+
+    <div class="playback-control" id="playbackControl">
+        <div class="play-icon" id="playIcon"></div>
+    </div>
+
+    <div class="notation-panel" id="notationPanel"></div>
+
+    <script>
+        let selectedTool = 'circle';
+        let forms = [];
+        let isPlaying = false;
+        let notationMarks = [];
+        let gravityFields = new Map();
+
+        const compositionSpace = document.getElementById('compositionSpace');
+        const frequencyValue = document.getElementById('frequencyValue');
+        const notationPanel = document.getElementById('notationPanel');
+        const playbackControl = document.getElementById('playbackControl');
+        const playIcon = document.getElementById('playIcon');
+
+        // Tool selection
+        document.querySelectorAll('.tool').forEach(tool => {
+            tool.addEventListener('click', () => {
+                document.querySelector('.tool.active').classList.remove('active');
+                tool.classList.add('active');
+                selectedTool = tool.dataset.shape;
+            });
+        });
+
+        // Create forms
+        compositionSpace.addEventListener('click', (e) => {
+            if (e.target === compositionSpace) {
+                createForm(e.clientX, e.clientY);
+            }
+        });
+
+        function createForm(x, y) {
+            const form = document.createElement('div');
+            form.className = `form form-${selectedTool}`;
+            form.style.left = x + 'px';
+            form.style.top = y + 'px';
+            form.style.transform = 'translate(-50%, -50%)';
+            
+            // Random properties for drift animation
+            form.style.setProperty('--drift-x', (Math.random() - 0.5) * 100 + 'px');
+            form.style.setProperty('--drift-y', (Math.random() - 0.5) * 100 + 'px');
+            form.style.setProperty('--drift-r', (Math.random() - 0.5) * 30 + 'deg');
+            
+            compositionSpace.appendChild(form);
+            forms.push({element: form, x, y, shape: selectedTool});
+            
+            createGravityField(form);
+            updateFrequency();
+            updateNotation();
+            
+            makeDraggable(form);
+        }
+
+        function createGravityField(form) {
+            const field = document.createElement('div');
+            field.className = 'gravity-field';
+            const size = 200 + Math.random() * 200;
+            field.style.width = size + 'px';
+            field.style.height = size + 'px';
+            compositionSpace.appendChild(field);
+            gravityFields.set(form, field);
+            updateGravityField(form);
+        }
+
+        function updateGravityField(form) {
+            const field = gravityFields.get(form);
+            if (field) {
+                const rect = form.getBoundingClientRect();
+                field.style.left = rect.left + rect.width / 2 + 'px';
+                field.style.top = rect.top + rect.height / 2 + 'px';
+            }
+        }
+
+        function makeDraggable(form) {
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+
+            form.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const transform = window.getComputedStyle(form).transform;
+                const matrix = new DOMMatrix(transform);
+                initialX = matrix.m41;
+                initialY = matrix.m42;
+                form.style.transition = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    form.style.transform = `translate(${initialX + dx}px, ${initialY + dy}px)`;
+                    updateGravityField(form);
+                    updateFrequency();
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    form.style.transition = '';
+                    updateNotation();
+                }
+            });
+        }
+
+        function updateFrequency() {
+            // Calculate "silence frequency" based on form distances
+            let totalFreq = 0;
+            forms.forEach((form1, i) => {
+                forms.forEach((form2, j) => {
+                    if (i < j) {
+                        const dist = Math.sqrt(
+                            Math.pow(form1.x - form2.x, 2) + 
+                            Math.pow(form1.y - form2.y, 2)
+                        );
+                        totalFreq += 1 / (dist + 1);
+                    }
+                });
+            });
+            frequencyValue.textContent = totalFreq.toFixed(3);
+        }
+
+        function updateNotation() {
+            notationPanel.innerHTML = '';
+            notationMarks = [];
+            
+            const spacing = 800 / (forms.length + 1);
+            forms.forEach((form, i) => {
+                const mark = document.createElement('div');
+                mark.className = 'notation-mark';
+                mark.style.marginLeft = spacing * (i + 0.5) + 'px';
+                
+                // Height based on vertical position
+                const height = 20 + (form.y / 900) * 40;
+                mark.style.height = height + 'px';
+                
+                if (Math.random() > 0.6) {
+                    mark.classList.add('active');
+                }
+                
+                notationPanel.appendChild(mark);
+                notationMarks.push(mark);
+            });
+        }
+
+        // Playback
+        playbackControl.addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            
+            if (isPlaying) {
+                playIcon.className = 'pause-icon';
+                forms.forEach(form => {
+                    form.element.classList.add('drifting');
+                });
+            } else {
+                playIcon.className = 'play-icon';
+                forms.forEach(form => {
+                    form.element.classList.remove('drifting');
+                });
+            }
+        });
+
+        // Initialize with a few forms
+        setTimeout(() => {
+            createForm(300, 400);
+            selectedTool = 'triangle';
+            createForm(600, 300);
+            selectedTool = 'square';
+            createForm(900, 500);
+            selectedTool = 'line';
+            createForm(1200, 400);
+            selectedTool = 'circle';
+        }, 100);
+    </script>
+</body>
+</html>

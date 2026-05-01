@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Archive</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #7f8c8d;
+            --accent: #3498db;
+            --surface: #ffffff;
+            --text: #2c3e50;
+            --spacing: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: calc(var(--spacing) * 4);
+        }
+
+        .header {
+            margin-bottom: calc(var(--spacing) * 6);
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: var(--spacing);
+        }
+
+        .subtitle {
+            color: var(--secondary);
+            font-size: 16px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: calc(var(--spacing) * 4);
+            align-items: start;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: calc(var(--spacing) * 3);
+        }
+
+        .memory-card {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: calc(var(--spacing) * 3);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+
+        .memory-card.selected {
+            border: 2px solid var(--accent);
+        }
+
+        .memory-date {
+            font-size: 14px;
+            color: var(--secondary);
+            margin-bottom: var(--spacing);
+        }
+
+        .memory-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: calc(var(--spacing) * 1.5);
+            line-height: 1.4;
+        }
+
+        .memory-preview {
+            font-size: 14px;
+            color: var(--secondary);
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .memory-indicator {
+            position: absolute;
+            top: calc(var(--spacing) * 2);
+            right: calc(var(--spacing) * 2);
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .memory-card.selected .memory-indicator {
+            opacity: 1;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: calc(var(--spacing) * 3);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: calc(var(--spacing) * 4);
+        }
+
+        .sidebar-header {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: calc(var(--spacing) * 3);
+        }
+
+        .filter-group {
+            margin-bottom: calc(var(--spacing) * 3);
+        }
+
+        .filter-label {
+            font-size: 14px;
+            color: var(--secondary);
+            margin-bottom: calc(var(--spacing) * 1.5);
+        }
+
+        .filter-options {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+        }
+
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing);
+            cursor: pointer;
+            padding: var(--spacing);
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        .filter-option:hover {
+            background: #f8f9fa;
+        }
+
+        .filter-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--secondary);
+            border-radius: 3px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .filter-option.active .filter-checkbox {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .filter-option.active .filter-checkbox::after {
+            content: '✓';
+            position: absolute;
+            top: -2px;
+            left: 1px;
+            color: white;
+            font-size: 12px;
+        }
+
+        .filter-text {
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing);
+            margin-top: calc(var(--spacing) * 4);
+        }
+
+        .button {
+            flex: 1;
+            padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .button-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #2980b9;
+        }
+
+        .button-secondary {
+            background: transparent;
+            color: var(--secondary);
+            border: 1px solid #e1e4e8;
+        }
+
+        .button-secondary:hover {
+            background: #f8f9fa;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: static;
+            }
+            
+            .memory-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Memory Archive</h1>
+            <p class="subtitle">Browse and organize your collected memories</p>
+        </header>
+
+        <div class="main-grid">
+            <main class="memory-grid">
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">March 15, 2024</time>
+                    <h3 class="memory-title">Morning Coffee Ritual</h3>
+                    <p class="memory-preview">The familiar aroma filled the kitchen as sunlight streamed through the window, creating patterns on the wooden table where countless mornings had begun...</p>
+                </article>
+
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">March 10, 2024</time>
+                    <h3 class="memory-title">Rain on the Window</h3>
+                    <p class="memory-preview">Droplets racing down the glass, each carrying its own reflection of the world outside. The rhythmic tapping created a meditation...</p>
+                </article>
+
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">March 5, 2024</time>
+                    <h3 class="memory-title">Old Bookstore Visit</h3>
+                    <p class="memory-preview">The musty smell of aged paper and leather bindings. Dust particles dancing in the shaft of light between the towering shelves...</p>
+                </article>
+
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">February 28, 2024</time>
+                    <h3 class="memory-title">Winter's Last Snow</h3>
+                    <p class="memory-preview">Silent flakes falling in the lamplight, each one unique and fleeting. The world hushed under a blanket of white...</p>
+                </article>
+
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">February 20, 2024</time>
+                    <h3 class="memory-title">Grandmother's Recipe</h3>
+                    <p class="memory-preview">Her handwriting on the yellowed index card, ingredients measured in pinches and dashes. The kitchen filled with warmth...</p>
+                </article>
+
+                <article class="memory-card" onclick="this.classList.toggle('selected')">
+                    <div class="memory-indicator"></div>
+                    <time class="memory-date">February 14, 2024</time>
+                    <h3 class="memory-title">City Lights at Dusk</h3>
+                    <p class="memory-preview">The transition from day to night, windows beginning to glow like scattered stars. The pulse of the city shifting rhythms...</p>
+                </article>
+            </main>
+
+            <aside class="sidebar">
+                <h2 class="sidebar-header">Filter Memories</h2>
+                
+                <div class="filter-group">
+                    <p class="filter-label">Categories</p>
+                    <div class="filter-options">
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">Daily Rituals</span>
+                        </label>
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">Nature</span>
+                        </label>
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">Places</span>
+                        </label>
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">People</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <p class="filter-label">Time Period</p>
+                    <div class="filter-options">
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">This Week</span>
+                        </label>
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">This Month</span>
+                        </label>
+                        <label class="filter-option" onclick="this.classList.toggle('active')">
+                            <span class="filter-checkbox"></span>
+                            <span class="filter-text">This Year</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="button button-secondary">Clear</button>
+                    <button class="button button-primary">Apply</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

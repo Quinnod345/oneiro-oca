@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haiku Stream</title>
+    <style>
+        :root {
+            --bark: #3a2f2a;
+            --moss: #7a8b6f;
+            --sky: #e8e3dc;
+            --water: #5a6b7d;
+            --leaf: #d4a574;
+            --decay: #8b7355;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--sky);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .stream-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .word-leaf {
+            position: absolute;
+            padding: 8px 16px;
+            background: var(--leaf);
+            color: var(--bark);
+            border-radius: 24px 4px;
+            font-size: 18px;
+            cursor: grab;
+            pointer-events: all;
+            user-select: none;
+            transform-origin: center;
+            animation: fall linear forwards, sway 4s ease-in-out infinite;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: opacity 0.3s;
+        }
+
+        .word-leaf:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .word-leaf.caught {
+            animation: none;
+            cursor: default;
+        }
+
+        .word-leaf.decaying {
+            background: var(--decay);
+            opacity: 0.7;
+        }
+
+        @keyframes fall {
+            from {
+                top: -50px;
+            }
+            to {
+                top: 110vh;
+            }
+        }
+
+        @keyframes sway {
+            0%, 100% {
+                transform: translateX(0) rotate(0deg);
+            }
+            25% {
+                transform: translateX(30px) rotate(5deg);
+            }
+            75% {
+                transform: translateX(-30px) rotate(-5deg);
+            }
+        }
+
+        .branch {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 60px;
+            background: linear-gradient(to bottom, var(--bark), #2a1f1a);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .branch::before {
+            content: attr(data-syllables);
+            position: absolute;
+            left: -80px;
+            color: var(--moss);
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .branch.line-1 {
+            top: 20%;
+        }
+
+        .branch.line-2 {
+            top: 45%;
+        }
+
+        .branch.line-3 {
+            top: 70%;
+        }
+
+        .slot {
+            flex: 1;
+            height: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--sky);
+            transition: all 0.3s;
+        }
+
+        .slot.filled {
+            background: var(--moss);
+            color: white;
+        }
+
+        .fragment-canvas {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 150px;
+            background: linear-gradient(to top, var(--water), transparent);
+            pointer-events: all;
+        }
+
+        .fragment {
+            position: absolute;
+            font-size: 24px;
+            color: var(--bark);
+            opacity: 0.6;
+            pointer-events: none;
+            animation: drift 10s linear infinite;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translateX(0) translateY(0);
+            }
+            to {
+                transform: translateX(100px) translateY(-50px);
+            }
+        }
+
+        .drawing-surface {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .drawn-path {
+            stroke: var(--water);
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+            opacity: 0.8;
+        }
+
+        .composed-word {
+            position: absolute;
+            padding: 6px 12px;
+            background: var(--water);
+            color: white;
+            border-radius: 16px;
+            font-size: 16px;
+            pointer-events: all;
+            cursor: grab;
+            animation: emerge 0.5s ease-out;
+        }
+
+        @keyframes emerge {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .haiku-display {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            background: rgba(255,255,255,0.9);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            font-size: 20px;
+            line-height: 1.8;
+            color: var(--bark);
+            min-width: 300px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .haiku-display.visible {
+            opacity: 1;
+        }
+
+        .timer {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: conic-gradient(var(--moss) var(--progress, 0%), transparent 0%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--bark);
+        }
+
+        .instructions {
+            position: absolute;
+            left: 40px;
+            bottom: 40px;
+            color: var(--bark);
+            font-size: 14px;
+            opacity: 0.7;
+            max-width: 400px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="stream-container" id="stream"></div>
+    
+    <div class="branch line-1" data-syllables="5">
+        <div class="slot" data-max="5"></div>
+    </div>
+    
+    <div class="branch line-2" data-syllables="7">
+        <div class="slot" data-max="7"></div>
+    </div>
+    
+    <div class="branch line-3" data-syllables="5">
+        <div class="slot" data-max="5"></div>
+    </div>
+    
+    <div class="fragment-canvas" id="fragments"></div>
+    
+    <svg class="drawing-surface" id="drawingSurface">
+        <path class="drawn-path" id="drawPath"></path>
+    </svg>
+    
+    <div class="haiku-display" id="haikuDisplay"></div>
+    
+    <div class="timer" id="timer">
+        <span id="timerText">60</span>
+    </div>
+    
+    <div class="instructions">
+        Catch falling words before they decay. Draw gestures in the water to combine letter fragments. 
+        Fill each branch with the correct syllable count.
+    </div>
+
+    <script>
+        const words = [
+            { text: 'autumn', syllables: 2 },
+            { text: 'leaves', syllables: 1 },
+            { text: 'falling', syllables: 2 },
+            { text: 'whisper', syllables: 2 },
+            { text: 'mountain', syllables: 2 },
+            { text: 'silence', syllables: 2 },
+            { text: 'moon', syllables: 1 },
+            { text: 'river', syllables: 2 },
+            { text: 'shadow', syllables: 2 },
+            { text: 'gentle', syllables: 2 },
+            { text: 'morning', syllables: 2 },
+            { text: 'dew', syllables: 1 },
+            { text: 'petals', syllables: 2 },
+            { text: 'wind', syllables: 1 },
+            { text: 'cherry', syllables: 2 },
+            { text: 'blossom', syllables: 2 },
+            { text: 'temple', syllables: 2 },
+            { text: 'bell', syllables: 1 },
+            { text: 'echoes', syllables: 2 },
+            { text: 'through', syllables: 1 },
+            { text: 'mist', syllables: 1 },
+            { text: 'ancient', syllables: 2 },
+            { text: 'path', syllables: 1 },
+            { text: 'bamboo', syllables: 2 },
+            { text: 'rustles', syllables: 2 },
+            { text: 'softly', syllables: 2 },
+            { text: 'in', syllables: 1 },
+            { text: 'the', syllables: 1 },
+            { text: 'breeze', syllables: 1 }
+        ];
+
+        let currentWords = [];
+        let fragments = [];
+        let drawing = false;
+        let currentPath = [];
+        let branchContents = { 1: [], 2: [], 3: [] };
+        let timeRemaining = 60;
+
+        function createWordLeaf() {
+            const word = words[Math.floor(Math.random() * words.length)];
+            const leaf = document.createElement('div');
+            leaf.className = 'word-leaf';
+            leaf.textContent = word.text;
+            leaf.dataset.syllables = word.syllables;
+            leaf.style.left = Math.random() * (window.innerWidth - 100) + 'px';
+            leaf.style.animationDuration = (8 + Math.random() * 4) + 's';
+            
+            const lifespan = 5000 + Math.random() * 3000;
+            setTimeout(() => {
+                if (!leaf.classList.contains('caught')) {
+                    leaf.classList.add('decaying');
+                    setTimeout(() => {
+                        if (!leaf.classList.contains('caught')) {
+                            fragmentize(leaf);
+                        }
+                    }, 1000);
+                }
+            }, lifespan);
+
+            leaf.addEventListener('mousedown', (e) => catchWord(e, leaf, word));
+            
+            document.getElementById('stream').appendChild(leaf);
+            currentWords.push(leaf);
+        }
+
+        function catchWord(e, leaf, word) {
+            if (leaf.classList.contains('caught')) return;
+            
+            leaf.classList.add('caught');
+            leaf.style.animation = 'none';
+            
+            let offsetX = e.clientX - leaf.offsetLeft;
+            let offsetY = e.clientY - leaf.offsetTop;
+            
+            function moveWord(e) {
+                leaf.style.left = (e.clientX - offsetX) + 'px';
+                leaf.style.top = (e.clientY - offsetY) + 'px';
+                
+                checkBranchMagnetism(leaf, word);
+            }
+            
+            function dropWord() {
+                document.removeEventListener('mousemove', moveWord);
+                document.removeEventListener('mouseup', dropWord);
+            }
+            
+            document.addEventListener('mousemove', moveWord);
+            document.addEventListener('mouseup', dropWord);
+        }
+
+        function checkBranchMagnetism(leaf, word) {
+            const branches = document.querySelectorAll('.branch');
+            branches.forEach((branch, index) => {
+                const slot = branch.querySelector('.slot');
+                const rect = slot.getBoundingClientRect();
+                const leafRect = leaf.getBoundingClientRect();
+                
+                const distance = Math.sqrt(
+                    Math.pow(rect.left + rect.width/2 - leafRect.left - leafRect.width/2, 2) +
+                    Math.pow(rect.top + rect.height/2 - leafRect.top - leafRect.height/2, 2)
+                );
+                
+                if (distance < 50 && !slot.classList.contains('filled')) {
+                    const currentSyllables = branchContents[index + 1].reduce((sum, w) => sum + w.syllables, 0);
+                    const maxSyllables = parseInt(slot.dataset.max);
+                    
+                    if (currentSyllables + word.syllables <= maxSyllables) {
+                        leaf.style.left = rect.left + 'px';
+                        leaf.style.top = rect.top + 'px';
+                        leaf.remove();
+                        
+                        branchContents[index + 1].push(word);
+                        updateBranchDisplay(index + 1);
+                        
+                        if (currentSyllables + word.syllables === maxSyllables) {
+                            slot.classList.add('filled');
+                        }
+                        
+                        checkHaikuComplete();
+                    }
+                }
+            });
+        }
+
+        function updateBranchDisplay(branchNum) {
+            const branch = document.querySelector(`.branch.line-${branchNum}`);
+            const slot = branch.querySelector('.slot');
+            slot.textContent = branchContents[branchNum].map(w => w.text).join(' ');
+        }
+
+        function fragmentize(leaf) {
+            const text = leaf.textContent;
+            const rect = leaf.getBoundingClientRect();
+            
+            for (let char of text) {
+                const fragment = document.createElement('div');
+                fragment.className = 'fragment';
+                fragment.textContent = char;
+                fragment.style.left = rect.left + Math.random() * rect.width + 'px';
+                fragment.style.bottom = Math.random() * 100 + 'px';
+                fragment.style.animationDelay = Math.random() * 2 + 's';
+                
+                document.getElementById('fragments').appendChild(fragment);
+                fragments.push({ element: fragment, char: char });
+            }
+            
+            leaf.remove();
+        }
+
+        function checkHaikuComplete() {
+            const line1Full = branchContents[1].reduce((sum, w) => sum + w.syllables, 0) === 5;
+            const line2Full = branchContents[2].reduce((sum, w) => sum + w.syllables, 0) === 7;
+            const line3Full = branchContents[3].reduce((sum, w) => sum + w.syllables, 0) === 5;
+            
+            if (line1Full && line2Full && line3Full) {
+                displayHaiku();
+            }
+        }
+
+        function displayHaiku() {
+            const display = document.getElementById('haikuDisplay');
+            display.innerHTML = `
+                ${branchContents[1].map(w => w.text).join(' ')}<br>
+                ${branchContents[2].map(w => w.text).join(' ')}<br>
+                ${branchContents[3].map(w => w.text).join(' ')}
+            `;
+            display.classList.add('visible');
+        }
+
+        // Drawing functionality
+        const drawingSurface = document.getElementById('drawingSurface');
+        const drawPath = document.getElementById('drawPath');
+
+        drawingSurface.addEventListener('mousedown', startDrawing);
+        drawingSurface.addEventListener('mousemove', draw);
+        drawingSurface.addEventListener('mouseup', endDrawing);
+
+        function startDrawing(e) {
+            drawing = true;
+            currentPath = [[e.clientX, e.clientY]];
+            drawingSurface.style.pointerEvents = 'all';
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+            
+            currentPath.push([e.clientX, e.clientY]);
+            
+            const pathString = currentPath.map((point, index) => 
+                index === 0 ? `M ${point[0]} ${point[1]}` : `L ${point[0]} ${point[1]}`
+            ).join(' ');
+            
+            drawPath.setAttribute('d', pathString);
+        }
+
+        function endDrawing() {
+            if (!drawing) return;
+            drawing = false;
+            drawingSurface.style.pointerEvents = 'none';
+            
+            checkFragmentCapture();
+            
+            setTimeout(() => {
+                drawPath.setAttribute('d', '');
+                currentPath = [];
+            }, 500);
+        }
+
+        function checkFragmentCapture() {
+            const capturedFragments = [];
+            
+            fragments.forEach(frag => {
+                const rect = frag.element.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                for (let point of currentPath) {
+                    const distance = Math.sqrt(
+                        Math.pow(point[0] - centerX, 2) + 
+                        Math.pow(point[1] - centerY, 2)
+                    );
+                    
+                    if (distance < 30) {
+                        capturedFragments.push(frag);
+                        break;
+                    }
+                }
+            });
+            
+            if (capturedFragments.length >= 2) {
+                const newWord = capturedFragments.map(f => f.char).join('');
+                createComposedWord(newWord, currentPath[Math.floor(currentPath.length / 2)]);
+                
+                capturedFragments.forEach(frag => {
+                    frag.element.remove();
+                    fragments = fragments.filter(f => f !== frag);
+                });
+            }
+        }
+
+        function createComposedWord(text, position) {
+            const word = document.createElement('div');
+            word.className = 'composed-word';
+            word.textContent = text;
+            word.style.left = position[0] + 'px';
+            word.style.top = position[1] + 'px';
+            
+            const syllableGuess = Math.max(1, Math.ceil(text.length / 3));
+            const wordData = { text: text, syllables: syllableGuess };
+            
+            word.addEventListener('mousedown', (e) => catchWord(e, word, wordData));
+            
+            document.body.appendChild(word);
+        }
+
+        // Timer
+        function updateTimer() {
+            timeRemaining--;
+            document.getElementById('timerText').textContent = timeRemaining;
+            document.getElementById('timer').style.setProperty('--progress', ((60 - timeRemaining) / 60 * 100) + '%');
+            
+            if (timeRemaining <= 0) {
+                clearInterval(timerInterval);
+                clearInterval(wordInterval);
+            }
+        }
+
+        // Start the experience
+        const wordInterval = setInterval(createWordLeaf, 2000);
+        const timerInterval = setInterval(updateTimer, 1000);
+        
+        // Create initial words
+        for (let i = 0; i < 3; i++) {
+            setTimeout(createWordLeaf, i * 500);
+        }
+    </script>
+</body>
+</html>

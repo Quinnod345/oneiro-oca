@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seasonal Recipe Composer</title>
+    <style>
+        :root {
+            --bg-primary: #fdfcfa;
+            --text-primary: #2c3e50;
+            --text-secondary: #6b7280;
+            --accent: #b87333;
+            --border: #e5e7eb;
+            --hover: #f9fafb;
+            --spacing-unit: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: calc(var(--spacing-unit) * 4);
+            width: 100%;
+            flex: 1;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: calc(var(--spacing-unit) * 6);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: calc(var(--spacing-unit) * 2);
+            }
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: calc(var(--spacing-unit) * 4);
+        }
+
+        .season-selector {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: calc(var(--spacing-unit) * 3);
+        }
+
+        .season-selector h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: calc(var(--spacing-unit) * 2);
+            color: var(--text-secondary);
+        }
+
+        .season-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: calc(var(--spacing-unit) * 2);
+        }
+
+        .season-button {
+            padding: calc(var(--spacing-unit) * 2);
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .season-button:hover {
+            background: var(--hover);
+            transform: translateY(-1px);
+        }
+
+        .season-button.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .recipe-content {
+            display: flex;
+            flex-direction: column;
+            gap: calc(var(--spacing-unit) * 4);
+        }
+
+        .recipe-header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: calc(var(--spacing-unit) * 3);
+        }
+
+        .recipe-title {
+            font-size: 32px;
+            font-weight: 300;
+            margin-bottom: calc(var(--spacing-unit));
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .recipe-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            opacity: 0;
+            animation: fadeInUp 0.6s ease 0.1s forwards;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .ingredients-section {
+            display: grid;
+            gap: calc(var(--spacing-unit) * 3);
+        }
+
+        .ingredient-group {
+            display: grid;
+            gap: calc(var(--spacing-unit) * 2);
+        }
+
+        .ingredient-group h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ingredient-list {
+            display: grid;
+            gap: calc(var(--spacing-unit) * 1.5);
+        }
+
+        .ingredient-item {
+            display: flex;
+            align-items: baseline;
+            gap: calc(var(--spacing-unit) * 2);
+            padding: calc(var(--spacing-unit) * 1.5) 0;
+            border-bottom: 1px solid var(--hover);
+            opacity: 0;
+            animation: fadeInUp 0.4s ease forwards;
+        }
+
+        .ingredient-item:nth-child(1) { animation-delay: 0.1s; }
+        .ingredient-item:nth-child(2) { animation-delay: 0.15s; }
+        .ingredient-item:nth-child(3) { animation-delay: 0.2s; }
+        .ingredient-item:nth-child(4) { animation-delay: 0.25s; }
+        .ingredient-item:nth-child(5) { animation-delay: 0.3s; }
+
+        .ingredient-amount {
+            font-size: 14px;
+            color: var(--text-secondary);
+            min-width: 80px;
+        }
+
+        .ingredient-name {
+            font-size: 16px;
+            flex: 1;
+        }
+
+        .preparation-steps {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: calc(var(--spacing-unit) * 4);
+            margin-top: calc(var(--spacing-unit) * 3);
+        }
+
+        .preparation-steps h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: calc(var(--spacing-unit) * 3);
+        }
+
+        .step {
+            display: flex;
+            gap: calc(var(--spacing-unit) * 2);
+            margin-bottom: calc(var(--spacing-unit) * 3);
+            opacity: 0;
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        .step:nth-child(2) { animation-delay: 0.1s; }
+        .step:nth-child(3) { animation-delay: 0.2s; }
+        .step:nth-child(4) { animation-delay: 0.3s; }
+
+        .step-number {
+            width: 24px;
+            height: 24px;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="controls">
+            <div class="season-selector">
+                <h2>Select Season</h2>
+                <div class="season-grid">
+                    <button class="season-button active" data-season="spring">Spring</button>
+                    <button class="season-button" data-season="summer">Summer</button>
+                    <button class="season-button" data-season="autumn">Autumn</button>
+                    <button class="season-button" data-season="winter">Winter</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="recipe-content">
+            <header class="recipe-header">
+                <h1 class="recipe-title">Spring Asparagus Risotto</h1>
+                <p class="recipe-subtitle">A celebration of early seasonal vegetables</p>
+            </header>
+
+            <section class="ingredients-section">
+                <div class="ingredient-group">
+                    <h3>Main Ingredients</h3>
+                    <div class="ingredient-list">
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">1½ cups</span>
+                            <span class="ingredient-name">Arborio rice</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">1 bunch</span>
+                            <span class="ingredient-name">Fresh asparagus, trimmed</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">4 cups</span>
+                            <span class="ingredient-name">Vegetable stock, warm</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">½ cup</span>
+                            <span class="ingredient-name">Dry white wine</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">¾ cup</span>
+                            <span class="ingredient-name">Freshly grated Parmesan</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ingredient-group">
+                    <h3>Aromatics</h3>
+                    <div class="ingredient-list">
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">1 small</span>
+                            <span class="ingredient-name">Shallot, finely diced</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">2 cloves</span>
+                            <span class="ingredient-name">Garlic, minced</span>
+                        </div>
+                        <div class="ingredient-item">
+                            <span class="ingredient-amount">2 tbsp</span>
+                            <span class="ingredient-name">Fresh lemon juice</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="preparation-steps">
+                <h3>Preparation</h3>
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <p class="step-text">Blanch asparagus in salted boiling water for 2 minutes. Reserve cooking water and chop asparagus into 1-inch pieces.</p>
+                </div>
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <p class="step-text">In a large pan, sauté shallot in olive oil until translucent. Add garlic and rice, stirring until grains are coated.</p>
+                </div>
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <p class="step-text">Add wine and stir until absorbed. Gradually add warm stock, one ladle at a time, stirring constantly until each addition is absorbed.</p>
+                </div>
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <p class="step-text">After 15 minutes, fold in asparagus pieces. Continue cooking until rice is creamy and al dente. Remove from heat, stir in Parmesan and lemon juice.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const seasonButtons = document.querySelectorAll('.season-button');
+        const recipeTitle = document.querySelector('.recipe-title');
+        const recipeSubtitle = document.querySelector('.recipe-subtitle');
+        
+        const seasonalRecipes = {
+            spring: {
+                title: 'Spring Asparagus Risotto',
+                subtitle: 'A celebration of early seasonal vegetables'
+            },
+            summer: {
+                title: 'Heirloom Tomato Galette',
+                subtitle: 'Peak summer flavors in a rustic tart'
+            },
+            autumn: {
+                title: 'Butternut Squash Soup',
+                subtitle: 'Warming spices meet harvest vegetables'
+            },
+            winter: {
+                title: 'Root Vegetable Gratin',
+                subtitle: 'Comfort food for cold evenings'
+            }
+        };
+        
+        seasonButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                seasonButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                const season = this.dataset.season;
+                const recipe = seasonalRecipes[season];
+                
+                recipeTitle.style.animation = 'none';
+                recipeSubtitle.style.animation = 'none';
+                
+                setTimeout(() => {
+                    recipeTitle.textContent = recipe.title;
+                    recipeSubtitle.textContent = recipe.subtitle;
+                    recipeTitle.style.animation = 'fadeInUp 0.6s ease forwards';
+                    recipeSubtitle.style.animation = 'fadeInUp 0.6s ease 0.1s forwards';
+                }, 10);
+            });
+        });
+    </script>
+</body>
+</html>

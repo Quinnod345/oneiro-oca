@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fragrance Composer</title>
+    <style>
+        :root {
+            --ink: #1a1a1a;
+            --parchment: #faf8f3;
+            --citrus: #ffb347;
+            --floral: #ff6b9d;
+            --woody: #8b6f47;
+            --staff-line: #e0d8c8;
+            --accent: #4a5568;
+            --hover-glow: rgba(255, 255, 255, 0.4);
+            --overlap-blend: #c9302c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--parchment);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+            cursor: default;
+        }
+
+        .composition-area {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 220px 1fr 320px;
+            position: relative;
+        }
+
+        .note-palette {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 2rem;
+            border-right: 1px solid var(--staff-line);
+            overflow-y: auto;
+        }
+
+        .palette-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            margin-bottom: 2rem;
+            font-weight: 500;
+        }
+
+        .note-item {
+            margin-bottom: 2.5rem;
+            cursor: grab;
+            transition: transform 0.2s ease;
+        }
+
+        .note-item:hover {
+            transform: translateX(8px);
+        }
+
+        .note-item:active {
+            cursor: grabbing;
+        }
+
+        .note-shape {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 0.75rem;
+            position: relative;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1));
+        }
+
+        .triangle {
+            width: 0;
+            height: 0;
+            border-left: 30px solid transparent;
+            border-right: 30px solid transparent;
+            border-bottom: 52px solid var(--citrus);
+        }
+
+        .circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--floral);
+        }
+
+        .square {
+            width: 60px;
+            height: 60px;
+            background: var(--woody);
+        }
+
+        .note-label {
+            font-size: 0.875rem;
+            color: var(--ink);
+            margin-bottom: 0.25rem;
+        }
+
+        .note-description {
+            font-size: 0.75rem;
+            color: var(--accent);
+            line-height: 1.4;
+        }
+
+        .staff-container {
+            position: relative;
+            padding: 4rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .evolution-labels {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            margin-bottom: 1rem;
+            padding: 0 2rem;
+        }
+
+        .evolution-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            text-align: center;
+            position: relative;
+        }
+
+        .evolution-label::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 6px;
+            background: var(--accent);
+            opacity: 0.3;
+        }
+
+        .musical-staff {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(
+                to bottom,
+                transparent 19%,
+                var(--staff-line) 20%,
+                var(--staff-line) 21%,
+                transparent 21%,
+                transparent 39%,
+                var(--staff-line) 40%,
+                var(--staff-line) 41%,
+                transparent 41%,
+                transparent 59%,
+                var(--staff-line) 60%,
+                var(--staff-line) 61%,
+                transparent 61%,
+                transparent 79%,
+                var(--staff-line) 80%,
+                var(--staff-line) 81%,
+                transparent 81%,
+                transparent 99%,
+                var(--staff-line) 100%
+            );
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.05);
+        }
+
+        .intensity-axis {
+            position: absolute;
+            left: -3rem;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+        }
+
+        .placed-note {
+            position: absolute;
+            width: 48px;
+            height: 48px;
+            cursor: move;
+            transition: transform 0.15s ease;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
+        }
+
+        .placed-note:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(0 6px 20px rgba(0,0,0,0.25));
+        }
+
+        .placed-note.triangle-placed {
+            width: 0;
+            height: 0;
+            border-left: 24px solid transparent;
+            border-right: 24px solid transparent;
+            border-bottom: 41px solid var(--citrus);
+        }
+
+        .placed-note.circle-placed {
+            border-radius: 50%;
+            background: var(--floral);
+        }
+
+        .placed-note.square-placed {
+            background: var(--woody);
+        }
+
+        .blend-overlay {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            mix-blend-mode: multiply;
+            opacity: 0.7;
+        }
+
+        .composition-panel {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2rem;
+            border-left: 1px solid var(--staff-line);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fragrance-name {
+            font-size: 1.75rem;
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+            min-height: 2.5rem;
+            transition: opacity 0.5s ease;
+        }
+
+        .fragrance-description {
+            font-size: 0.875rem;
+            color: var(--accent);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            min-height: 3rem;
+            font-style: italic;
+        }
+
+        .harmony-display {
+            flex: 1;
+            border-top: 1px solid var(--staff-line);
+            padding-top: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .harmony-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .chord-progression {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+
+        .chord {
+            padding: 0.5rem 1rem;
+            background: var(--parchment);
+            border-radius: 4px;
+            font-size: 0.875rem;
+            color: var(--ink);
+            border: 1px solid var(--staff-line);
+        }
+
+        .accord-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .accord-item {
+            font-size: 0.8125rem;
+            color: var(--accent);
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .accord-item::before {
+            content: '◆';
+            position: absolute;
+            left: 0;
+            color: var(--overlap-blend);
+            opacity: 0.6;
+        }
+
+        .order-button {
+            width: 100%;
+            padding: 1.25rem;
+            background: var(--ink);
+            color: var(--parchment);
+            border: none;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .order-button:hover {
+            background: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .order-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .audio-context-prompt {
+            position: fixed;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--ink);
+            color: var(--parchment);
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .audio-context-prompt:hover {
+            transform: translateX(-50%) translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+        }
+
+        @keyframes notePlace {
+            0% {
+                transform: scale(0.8) rotate(-5deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1) rotate(2deg);
+            }
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .placed-note {
+            animation: notePlace 0.3s ease-out;
+        }
+
+        .treble-clef {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 4rem;
+            color: var(--staff-line);
+            opacity: 0.4;
+            font-family: serif;
+            user-select: none;
+        }
+
+        .drop-zone-indicator {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            background: radial-gradient(circle at var(--x) var(--y), rgba(255,255,255,0.3) 0%, transparent 50%);
+        }
+
+        .staff-container.dragging .drop-zone-indicator {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="composition-area">
+        <div class="note-palette">
+            <h3 class="palette-title">Scent Notes</h3>
+            
+            <div class="note-item" draggable="true" data-type="citrus" data-tone="C5">
+                <div class="note-shape triangle"></div>
+                <div class="note-label">Bergamot</div>
+                <div class="note-description">Bright, sparkling citrus with Earl Grey facets</div>
+            </div>
+            
+            <div class="note-item" draggable="true" data-type="citrus" data-tone="D5">
+                <div class="note-shape triangle"></div>
+                <div class="note-label">Yuzu</div>
+                <div class="note-description">Tart Japanese citrus with green notes</div>
+            </div>
+            
+            <div class="note-item" draggable="true" data-type="floral" data-tone="E4">
+                <div class="note-shape circle"></div>
+                <div class="note-label">Jasmine</div>
+                <div class="note-description">Intoxicating white floral, sweet and narcotic</div>
+            </div>
+            
+            <div class="note-item" draggable="true" data-type="floral" data-tone="F4">
+                <div class="note-shape circle"></div>
+                <div class="note-label">Rose</div>
+                <div class="note-description">Damask rose with honey undertones</div>
+            </div>
+            
+            <div class="note-item" draggable="true" data-type="woody" data-tone="G3">
+                <div class="note-shape square"></div>
+                <div class="note-label">Sandalwood</div>
+                <div class="note-description">Creamy, soft wood with milky warmth</div>
+            </div>
+            
+            <div class="note-item" draggable="true" data-type="woody" data-tone="A3">
+                <div class="note-shape square"></div>
+                <div class="note-label">Cedar</div>
+                <div class="note-description">Dry, pencil shavings with resinous depth</div>
+            </div>
+        </div>
+
+        <div class="staff-container">
+            <div class="evolution-labels">
+                <div class="evolution-label">Top Notes</div>
+                <div class="evolution-label">Heart Notes</div>
+                <div class="evolution-label">Base Notes</div>
+            </div>
+            
+            <div class="musical-staff" id="staff">
+                <div class="treble-clef">𝄞</div>
+                <div class="drop-zone-indicator"></div>
+                <div class="intensity-axis">
+                    <span>Intense</span>
+                    <span>Strong</span>
+                    <span>Moderate</span>
+                    <span>Soft</span>
+                    <span>Whisper</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="composition-panel">
+            <h2 class="fragrance-name" id="fragranceName">—</h2>
+            <p class="fragrance-description" id="fragranceDesc">Begin composing your scent...</p>
+            
+            <div class="harmony-display">
+                <h4 class="harmony-title">Harmonic Structure</h4>
+                <div class="chord-progression" id="chordDisplay"></div>
+                <div class="accord-list" id="accordList"></div>
+            </div>
+            
+            <button class="order-button" id="orderBtn" disabled>Compose My Fragrance</button>
+        </div>
+    </div>
+
+    <div class="audio-context-prompt" id="audioPrompt">Click to enable sound</div>
+
+    <script>
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+        let placedNotes = [];
+        let draggedElement = null;
+        
+        const noteFrequencies = {
+            'C5': 523.25,
+            'D5': 587.33,
+            'E4': 329.63,
+            'F4': 349.23,
+            'G3': 196.00,
+            'A3': 220.00
+        };
+        
+        const fragranceNames = {
+            'major': ['Aurora\'s Whisper', 'Golden Hour Reverie', 'Celestial Dance'],
+            'minor': ['Midnight Sonata', 'Velvet Shadow', 'Lunar Eclipse'],
+            'diminished': ['Enigma\'s Edge', 'Twilight Paradox', 'Abstract Dreams'],
+            'augmented': ['Phoenix Rising', 'Infinite Bloom', 'Cosmic Voyage']
+        };
+        
+        const accordDescriptions = {
+            'citrus-floral': 'Sparkling citrus-floral accord',
+            'floral-woody': 'Sophisticated floral-wood harmony',
+            'citrus-woody': 'Fresh citrus-wood contrast',
+            'citrus-citrus': 'Vibrant citrus cocktail',
+            'floral-floral': 'Lush floral bouquet',
+            'woody-woody': 'Deep wood symphony'
+        };
+
+        document.getElementById('audioPrompt').addEventListener('click', function() {
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+                this.style.display = 'none';
+            }
+        });
+
+        // Drag and drop functionality
+        document.querySelectorAll('.note-item').forEach(item => {
+            item.addEventListener('dragstart', handleDragStart);
+            item.addEventListener('dragend', handleDragEnd);
+        });
+
+        const staff = document.getElementById('staff');
+        staff.addEventListener('dragover', handleDragOver);
+        staff.addEventListener('drop', handleDrop);
+        staff.addEventListener('dragleave', handleDragLeave);
+
+        function handleDragStart(e) {
+            draggedElement = {
+                type: this.dataset.type,
+                tone: this.dataset.tone,
+                label: this.querySelector('.note-label').textContent
+            };
+            staff.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'copy';
+        }
+
+        function handleDragEnd(e) {
+            staff.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const rect = staff.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            staff.style.setProperty('--x', x + 'px');
+            staff.style.setProperty('--y', y + 'px');
+        }
+
+        function handleDragLeave(e) {
+            if (e.target === staff) {
+                staff.classList.remove('dragging');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            staff.classList.remove('dragging');
+            
+            if (draggedElement) {
+                const rect = staff.getBoundingClientRect();
+                const x = e.clientX - rect.left - 24;
+                const y = e.clientY - rect.top - 24;
+                
+                placeNote(x, y, draggedElement);
+                draggedElement = null;
+            }
+        }
+
+        function placeNote(x, y, noteData) {
+            const note = document.createElement('div');
+            note.className = `placed-note ${noteData.type}-placed`;
+            note.style.left = x + 'px';
+            note.style.top = y + 'px';
+            note.dataset.type = noteData.type;
+            note.dataset.tone = noteData.tone;
+            note.dataset.label = noteData.label;
+            
+            // Make placed notes draggable within staff
+            note.draggable = true;
+            note.addEventListener('dragstart', function(e) {
+                e.dataTransfer.effectAllowed = 'move';
+                this.style.opacity = '0.5';
+            });
+            
+            note.addEventListener('dragend', function(e) {
+                this.style.opacity = '1';
+            });
+            
+            staff.appendChild(note);
+            
+            placedNotes.push({
+                element: note,
+                x: x,
+                y: y,
+                ...noteData
+            });
+            
+            playTone(noteData.tone);
+            checkOverlaps();
+            updateComposition();
+        }
+
+        function playTone(note) {
+            if (!audioCtx) return;
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(noteFrequencies[note], audioCtx.currentTime);
+            
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.1);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
+            
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 1);
+        }
+
+        function checkOverlaps() {
+            // Remove existing blend overlays
+            document.querySelectorAll('.blend-overlay').forEach(el => el.remove());
+            
+            for (let i = 0; i < placedNotes.length; i++) {
+                for (let j = i + 1; j < placedNotes.length; j++) {
+                    const note1 = placedNotes[i];
+                    const note2 = placedNotes[j];
+                    
+                    const dist = Math.sqrt(
+                        Math.pow(note1.x - note2.x, 2) + 
+                        Math.pow(note1.y - note2.y, 2)
+                    );
+                    
+                    if (dist < 60) {
+                        createBlendOverlay(note1, note2);
+                    }
+                }
+            }
+        }
+
+        function createBlendOverlay(note1, note2) {
+            const overlay = document.createElement('div');
+            overlay.className = 'blend-overlay';
+            
+            const centerX = (note1.x + note2.x) / 2 + 24;
+            const centerY = (note1.y + note2.y) / 2 + 24;
+            const size = 80;
+            
+            overlay.style.left = (centerX - size/2) + 'px';
+            overlay.style.top = (centerY - size/2) + 'px';
+            overlay.style.width = size + 'px';
+            overlay.style.height = size + 'px';
+            overlay.style.background = getBlendColor(note1.type, note2.type);
+            
+            staff.appendChild(overlay);
+        }
+
+        function getBlendColor(type1, type2) {
+            const blendMap = {
+                'citrus-floral': '#ff9066',
+                'floral-citrus': '#ff9066',
+                'citrus-woody': '#cc8855',
+                'woody-citrus': '#cc8855',
+                'floral-woody': '#b87799',
+                'woody-floral': '#b87799'
+            };
+            
+            return blendMap[`${type1}-${type2}`] || 'var(--overlap-blend)';
+        }
+
+        function updateComposition() {
+            if (placedNotes.length === 0) {
+                document.getElementById('fragranceName').textContent = '—';
+                document.getElementById('fragranceDesc').textContent = 'Begin composing your scent...';
+                document.getElementById('chordDisplay').innerHTML = '';
+                document.getElementById('accordList').innerHTML = '';
+                document.getElementById('orderBtn').disabled = true;
+                return;
+            }
+            
+            const harmony = analyzeHarmony();
+            const name = generateName(harmony);
+            const description = generateDescription();
+            const accords = findAccords();
+            
+            document.getElementById('fragranceName').textContent = name;
+            document.getElementById('fragranceDesc').textContent = description;
+            displayChords(harmony);
+            displayAccords(accords);
+            
+            document.getElementById('orderBtn').disabled = placedNotes.length < 3;
+        }
+
+        function analyzeHarmony() {
+            const tones = placedNotes.map(n => n.tone);
+            const intervals = [];
+            
+            for (let i = 0; i < tones.length - 1; i++) {
+                const freq1 = noteFrequencies[tones[i]];
+                const freq2 = noteFrequencies[tones[i + 1]];
+                intervals.push(freq2 / freq1);
+            }
+            
+            // Simplified harmony detection
+            if (intervals.some(i => i > 1.25 && i < 1.27)) return 'major';
+            if (intervals.some(i => i > 1.18 && i < 1.20)) return 'minor';
+            if (intervals.some(i => i > 1.4)) return 'augmented';
+            return 'diminished';
+        }
+
+        function generateName(harmony) {
+            const names = fragranceNames[harmony] || fragranceNames['major'];
+            return names[Math.floor(Math.random() * names.length)];
+        }
+
+        function generateDescription() {
+            const positions = placedNotes.map(n => n.x);
+            const avgPosition = positions.reduce((a, b) => a + b, 0) / positions.length;
+            const staffWidth = staff.offsetWidth;
+            
+            if (avgPosition < staffWidth * 0.33) {
+                return 'A bright opening that dances on the skin with effervescent joy';
+            } else if (avgPosition < staffWidth * 0.66) {
+                return 'A harmonious heart that unfolds like silk in the afternoon sun';
+            } else {
+                return 'A deep, resonant base that lingers like a whispered promise';
+            }
+        }
+
+        function displayChords(harmony) {
+            const chordMap = {
+                'major': ['I', 'IV', 'V'],
+                'minor': ['i', 'iv', 'V'],
+                'diminished': ['i°', 'ii°', 'V'],
+                'augmented': ['I+', 'IV', 'V+']
+            };
+            
+            const chords = chordMap[harmony] || chordMap['major'];
+            const display = document.getElementById('chordDisplay');
+            display.innerHTML = chords.map(c => `<div class="chord">${c}</div>`).join('');
+        }
+
+        function findAccords() {
+            const accords = [];
+            const checked = new Set();
+            
+            for (let i = 0; i < placedNotes.length; i++) {
+                for (let j = i + 1; j < placedNotes.length; j++) {
+                    const note1 = placedNotes[i];
+                    const note2 = placedNotes[j];
+                    
+                    const dist = Math.sqrt(
+                        Math.pow(note1.x - note2.x, 2) + 
+                        Math.pow(note1.y - note2.y, 2)
+                    );
+                    
+                    if (dist < 60) {
+                        const key = `${note1.type}-${note2.type}`;
+                        if (!checked.has(key)) {
+                            checked.add(key);
+                            accords.push({
+                                types: [note1.type, note2.type],
+                                labels: [note1.label, note2.label]
+                            });
+                        }
+                    }
+                }
+            }
+            
+            return accords;
+        }
+
+        function displayAccords(accords) {
+            const display = document.getElementById('accordList');
+            if (accords.length === 0) {
+                display.innerHTML = '<div class="accord-item">No accords yet - overlap notes to create blends</div>';
+                return;
+            }
+            
+            display.innerHTML = accords.map(accord => {
+                const key = `${accord.types[0]}-${accord.types[1]}`;
+                const description = accordDescriptions[key] || 'Unique accord blend';
+                return `<div class="accord-item">${description}: ${accord.labels.join(' + ')}</div>`;
+            }).join('');
+        }
+
+        document.getElementById('orderBtn').addEventListener('click', function() {
+            const name = document.getElementById('fragranceName').textContent;
+            alert(`Your fragrance "${name}" has been composed and will be blended by our perfumers.`);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sound Visualizer - Audio Experience</title>
+    <style>
+        :root {
+            --primary: #0a0908;
+            --accent: #e85d04;
+            --secondary: #fdf0d5;
+            --highlight: #2a9d8f;
+            --interface: rgba(253, 240, 213, 0.05);
+            --text: rgba(253, 240, 213, 0.9);
+            --text-dim: rgba(253, 240, 213, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--primary);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 1px solid var(--interface);
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .controls-panel {
+            background: var(--interface);
+            border-radius: 12px;
+            padding: 2rem;
+            min-width: 280px;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-title {
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            margin-bottom: 2rem;
+        }
+
+        .control-label {
+            display: block;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-dim);
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .slider::-moz-range-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        .visualizer-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: var(--interface);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #audioVisualizer {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+        }
+
+        .audio-input {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            background: rgba(10, 9, 8, 0.8);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--accent);
+            color: var(--primary);
+            border: none;
+            border-radius: 25px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn:hover {
+            background: var(--highlight);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--text-dim);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: transparent;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .stats-panel {
+            background: var(--interface);
+            border-radius: 12px;
+            padding: 2rem;
+            min-width: 280px;
+        }
+
+        .stat-item {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-dim);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 300;
+        }
+
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .preset-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .preset-btn:hover {
+            background: var(--accent);
+            color: var(--primary);
+            border-color: var(--accent);
+        }
+
+        @media (max-width: 1200px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .controls-panel,
+            .stats-panel {
+                min-width: auto;
+                width: 100%;
+            }
+
+            .visualizer-container {
+                min-height: 400px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .main-container {
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .audio-input {
+                padding: 0.75rem 1.25rem;
+                gap: 0.75rem;
+            }
+
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Sound Visualizer</h1>
+        <p class="subtitle">Transform audio into visual patterns</p>
+    </header>
+
+    <div class="main-container">
+        <aside class="controls-panel">
+            <h2 class="panel-title">Audio Controls</h2>
+            
+            <div class="control-group">
+                <label class="control-label">Sensitivity</label>
+                <input type="range" class="slider" id="sensitivity" min="0" max="100" value="50">
+            </div>
+            
+            <div class="control-group">
+                <label class="control-label">Smoothing</label>
+                <input type="range" class="slider" id="smoothing" min="0" max="100" value="70">
+            </div>
+            
+            <div class="control-group">
+                <label class="control-label">Zoom</label>
+                <input type="range" class="slider" id="zoom" min="50" max="200" value="100">
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">Visualization Presets</label>
+                <div class="preset-buttons">
+                    <button class="preset-btn" data-preset="waves">Waves</button>
+                    <button class="preset-btn" data-preset="bars">Bars</button>
+                    <button class="preset-btn" data-preset="circle">Circle</button>
+                    <button class="preset-btn" data-preset="spectrum">Spectrum</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="visualizer-container">
+            <canvas id="audioVisualizer"></canvas>
+            
+            <div class="audio-input">
+                <button class="btn" id="micBtn">Use Microphone</button>
+                <label for="fileInput" class="btn btn-secondary">Upload Audio</label>
+                <input type="file" id="fileInput" accept="audio/*">
+            </div>
+        </main>
+
+        <aside class="stats-panel">
+            <h2 class="panel-title">Audio Statistics</h2>
+            
+            <div class="stat-item">
+                <p class="stat-label">Frequency</p>
+                <p class="stat-value" id="frequency">0 Hz</p>
+            </div>
+            
+            <div class="stat-item">
+                <p class="stat-label">Amplitude</p>
+                <p class="stat-value" id="amplitude">0 dB</p>
+            </div>
+            
+            <div class="stat-item">
+                <p class="stat-label">BPM</p>
+                <p class="stat-value" id="bpm">--</p>
+            </div>
+            
+            <div class="stat-item">
+                <p class="stat-label">Duration</p>
+                <p class="stat-value" id="duration">0:00</p>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('audioVisualizer');
+        const ctx = canvas.getContext('2d');
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let animationId;
+        let visualizationType = 'waves';
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function initAudioContext() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            const bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+        }
+
+        function drawWaves() {
+            analyser.getByteTimeDomainData(dataArray);
+            
+            ctx.fillStyle = 'rgba(10, 9, 8, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#e85d04';
+            ctx.beginPath();
+            
+            const sliceWidth = canvas.width / dataArray.length;
+            let x = 0;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * canvas.height / 2;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                x += sliceWidth;
+            }
+            
+            ctx.stroke();
+        }
+
+        function drawBars() {
+            analyser.getByteFrequencyData(dataArray);
+            
+            ctx.fillStyle = 'rgba(10, 9, 8, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const barWidth = (canvas.width / dataArray.length) * 2.5;
+            let x = 0;
+            
+            for (let i = 0; i < dataArray.length; i++) {
+                const barHeight = (dataArray[i] / 255) * canvas.height * 0.8;
+                
+                const hue = (i / dataArray.length) * 120 + 10;
+                ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+                
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+        }
+
+        function draw() {
+            animationId = requestAnimationFrame(draw);
+            
+            if (visualizationType === 'waves') {
+                drawWaves();
+            } else if (visualizationType === 'bars') {
+                drawBars();
+            }
+            
+            updateStats();
+        }
+
+        function updateStats() {
+            analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            document.getElementById('amplitude').textContent = Math.round(average) + ' dB';
+            
+            const maxIndex = dataArray.indexOf(Math.max(...dataArray));
+            const frequency = (maxIndex * audioContext.sampleRate) / analyser.fftSize;
+            document.getElementById('frequency').textContent = Math.round(frequency) + ' Hz';
+        }
+
+        document.getElementById('micBtn').addEventListener('click', async () => {
+            if (!audioContext) initAudioContext();
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                draw();
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+            }
+        });
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!audioContext) initAudioContext();
+            
+            const arrayBuffer = await file.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+            source.start();
+            
+            draw();
+            
+            const duration = audioBuffer.duration;
+            const minutes = Math.floor(duration / 60);
+            const seconds = Math.floor(duration % 60);
+            document.getElementById('duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        });
+
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                visualizationType = e.target.dataset.preset;
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+            });
+        });
+
+        document.getElementById('sensitivity').addEventListener('input', (e) => {
+            if (analyser) {
+                analyser.minDecibels = -90 + (e.target.value * 0.6);
+                analyser.maxDecibels = -10 - ((100 - e.target.value) * 0.4);
+            }
+        });
+
+        document.getElementById('smoothing').addEventListener('input', (e) => {
+            if (analyser) {
+                analyser.smoothingTimeConstant = e.target.value / 100;
+            }
+        });
+    </script>
+</body>
+</html>

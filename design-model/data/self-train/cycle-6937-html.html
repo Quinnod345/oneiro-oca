@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Pressure Cooker</title>
+    <style>
+        :root {
+            --vessel-glass: rgba(244, 246, 248, 0.08);
+            --steam-white: rgba(255, 255, 255, 0.4);
+            --pressure-red: #e74c3c;
+            --amber-preserve: #f39c12;
+            --metal-rim: #34495e;
+            --gauge-needle: #c0392b;
+            --memory-blue: #3498db;
+            --fade-gray: #95a5a6;
+            --paper-cream: #fdf6e3;
+            --cassette-black: #2c3e50;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, #1a1a1a 0%, #0a0a0a 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+        }
+
+        .cooker-vessel {
+            position: absolute;
+            left: 50%;
+            top: 45%;
+            transform: translate(-50%, -50%);
+            width: 580px;
+            height: 580px;
+            background: var(--vessel-glass);
+            border-radius: 50%;
+            border: 12px solid var(--metal-rim);
+            box-shadow: 
+                inset 0 0 80px rgba(255, 255, 255, 0.05),
+                0 0 60px rgba(255, 255, 255, 0.1),
+                0 20px 40px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .steam-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 100%, var(--steam-white) 0%, transparent 70%);
+            opacity: 0;
+            animation: steamRise 8s ease-in-out infinite;
+        }
+
+        @keyframes steamRise {
+            0%, 100% { opacity: 0; transform: translateY(100%); }
+            50% { opacity: 0.7; transform: translateY(-20%); }
+        }
+
+        .pressure-gauge {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            background: var(--metal-rim);
+            border-radius: 50%;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .gauge-face {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 100px;
+            height: 100px;
+            background: #f0f0f0;
+            border-radius: 50%;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .gauge-needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 3px;
+            height: 40px;
+            background: var(--gauge-needle);
+            transform-origin: center bottom;
+            transform: translate(-50%, -100%) rotate(-45deg);
+            animation: pressureRise 20s ease-out infinite;
+        }
+
+        @keyframes pressureRise {
+            0% { transform: translate(-50%, -100%) rotate(-45deg); }
+            100% { transform: translate(-50%, -100%) rotate(135deg); }
+        }
+
+        .memory-item {
+            position: absolute;
+            cursor: grab;
+            transition: all 0.3s ease;
+        }
+
+        .memory-item:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .memory-photo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #fff 0%, var(--paper-cream) 100%);
+            border: 4px solid #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: photoCurl 15s ease-in-out infinite;
+        }
+
+        @keyframes photoCurl {
+            0%, 70% { transform: rotate(0deg); filter: saturate(100%); }
+            100% { transform: rotate(-10deg) scale(0.95); filter: saturate(20%) brightness(0.8); }
+        }
+
+        .memory-cassette {
+            width: 100px;
+            height: 60px;
+            background: var(--cassette-black);
+            border-radius: 4px;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .cassette-tape {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 2px;
+            background: #8b6914;
+            animation: unspool 12s linear infinite;
+        }
+
+        @keyframes unspool {
+            0% { width: 80%; opacity: 1; }
+            100% { width: 120%; opacity: 0.3; }
+        }
+
+        .memory-note {
+            width: 70px;
+            height: 90px;
+            background: var(--paper-cream);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            font-size: 10px;
+            line-height: 1.3;
+            color: #444;
+            animation: dissolve 18s ease-in-out infinite;
+        }
+
+        @keyframes dissolve {
+            0%, 60% { opacity: 1; filter: blur(0px); }
+            100% { opacity: 0.2; filter: blur(2px); }
+        }
+
+        .preservation-slots {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+
+        .slot {
+            width: 100px;
+            height: 100px;
+            border: 3px dashed var(--amber-preserve);
+            border-radius: 12px;
+            background: rgba(243, 156, 18, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .slot.occupied {
+            background: rgba(243, 156, 18, 0.3);
+            border-style: solid;
+            box-shadow: inset 0 0 20px var(--amber-preserve);
+        }
+
+        .slot-label {
+            position: absolute;
+            bottom: -25px;
+            font-size: 12px;
+            color: var(--amber-preserve);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .amber-capsule {
+            width: 80%;
+            height: 80%;
+            background: radial-gradient(circle, rgba(243, 156, 18, 0.8) 0%, rgba(230, 126, 34, 0.9) 100%);
+            border-radius: 8px;
+            box-shadow: 
+                inset 0 0 20px rgba(255, 255, 255, 0.3),
+                0 0 20px var(--amber-preserve);
+            animation: crystallize 0.8s ease-out;
+        }
+
+        @keyframes crystallize {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .steam-particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--steam-white);
+            border-radius: 50%;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) scale(1); opacity: 0; }
+            20% { opacity: 0.8; }
+            100% { transform: translateY(-200px) scale(0.3); opacity: 0; }
+        }
+
+        .timer {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            font-size: 48px;
+            font-weight: 100;
+            color: var(--pressure-red);
+            text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            max-width: 300px;
+            color: #ecf0f1;
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
+        .instructions h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            font-weight: 400;
+        }
+
+        .vessel-lid {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 520px;
+            height: 40px;
+            background: var(--metal-rim);
+            border-radius: 50%;
+            box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .memory-vapor {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .vapor-trail {
+            position: absolute;
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to top, transparent, var(--steam-white));
+            animation: vaporize 3s ease-out forwards;
+        }
+
+        @keyframes vaporize {
+            0% { opacity: 0; transform: translateY(0) scale(1); }
+            50% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-100px) scale(0.3); }
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>Memory Triage Protocol</h2>
+        <p>Your memories are dissolving under pressure. Drag the most precious ones to the preservation slots before they vanish forever.</p>
+    </div>
+
+    <div class="timer">00:47</div>
+
+    <div class="cooker-vessel">
+        <div class="vessel-lid"></div>
+        <div class="pressure-gauge">
+            <div class="gauge-face"></div>
+            <div class="gauge-needle"></div>
+        </div>
+
+        <div class="steam-layer"></div>
+        
+        <div class="memory-item memory-photo" style="top: 120px; left: 80px;">
+            <div style="width: 100%; height: 100%; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect fill="%23e8e8e8" width="80" height="80"/><circle cx="40" cy="35" r="12" fill="%23bbb"/><path d="M20 60 L40 40 L60 60" fill="%23999"/></svg>'); background-size: cover;"></div>
+        </div>
+
+        <div class="memory-item memory-cassette" style="top: 200px; right: 100px;">
+            <div class="cassette-tape"></div>
+        </div>
+
+        <div class="memory-item memory-note" style="bottom: 180px; left: 150px;">
+            dear future self, remember the way sunlight felt that tuesday morning...
+        </div>
+
+        <div class="memory-item memory-photo" style="top: 80px; right: 180px;">
+            <div style="width: 100%; height: 100%; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect fill="%23f0f0f0" width="80" height="80"/><rect x="10" y="20" width="60" height="40" fill="%23ccc"/></svg>'); background-size: cover;"></div>
+        </div>
+
+        <div class="memory-item memory-note" style="bottom: 120px; right: 80px;">
+            mom's voice singing in the kitchen, flour on her hands
+        </div>
+
+        <div class="memory-item memory-cassette" style="top: 280px; left: 100px;">
+            <div class="cassette-tape"></div>
+        </div>
+
+        <div class="memory-vapor"></div>
+
+        <div class="steam-particle" style="left: 20%; animation-delay: 0s;"></div>
+        <div class="steam-particle" style="left: 40%; animation-delay: 1s;"></div>
+        <div class="steam-particle" style="left: 60%; animation-delay: 2s;"></div>
+        <div class="steam-particle" style="left: 80%; animation-delay: 3s;"></div>
+    </div>
+
+    <div class="preservation-slots">
+        <div class="slot">
+            <span class="slot-label">Forever</span>
+        </div>
+        <div class="slot occupied">
+            <div class="amber-capsule"></div>
+            <span class="slot-label">Saved</span>
+        </div>
+        <div class="slot">
+            <span class="slot-label">Cherish</span>
+        </div>
+    </div>
+
+    <script>
+        let timer = 47;
+        const timerEl = document.querySelector('.timer');
+        
+        setInterval(() => {
+            timer--;
+            if (timer >= 0) {
+                const minutes = Math.floor(timer / 60);
+                const seconds = timer % 60;
+                timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timer < 10) {
+                    timerEl.style.animation = 'pulse 0.5s ease-in-out infinite';
+                }
+            }
+        }, 1000);
+
+        document.querySelectorAll('.memory-item').forEach(item => {
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+
+            item.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = item.offsetLeft;
+                initialY = item.offsetTop;
+                item.style.zIndex = 1000;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                item.style.left = initialX + deltaX + 'px';
+                item.style.top = initialY + deltaY + 'px';
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    item.style.zIndex = '';
+                    isDragging = false;
+                    
+                    // Check if dropped on a slot
+                    const slots = document.querySelectorAll('.slot:not(.occupied)');
+                    const itemRect = item.getBoundingClientRect();
+                    
+                    slots.forEach(slot => {
+                        const slotRect = slot.getBoundingClientRect();
+                        if (itemRect.left < slotRect.right &&
+                            itemRect.right > slotRect.left &&
+                            itemRect.top < slotRect.bottom &&
+                            itemRect.bottom > slotRect.top) {
+                            
+                            slot.classList.add('occupied');
+                            const capsule = document.createElement('div');
+                            capsule.className = 'amber-capsule';
+                            slot.appendChild(capsule);
+                            
+                            // Create vapor effect
+                            const vapor = document.createElement('div');
+                            vapor.className = 'vapor-trail';
+                            vapor.style.left = item.offsetLeft + item.offsetWidth/2 + 'px';
+                            vapor.style.top = item.offsetTop + 'px';
+                            document.querySelector('.memory-vapor').appendChild(vapor);
+                            
+                            item.remove();
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

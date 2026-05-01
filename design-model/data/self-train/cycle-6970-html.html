@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --void: #0a0a0b;
+            --ash: #1a1a1c;
+            --bone: #e8e4e1;
+            --ember: #ff6b4a;
+            --fade: #767676;
+            --ghost: rgba(255, 255, 255, 0.03);
+            --corruption: #ff00ff;
+            --decay-1: rgba(255, 107, 74, 0.1);
+            --decay-2: rgba(255, 107, 74, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: crosshair;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--bone);
+            position: relative;
+        }
+
+        .static-overlay {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    var(--ghost) 2px,
+                    var(--ghost) 4px
+                );
+            pointer-events: none;
+            opacity: 0.3;
+            animation: flicker 0.1s infinite;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.3; }
+            50% { opacity: 0.35; }
+            100% { opacity: 0.3; }
+        }
+
+        .main-interface {
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            height: 100vh;
+            position: relative;
+        }
+
+        .memory-input {
+            background: var(--ash);
+            border-right: 1px solid var(--ghost);
+            padding: 3rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .input-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--fade);
+            margin-bottom: 1.5rem;
+        }
+
+        .memory-field {
+            position: relative;
+        }
+
+        .memory-textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--fade);
+            color: var(--bone);
+            font-size: 1.125rem;
+            line-height: 1.6;
+            padding: 0.75rem 0;
+            resize: none;
+            outline: none;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+
+        .memory-textarea:focus {
+            border-bottom-color: var(--ember);
+        }
+
+        .memory-label {
+            position: absolute;
+            left: 0;
+            top: 0.75rem;
+            font-size: 0.875rem;
+            color: var(--fade);
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+
+        .memory-textarea:focus + .memory-label,
+        .memory-textarea:not(:placeholder-shown) + .memory-label {
+            top: -1rem;
+            font-size: 0.75rem;
+            color: var(--ember);
+        }
+
+        .decay-factors {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .factor {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .factor-label {
+            font-size: 0.875rem;
+            color: var(--fade);
+        }
+
+        .factor-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 2px;
+            background: var(--fade);
+            outline: none;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .factor-slider:hover {
+            opacity: 1;
+        }
+
+        .factor-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--ember);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .factor-value {
+            font-size: 0.75rem;
+            color: var(--ember);
+            text-align: right;
+        }
+
+        .visualization-area {
+            position: relative;
+            background: var(--void);
+            overflow: hidden;
+        }
+
+        .memory-organism {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-core {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            filter: blur(0px);
+            transition: filter 0.5s;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            background: var(--decay-1);
+            border-radius: 50%;
+            pointer-events: all;
+            transition: all 0.3s;
+            filter: brightness(1) saturate(1);
+        }
+
+        .memory-fragment:hover {
+            background: var(--ember);
+            transform: scale(1.1);
+            filter: brightness(1.2) saturate(1.2);
+        }
+
+        .fragment-1 {
+            width: 120px;
+            height: 120px;
+            top: 20%;
+            left: 30%;
+            animation: drift-1 20s infinite ease-in-out;
+        }
+
+        .fragment-2 {
+            width: 80px;
+            height: 80px;
+            top: 50%;
+            left: 60%;
+            animation: drift-2 15s infinite ease-in-out;
+        }
+
+        .fragment-3 {
+            width: 150px;
+            height: 150px;
+            top: 40%;
+            left: 20%;
+            animation: drift-3 25s infinite ease-in-out;
+        }
+
+        .fragment-4 {
+            width: 60px;
+            height: 60px;
+            top: 70%;
+            left: 50%;
+            animation: drift-4 18s infinite ease-in-out;
+        }
+
+        .fragment-5 {
+            width: 100px;
+            height: 100px;
+            top: 25%;
+            left: 65%;
+            animation: drift-5 22s infinite ease-in-out;
+        }
+
+        @keyframes drift-1 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-20px, 15px) rotate(180deg); }
+        }
+
+        @keyframes drift-2 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(15px, -20px) rotate(-180deg); }
+        }
+
+        @keyframes drift-3 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-15px, -15px) rotate(90deg); }
+        }
+
+        @keyframes drift-4 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(20px, 10px) rotate(-90deg); }
+        }
+
+        @keyframes drift-5 {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-10px, 20px) rotate(270deg); }
+        }
+
+        .memory-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--bone);
+            opacity: 0.8;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.4;
+            pointer-events: none;
+            filter: blur(0px);
+            transition: filter 0.5s, opacity 0.5s;
+        }
+
+        .decay-high .memory-core {
+            filter: blur(2px) saturate(0.5);
+        }
+
+        .decay-high .memory-fragment {
+            opacity: 0.3;
+            filter: saturate(0.2);
+        }
+
+        .decay-high .memory-text {
+            filter: blur(3px);
+            opacity: 0.2;
+        }
+
+        .preservation-panel {
+            background: var(--ash);
+            border-left: 1px solid var(--ghost);
+            padding: 3rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .preservation-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--fade);
+            margin-bottom: 1rem;
+        }
+
+        .ritual-status {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: var(--fade);
+        }
+
+        .status-value {
+            color: var(--ember);
+        }
+
+        .ritual-instructions {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            color: var(--fade);
+            padding: 1.5rem;
+            background: var(--ghost);
+            border-radius: 4px;
+            border-left: 3px solid var(--ember);
+        }
+
+        .glitch-text {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            font-size: 0.75rem;
+            color: var(--corruption);
+            opacity: 0;
+            animation: glitch-appear 10s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes glitch-appear {
+            0%, 95%, 100% { opacity: 0; }
+            96%, 99% { opacity: 1; }
+        }
+
+        .traced {
+            background: var(--ember) !important;
+            box-shadow: 0 0 30px var(--ember);
+            animation: pulse 1s ease-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .chromatic-aberration {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            mix-blend-mode: screen;
+            opacity: 0.1;
+            background: 
+                linear-gradient(45deg, transparent 40%, var(--corruption) 50%, transparent 60%),
+                linear-gradient(-45deg, transparent 40%, cyan 50%, transparent 60%);
+            animation: aberration-shift 20s infinite;
+        }
+
+        @keyframes aberration-shift {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(2px, -2px); }
+        }
+
+        .initiate-button {
+            background: var(--ember);
+            border: none;
+            color: var(--void);
+            padding: 1rem 2rem;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 2rem;
+        }
+
+        .initiate-button:hover {
+            background: var(--bone);
+            transform: translateY(-2px);
+        }
+
+        .decay-meter {
+            width: 100%;
+            height: 4px;
+            background: var(--fade);
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .decay-progress {
+            height: 100%;
+            background: var(--ember);
+            width: 30%;
+            transition: width 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <div class="static-overlay"></div>
+    <div class="chromatic-aberration"></div>
+    
+    <div class="main-interface">
+        <div class="memory-input">
+            <h2 class="input-title">Memory Capture</h2>
+            
+            <div class="memory-field">
+                <textarea 
+                    class="memory-textarea" 
+                    placeholder=" " 
+                    rows="4"
+                    id="memoryInput"
+                ></textarea>
+                <label class="memory-label">Describe your memory...</label>
+            </div>
+            
+            <div class="decay-factors">
+                <div class="factor">
+                    <label class="factor-label">Time Elapsed</label>
+                    <input type="range" class="factor-slider" min="0" max="100" value="30" id="timeSlider">
+                    <span class="factor-value" id="timeValue">3 years</span>
+                </div>
+                
+                <div class="factor">
+                    <label class="factor-label">Recall Frequency</label>
+                    <input type="range" class="factor-slider" min="0" max="100" value="20" id="recallSlider">
+                    <span class="factor-value" id="recallValue">Rarely</span>
+                </div>
+                
+                <div class="factor">
+                    <label class="factor-label">Emotional Weight</label>
+                    <input type="range" class="factor-slider" min="0" max="100" value="70" id="emotionSlider">
+                    <span class="factor-value" id="emotionValue">Significant</span>
+                </div>
+            </div>
+            
+            <button class="initiate-button" onclick="initiateDecay()">Begin Decay Analysis</button>
+        </div>
+        
+        <div class="visualization-area">
+            <div class="memory-organism" id="organism">
+                <div class="memory-core" id="memoryCore">
+                    <div class="memory-fragment fragment-1" onmouseover="preserveFragment(this)"></div>
+                    <div class="memory-fragment fragment-2" onmouseover="preserveFragment(this)"></div>
+                    <div class="memory-fragment fragment-3" onmouseover="preserveFragment(this)"></div>
+                    <div class="memory-fragment fragment-4" onmouseover="preserveFragment(this)"></div>
+                    <div class="memory-fragment fragment-5" onmouseover="preserveFragment(this)"></div>
+                </div>
+                <div class="memory-text" id="memoryText">Your memory will appear here...</div>
+            </div>
+        </div>
+        
+        <div class="preservation-panel">
+            <h2 class="preservation-title">Preservation Ritual</h2>
+            
+            <div class="ritual-status">
+                <div class="status-item">
+                    <span>Fragments Traced</span>
+                    <span class="status-value" id="tracedCount">0/5</span>
+                </div>
+                <div class="status-item">
+                    <span>Clarity Restored</span>
+                    <span class="status-value" id="clarityPercent">0%</span>
+                </div>
+                <div class="status-item">
+                    <span>Decay Rate</span>
+                    <span class="status-value" id="decayRate">Stable</span>
+                </div>
+            </div>
+            
+            <div class="decay-meter">
+                <div class="decay-progress" id="decayBar"></div>
+            </div>
+            
+            <div class="ritual-instructions">
+                Trace the dissolving fragments with your cursor to temporarily restore clarity. Each fragment holds a piece of the whole. The memory fights against preservation.
+            </div>
+        </div>
+    </div>
+    
+    <div class="glitch-text">ERROR: MEMORY_CORRUPTION_DETECTED</div>
+    
+    <script>
+        let tracedFragments = 0;
+        let decayLevel = 30;
+        let preservationActive = false;
+        
+        function initiateDecay() {
+            const memoryText = document.getElementById('memoryInput').value;
+            if (memoryText) {
+                document.getElementById('memoryText').textContent = memoryText;
+                calculateDecay();
+            }
+        }
+        
+        function calculateDecay() {
+            const time = document.getElementById('timeSlider').value;
+            const recall = document.getElementById('recallSlider').value;
+            const emotion = document.getElementById('emotionSlider').value;
+            
+            decayLevel = Math.max(10, (parseInt(time) + (100 - parseInt(recall))) / 2 - (parseInt(emotion) / 4));
+            
+            const organism = document.getElementById('organism');
+            if (decayLevel > 50) {
+                organism.classList.add('decay-high');
+            } else {
+                organism.classList.remove('decay-high');
+            }
+            
+            document.getElementById('decayBar').style.width = decayLevel + '%';
+            updateDecayRate();
+        }
+        
+        function preserveFragment(element) {
+            if (!element.classList.contains('traced')) {
+                element.classList.add('traced');
+                tracedFragments++;
+                updatePreservationStatus();
+                
+                setTimeout(() => {
+                    element.classList.remove('traced');
+                    tracedFragments--;
+                    updatePreservationStatus();
+                }, 3000);
+            }
+        }
+        
+        function updatePreservationStatus() {
+            document.getElementById('tracedCount').textContent = `${tracedFragments}/5`;
+            const clarity = (tracedFragments / 5) * 100;
+            document.getElementById('clarityPercent').textContent = `${Math.round(clarity)}%`;
+            
+            const memoryCore = document.getElementById('memoryCore');
+            const memoryText = document.getElementById('memoryText');
+            
+            if (tracedFragments > 3) {
+                memoryCore.style.filter = 'blur(0px) saturate(1)';
+                memoryText.style.filter = 'blur(0px)';
+                memoryText.style.opacity = '0.8';
+            }
+        }
+        
+        function updateDecayRate() {
+            const rate = document.getElementById('decayRate');
+            if (decayLevel < 30) {
+                rate.textContent = 'Stable';
+            } else if (decayLevel < 60) {
+                rate.textContent = 'Degrading';
+            } else {
+                rate.textContent = 'Critical';
+            }
+        }
+        
+        // Update value displays
+        document.getElementById('timeSlider').addEventListener('input', function(e) {
+            const years = Math.round(e.target.value / 10);
+            document.getElementById('timeValue').textContent = `${years} years`;
+            if (document.getElementById('memoryInput').value) calculateDecay();
+        });
+        
+        document.getElementById('recallSlider').addEventListener('input', function(e) {
+            const val = e.target.value;
+            let freq = 'Never';
+            if (val > 80) freq = 'Daily';
+            else if (val > 60) freq = 'Weekly';
+            else if (val > 40) freq = 'Monthly';
+            else if (val > 20) freq = 'Rarely';
+            document.getElementById('recallValue').textContent = freq;
+            if (document.getElementById('memoryInput').value) calculateDecay();
+        });
+        
+        document.getElementById('emotionSlider').addEventListener('input', function(e) {
+            const val = e.target.value;
+            let weight = 'Neutral';
+            if (val > 80) weight = 'Core Identity';
+            else if (val > 60) weight = 'Significant';
+            else if (val > 40) weight = 'Meaningful';
+            else if (val > 20) weight = 'Minor';
+            document.getElementById('emotionValue').textContent = weight;
+            if (document.getElementById('memoryInput').value) calculateDecay();
+        });
+    </script>
+</body>
+</html>

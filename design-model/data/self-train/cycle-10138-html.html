@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Apothecary</title>
+    <style>
+        :root {
+            --cabinet-wood: #2a1810;
+            --brass: #b08d57;
+            --glass-green: #e8f5f0;
+            --memory-blue: #4a6fa5;
+            --volatile-red: #c94545;
+            --harmony-gold: #f4d03f;
+            --vial-liquid: #e0f2fe;
+            --aged-paper: #f5f2ed;
+            --shadow-deep: rgba(26, 12, 8, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Baskerville, 'Times New Roman', serif;
+            background: var(--aged-paper);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            position: relative;
+        }
+
+        .temporal-interface {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .cabinet-section {
+            width: 55%;
+            background: linear-gradient(135deg, #f5f2ed 0%, #ebe7e0 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid rgba(42, 24, 16, 0.1);
+        }
+
+        .memory-viewport {
+            width: 45%;
+            background: #1a1a1a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .apothecary-cabinet {
+            width: 520px;
+            height: 680px;
+            background: var(--cabinet-wood);
+            border-radius: 3px 3px 0 0;
+            box-shadow: 0 20px 40px var(--shadow-deep);
+            position: relative;
+            transform: perspective(800px) rotateX(2deg);
+        }
+
+        .cabinet-top {
+            height: 80px;
+            background: linear-gradient(180deg, #3a2820 0%, var(--cabinet-wood) 100%);
+            border-radius: 3px 3px 0 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cabinet-label {
+            color: var(--brass);
+            font-size: 20px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 300;
+        }
+
+        .drawer-grid {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            height: calc(100% - 80px);
+        }
+
+        .drawer {
+            background: linear-gradient(135deg, #3a2820 0%, #2a1810 100%);
+            border: 1px solid var(--brass);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .drawer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, transparent 0%, rgba(176, 141, 87, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .drawer:hover {
+            transform: translateZ(10px) scale(1.02);
+        }
+
+        .drawer:hover::before {
+            opacity: 1;
+        }
+
+        .drawer-handle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 6px;
+            background: var(--brass);
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .drawer-date {
+            position: absolute;
+            bottom: 8px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: var(--brass);
+            opacity: 0.6;
+            letter-spacing: 1px;
+        }
+
+        .drawer.open {
+            transform: translateZ(40px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--memory-blue) 0%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .drawer.open .memory-fragment {
+            opacity: 0.8;
+            transform: translateY(-60px) scale(1.2);
+            pointer-events: all;
+            cursor: grab;
+        }
+
+        .memory-fragment.dragging {
+            position: fixed;
+            z-index: 1000;
+            cursor: grabbing;
+            filter: blur(0.5px);
+        }
+
+        .work-surface {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 440px;
+            height: 160px;
+            background: linear-gradient(180deg, transparent 0%, rgba(42, 24, 16, 0.1) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        .vial {
+            width: 60px;
+            height: 120px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .vial-glass {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(232, 245, 240, 0.3) 0%, rgba(232, 245, 240, 0.1) 100%);
+            border: 1px solid rgba(176, 141, 87, 0.3);
+            border-radius: 0 0 20px 20px;
+            overflow: hidden;
+        }
+
+        .vial-cork {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 25px;
+            background: linear-gradient(180deg, #d4a574 0%, #b8935f 100%);
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .vial-liquid {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 0;
+            background: var(--vial-liquid);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            mix-blend-mode: multiply;
+        }
+
+        .vial.active .vial-liquid {
+            height: 70%;
+            animation: swirl 2s ease-in-out infinite;
+        }
+
+        @keyframes swirl {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            50% { transform: translateX(2px) rotate(1deg); }
+        }
+
+        .vial.volatile {
+            animation: shake 0.5s;
+        }
+
+        .vial.volatile .vial-glass {
+            background: linear-gradient(180deg, rgba(201, 69, 69, 0.3) 0%, rgba(201, 69, 69, 0.1) 100%);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .vial.harmonious .vial-liquid {
+            background: linear-gradient(180deg, var(--harmony-gold) 0%, rgba(244, 208, 63, 0.4) 100%);
+            animation: crystallize 1.5s ease-out forwards;
+        }
+
+        @keyframes crystallize {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; filter: brightness(1.2); }
+        }
+
+        .memory-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 60%;
+            border-radius: 20px;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .memory-display.active {
+            opacity: 1;
+        }
+
+        .memory-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: sepia(0.2) contrast(1.1);
+        }
+
+        .memory-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+            pointer-events: none;
+        }
+
+        .temporal-readout {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: rgba(255,255,255,0.8);
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .emotion-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--memory-blue);
+            border-radius: 50%;
+            opacity: 0;
+            animation: float-up 3s ease-out infinite;
+        }
+
+        @keyframes float-up {
+            0% { transform: translateY(100px); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+        .remedy-label {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--aged-paper);
+            padding: 8px 16px;
+            border: 1px solid var(--brass);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--cabinet-wood);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .vial.complete .remedy-label {
+            opacity: 1;
+        }
+
+        .temporal-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(176, 141, 87, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(176, 141, 87, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-interface">
+        <section class="cabinet-section">
+            <div class="temporal-grid"></div>
+            <div class="apothecary-cabinet">
+                <div class="cabinet-top">
+                    <h1 class="cabinet-label">Temporalis</h1>
+                </div>
+                <div class="drawer-grid">
+                    <div class="drawer" data-memory="laugh-tuesday">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">TUE 14</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="birthday-sunset">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">MAY 23</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="coffee-morning">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">JAN 07</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="rain-window">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">OCT 19</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="first-snow">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">DEC 03</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="beach-walk">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">JUL 29</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="candlelight">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">FEB 14</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="autumn-leaves">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">SEP 21</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="midnight-stars">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">AUG 12</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="morning-mist">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">APR 06</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="fireplace">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">NOV 25</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                    <div class="drawer" data-memory="garden-bloom">
+                        <div class="drawer-handle"></div>
+                        <div class="drawer-date">MAR 15</div>
+                        <div class="memory-fragment"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="work-surface">
+                <div class="vial" data-vial="1">
+                    <div class="vial-cork"></div>
+                    <div class="vial-glass">
+                        <div class="vial-liquid"></div>
+                    </div>
+                    <div class="remedy-label">Serenity Blend</div>
+                </div>
+                <div class="vial" data-vial="2">
+                    <div class="vial-cork"></div>
+                    <div class="vial-glass">
+                        <div class="vial-liquid"></div>
+                    </div>
+                    <div class="remedy-label">Joy Essence</div>
+                </div>
+                <div class="vial" data-vial="3">
+                    <div class="vial-cork"></div>
+                    <div class="vial-glass">
+                        <div class="vial-liquid"></div>
+                    </div>
+                    <div class="remedy-label">Comfort Tonic</div>
+                </div>
+            </div>
+        </section>
+        <section class="memory-viewport">
+            <div class="temporal-readout">MEMORY SYNTHESIS</div>
+            <div class="memory-display">
+                <video class="memory-video" loop muted autoplay>
+                    <source src="memory.mp4" type="video/mp4">
+                </video>
+                <div class="memory-overlay"></div>
+            </div>
+            <div class="emotion-particles">
+                <div class="particle" style="left: 20%; animation-delay: 0s;"></div>
+                <div class="particle" style="left: 40%; animation-delay: 0.5s;"></div>
+                <div class="particle" style="left: 60%; animation-delay: 1s;"></div>
+                <div class="particle" style="left: 80%; animation-delay: 1.5s;"></div>
+                <div class="particle" style="left: 30%; animation-delay: 2s;"></div>
+                <div class="particle" style="left: 70%; animation-delay: 2.5s;"></div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const drawers = document.querySelectorAll('.drawer');
+        const vials = document.querySelectorAll('.vial');
+        const memoryDisplay = document.querySelector('.memory-display');
+        let draggedMemory = null;
+        let activeVial = null;
+        
+        const memoryCompatibility = {
+            'laugh-tuesday': ['coffee-morning', 'beach-walk', 'garden-bloom'],
+            'birthday-sunset': ['candlelight', 'fireplace', 'autumn-leaves'],
+            'coffee-morning': ['morning-mist', 'laugh-tuesday', 'garden-bloom'],
+            'rain-window': ['fireplace', 'candlelight', 'autumn-leaves'],
+            'first-snow': ['fireplace', 'midnight-stars', 'morning-mist'],
+            'beach-walk': ['birthday-sunset', 'laugh-tuesday', 'garden-bloom'],
+            'candlelight': ['fireplace', 'birthday-sunset', 'rain-window'],
+            'autumn-leaves': ['rain-window', 'fireplace', 'birthday-sunset'],
+            'midnight-stars': ['first-snow', 'beach-walk', 'morning-mist'],
+            'morning-mist': ['coffee-morning', 'garden-bloom', 'first-snow'],
+            'fireplace': ['candlelight', 'rain-window', 'autumn-leaves'],
+            'garden-bloom': ['morning-mist', 'coffee-morning', 'beach-walk']
+        };
+
+        drawers.forEach(drawer => {
+            drawer.addEventListener('click', function() {
+                if (this.classList.contains('open')) {
+                    this.classList.remove('open');
+                } else {
+                    drawers.forEach(d => d.classList.remove('open'));
+                    this.classList.add('open');
+                }
+            });
+
+            const fragment = drawer.querySelector('.memory-fragment');
+            
+            fragment.addEventListener('mousedown', function(e) {
+                e.stopPropagation();
+                draggedMemory = drawer.dataset.memory;
+                fragment.classList.add('dragging');
+                fragment.style.left = e.pageX - 20 + 'px';
+                fragment.style.top = e.pageY - 20 + 'px';
+                
+                const onMouseMove = function(e) {
+                    fragment.style.left = e.pageX - 20 + 'px';
+                    fragment.style.top = e.pageY - 20 + 'px';
+                };
+                
+                const onMouseUp = function(e) {
+                    fragment.classList.remove('dragging');
+                    fragment.style.left = '';
+                    fragment.style.top = '';
+                    
+                    const targetVial = document.elementFromPoint(e.clientX, e.clientY)?.closest('.vial');
+                    if (targetVial && draggedMemory) {
+                        processMemoryDrop(targetVial, draggedMemory);
+                    }
+                    
+                    draggedMemory = null;
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        });
+
+        function processMemoryDrop(vial, memory) {
+            const existingMemory = vial.dataset.currentMemory;
+            
+            if (existingMemory) {
+                const compatible = memoryCompatibility[existingMemory]?.includes(memory);
+                
+                if (compatible) {
+                    vial.classList.add('harmonious');
+                    vial.classList.add('complete');
+                    setTimeout(() => {
+                        vial.classList.remove('harmonious');
+                    }, 1500);
+                } else {
+                    vial.classList.add('volatile');
+                    setTimeout(() => {
+                        vial.classList.remove('volatile');
+                        vial.classList.remove('active');
+                        vial.dataset.currentMemory = '';
+                    }, 500);
+                    return;
+                }
+            } else {
+                vial.dataset.currentMemory = memory;
+                vial.classList.add('active');
+            }
+            
+            memoryDisplay.classList.add('active');
+            activeVial = vial;
+        }
+
+        vials.forEach(vial => {
+            vial.addEventListener('click', function() {
+                if (this.classList.contains('complete')) {
+                    this.style.transform = 'scale(0.9)';
+                    setTimeout(() => {
+                        this.style.transform = '';
+                        this.classList.remove('complete', 'active');
+                        this.dataset.currentMemory = '';
+                    }, 300);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

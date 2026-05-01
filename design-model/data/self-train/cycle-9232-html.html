@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Observatory</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --stellar: #1a1a2e;
+            --nebula: #16213e;
+            --starlight: #e8e3d3;
+            --decay: #ff6b6b;
+            --preserve: #4ecdc4;
+            --constellation: rgba(255, 255, 255, 0.15);
+            --time: #8b8b9a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: radial-gradient(ellipse at top, var(--nebula) 0%, var(--void) 100%);
+            color: var(--starlight);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .observatory {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .star-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            animation: cosmic-drift 200s linear infinite;
+        }
+
+        @keyframes cosmic-drift {
+            from { transform: rotateY(0deg) rotateX(2deg); }
+            to { transform: rotateY(360deg) rotateX(2deg); }
+        }
+
+        .memory-star {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            filter: blur(0px);
+        }
+
+        .memory-star::before {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            animation: twinkle 3s ease-in-out infinite;
+            animation-delay: var(--twinkle-delay);
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: var(--star-opacity); transform: scale(1); }
+            50% { opacity: calc(var(--star-opacity) * 0.3); transform: scale(0.8); }
+        }
+
+        .memory-star.fading {
+            filter: blur(1px);
+            opacity: 0.3;
+        }
+
+        .memory-star.shooting {
+            animation: shoot 2s ease-out forwards;
+        }
+
+        @keyframes shoot {
+            to {
+                transform: translate(300px, 300px);
+                opacity: 0;
+            }
+        }
+
+        .memory-star:hover {
+            transform: scale(1.5);
+            filter: brightness(1.5) drop-shadow(0 0 20px rgba(255,255,255,0.8));
+        }
+
+        .memory-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: var(--time);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            text-shadow: 0 0 10px var(--void);
+        }
+
+        .memory-star:hover .memory-label {
+            opacity: 1;
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--constellation), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .constellation-line.active {
+            opacity: 1;
+            animation: pulse-line 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-line {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        .temporal-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            background: rgba(26, 26, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .time-scrubber {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .time-progress {
+            position: absolute;
+            height: 100%;
+            background: linear-gradient(90deg, var(--preserve), var(--decay));
+            border-radius: 2px;
+            width: 30%;
+            transition: width 0.3s ease;
+        }
+
+        .time-marker {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            background: var(--starlight);
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 0 20px rgba(255,255,255,0.5);
+            left: 30%;
+        }
+
+        .time-marker:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .time-label {
+            font-size: 12px;
+            color: var(--time);
+            min-width: 100px;
+        }
+
+        .polish-tool {
+            position: fixed;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(78, 205, 196, 0.1);
+            border: 1px solid var(--preserve);
+            border-radius: 16px;
+            padding: 20px;
+            width: 280px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .polish-tool.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .polish-info {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .polish-button {
+            width: 100%;
+            padding: 12px;
+            background: var(--preserve);
+            border: none;
+            border-radius: 8px;
+            color: var(--void);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .polish-button:hover {
+            background: var(--starlight);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(78, 205, 196, 0.3);
+        }
+
+        .decay-indicator {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 13px;
+            color: var(--time);
+        }
+
+        .decay-rate {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .decay-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .future-ghost {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0.1;
+            filter: blur(2px);
+        }
+
+        .header-controls {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(26, 26, 46, 0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 18px;
+        }
+
+        .control-btn:hover {
+            background: rgba(78, 205, 196, 0.2);
+            border-color: var(--preserve);
+            transform: scale(1.1);
+        }
+
+        .memory-trail {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+
+        .trail-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--starlight);
+            border-radius: 50%;
+            animation: drift 10s linear infinite;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translateY(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.5;
+            }
+            90% {
+                opacity: 0.5;
+            }
+            to {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="observatory">
+        <div class="star-field" id="starField">
+            <!-- Memory stars will be dynamically added here -->
+        </div>
+        
+        <div class="memory-trail" id="memoryTrail"></div>
+        
+        <div class="decay-indicator">
+            <div class="decay-rate">
+                <div class="decay-dot" style="color: var(--preserve)"></div>
+                <span>Preserved</span>
+            </div>
+            <div class="decay-rate">
+                <div class="decay-dot" style="color: var(--time)"></div>
+                <span>Fading</span>
+            </div>
+            <div class="decay-rate">
+                <div class="decay-dot" style="color: var(--decay)"></div>
+                <span>Vanishing</span>
+            </div>
+        </div>
+
+        <div class="header-controls">
+            <div class="control-btn" title="Add Memory">+</div>
+            <div class="control-btn" title="View Constellations">⋆</div>
+            <div class="control-btn" title="Settings">⚙</div>
+        </div>
+
+        <div class="temporal-controls">
+            <span class="time-label">Now</span>
+            <div class="time-scrubber" id="timeScrubber">
+                <div class="time-progress" id="timeProgress"></div>
+                <div class="time-marker" id="timeMarker"></div>
+            </div>
+            <span class="time-label">+1 Year</span>
+        </div>
+
+        <div class="polish-tool" id="polishTool">
+            <div class="polish-info">
+                <strong id="memoryName">Memory Name</strong><br>
+                <span id="decayInfo">Will fade in 3 months</span>
+            </div>
+            <button class="polish-button" onclick="polishMemory()">Polish Memory ✨</button>
+        </div>
+    </div>
+
+    <script>
+        const memories = [
+            { id: 1, name: 'First day of school', x: 20, y: 15, size: 8, decay: 0.8, related: [2, 3] },
+            { id: 2, name: 'Summer vacation 2019', x: 35, y: 25, size: 12, decay: 0.6, related: [1] },
+            { id: 3, name: 'Birthday celebration', x: 25, y: 40, size: 10, decay: 0.9, related: [1, 4] },
+            { id: 4, name: 'Old project files', x: 60, y: 30, size: 6, decay: 0.3, related: [3, 5] },
+            { id: 5, name: 'Concert tickets', x: 70, y: 45, size: 8, decay: 0.4, related: [4] },
+            { id: 6, name: 'Graduation photos', x: 45, y: 20, size: 14, decay: 0.95, related: [] },
+            { id: 7, name: 'Text conversations', x: 80, y: 60, size: 7, decay: 0.2, related: [] },
+            { id: 8, name: 'Travel itinerary', x: 15, y: 70, size: 9, decay: 0.5, related: [] },
+            { id: 9, name: 'Recipe collection', x: 50, y: 65, size: 11, decay: 0.7, related: [] },
+            { id: 10, name: 'Meeting notes', x: 85, y: 25, size: 5, decay: 0.1, related: [] }
+        ];
+
+        let selectedMemory = null;
+        let timeProgress = 0.3;
+        let constellationsVisible = false;
+
+        function createStarField() {
+            const starField = document.getElementById('starField');
+            
+            memories.forEach((memory, index) => {
+                const star = document.createElement('div');
+                star.className = 'memory-star';
+                star.id = `star-${memory.id}`;
+                star.style.left = `${memory.x}%`;
+                star.style.top = `${memory.y}%`;
+                star.style.width = `${memory.size * 3}px`;
+                star.style.height = `${memory.size * 3}px`;
+                star.style.setProperty('--star-opacity', memory.decay);
+                star.style.setProperty('--twinkle-delay', `${index * 0.3}s`);
+                
+                if (memory.decay < 0.3) {
+                    star.classList.add('fading');
+                }
+                
+                const label = document.createElement('div');
+                label.className = 'memory-label';
+                label.textContent = memory.name;
+                star.appendChild(label);
+                
+                star.addEventListener('click', () => selectMemory(memory));
+                
+                starField.appendChild(star);
+                
+                // Create future ghost
+                if (memory.decay < 0.5) {
+                    const ghost = document.createElement('div');
+                    ghost.className = 'future-ghost';
+                    ghost.style.left = `${memory.x + 5}%`;
+                    ghost.style.top = `${memory.y + 5}%`;
+                    ghost.style.width = `${memory.size * 2}px`;
+                    ghost.style.height = `${memory.size * 2}px`;
+                    ghost.style.background = 'radial-gradient(circle, rgba(255,107,107,0.5) 0%, transparent 70%)';
+                    ghost.style.borderRadius = '50%';
+                    starField.appendChild(ghost);
+                }
+            });
+            
+            createConstellations();
+            createTrailParticles();
+        }
+
+        function createConstellations() {
+            const starField = document.getElementById('starField');
+            
+            memories.forEach(memory => {
+                memory.related.forEach(relatedId => {
+                    const relatedMemory = memories.find(m => m.id === relatedId);
+                    if (relatedMemory) {
+                        const line = document.createElement('div');
+                        line.className = 'constellation-line';
+                        
+                        const x1 = memory.x;
+                        const y1 = memory.y;
+                        const x2 = relatedMemory.x;
+                        const y2 = relatedMemory.y;
+                        
+                        const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+                        
+                        line.style.left = `${x1}%`;
+                        line.style.top = `${y1}%`;
+                        line.style.width = `${distance}%`;
+                        line.style.transform = `rotate(${angle}deg)`;
+                        
+                        starField.appendChild(line);
+                    }
+                });
+            });
+        }
+
+        function createTrailParticles() {
+            const trail = document.getElementById('memoryTrail');
+            
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'trail-particle';
+                particle.style.left = `${Math.random() * 100}%`;
+                particle.style.top = `${Math.random() * 100}%`;
+                particle.style.animationDelay = `${Math.random() * 10}s`;
+                trail.appendChild(particle);
+            }
+        }
+
+        function selectMemory(memory) {
+            selectedMemory = memory;
+            const polishTool = document.getElementById('polishTool');
+            polishTool.classList.add('active');
+            document.getElementById('memoryName').textContent = memory.name;
+            
+            const monthsLeft = Math.round(memory.decay * 12);
+            document.getElementById('decayInfo').textContent = 
+                monthsLeft <= 1 ? 'Will vanish soon' : `Will fade in ${monthsLeft} months`;
+        }
+
+        function polishMemory() {
+            if (selectedMemory) {
+                selectedMemory.decay = Math.min(1, selectedMemory.decay + 0.2);
+                const star = document.getElementById(`star-${selectedMemory.id}`);
+                star.style.setProperty('--star-opacity', selectedMemory.decay);
+                star.classList.remove('fading');
+                
+                // Visual feedback
+                star.style.animation = 'none';
+                setTimeout(() => {
+                    star.style.animation = '';
+                    star.style.filter = 'brightness(2) drop-shadow(0 0 30px rgba(78, 205, 196, 1))';
+                    setTimeout(() => {
+                        star.style.filter = '';
+                    }, 1000);
+                }, 10);
+                
+                document.getElementById('polishTool').classList.remove('active');
+            }
+        }
+
+        // Time scrubber functionality
+        const timeScrubber = document.getElementById('timeScrubber');
+        const timeMarker = document.getElementById('timeMarker');
+        const timeProgressBar = document.getElementById('timeProgress');
+        let isDragging = false;
+
+        timeMarker.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = timeScrubber.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const progress = Math.max(0, Math.min(1, x / rect.width));
+                timeProgress = progress;
+                updateTimeDisplay();
+            }
+        });
+
+        timeScrubber.addEventListener('click', (e) => {
+            const rect = timeScrubber.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            timeProgress = Math.max(0, Math.min(1, x / rect.width));
+            updateTimeDisplay();
+        });
+
+        function updateTimeDisplay() {
+            const percentage = timeProgress * 100;
+            timeMarker.style.left = `${percentage}%`;
+            timeProgressBar.style.width = `${percentage}%`;
+            
+            // Update star opacity based on time
+            memories.forEach(memory => {
+                const futureDecay = Math.max(0, memory.decay - timeProgress);
+                const star = document.getElementById(`star-${memory.id}`);
+                star.style.opacity = futureDecay;
+                
+                if (futureDecay <= 0.1) {
+                    star.classList.add('shooting');
+                }
+            });
+        }
+
+        // Toggle constellations
+        document.querySelectorAll('.control-btn')[1].addEventListener('click', () => {
+            constellationsVisible = !constellationsVisible;
+            document.querySelectorAll('.constellation-line').forEach(line => {
+                line.classList.toggle('active', constellationsVisible);
+            });
+        });
+
+        // Initialize
+        createStarField();
+        updateTimeDisplay();
+
+        // Periodic decay animation
+        setInterval(() => {
+            const randomMemory = memories[Math.floor(Math.random() * memories.length)];
+            if (randomMemory.decay < 0.3) {
+                const star = document.getElementById(`star-${randomMemory.id}`);
+                star.style.filter = `brightness(0.5) blur(${Math.random() * 2}px)`;
+                setTimeout(() => {
+                    star.style.filter = '';
+                }, 1000);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

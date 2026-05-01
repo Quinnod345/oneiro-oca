@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Preservation</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --surface: #ecf0f1;
+            --text: #34495e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--surface);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 300;
+            color: var(--primary);
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: var(--text);
+            margin-bottom: 60px;
+            opacity: 0.7;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            height: 600px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            padding: 40px;
+            border-right: 1px solid rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: var(--text);
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: 300;
+            color: var(--primary);
+        }
+
+        .metric-bar {
+            height: 4px;
+            background: rgba(0, 0, 0, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .metric-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 2s ease;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 180px);
+            grid-gap: 24px;
+            position: relative;
+        }
+
+        .memory-card {
+            width: 180px;
+            height: 240px;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .memory-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .memory-image {
+            width: 100%;
+            height: 140px;
+            background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-content {
+            padding: 20px;
+        }
+
+        .memory-title {
+            font-size: 16px;
+            color: var(--primary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .memory-date {
+            font-size: 14px;
+            color: var(--text);
+            opacity: 0.5;
+        }
+
+        .fade-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.9) 100%);
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+        }
+
+        .memory-card[data-fading="true"] .fade-overlay {
+            opacity: 1;
+        }
+
+        .action-bar {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+        }
+
+        .action-button {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .action-button:hover {
+            background: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .preservation-indicator {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            width: 120px;
+            height: 120px;
+            border: 8px solid rgba(0, 0, 0, 0.08);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 300;
+            color: var(--primary);
+        }
+
+        .preservation-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 8px solid transparent;
+            border-top-color: var(--accent);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>Memory Preservation System</h1>
+    <p class="subtitle">Archive and protect your most valuable moments</p>
+    
+    <div class="container">
+        <aside class="sidebar">
+            <div class="metric">
+                <span class="metric-label">Preservation Status</span>
+                <span class="metric-value">78%</span>
+                <div class="metric-bar">
+                    <div class="metric-fill" style="width: 78%"></div>
+                </div>
+            </div>
+            
+            <div class="metric">
+                <span class="metric-label">Total Memories</span>
+                <span class="metric-value">234</span>
+            </div>
+            
+            <div class="metric">
+                <span class="metric-label">At Risk</span>
+                <span class="metric-value">12</span>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <div class="memory-grid">
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Summer Vacation</h3>
+                        <p class="memory-date">July 2020</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="true">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Birthday Party</h3>
+                        <p class="memory-date">March 2018</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Graduation Day</h3>
+                        <p class="memory-date">May 2019</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Family Reunion</h3>
+                        <p class="memory-date">December 2021</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">First Concert</h3>
+                        <p class="memory-date">August 2017</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="true">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Weekend Trip</h3>
+                        <p class="memory-date">October 2016</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">New Year's Eve</h3>
+                        <p class="memory-date">January 2022</p>
+                    </div>
+                </div>
+                
+                <div class="memory-card" data-fading="false">
+                    <div class="memory-image"></div>
+                    <div class="fade-overlay"></div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">Art Exhibition</h3>
+                        <p class="memory-date">June 2021</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="preservation-indicator">
+                <div class="preservation-ring"></div>
+                78%
+            </div>
+            
+            <div class="action-bar">
+                <button class="action-button">Add Memory</button>
+                <button class="action-button">Preserve All</button>
+                <button class="action-button">Export Archive</button>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        document.querySelectorAll('.memory-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const isFading = this.getAttribute('data-fading') === 'true';
+                this.setAttribute('data-fading', !isFading);
+            });
+        });
+        
+        document.querySelectorAll('.action-button').forEach(button => {
+            button.addEventListener('click', function() {
+                this.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            });
+        });
+    </script>
+</body>
+</html>

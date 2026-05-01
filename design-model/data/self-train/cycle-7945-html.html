@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Transplant Clinic</title>
+    <style>
+        :root {
+            --tissue-dark: #0a0408;
+            --tissue-membrane: #1a0f17;
+            --tissue-healthy: #2d1626;
+            --tissue-inflamed: #4a1939;
+            --memory-dormant: #3d2f47;
+            --memory-active: #8a4f7d;
+            --memory-extracted: #ffa987;
+            --scar-fresh: #ff6b6b;
+            --scar-healed: #4a2837;
+            --protein-compatible: #87ffa9;
+            --protein-neutral: #ffd687;
+            --protein-incompatible: #ff8787;
+            --surgical-steel: #e8e8e8;
+            --diagnostic-overlay: rgba(138, 79, 125, 0.1);
+            --pulse-duration: 4s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--tissue-dark);
+            color: var(--surgical-steel);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        .clinic-interface {
+            width: 1440px;
+            height: 900px;
+            position: relative;
+            display: grid;
+            grid-template-columns: 480px 1fr 380px;
+            grid-template-rows: 80px 1fr 120px;
+            gap: 2px;
+            background: var(--tissue-membrane);
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: var(--tissue-dark);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            border-bottom: 1px solid var(--tissue-healthy);
+        }
+
+        .clinic-title {
+            font-size: 14px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--memory-dormant);
+            margin-right: auto;
+        }
+
+        .patient-status {
+            display: flex;
+            gap: 40px;
+            font-size: 12px;
+            color: var(--surgical-steel);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--protein-compatible);
+            animation: vitals-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes vitals-pulse {
+            0%, 100% { opacity: 0.4; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+
+        .donor-timeline, .recipient-timeline {
+            background: var(--tissue-dark);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .timeline-label {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--memory-dormant);
+        }
+
+        .memory-stream {
+            position: absolute;
+            top: 60px;
+            left: 40px;
+            right: 40px;
+            bottom: 40px;
+        }
+
+        .tissue-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--tissue-membrane) 10%,
+                var(--tissue-healthy) 50%,
+                var(--tissue-membrane) 90%,
+                transparent 100%);
+            opacity: 0.3;
+            animation: tissue-breathe var(--pulse-duration) ease-in-out infinite;
+        }
+
+        @keyframes tissue-breathe {
+            0%, 100% { transform: scaleY(0.95); opacity: 0.2; }
+            50% { transform: scaleY(1.05); opacity: 0.4; }
+        }
+
+        .memory-node {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 40% 60% 50% 50%;
+            background: radial-gradient(ellipse at 30% 30%, 
+                var(--memory-active), 
+                transparent);
+            border: 1px solid var(--memory-dormant);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: memory-float 6s ease-in-out infinite;
+        }
+
+        .memory-node::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: inherit;
+            background: radial-gradient(ellipse at center, 
+                var(--memory-active), 
+                transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-node:hover {
+            transform: scale(1.1);
+            border-color: var(--memory-extracted);
+        }
+
+        .memory-node:hover::before {
+            opacity: 0.3;
+        }
+
+        @keyframes memory-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            33% { transform: translateY(-5px) rotate(-2deg); }
+            66% { transform: translateY(3px) rotate(1deg); }
+        }
+
+        .memory-node.extracting {
+            animation: extraction-shake 0.3s ease;
+            border-color: var(--scar-fresh);
+        }
+
+        @keyframes extraction-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-2px); }
+            75% { transform: translateX(2px); }
+        }
+
+        .extraction-scar {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center,
+                var(--scar-fresh) 0%,
+                transparent 50%);
+            opacity: 0.8;
+            animation: scar-heal 4s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes scar-heal {
+            0% { 
+                transform: scale(0.5);
+                opacity: 1;
+                filter: blur(0);
+            }
+            100% { 
+                transform: scale(1.2);
+                opacity: 0.2;
+                filter: blur(4px);
+                background: radial-gradient(circle at center,
+                    var(--scar-healed) 0%,
+                    transparent 50%);
+            }
+        }
+
+        .surgical-workspace {
+            background: var(--tissue-dark);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            grid-row: 2;
+        }
+
+        .extraction-chamber {
+            width: 200px;
+            height: 200px;
+            border: 2px solid var(--tissue-healthy);
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center,
+                var(--tissue-membrane),
+                transparent);
+        }
+
+        .chamber-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--memory-active);
+            border-radius: 50%;
+            animation: chamber-pulse-anim 2s ease-out infinite;
+        }
+
+        @keyframes chamber-pulse-anim {
+            0% {
+                transform: scale(0.9);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1.3);
+                opacity: 0;
+            }
+        }
+
+        .extracted-memory {
+            width: 80px;
+            height: 80px;
+            border-radius: 45% 55% 50% 50%;
+            background: radial-gradient(ellipse at 40% 40%,
+                var(--memory-extracted),
+                var(--memory-active));
+            position: absolute;
+            animation: memory-decay 3s ease-out forwards;
+            box-shadow: 0 0 30px var(--memory-extracted);
+        }
+
+        @keyframes memory-decay {
+            0% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+                filter: brightness(1.2);
+            }
+            100% {
+                opacity: 0.3;
+                transform: scale(0.7) rotate(180deg);
+                filter: brightness(0.4) grayscale(0.5);
+            }
+        }
+
+        .diagnostic-panel {
+            grid-row: 2;
+            background: var(--tissue-dark);
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid var(--tissue-healthy);
+        }
+
+        .diagnostic-header {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--memory-dormant);
+            margin-bottom: 20px;
+        }
+
+        .protein-chain {
+            margin-bottom: 30px;
+        }
+
+        .chain-label {
+            font-size: 11px;
+            color: var(--surgical-steel);
+            margin-bottom: 8px;
+        }
+
+        .protein-sequence {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .protein-marker {
+            width: 24px;
+            height: 8px;
+            border-radius: 2px;
+            background: var(--protein-neutral);
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .protein-marker.compatible {
+            background: var(--protein-compatible);
+            box-shadow: 0 0 4px var(--protein-compatible);
+        }
+
+        .protein-marker.incompatible {
+            background: var(--protein-incompatible);
+            animation: rejection-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes rejection-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .surgical-tools {
+            grid-column: 1 / -1;
+            background: var(--tissue-dark);
+            border-top: 1px solid var(--tissue-healthy);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            gap: 40px;
+        }
+
+        .tool {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 24px;
+            border: 1px solid var(--tissue-healthy);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .tool:hover {
+            background: var(--tissue-membrane);
+            border-color: var(--memory-active);
+        }
+
+        .tool.active {
+            background: var(--tissue-healthy);
+            border-color: var(--memory-extracted);
+        }
+
+        .tool-icon {
+            width: 32px;
+            height: 32px;
+            position: relative;
+        }
+
+        .tool-name {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--surgical-steel);
+        }
+
+        .scalpel-icon {
+            background: linear-gradient(135deg, 
+                var(--surgical-steel) 0%, 
+                var(--surgical-steel) 30%,
+                var(--memory-active) 100%);
+            width: 2px;
+            height: 100%;
+            margin: 0 auto;
+            transform: rotate(-45deg);
+        }
+
+        .transplant-icon {
+            border: 2px solid var(--surgical-steel);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            margin: 4px;
+            position: relative;
+        }
+
+        .transplant-icon::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: var(--memory-extracted);
+            border-radius: 50%;
+        }
+
+        .timer {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .timer-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--memory-dormant);
+        }
+
+        .timer-display {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--memory-extracted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .memory-node[data-id="1"] { top: 20%; left: 15%; }
+        .memory-node[data-id="2"] { top: 45%; left: 35%; }
+        .memory-node[data-id="3"] { top: 70%; left: 25%; }
+        .memory-node[data-id="4"] { top: 30%; left: 60%; }
+        .memory-node[data-id="5"] { top: 60%; left: 70%; }
+
+        .compatibility-warning {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--tissue-dark);
+            border: 2px solid var(--scar-fresh);
+            padding: 20px 40px;
+            border-radius: 8px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .compatibility-warning.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+    </style>
+</head>
+<body>
+    <div class="clinic-interface">
+        <div class="header">
+            <div class="clinic-title">Memory Transplant Clinic</div>
+            <div class="patient-status">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>Donor: Stable</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" style="background: var(--protein-neutral)"></div>
+                    <span>Recipient: Monitoring</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="donor-timeline">
+            <div class="timeline-label">Donor Consciousness Stream</div>
+            <div class="memory-stream">
+                <div class="tissue-layer"></div>
+                <div class="memory-node" data-id="1"></div>
+                <div class="memory-node" data-id="2"></div>
+                <div class="memory-node" data-id="3"></div>
+                <div class="memory-node" data-id="4"></div>
+                <div class="memory-node" data-id="5"></div>
+            </div>
+        </div>
+
+        <div class="surgical-workspace">
+            <div class="extraction-chamber">
+                <div class="chamber-pulse"></div>
+            </div>
+        </div>
+
+        <div class="recipient-timeline">
+            <div class="timeline-label">Recipient Consciousness Stream</div>
+            <div class="memory-stream">
+                <div class="tissue-layer"></div>
+            </div>
+        </div>
+
+        <div class="diagnostic-panel">
+            <div class="diagnostic-header">Memory Chemistry Analysis</div>
+            <div class="protein-chain">
+                <div class="chain-label">Emotional Temperature</div>
+                <div class="protein-sequence">
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker incompatible"></div>
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker compatible"></div>
+                </div>
+            </div>
+            <div class="protein-chain">
+                <div class="chain-label">Temporal Coherence</div>
+                <div class="protein-sequence">
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker"></div>
+                </div>
+            </div>
+            <div class="protein-chain">
+                <div class="chain-label">Sensory Binding</div>
+                <div class="protein-sequence">
+                    <div class="protein-marker incompatible"></div>
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker compatible"></div>
+                    <div class="protein-marker"></div>
+                    <div class="protein-marker incompatible"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="surgical-tools">
+            <div class="tool active">
+                <div class="tool-icon">
+                    <div class="scalpel-icon"></div>
+                </div>
+                <div class="tool-name">Extract</div>
+            </div>
+            <div class="tool">
+                <div class="tool-icon">
+                    <div class="transplant-icon"></div>
+                </div>
+                <div class="tool-name">Transplant</div>
+            </div>
+            <div class="timer">
+                <div class="timer-label">Decay Timer</div>
+                <div class="timer-display">--:--</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

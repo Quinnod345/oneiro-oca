@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Constellation Navigator</title>
+    <style>
+        :root {
+            --cosmos-void: #000308;
+            --memory-distant: rgba(147, 172, 255, 0.15);
+            --memory-mid: rgba(255, 237, 191, 0.3);
+            --memory-near: rgba(255, 255, 255, 0.85);
+            --fragment-pulse: #ff6b6b;
+            --connection-thread: rgba(255, 255, 255, 0.08);
+            --navigation-guide: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--cosmos-void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: grab;
+            perspective: 1200px;
+        }
+
+        .starfield-container {
+            position: absolute;
+            inset: 0;
+            transform-style: preserve-3d;
+            transition: transform 0.3s ease-out;
+        }
+
+        .depth-layer {
+            position: absolute;
+            inset: 0;
+            transform-style: preserve-3d;
+        }
+
+        .layer-distant {
+            transform: translateZ(-800px) scale(2.5);
+        }
+
+        .layer-mid {
+            transform: translateZ(-400px) scale(1.5);
+        }
+
+        .layer-near {
+            transform: translateZ(0px);
+        }
+
+        .memory-star {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: all;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            cursor: pointer;
+        }
+
+        .star-distant {
+            width: 3px;
+            height: 3px;
+            background: var(--memory-distant);
+            filter: blur(1.5px);
+            animation: drift 120s infinite linear;
+        }
+
+        .star-mid {
+            width: 6px;
+            height: 6px;
+            background: var(--memory-mid);
+            filter: blur(0.8px);
+            animation: drift 80s infinite linear;
+        }
+
+        .star-near {
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle, var(--memory-near) 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .star-near:hover {
+            transform: scale(1.5);
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.6);
+        }
+
+        @keyframes drift {
+            from { transform: rotate(0deg) translateX(10px) rotate(0deg); }
+            to { transform: rotate(360deg) translateX(10px) rotate(-360deg); }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--connection-thread), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .connection-active {
+            opacity: 1;
+            animation: pulse-connection 2s infinite;
+        }
+
+        @keyframes pulse-connection {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .memory-fragment {
+            position: absolute;
+            padding: 12px 18px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .fragment-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .constellation-pattern {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .pattern-guide {
+            position: absolute;
+            border: 2px dashed var(--navigation-guide);
+            border-radius: 50%;
+            animation: rotate-guide 30s infinite linear;
+        }
+
+        @keyframes rotate-guide {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .navigation-compass {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 120px;
+            height: 120px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .compass-needle {
+            width: 2px;
+            height: 80px;
+            background: linear-gradient(to top, transparent, var(--fragment-pulse), transparent);
+            transform-origin: center bottom;
+            animation: compass-swing 4s ease-in-out infinite;
+        }
+
+        @keyframes compass-swing {
+            0%, 100% { transform: rotate(-20deg); }
+            50% { transform: rotate(20deg); }
+        }
+
+        .memory-revealed {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 600px;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            text-align: center;
+            opacity: 0;
+            transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+            backdrop-filter: blur(20px);
+        }
+
+        .memory-active {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
+        .memory-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            font-weight: 200;
+        }
+
+        .memory-content {
+            font-size: 16px;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 300;
+        }
+
+        .sensory-indicator {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .sense-icon {
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .sense-active {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--fragment-pulse);
+            transform: scale(1.2);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 300px;
+            background: linear-gradient(to bottom, 
+                var(--memory-near) 0%, 
+                var(--memory-mid) 50%, 
+                var(--memory-distant) 100%);
+            border-radius: 2px;
+            opacity: 0.5;
+        }
+
+        .depth-marker {
+            position: absolute;
+            left: -8px;
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            background: var(--cosmos-void);
+            transition: top 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="starfield-container" id="starfield">
+        <div class="depth-layer layer-distant" id="layer-distant"></div>
+        <div class="depth-layer layer-mid" id="layer-mid"></div>
+        <div class="depth-layer layer-near" id="layer-near"></div>
+        <div class="constellation-pattern">
+            <div class="pattern-guide" style="width: 200px; height: 200px; top: 30%; left: 40%;"></div>
+            <div class="pattern-guide" style="width: 150px; height: 150px; top: 50%; left: 60%; animation-direction: reverse;"></div>
+        </div>
+    </div>
+
+    <div class="navigation-compass">
+        <div class="compass-needle"></div>
+    </div>
+
+    <div class="sensory-indicator">
+        <div class="sense-icon" data-sense="smell">👃</div>
+        <div class="sense-icon" data-sense="sound">👂</div>
+        <div class="sense-icon" data-sense="touch">✋</div>
+    </div>
+
+    <div class="depth-indicator">
+        <div class="depth-marker" style="top: 10%;"></div>
+    </div>
+
+    <div class="memory-revealed" id="memory-panel">
+        <h2 class="memory-title">Summer Rain on Hot Pavement</h2>
+        <p class="memory-content">
+            The scent of petrichor rising from sun-baked concrete, mixing with the distant sound of an ice cream truck's melody. Your bare feet on the warm sidewalk, suddenly cooled by the first drops of an afternoon storm.
+        </p>
+    </div>
+
+    <script>
+        const starfield = document.getElementById('starfield');
+        const layers = {
+            distant: document.getElementById('layer-distant'),
+            mid: document.getElementById('layer-mid'),
+            near: document.getElementById('layer-near')
+        };
+
+        const memories = [
+            { type: 'smell', x: 720, y: 450, layer: 'near', fragment: 'Petrichor' },
+            { type: 'sound', x: 300, y: 200, layer: 'distant', fragment: 'Ice cream melody' },
+            { type: 'touch', x: 900, y: 600, layer: 'mid', fragment: 'Warm concrete' },
+            { type: 'smell', x: 500, y: 300, layer: 'near', fragment: 'Fresh cut grass' },
+            { type: 'sound', x: 1100, y: 400, layer: 'mid', fragment: 'Distant thunder' },
+            { type: 'touch', x: 400, y: 700, layer: 'distant', fragment: 'Cool raindrops' }
+        ];
+
+        let connections = [];
+        let selectedStars = [];
+        let mouseX = 0, mouseY = 0;
+
+        memories.forEach((memory, index) => {
+            const star = document.createElement('div');
+            star.className = `memory-star star-${memory.layer}`;
+            star.style.left = memory.x + 'px';
+            star.style.top = memory.y + 'px';
+            star.dataset.index = index;
+            
+            const fragment = document.createElement('div');
+            fragment.className = 'memory-fragment';
+            fragment.textContent = memory.fragment;
+            fragment.style.left = (memory.x + 20) + 'px';
+            fragment.style.top = (memory.y - 40) + 'px';
+            
+            star.addEventListener('mouseenter', () => {
+                fragment.classList.add('fragment-visible');
+                document.querySelector(`[data-sense="${memory.type}"]`).classList.add('sense-active');
+            });
+            
+            star.addEventListener('mouseleave', () => {
+                fragment.classList.remove('fragment-visible');
+                document.querySelector(`[data-sense="${memory.type}"]`).classList.remove('sense-active');
+            });
+            
+            star.addEventListener('click', () => {
+                if (selectedStars.length < 3 && !selectedStars.includes(index)) {
+                    selectedStars.push(index);
+                    star.style.background = 'var(--fragment-pulse)';
+                    
+                    if (selectedStars.length === 3) {
+                        document.getElementById('memory-panel').classList.add('memory-active');
+                        setTimeout(() => {
+                            selectedStars = [];
+                            document.querySelectorAll('.memory-star').forEach(s => {
+                                s.style.background = '';
+                            });
+                            document.getElementById('memory-panel').classList.remove('memory-active');
+                        }, 5000);
+                    }
+                }
+            });
+            
+            layers[memory.layer].appendChild(star);
+            starfield.appendChild(fragment);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            const deltaX = (e.clientX - 720) / 720;
+            const deltaY = (e.clientY - 450) / 450;
+            
+            starfield.style.transform = `rotateY(${deltaX * 15}deg) rotateX(${-deltaY * 15}deg)`;
+            
+            const depthMarker = document.querySelector('.depth-marker');
+            const depth = Math.abs(deltaY) * 100;
+            depthMarker.style.top = `${Math.min(90, Math.max(10, 50 - depth))}%`;
+        });
+
+        // Add random stars for atmosphere
+        for (let i = 0; i < 100; i++) {
+            const star = document.createElement('div');
+            star.className = 'memory-star star-distant';
+            star.style.left = Math.random() * 1440 + 'px';
+            star.style.top = Math.random() * 900 + 'px';
+            star.style.width = star.style.height = Math.random() * 2 + 1 + 'px';
+            star.style.animationDelay = Math.random() * 120 + 's';
+            layers.distant.appendChild(star);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conscious Architecture</title>
+    <style>
+        :root {
+            --primary: #0a0a0a;
+            --accent: #f0f0f0;
+            --active: #ff3333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui;
+            background: var(--primary);
+            color: var(--accent);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .consciousness-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 200px);
+            grid-template-rows: repeat(3, 200px);
+            gap: 40px;
+            position: relative;
+        }
+
+        .room {
+            position: relative;
+            background: var(--primary);
+            border: 2px solid var(--accent);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .room::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, transparent 0%, var(--accent) 100%);
+            opacity: 0;
+            transition: opacity 0.6s ease;
+            pointer-events: none;
+        }
+
+        .room.active::before {
+            opacity: 0.15;
+        }
+
+        .room.active {
+            border-color: var(--active);
+            transform: scale(1.05);
+        }
+
+        .pulse-indicator {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: var(--accent);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .room.active .pulse-indicator {
+            opacity: 1;
+            animation: pulse 2s ease-out infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 2px;
+            background: var(--active);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .connection-line.active {
+            opacity: 1;
+        }
+
+        .control-panel {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: var(--primary);
+            padding: 20px;
+            border: 1px solid var(--accent);
+        }
+
+        .mode-button {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .mode-button:hover {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .mode-button.active {
+            background: var(--active);
+            border-color: var(--active);
+            color: var(--primary);
+        }
+
+        .status {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .status.active {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .consciousness-grid {
+                grid-template-columns: repeat(3, 80px);
+                grid-template-rows: repeat(3, 80px);
+                gap: 20px;
+            }
+            
+            .control-panel {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+            }
+            
+            .mode-button {
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <button class="mode-button active" data-mode="individual">Individual</button>
+        <button class="mode-button" data-mode="connected">Connected</button>
+        <button class="mode-button" data-mode="synchronized">Synchronized</button>
+    </div>
+
+    <div class="consciousness-grid">
+        <div class="room" data-room="1">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="2">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="3">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="4">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="5">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="6">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="7">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="8">
+            <div class="pulse-indicator"></div>
+        </div>
+        <div class="room" data-room="9">
+            <div class="pulse-indicator"></div>
+        </div>
+    </div>
+
+    <div class="status">Click rooms to activate consciousness</div>
+
+    <script>
+        const rooms = document.querySelectorAll('.room');
+        const modeButtons = document.querySelectorAll('.mode-button');
+        const status = document.querySelector('.status');
+        const grid = document.querySelector('.consciousness-grid');
+        let currentMode = 'individual';
+        let activeRooms = new Set();
+
+        function getRoomPosition(room) {
+            const rect = room.getBoundingClientRect();
+            const gridRect = grid.getBoundingClientRect();
+            return {
+                x: rect.left + rect.width / 2 - gridRect.left,
+                y: rect.top + rect.height / 2 - gridRect.top
+            };
+        }
+
+        function createConnection(room1, room2) {
+            const line = document.createElement('div');
+            line.className = 'connection-line';
+            
+            const pos1 = getRoomPosition(room1);
+            const pos2 = getRoomPosition(room2);
+            
+            const distance = Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
+            const angle = Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x);
+            
+            line.style.width = `${distance}px`;
+            line.style.left = `${pos1.x}px`;
+            line.style.top = `${pos1.y}px`;
+            line.style.transform = `rotate(${angle}rad)`;
+            
+            grid.appendChild(line);
+            setTimeout(() => line.classList.add('active'), 10);
+            
+            return line;
+        }
+
+        function clearConnections() {
+            document.querySelectorAll('.connection-line').forEach(line => line.remove());
+        }
+
+        function updateStatus() {
+            const count = activeRooms.size;
+            if (count === 0) {
+                status.textContent = 'Click rooms to activate consciousness';
+                status.classList.remove('active');
+            } else if (count === 1) {
+                status.textContent = '1 room conscious';
+                status.classList.add('active');
+            } else {
+                status.textContent = `${count} rooms ${currentMode === 'synchronized' ? 'synchronized' : 'conscious'}`;
+                status.classList.add('active');
+            }
+        }
+
+        function handleRoomClick(e) {
+            const room = e.currentTarget;
+            const roomId = room.dataset.room;
+            
+            if (currentMode === 'individual') {
+                room.classList.toggle('active');
+                if (room.classList.contains('active')) {
+                    activeRooms.add(roomId);
+                } else {
+                    activeRooms.delete(roomId);
+                }
+            } else if (currentMode === 'connected') {
+                clearConnections();
+                const wasActive = room.classList.contains('active');
+                
+                if (!wasActive) {
+                    room.classList.add('active');
+                    activeRooms.add(roomId);
+                    
+                    const activeElements = Array.from(activeRooms).map(id => 
+                        document.querySelector(`[data-room="${id}"]`)
+                    );
+                    
+                    for (let i = 0; i < activeElements.length - 1; i++) {
+                        createConnection(activeElements[i], activeElements[activeElements.length - 1]);
+                    }
+                } else {
+                    room.classList.remove('active');
+                    activeRooms.delete(roomId);
+                }
+            } else if (currentMode === 'synchronized') {
+                const isActive = room.classList.contains('active');
+                rooms.forEach(r => {
+                    if (isActive) {
+                        r.classList.remove('active');
+                    } else {
+                        r.classList.add('active');
+                    }
+                });
+                if (isActive) {
+                    activeRooms.clear();
+                } else {
+                    rooms.forEach(r => activeRooms.add(r.dataset.room));
+                }
+            }
+            
+            updateStatus();
+        }
+
+        function handleModeChange(e) {
+            const mode = e.currentTarget.dataset.mode;
+            currentMode = mode;
+            
+            modeButtons.forEach(btn => btn.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            
+            clearConnections();
+            rooms.forEach(room => room.classList.remove('active'));
+            activeRooms.clear();
+            updateStatus();
+        }
+
+        rooms.forEach(room => room.addEventListener('click', handleRoomClick));
+        modeButtons.forEach(button => button.addEventListener('click', handleModeChange));
+
+        window.addEventListener('resize', () => {
+            if (currentMode === 'connected' && activeRooms.size > 1) {
+                clearConnections();
+                const activeElements = Array.from(activeRooms).map(id => 
+                    document.querySelector(`[data-room="${id}"]`)
+                );
+                for (let i = 0; i < activeElements.length - 1; i++) {
+                    for (let j = i + 1; j < activeElements.length; j++) {
+                        createConnection(activeElements[i], activeElements[j]);
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

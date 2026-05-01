@@ -1,0 +1,326 @@
+function App() {
+  const [palace, setPalace] = React.useState({
+    rooms: [],
+    connections: [],
+    activeRoom: null,
+    conceptWell: [
+      { id: 'c1', text: 'Photosynthesis', category: 'biology', visits: 0 },
+      { id: 'c2', text: 'Pythagorean theorem', category: 'math', visits: 0 },
+      { id: 'c3', text: 'French Revolution', category: 'history', visits: 0 },
+      { id: 'c4', text: 'Periodic Table', category: 'chemistry', visits: 0 },
+      { id: 'c5', text: 'Shakespeare sonnets', category: 'literature', visits: 0 }
+    ]
+  });
+  
+  const [draggedConcept, setDraggedConcept] = React.useState(null);
+  const [ripples, setRipples] = React.useState([]);
+  const [viewMode, setViewMode] = React.useState('architect'); // architect | traverse
+  const [cameraPos, setCameraPos] = React.useState({ x: 0, y: 0, zoom: 1 });
+
+  const createRoom = (x, y) => {
+    const shapes = ['hexagon', 'triangle', 'pentagon'];
+    const newRoom = {
+      id: `room-${Date.now()}`,
+      x,
+      y,
+      shape: shapes[Math.floor(Math.random() * shapes.length)],
+      rotation: Math.random() * 360,
+      walls: [{}, {}, {}, {}, {}, {}], // max 6 walls for hexagon
+      memories: [],
+      visitCount: 0,
+      lastVisit: null,
+      pulsePhase: Math.random() * Math.PI * 2
+    };
+    
+    setPalace(prev => ({
+      ...prev,
+      rooms: [...prev.rooms, newRoom]
+    }));
+  };
+
+  const handleConceptDrop = (roomId, wallIndex, concept) => {
+    const rippleId = Date.now();
+    setRipples(prev => [...prev, { id: rippleId, roomId, wallIndex, time: 0 }]);
+    
+    setPalace(prev => ({
+      ...prev,
+      rooms: prev.rooms.map(room => {
+        if (room.id === roomId) {
+          const newWalls = [...room.walls];
+          newWalls[wallIndex] = {
+            concept: concept.text,
+            category: concept.category,
+            addedAt: Date.now(),
+            morphPhase: 0
+          };
+          return {
+            ...room,
+            walls: newWalls,
+            memories: [...room.memories, concept]
+          };
+        }
+        return room;
+      }),
+      conceptWell: prev.conceptWell.filter(c => c.id !== concept.id)
+    }));
+    
+    setTimeout(() => {
+      setRipples(prev => prev.filter(r => r.id !== rippleId));
+    }, 3000);
+  };
+
+  React.useEffect(() => {
+    const animFrame = requestAnimationFrame(function animate() {
+      setRipples(prev => prev.map(r => ({ ...r, time: r.time + 0.02 })));
+      setPalace(prev => ({
+        ...prev,
+        rooms: prev.rooms.map(room => ({
+          ...room,
+          pulsePhase: room.pulsePhase + 0.01,
+          walls: room.walls.map(wall => 
+            wall.concept ? { ...wall, morphPhase: wall.morphPhase + 0.005 } : wall
+          )
+        }))
+      }));
+      requestAnimationFrame(animate);
+    });
+    return () => cancelAnimationFrame(animFrame);
+  }, []);
+
+  const Room = ({ room, isActive }) => {
+    const vertices = room.shape === 'hexagon' ? 6 : room.shape === 'pentagon' ? 5 : 3;
+    const angleStep = (Math.PI * 2) / vertices;
+    const radius = 80;
+    
+    const points = Array.from({ length: vertices }, (_, i) => {
+      const angle = i * angleStep - Math.PI / 2;
+      return {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius
+      };
+    });
+    
+    const pathData = points.map((p, i) => 
+      `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
+    ).join(' ') + ' Z';
+    
+    return React.createElement('g', {
+      transform: `translate(${room.x}, ${room.y}) rotate(${room.rotation})`,
+      style: { cursor: 'pointer' },
+      onClick: () => setPalace(prev => ({ ...prev, activeRoom: room.id }))
+    },
+      React.createElement('path', {
+        d: pathData,
+        fill: 'none',
+        stroke: isActive ? '#f39' : '#89a',
+        strokeWidth: isActive ? 3 : 1.5,
+        opacity: 0.8 + Math.sin(room.pulsePhase) * 0.2
+      }),
+      room.walls.map((wall, i) => {
+        if (!wall.concept) return null;
+        const p1 = points[i];
+        const p2 = points[(i + 1) % vertices];
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const ripple = ripples.find(r => r.roomId === room.id && r.wallIndex === i);
+        
+        return React.createElement('g', { key: i },
+          ripple && React.createElement('circle', {
+            cx: midX,
+            cy: midY,
+            r: ripple.time * 50,
+            fill: 'none',
+            stroke: '#f9c',
+            strokeWidth: 2,
+            opacity: Math.max(0, 1 - ripple.time)
+          }),
+          React.createElement('line', {
+            x1: p1.x,
+            y1: p1.y,
+            x2: p2.x,
+            y2: p2.y,
+            stroke: '#f9c',
+            strokeWidth: 3 + Math.sin(wall.morphPhase) * 2,
+            opacity: 0.7
+          }),
+          React.createElement('text', {
+            x: midX,
+            y: midY,
+            fill: '#fff',
+            fontSize: 10,
+            textAnchor: 'middle',
+            transform: `rotate(${-room.rotation}, ${midX}, ${midY})`
+          }, wall.concept.substring(0, 8) + '...')
+        );
+      })
+    );
+  };
+
+  return React.createElement('div', {
+    style: {
+      width: '100vw',
+      height: '100vh',
+      background: '#0a0a14',
+      color: '#fff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+      overflow: 'hidden',
+      position: 'relative'
+    }
+  },
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        top: 20,
+        left: 20,
+        zIndex: 10
+      }
+    },
+      React.createElement('h1', {
+        style: {
+          margin: 0,
+          fontSize: 18,
+          fontWeight: 300,
+          letterSpacing: 2,
+          textTransform: 'uppercase',
+          opacity: 0.9
+        }
+      }, 'Memory Palace'),
+      React.createElement('div', {
+        style: {
+          marginTop: 10,
+          fontSize: 12,
+          opacity: 0.6
+        }
+      }, viewMode === 'architect' ? 'Click to place rooms' : 'Navigate your memories')
+    ),
+    
+    React.createElement('svg', {
+      style: {
+        width: '100%',
+        height: '100%',
+        cursor: viewMode === 'architect' ? 'crosshair' : 'grab'
+      },
+      viewBox: `${-window.innerWidth/2 + cameraPos.x} ${-window.innerHeight/2 + cameraPos.y} ${window.innerWidth / cameraPos.zoom} ${window.innerHeight / cameraPos.zoom}`,
+      onClick: (e) => {
+        if (viewMode === 'architect' && !palace.activeRoom) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = (e.clientX - rect.width / 2) / cameraPos.zoom - cameraPos.x;
+          const y = (e.clientY - rect.height / 2) / cameraPos.zoom - cameraPos.y;
+          createRoom(x, y);
+        }
+      }
+    },
+      palace.connections.map(conn => 
+        React.createElement('line', {
+          key: `${conn.from}-${conn.to}`,
+          x1: palace.rooms.find(r => r.id === conn.from)?.x || 0,
+          y1: palace.rooms.find(r => r.id === conn.from)?.y || 0,
+          x2: palace.rooms.find(r => r.id === conn.to)?.x || 0,
+          y2: palace.rooms.find(r => r.id === conn.to)?.y || 0,
+          stroke: '#456',
+          strokeWidth: 1,
+          opacity: 0.5
+        })
+      ),
+      palace.rooms.map(room =>
+        React.createElement(Room, {
+          key: room.id,
+          room,
+          isActive: room.id === palace.activeRoom
+        })
+      )
+    ),
+    
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        bottom: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: 10,
+        padding: 15,
+        background: 'rgba(40, 40, 60, 0.9)',
+        borderRadius: 20,
+        backdropFilter: 'blur(10px)'
+      }
+    },
+      palace.conceptWell.map(concept =>
+        React.createElement('div', {
+          key: concept.id,
+          draggable: true,
+          onDragStart: () => setDraggedConcept(concept),
+          onDragEnd: () => setDraggedConcept(null),
+          style: {
+            padding: '8px 15px',
+            background: '#234',
+            borderRadius: 15,
+            cursor: 'grab',
+            fontSize: 13,
+            transition: 'all 0.2s',
+            border: '1px solid #456',
+            ':hover': {
+              background: '#345',
+              transform: 'translateY(-2px)'
+            }
+          }
+        }, concept.text)
+      )
+    ),
+    
+    palace.activeRoom && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        right: 20,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        width: 300,
+        padding: 20,
+        background: 'rgba(30, 30, 50, 0.95)',
+        borderRadius: 10,
+        backdropFilter: 'blur(20px)'
+      }
+    },
+      React.createElement('h3', {
+        style: {
+          margin: '0 0 15px 0',
+          fontSize: 16,
+          fontWeight: 400
+        }
+      }, 'Room Walls'),
+      React.createElement('div', {
+        style: {
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 10
+        }
+      },
+        Array.from({ length: 6 }, (_, i) => {
+          const room = palace.rooms.find(r => r.id === palace.activeRoom);
+          const wall = room?.walls[i];
+          return React.createElement('div', {
+            key: i,
+            onDragOver: (e) => e.preventDefault(),
+            onDrop: () => {
+              if (draggedConcept) {
+                handleConceptDrop(palace.activeRoom, i, draggedConcept);
+              }
+            },
+            style: {
+              height: 80,
+              background: wall?.concept ? '#456' : '#234',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              border: '2px dashed #567',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }
+          }, wall?.concept || 'Drop concept');
+        })
+      )
+    )
+  );
+}

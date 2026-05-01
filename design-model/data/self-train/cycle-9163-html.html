@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Debt Calculator</title>
+    <style>
+        :root {
+            --midnight: #0a0e1a;
+            --twilight: #1a2942;
+            --dawn: #faf6ed;
+            --blood: #c41e3a;
+            --shadow: #050709;
+            --moonlight: #e8e3d3;
+            --exhaustion: #8b7766;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Baskerville, 'Times New Roman', serif;
+            background: var(--dawn);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            transition: background-color 3s ease;
+        }
+
+        body.nightmare {
+            background: var(--midnight);
+        }
+
+        .sky {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 3s ease;
+        }
+
+        body.nightmare .sky {
+            opacity: 1;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--moonlight);
+            opacity: 0.7;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 0.2; }
+        }
+
+        .creature-container {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 400px;
+            pointer-events: none;
+        }
+
+        .creature {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 200px;
+            background: var(--shadow);
+            border-radius: 50% 50% 0 0;
+            filter: blur(8px);
+            opacity: 0.8;
+            transition: all 2s ease;
+        }
+
+        .creature::before {
+            content: '';
+            position: absolute;
+            top: 30%;
+            left: 20%;
+            width: 20px;
+            height: 20px;
+            background: var(--blood);
+            border-radius: 50%;
+            box-shadow: 40px 0 0 var(--blood);
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        body.nightmare .creature::before {
+            opacity: 1;
+        }
+
+        .creature.growing {
+            width: 400px;
+            height: 350px;
+            filter: blur(4px);
+        }
+
+        .creature.monstrous {
+            width: 600px;
+            height: 500px;
+            filter: blur(2px);
+            opacity: 0.9;
+        }
+
+        .tendrils {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            height: 100%;
+        }
+
+        .tendril {
+            position: absolute;
+            bottom: 0;
+            width: 40px;
+            height: 200px;
+            background: var(--shadow);
+            opacity: 0.6;
+            transform-origin: bottom center;
+            filter: blur(3px);
+            animation: sway 4s ease-in-out infinite;
+        }
+
+        .tendril:nth-child(1) { left: 10%; animation-delay: 0s; }
+        .tendril:nth-child(2) { left: 25%; animation-delay: 0.5s; height: 250px; }
+        .tendril:nth-child(3) { left: 40%; animation-delay: 1s; }
+        .tendril:nth-child(4) { right: 25%; animation-delay: 1.5s; height: 280px; }
+        .tendril:nth-child(5) { right: 10%; animation-delay: 2s; }
+
+        @keyframes sway {
+            0%, 100% { transform: rotate(-5deg); }
+            50% { transform: rotate(5deg); }
+        }
+
+        .wheel-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            z-index: 10;
+        }
+
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border: 3px solid var(--exhaustion);
+            border-radius: 50%;
+            position: relative;
+            cursor: grab;
+            background: radial-gradient(circle, rgba(250,246,237,0.9) 0%, rgba(250,246,237,0.7) 100%);
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.1);
+            transition: border-color 1s ease;
+        }
+
+        body.nightmare .wheel {
+            border-color: var(--moonlight);
+            background: radial-gradient(circle, rgba(26,41,66,0.9) 0%, rgba(10,14,26,0.9) 100%);
+        }
+
+        .wheel:active {
+            cursor: grabbing;
+        }
+
+        .spokes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .spoke {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 50%;
+            background: var(--exhaustion);
+            transform-origin: center bottom;
+            opacity: 0.3;
+        }
+
+        body.nightmare .spoke {
+            background: var(--moonlight);
+            opacity: 0.2;
+        }
+
+        .spoke:nth-child(1) { transform: translate(-50%, -100%) rotate(0deg); }
+        .spoke:nth-child(2) { transform: translate(-50%, -100%) rotate(30deg); }
+        .spoke:nth-child(3) { transform: translate(-50%, -100%) rotate(60deg); }
+        .spoke:nth-child(4) { transform: translate(-50%, -100%) rotate(90deg); }
+        .spoke:nth-child(5) { transform: translate(-50%, -100%) rotate(120deg); }
+        .spoke:nth-child(6) { transform: translate(-50%, -100%) rotate(150deg); }
+
+        .handles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .handle {
+            position: absolute;
+            width: 60px;
+            height: 20px;
+            background: var(--exhaustion);
+            border-radius: 10px;
+            top: 50%;
+            left: 50%;
+            transform-origin: -150px center;
+            cursor: pointer;
+        }
+
+        body.nightmare .handle {
+            background: var(--moonlight);
+        }
+
+        .handle:nth-child(1) { transform: rotate(0deg); }
+        .handle:nth-child(2) { transform: rotate(90deg); }
+        .handle:nth-child(3) { transform: rotate(180deg); }
+        .handle:nth-child(4) { transform: rotate(270deg); }
+
+        .clock-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .hour-mark {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--exhaustion);
+            text-align: center;
+            width: 30px;
+        }
+
+        body.nightmare .hour-mark {
+            color: var(--moonlight);
+        }
+
+        .center-hub {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            background: var(--exhaustion);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: var(--dawn);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        body.nightmare .center-hub {
+            background: var(--moonlight);
+            color: var(--midnight);
+        }
+
+        .hours-display {
+            font-size: 24px;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .sleep-arc {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .sleep-fill {
+            fill: none;
+            stroke: var(--blood);
+            stroke-width: 30;
+            stroke-linecap: round;
+            opacity: 0.7;
+            transform-origin: center;
+            transform: rotate(-90deg);
+            transition: stroke-dasharray 0.5s ease;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(250,246,237,0.9);
+            padding: 20px;
+            border-radius: 8px;
+            width: 250px;
+            border: 1px solid var(--exhaustion);
+            font-size: 14px;
+            color: var(--midnight);
+        }
+
+        body.nightmare .info-panel {
+            background: rgba(26,41,66,0.9);
+            color: var(--moonlight);
+            border-color: var(--moonlight);
+        }
+
+        .debt-counter {
+            font-size: 36px;
+            font-weight: bold;
+            color: var(--blood);
+            margin: 10px 0;
+        }
+
+        .status-text {
+            margin-top: 15px;
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        .feed-button {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: var(--exhaustion);
+            color: var(--dawn);
+            border: none;
+            border-radius: 30px;
+            font-family: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 20;
+        }
+
+        body.nightmare .feed-button {
+            background: var(--moonlight);
+            color: var(--midnight);
+        }
+
+        .feed-button:hover {
+            transform: translateX(-50%) scale(1.05);
+        }
+
+        .moon {
+            position: absolute;
+            top: 50px;
+            right: 50px;
+            width: 80px;
+            height: 80px;
+            background: var(--moonlight);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 3s ease;
+            box-shadow: 0 0 20px rgba(232,227,211,0.5);
+        }
+
+        body.nightmare .moon {
+            opacity: 1;
+        }
+
+        .moon::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            width: 20px;
+            height: 20px;
+            background: var(--midnight);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="sky" id="sky"></div>
+    
+    <div class="moon"></div>
+
+    <div class="creature-container">
+        <div class="tendrils">
+            <div class="tendril"></div>
+            <div class="tendril"></div>
+            <div class="tendril"></div>
+            <div class="tendril"></div>
+            <div class="tendril"></div>
+        </div>
+        <div class="creature" id="creature"></div>
+    </div>
+
+    <div class="wheel-container">
+        <div class="wheel" id="wheel">
+            <div class="spokes">
+                <div class="spoke"></div>
+                <div class="spoke"></div>
+                <div class="spoke"></div>
+                <div class="spoke"></div>
+                <div class="spoke"></div>
+                <div class="spoke"></div>
+            </div>
+            <div class="handles">
+                <div class="handle"></div>
+                <div class="handle"></div>
+                <div class="handle"></div>
+                <div class="handle"></div>
+            </div>
+            <svg class="sleep-arc">
+                <circle class="sleep-fill" id="sleepArc" cx="200" cy="200" r="170" 
+                        stroke-dasharray="0 1068" />
+            </svg>
+            <div class="center-hub">
+                <div class="hours-display" id="hoursDisplay">0</div>
+                <div>hours</div>
+            </div>
+            <div class="clock-face">
+                <div class="hour-mark" style="transform: translateX(-50%) rotate(0deg) translateY(-190px);">12</div>
+                <div class="hour-mark" style="transform: translateX(-50%) rotate(90deg) translateY(-190px) rotate(-90deg);">6</div>
+                <div class="hour-mark" style="transform: translateX(-50%) rotate(180deg) translateY(-190px) rotate(-180deg);">12</div>
+                <div class="hour-mark" style="transform: translateX(-50%) rotate(270deg) translateY(-190px) rotate(-270deg);">6</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h2>Sleep Debt</h2>
+        <div class="debt-counter" id="debtCounter">0h</div>
+        <div class="status-text" id="statusText">
+            The shadow rests peacefully. Your sleep is balanced.
+        </div>
+    </div>
+
+    <button class="feed-button" id="feedButton">Feed Sleep to Shadow</button>
+
+    <script>
+        let rotation = 0;
+        let isDragging = false;
+        let startAngle = 0;
+        let currentHours = 0;
+        let sleepDebt = 0;
+        let weeklyHours = [];
+        
+        const wheel = document.getElementById('wheel');
+        const hoursDisplay = document.getElementById('hoursDisplay');
+        const sleepArc = document.getElementById('sleepArc');
+        const creature = document.getElementById('creature');
+        const debtCounter = document.getElementById('debtCounter');
+        const statusText = document.getElementById('statusText');
+        const feedButton = document.getElementById('feedButton');
+        const body = document.body;
+        const sky = document.getElementById('sky');
+
+        // Create stars
+        for (let i = 0; i < 50; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 60 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            sky.appendChild(star);
+        }
+
+        function updateCreature() {
+            if (sleepDebt <= 0) {
+                creature.className = 'creature';
+                body.classList.remove('nightmare');
+                statusText.textContent = "The shadow rests peacefully. Your sleep is balanced.";
+            } else if (sleepDebt < 10) {
+                creature.className = 'creature growing';
+                body.classList.remove('nightmare');
+                statusText.textContent = "The shadow stirs, feeding on your lost hours...";
+            } else if (sleepDebt < 20) {
+                creature.className = 'creature growing';
+                body.classList.add('nightmare');
+                statusText.textContent = "The shadow grows hungry, darkness creeps in...";
+            } else {
+                creature.className = 'creature monstrous';
+                body.classList.add('nightmare');
+                statusText.textContent = "The shadow looms large, devouring your waking world!";
+            }
+        }
+
+        function calculateDebt() {
+            const totalNeeded = weeklyHours.length * 8;
+            const totalSlept = weeklyHours.reduce((sum, hours) => sum + hours, 0);
+            sleepDebt = Math.max(0, totalNeeded - totalSlept);
+            debtCounter.textContent = sleepDebt + 'h';
+            updateCreature();
+        }
+
+        function getAngle(e) {
+            const rect = wheel.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            return Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+        }
+
+        wheel.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startAngle = getAngle(e) - rotation;
+            wheel.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const angle = getAngle(e);
+            rotation = angle - startAngle;
+            wheel.style.transform = `rotate(${rotation}deg)`;
+            
+            const hours = Math.abs(Math.round((rotation % 360) / 15));
+            currentHours = hours > 24 ? 24 : hours;
+            hoursDisplay.textContent = currentHours;
+            
+            const circumference = 2 * Math.PI * 170;
+            const arcLength = (currentHours / 24) * circumference;
+            sleepArc.style.strokeDasharray = `${arcLength} ${circumference}`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            wheel.style.cursor = 'grab';
+        });
+
+        feedButton.addEventListener('click', () => {
+            if (currentHours > 0) {
+                weeklyHours.push(currentHours);
+                if (weeklyHours.length > 7) {
+                    weeklyHours.shift();
+                }
+                calculateDebt();
+                currentHours = 0;
+                hoursDisplay.textContent = '0';
+                sleepArc.style.strokeDasharray = '0 1068';
+                rotation = 0;
+                wheel.style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // Initialize
+        updateCreature();
+    </script>
+</body>
+</html>

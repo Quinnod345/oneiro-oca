@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Planner - Blueprint Editor</title>
+    <style>
+        :root {
+            --blueprint-bg: #001426;
+            --blueprint-grid: #003354;
+            --blueprint-line: #0582ca;
+            --blueprint-accent: #00f5ff;
+            --text-primary: #e0fbfc;
+            --text-secondary: #5eb3d6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--blueprint-bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 39px, var(--blueprint-grid) 40px),
+                repeating-linear-gradient(90deg, transparent, transparent 39px, var(--blueprint-grid) 40px);
+            opacity: 0.2;
+            pointer-events: none;
+        }
+
+        .header {
+            padding: 24px 32px;
+            background: rgba(0, 20, 38, 0.6);
+            border-bottom: 1px solid var(--blueprint-grid);
+            z-index: 10;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--blueprint-accent);
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 40px;
+        }
+
+        .blueprint-canvas {
+            width: 100%;
+            max-width: 1200px;
+            height: 100%;
+            position: relative;
+            display: flex;
+            gap: 40px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .room {
+            width: 320px;
+            height: 320px;
+            position: relative;
+            border: 2px solid var(--blueprint-line);
+            background: rgba(0, 20, 38, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .room:hover {
+            transform: scale(1.02);
+        }
+
+        .room-label {
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .furniture {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.15s ease;
+        }
+
+        .furniture:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .furniture:hover {
+            filter: brightness(1.2);
+        }
+
+        .chair {
+            width: 40px;
+            height: 40px;
+            border: 1.5px solid var(--blueprint-accent);
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .chair::after {
+            content: '';
+            position: absolute;
+            width: 36px;
+            height: 1.5px;
+            background: var(--blueprint-accent);
+            top: 50%;
+            left: 2px;
+            transform: translateY(-50%);
+        }
+
+        .table {
+            width: 80px;
+            height: 60px;
+            border: 1.5px solid var(--blueprint-accent);
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .bed {
+            width: 80px;
+            height: 120px;
+            border: 1.5px solid var(--blueprint-accent);
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .bed::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 30px;
+            border-bottom: 1.5px solid var(--blueprint-accent);
+            top: 0;
+            left: 0;
+        }
+
+        .sink {
+            width: 50px;
+            height: 40px;
+            border: 1.5px solid var(--blueprint-accent);
+            border-radius: 8px;
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .toilet {
+            width: 35px;
+            height: 50px;
+            border: 1.5px solid var(--blueprint-accent);
+            border-radius: 8px;
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .sofa {
+            width: 120px;
+            height: 60px;
+            border: 1.5px solid var(--blueprint-accent);
+            background: rgba(0, 245, 255, 0.05);
+        }
+
+        .sofa::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 245, 255, 0.1);
+            bottom: 0;
+            left: 0;
+            border-top: 1.5px solid var(--blueprint-accent);
+        }
+
+        .toolbar {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(0, 20, 38, 0.9);
+            border: 1px solid var(--blueprint-grid);
+            border-radius: 8px;
+            z-index: 20;
+        }
+
+        .tool-button {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--blueprint-line);
+            color: var(--text-primary);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tool-button:hover {
+            background: var(--blueprint-line);
+            color: var(--blueprint-bg);
+        }
+
+        .dimensions {
+            position: absolute;
+            font-size: 10px;
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+
+        .room .dimensions {
+            bottom: 12px;
+            right: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Room Planner</h1>
+    </div>
+
+    <div class="workspace">
+        <div class="blueprint-canvas">
+            <div class="room" id="bedroom">
+                <div class="room-label">Bedroom</div>
+                <div class="dimensions">10' x 10'</div>
+                <div class="furniture bed" style="top: 40px; left: 40px;"></div>
+                <div class="furniture table" style="top: 60px; right: 40px;"></div>
+                <div class="furniture chair" style="top: 80px; right: 60px;"></div>
+            </div>
+
+            <div class="room" id="livingroom">
+                <div class="room-label">Living Room</div>
+                <div class="dimensions">10' x 10'</div>
+                <div class="furniture sofa" style="bottom: 40px; left: 100px;"></div>
+                <div class="furniture table" style="top: 120px; left: 120px;"></div>
+                <div class="furniture chair" style="top: 140px; left: 80px;"></div>
+                <div class="furniture chair" style="top: 140px; right: 80px;"></div>
+            </div>
+
+            <div class="room" id="bathroom">
+                <div class="room-label">Bathroom</div>
+                <div class="dimensions">10' x 10'</div>
+                <div class="furniture sink" style="top: 40px; left: 40px;"></div>
+                <div class="furniture toilet" style="top: 40px; right: 40px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="tool-button">Add Chair</button>
+        <button class="tool-button">Add Table</button>
+        <button class="tool-button">Add Bed</button>
+        <button class="tool-button">Clear</button>
+    </div>
+
+    <script>
+        document.querySelectorAll('.furniture').forEach(item => {
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            item.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+
+            function dragStart(e) {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+
+                if (e.target === item) {
+                    isDragging = true;
+                }
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+
+                    xOffset = currentX;
+                    yOffset = currentY;
+
+                    item.style.transform = `translate(${currentX}px, ${currentY}px)`;
+                }
+            }
+
+            function dragEnd(e) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+            }
+        });
+    </script>
+</body>
+</html>

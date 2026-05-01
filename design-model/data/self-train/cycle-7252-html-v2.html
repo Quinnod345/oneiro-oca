@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Fragment Collector</title>
+    <style>
+        :root {
+            --cosmos: #0a0a0f;
+            --nebula: #1a1a2e;
+            --stardust: #f0f0f5;
+            --accent: #64ffda;
+            --accent-warm: #ff6b9d;
+            --glow: #feca57;
+            --text: #e0e0e8;
+            --text-dim: #a0a0b0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--cosmos);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .starfield {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.3;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--stardust);
+            border-radius: 50%;
+            animation: twinkle 4s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.6; }
+        }
+
+        .main-container {
+            position: relative;
+            width: 90%;
+            max-width: 1200px;
+            height: 80vh;
+            display: grid;
+            grid-template-columns: 1fr 3fr 1fr;
+            gap: 2rem;
+            z-index: 1;
+        }
+
+        .sidebar {
+            background: rgba(26, 26, 46, 0.3);
+            border-radius: 1rem;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(100, 255, 218, 0.1);
+        }
+
+        .sidebar h2 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+        }
+
+        .fragment-count {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        .fragment-label {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+
+        .collection-area {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .consciousness-sphere {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 40%, rgba(255, 107, 157, 0.2), transparent 60%);
+            border: 2px solid rgba(100, 255, 218, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .consciousness-sphere:hover {
+            transform: scale(1.05);
+            border-color: rgba(100, 255, 218, 0.4);
+        }
+
+        .consciousness-sphere::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 30%, rgba(100, 255, 218, 0.05) 70%);
+            animation: gentle-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes gentle-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.3; }
+        }
+
+        .sphere-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+        }
+
+        .thought-fragment {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+
+        .thought-fragment:hover {
+            transform: scale(1.1);
+            filter: brightness(1.2);
+        }
+
+        .thought-fragment.dragging {
+            cursor: grabbing;
+            transform: scale(1.2);
+            filter: brightness(1.4) drop-shadow(0 0 10px var(--accent));
+        }
+
+        .fragment-shape {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-warm) 100%);
+            clip-path: polygon(50% 0%, 80% 25%, 100% 50%, 80% 75%, 50% 100%, 20% 75%, 0% 50%, 20% 25%);
+            opacity: 0.8;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(180deg); }
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            letter-spacing: 0.05em;
+        }
+
+        .crystallized {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            animation: orbit 15s linear infinite;
+        }
+
+        @keyframes orbit {
+            0% { transform: rotate(0deg) translateX(120px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(120px) rotate(-360deg); }
+        }
+
+        .crystallized .fragment-shape {
+            width: 100%;
+            height: 100%;
+            background: var(--glow);
+            opacity: 0.9;
+            animation: none;
+            filter: drop-shadow(0 0 8px var(--glow));
+        }
+
+        .fragment-enter {
+            animation: fragment-appear 0.6s ease-out;
+        }
+
+        @keyframes fragment-appear {
+            0% { 
+                opacity: 0;
+                transform: scale(0) rotate(180deg);
+            }
+            100% { 
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="starfield" id="starfield"></div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            <h2>Collection</h2>
+            <div class="fragment-count" id="fragment-count">0</div>
+            <div class="fragment-label">dream fragments</div>
+        </div>
+        
+        <div class="collection-area" id="collection-area">
+            <div class="consciousness-sphere" id="consciousness-sphere">
+                <span class="sphere-label">Core</span>
+            </div>
+            
+            <div class="thought-fragment" style="top: 20%; left: 10%;" draggable="true">
+                <div class="fragment-shape"></div>
+            </div>
+            
+            <div class="thought-fragment" style="top: 70%; left: 80%;" draggable="true">
+                <div class="fragment-shape"></div>
+            </div>
+            
+            <div class="thought-fragment" style="top: 30%; right: 15%;" draggable="true">
+                <div class="fragment-shape"></div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <h2>Energy</h2>
+            <div style="height: 200px; display: flex; align-items: center; justify-content: center;">
+                <svg width="120" height="120" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(100, 255, 218, 0.1)" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="10" 
+                            stroke-dasharray="314" stroke-dashoffset="157" transform="rotate(-90 60 60)"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        Drag dream fragments to the core
+    </div>
+
+    <script>
+        // Create starfield
+        const starfield = document.getElementById('starfield');
+        for (let i = 0; i < 50; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 4 + 's';
+            starfield.appendChild(star);
+        }
+
+        // Drag and drop functionality
+        let draggedElement = null;
+        let fragmentCount = 0;
+        const fragmentCounter = document.getElementById('fragment-count');
+        const sphere = document.getElementById('consciousness-sphere');
+        const collectionArea = document.getElementById('collection-area');
+
+        document.querySelectorAll('.thought-fragment').forEach(fragment => {
+            fragment.addEventListener('dragstart', (e) => {
+                draggedElement = e.target;
+                e.target.classList.add('dragging');
+            });
+
+            fragment.addEventListener('dragend', (e) => {
+                e.target.classList.remove('dragging');
+            });
+        });
+
+        sphere.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        sphere.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedElement && draggedElement.classList.contains('thought-fragment')) {
+                // Create crystallized version
+                const crystallized = document.createElement('div');
+                crystallized.className = 'crystallized fragment-enter';
+                crystallized.style.animationDelay = (fragmentCount * 0.5) + 's';
+                
+                const shape = document.createElement('div');
+                shape.className = 'fragment-shape';
+                crystallized.appendChild(shape);
+                
+                sphere.appendChild(crystallized);
+                
+                // Remove original fragment
+                draggedElement.remove();
+                
+                // Update counter
+                fragmentCount++;
+                fragmentCounter.textContent = fragmentCount;
+                
+                // Create new fragment after a delay
+                setTimeout(() => {
+                    const newFragment = document.createElement('div');
+                    newFragment.className = 'thought-fragment fragment-enter';
+                    newFragment.draggable = true;
+                    newFragment.style.top = Math.random() * 80 + '%';
+                    newFragment.style.left = Math.random() * 80 + '%';
+                    
+                    const newShape = document.createElement('div');
+                    newShape.className = 'fragment-shape';
+                    newFragment.appendChild(newShape);
+                    
+                    collectionArea.appendChild(newFragment);
+                    
+                    // Add event listeners to new fragment
+                    newFragment.addEventListener('dragstart', (e) => {
+                        draggedElement = e.target;
+                        e.target.classList.add('dragging');
+                    });
+                    
+                    newFragment.addEventListener('dragend', (e) => {
+                        e.target.classList.remove('dragging');
+                    });
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>

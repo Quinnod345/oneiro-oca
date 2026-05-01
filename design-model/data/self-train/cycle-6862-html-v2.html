@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conditional Messages</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #13141f;
+            --bg-tertiary: #1e2035;
+            --accent-blue: #4a9edc;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a4b8;
+            --text-muted: #6b7280;
+            --border: rgba(255, 255, 255, 0.1);
+            --hover: rgba(74, 158, 220, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--bg-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100%;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 3rem;
+            color: var(--text-primary);
+        }
+
+        .nav-item {
+            padding: 0.875rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .nav-item:hover {
+            background: var(--hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--hover);
+            color: var(--accent-blue);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+        }
+
+        .inbox-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .inbox-header {
+            padding: 2rem 3rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .inbox-title {
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+
+        .inbox-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .action-button {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-button:hover {
+            background: var(--hover);
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+        }
+
+        .message-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+        }
+
+        .message-item:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-blue);
+            transform: translateX(4px);
+        }
+
+        .message-left {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .message-indicator {
+            width: 4px;
+            height: 100%;
+            border-radius: 2px;
+            background: var(--accent-blue);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message-item.unread .message-indicator {
+            opacity: 1;
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-sender {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            color: var(--text-primary);
+        }
+
+        .message-subject {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .message-preview {
+            font-size: 0.813rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .message-meta {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .message-tag {
+            font-size: 0.688rem;
+            padding: 0.25rem 0.625rem;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .message-tag.rain {
+            background: rgba(74, 158, 220, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-subtext {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo">Messages</div>
+            <nav>
+                <div class="nav-item active">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                    </svg>
+                    Inbox
+                </div>
+                <div class="nav-item">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+                    </svg>
+                    Sent
+                </div>
+                <div class="nav-item">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                    </svg>
+                    Archive
+                </div>
+            </nav>
+        </aside>
+        
+        <main class="inbox-container">
+            <header class="inbox-header">
+                <h1 class="inbox-title">Conditional Messages</h1>
+                <div class="inbox-actions">
+                    <button class="action-button">Filter</button>
+                    <button class="action-button">Sort</button>
+                </div>
+            </header>
+            
+            <div class="message-list">
+                <article class="message-item unread">
+                    <div class="message-left">
+                        <div class="message-indicator"></div>
+                        <div class="message-content">
+                            <div class="message-sender">Weather Alert System</div>
+                            <div class="message-subject">Heavy rain expected in your area</div>
+                            <div class="message-preview">Based on current conditions, we're expecting significant rainfall starting at 3 PM today. Consider bringing an umbrella and planning indoor activities...</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <time class="message-time">12 min ago</time>
+                        <span class="message-tag rain">Weather</span>
+                    </div>
+                </article>
+                
+                <article class="message-item unread">
+                    <div class="message-left">
+                        <div class="message-indicator"></div>
+                        <div class="message-content">
+                            <div class="message-sender">Traffic Monitor</div>
+                            <div class="message-subject">Optimal route to downtown available</div>
+                            <div class="message-preview">Traffic conditions are currently favorable on Highway 101. Expected travel time is 22 minutes, which is 15 minutes faster than usual...</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <time class="message-time">45 min ago</time>
+                        <span class="message-tag">Traffic</span>
+                    </div>
+                </article>
+                
+                <article class="message-item">
+                    <div class="message-left">
+                        <div class="message-indicator"></div>
+                        <div class="message-content">
+                            <div class="message-sender">Smart Home</div>
+                            <div class="message-subject">Quiet hours activated</div>
+                            <div class="message-preview">All notifications have been muted and lights dimmed for your scheduled quiet time. Your devices will resume normal operation at 7 AM...</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <time class="message-time">2 hours ago</time>
+                        <span class="message-tag">Home</span>
+                    </div>
+                </article>
+                
+                <article class="message-item">
+                    <div class="message-left">
+                        <div class="message-indicator"></div>
+                        <div class="message-content">
+                            <div class="message-sender">Energy Manager</div>
+                            <div class="message-subject">Peak hours approaching</div>
+                            <div class="message-preview">Electricity rates will increase by 40% starting at 5 PM. Consider running high-energy appliances now or scheduling them for after 9 PM...</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <time class="message-time">3 hours ago</time>
+                        <span class="message-tag">Energy</span>
+                    </div>
+                </article>
+                
+                <article class="message-item">
+                    <div class="message-left">
+                        <div class="message-indicator"></div>
+                        <div class="message-content">
+                            <div class="message-sender">Calendar Assistant</div>
+                            <div class="message-subject">Meeting room prepared</div>
+                            <div class="message-preview">Conference Room B has been reserved and prepared for your 2 PM meeting. Temperature adjusted to 72°F and presentation equipment tested...</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        <time class="message-time">Yesterday</time>
+                        <span class="message-tag">Schedule</span>
+                    </div>
+                </article>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

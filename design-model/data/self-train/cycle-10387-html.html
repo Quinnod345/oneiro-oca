@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Fragment Collector</title>
+    <style>
+        :root {
+            --dawn-deep: #1a0f2e;
+            --dawn-purple: #3d2f5b;
+            --dawn-transition: #5a4570;
+            --dawn-orange: #8b5a3c;
+            --dawn-light: #d4a574;
+            --wisp-memory: #6b5b95;
+            --wisp-idea: #88b0d3;
+            --wisp-emotion: #ff6b6b;
+            --shard-glow: rgba(255, 255, 255, 0.1);
+            --capture-time: 0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            background: linear-gradient(135deg, var(--dawn-deep) 0%, var(--dawn-purple) 40%, var(--dawn-transition) 70%, var(--dawn-orange) 100%);
+            transition: background 8s ease;
+        }
+
+        body.emotion-heavy {
+            background: linear-gradient(135deg, var(--dawn-deep) 0%, var(--dawn-purple) 60%, var(--dawn-transition) 90%, var(--dawn-orange) 100%);
+        }
+
+        .time-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+            background: radial-gradient(ellipse at 30% 20%, transparent 0%, rgba(212, 165, 116, 0.2) 50%, transparent 100%);
+            animation: timeDrift 30s infinite alternate;
+        }
+
+        @keyframes timeDrift {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(-50px) translateY(20px); }
+        }
+
+        .wisp {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.3s ease;
+        }
+
+        .wisp.dragging {
+            cursor: grabbing;
+            z-index: 1000;
+        }
+
+        .wisp-memory {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle at center, var(--wisp-memory) 0%, transparent 70%);
+            filter: blur(8px);
+            animation: memoryBleed 4s infinite;
+        }
+
+        @keyframes memoryBleed {
+            0% { transform: scale(1) rotate(0deg); filter: blur(8px) saturate(1); }
+            50% { transform: scale(1.2) rotate(180deg); filter: blur(12px) saturate(0.6); }
+            100% { transform: scale(0.8) rotate(360deg); filter: blur(20px) saturate(0.2); opacity: 0; }
+        }
+
+        .wisp-idea {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+
+        .wisp-idea::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--wisp-idea);
+            border-radius: 50%;
+            animation: ideaScatter 3s infinite;
+        }
+
+        .wisp-idea::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--wisp-idea);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            box-shadow: 
+                -10px -10px 0 var(--wisp-idea),
+                10px -10px 0 var(--wisp-idea),
+                -10px 10px 0 var(--wisp-idea),
+                10px 10px 0 var(--wisp-idea);
+            animation: seedFloat 3s infinite;
+        }
+
+        @keyframes ideaScatter {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        @keyframes seedFloat {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+        }
+
+        .wisp-emotion {
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle at center, var(--wisp-emotion) 0%, transparent 60%);
+            border-radius: 50%;
+            animation: emotionPulse 2s infinite;
+        }
+
+        @keyframes emotionPulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; filter: blur(10px); }
+            50% { transform: scale(1.3); opacity: 0.3; filter: blur(20px); }
+        }
+
+        .wisp.dissipating {
+            pointer-events: none;
+            animation: dissipate 2s forwards;
+        }
+
+        @keyframes dissipate {
+            to { transform: scale(0.1); opacity: 0; }
+        }
+
+        .shard {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+            clip-path: polygon(50% 0%, 80% 20%, 100% 50%, 80% 80%, 50% 100%, 20% 80%, 0% 50%, 20% 20%);
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+            cursor: move;
+            transition: filter 0.3s ease;
+            z-index: 10;
+        }
+
+        .shard:hover {
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+        }
+
+        .shard.memory-shard {
+            background: linear-gradient(45deg, transparent 20%, rgba(107, 91, 149, 0.3) 50%, transparent 80%);
+        }
+
+        .shard.idea-shard {
+            background: linear-gradient(45deg, transparent 20%, rgba(136, 176, 211, 0.3) 50%, transparent 80%);
+        }
+
+        .shard.emotion-shard {
+            background: linear-gradient(45deg, transparent 20%, rgba(255, 107, 107, 0.3) 50%, transparent 80%);
+        }
+
+        .capture-zone {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 300px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .capture-zone.active {
+            border-color: rgba(255, 255, 255, 0.6);
+            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+        }
+
+        .capture-zone::before {
+            content: 'Release to crystallize';
+            position: absolute;
+            bottom: -30px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .capture-zone.active::before {
+            opacity: 1;
+        }
+
+        .hybrid-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .thought-echo {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: echoFade 4s forwards;
+            pointer-events: none;
+        }
+
+        @keyframes echoFade {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { opacity: 0.3; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .fragment-counter {
+            position: fixed;
+            top: 40px;
+            right: 60px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            letter-spacing: 2px;
+            font-weight: 300;
+        }
+
+        .wisp-spawner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .temporal-indicator {
+            position: fixed;
+            top: 50%;
+            left: 30px;
+            transform: translateY(-50%) rotate(-90deg);
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 11px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 200;
+        }
+    </style>
+</head>
+<body>
+    <div class="time-layer"></div>
+    <div class="temporal-indicator">perpetual dawn</div>
+    <div class="fragment-counter">
+        <span id="fragment-count">0</span> fragments crystallized
+    </div>
+    
+    <div class="wisp-spawner" id="wispContainer"></div>
+    <div class="hybrid-layer" id="hybridLayer"></div>
+    <div class="capture-zone" id="captureZone"></div>
+    
+    <script>
+        let fragmentCount = 0;
+        let emotionalWeight = 0;
+        const wispTypes = ['memory', 'idea', 'emotion'];
+        const wisps = [];
+        let draggedWisp = null;
+        
+        function createWisp() {
+            const type = wispTypes[Math.floor(Math.random() * wispTypes.length)];
+            const wisp = document.createElement('div');
+            wisp.className = `wisp wisp-${type}`;
+            wisp.dataset.type = type;
+            wisp.style.left = Math.random() * (window.innerWidth - 120) + 'px';
+            wisp.style.top = Math.random() * (window.innerHeight - 120) + 'px';
+            
+            document.getElementById('wispContainer').appendChild(wisp);
+            wisps.push({ element: wisp, birth: Date.now(), type });
+            
+            // Start dissipation timer
+            setTimeout(() => {
+                if (!wisp.classList.contains('captured') && wisp.parentNode) {
+                    wisp.classList.add('dissipating');
+                    setTimeout(() => wisp.remove(), 2000);
+                }
+            }, Math.random() * 3000 + 2000);
+            
+            // Make draggable
+            wisp.addEventListener('mousedown', startDrag);
+        }
+        
+        function startDrag(e) {
+            draggedWisp = e.target;
+            draggedWisp.classList.add('dragging');
+            
+            const rect = draggedWisp.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const offsetY = e.clientY - rect.top;
+            
+            function onMouseMove(e) {
+                draggedWisp.style.left = (e.clientX - offsetX) + 'px';
+                draggedWisp.style.top = (e.clientY - offsetY) + 'px';
+                
+                // Check if over capture zone
+                const captureRect = document.getElementById('captureZone').getBoundingClientRect();
+                const wispRect = draggedWisp.getBoundingClientRect();
+                
+                if (isOverlapping(wispRect, captureRect)) {
+                    document.getElementById('captureZone').classList.add('active');
+                } else {
+                    document.getElementById('captureZone').classList.remove('active');
+                }
+            }
+            
+            function onMouseUp() {
+                draggedWisp.classList.remove('dragging');
+                
+                const captureZone = document.getElementById('captureZone');
+                const captureRect = captureZone.getBoundingClientRect();
+                const wispRect = draggedWisp.getBoundingClientRect();
+                
+                if (isOverlapping(wispRect, captureRect)) {
+                    crystallize(draggedWisp);
+                }
+                
+                captureZone.classList.remove('active');
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                draggedWisp = null;
+            }
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+        
+        function isOverlapping(rect1, rect2) {
+            return !(rect1.right < rect2.left || 
+                     rect1.left > rect2.right || 
+                     rect1.bottom < rect2.top || 
+                     rect1.top > rect2.bottom);
+        }
+        
+        function crystallize(wisp) {
+            wisp.classList.add('captured');
+            const type = wisp.dataset.type;
+            
+            // Create shard
+            const shard = document.createElement('div');
+            shard.className = `shard ${type}-shard`;
+            shard.style.left = Math.random() * (window.innerWidth - 200) + 100 + 'px';
+            shard.style.top = Math.random() * (window.innerHeight - 300) + 100 + 'px';
+            shard.style.transform = `rotate(${Math.random() * 360}deg)`;
+            
+            document.body.appendChild(shard);
+            
+            // Make shard draggable
+            makeDraggable(shard);
+            
+            // Create echo effect
+            const echo = document.createElement('div');
+            echo.className = 'thought-echo';
+            echo.style.left = wisp.style.left;
+            echo.style.top = wisp.style.top;
+            document.getElementById('hybridLayer').appendChild(echo);
+            
+            // Update counter and emotional weight
+            fragmentCount++;
+            document.getElementById('fragment-count').textContent = fragmentCount;
+            
+            if (type === 'emotion') {
+                emotionalWeight += 0.1;
+                if (emotionalWeight > 0.5) {
+                    document.body.classList.add('emotion-heavy');
+                }
+            }
+            
+            // Remove wisp
+            wisp.remove();
+        }
+        
+        function makeDraggable(element) {
+            element.addEventListener('mousedown', (e) => {
+                const offsetX = e.clientX - element.getBoundingClientRect().left;
+                const offsetY = e.clientY - element.getBoundingClientRect().top;
+                element.style.zIndex = 1000;
+                
+                function onMouseMove(e) {
+                    element.style.left = (e.clientX - offsetX) + 'px';
+                    element.style.top = (e.clientY - offsetY) + 'px';
+                    
+                    // Check for overlapping shards
+                    const shards = document.querySelectorAll('.shard');
+                    shards.forEach(otherShard => {
+                        if (otherShard !== element && isOverlapping(
+                            element.getBoundingClientRect(),
+                            otherShard.getBoundingClientRect()
+                        )) {
+                            createHybridThought(element, otherShard);
+                        }
+                    });
+                }
+                
+                function onMouseUp() {
+                    element.style.zIndex = 10;
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                }
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+        
+        function createHybridThought(shard1, shard2) {
+            const hybrid = document.createElement('div');
+            hybrid.className = 'thought-echo';
+            hybrid.style.left = ((parseInt(shard1.style.left) + parseInt(shard2.style.left)) / 2) + 'px';
+            hybrid.style.top = ((parseInt(shard1.style.top) + parseInt(shard2.style.top)) / 2) + 'px';
+            hybrid.style.background = 'radial-gradient(circle at center, rgba(255, 255, 255, 0.2) 0%, transparent 60%)';
+            
+            document.getElementById('hybridLayer').appendChild(hybrid);
+        }
+        
+        // Spawn wisps periodically
+        setInterval(createWisp, 2000);
+        
+        // Initial wisps
+        setTimeout(() => {
+            for (let i = 0; i < 3; i++) {
+                setTimeout(createWisp, i * 500);
+            }
+        }, 500);
+    </script>
+</body>
+</html>

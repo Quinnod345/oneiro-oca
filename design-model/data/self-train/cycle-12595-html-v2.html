@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impossible Architecture</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --line-main: #ffffff;
+            --line-dim: rgba(255, 255, 255, 0.3);
+            --accent: #4a9eff;
+            --fill-subtle: rgba(74, 158, 255, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 800px;
+            height: 600px;
+            position: relative;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .structure {
+            stroke: var(--line-main);
+            stroke-width: 2;
+            fill: none;
+            transition: all 0.3s ease;
+        }
+
+        .structure:hover {
+            stroke: var(--accent);
+            filter: drop-shadow(0 0 10px var(--accent));
+        }
+
+        .hidden-space {
+            fill: var(--fill-subtle);
+            stroke: var(--line-dim);
+            stroke-width: 1;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .container:hover .hidden-space {
+            opacity: 1;
+        }
+
+        .interactive-element {
+            cursor: pointer;
+            stroke: var(--line-main);
+            stroke-width: 2;
+            fill: var(--bg-dark);
+        }
+
+        .interactive-element:hover {
+            fill: var(--fill-subtle);
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .rotating-section {
+            animation: rotate 20s linear infinite;
+            transform-origin: center;
+        }
+
+        nav {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--line-dim);
+            color: var(--line-main);
+            padding: 8px 16px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        button.active {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border-color: var(--accent);
+        }
+
+        .title {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 3px;
+            color: var(--line-main);
+            text-transform: uppercase;
+        }
+
+        .description {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--line-dim);
+            text-align: center;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title">Impossible Architecture</h1>
+    <p class="description">Explore geometric paradoxes. Hover to reveal hidden dimensions.</p>
+    
+    <div class="container">
+        <svg viewBox="0 0 800 600">
+            <!-- Main Penrose Triangle -->
+            <g id="penrose-triangle">
+                <path class="structure" d="M400 150 L550 350 L250 350 Z M400 150 L325 250 L475 250 Z"/>
+                <path class="structure" d="M250 350 L325 250 L325 450 Z"/>
+                <path class="structure" d="M550 350 L475 250 L475 450 Z"/>
+                
+                <!-- Hidden space that appears on hover -->
+                <polygon class="hidden-space" points="400,250 425,300 375,300"/>
+            </g>
+            
+            <!-- Impossible Cube Frame -->
+            <g id="impossible-cube" transform="translate(100, 100)">
+                <path class="structure" d="M0 0 L100 0 L100 100 L0 100 Z"/>
+                <path class="structure" d="M30 30 L130 30 L130 130 L30 130 Z"/>
+                <path class="structure" d="M0 0 L30 30 M100 0 L130 30 M100 100 L130 130 M0 100 L30 130"/>
+                
+                <!-- Interactive elements -->
+                <rect class="interactive-element" x="40" y="40" width="50" height="50" rx="2"/>
+            </g>
+            
+            <!-- Rotating Impossible Square -->
+            <g class="rotating-section" transform="translate(600, 300)">
+                <path class="structure" d="M-50 -50 L50 -50 L50 50 L-50 50 Z M-30 -30 L30 -30 L30 30 L-30 30 Z"/>
+                <line class="structure" x1="-50" y1="-50" x2="-30" y2="-30"/>
+                <line class="structure" x1="50" y1="-50" x2="30" y2="-30"/>
+            </g>
+            
+            <!-- Floor grid for depth -->
+            <g opacity="0.2">
+                <line class="structure" x1="0" y1="500" x2="800" y2="500"/>
+                <line class="structure" x1="100" y1="520" x2="700" y2="520"/>
+                <line class="structure" x1="200" y1="540" x2="600" y2="540"/>
+            </g>
+        </svg>
+    </div>
+    
+    <nav>
+        <button class="active" onclick="showView('penrose')">Penrose</button>
+        <button onclick="showView('cube')">Cube</button>
+        <button onclick="showView('stairs')">Stairs</button>
+    </nav>
+    
+    <script>
+        function showView(view) {
+            document.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const views = {
+                penrose: 'translate(0, 0)',
+                cube: 'translate(-100, -100) scale(1.5)',
+                stairs: 'translate(-200, 0) scale(1.2)'
+            };
+            
+            document.querySelector('svg').style.transform = views[view] || views.penrose;
+            document.querySelector('svg').style.transition = 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+        }
+        
+        document.querySelectorAll('.interactive-element').forEach(el => {
+            el.addEventListener('click', function() {
+                this.style.transform = this.style.transform === 'scale(0.8)' ? 'scale(1)' : 'scale(0.8)';
+            });
+        });
+    </script>
+</body>
+</html>

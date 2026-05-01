@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Culinary Cosmos</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --deep-space: #141420;
+            --nebula-dark: #1e1e2e;
+            --starfield: #2a2a3e;
+            --orbit-trail: #3a3a5e;
+            --flavor-compatible: #4ecca3;
+            --flavor-neutral: #eeeeee;
+            --flavor-clash: #ff6b6b;
+            --instruction-glow: #ffd93d;
+            --ring-active: #6bcf7f;
+            --ring-inactive: #393e46;
+            --cosmic-dust: rgba(255, 255, 255, 0.03);
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --gravity-strong: #ff4757;
+            --gravity-medium: #ffa502;
+            --gravity-weak: #1e90ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: radial-gradient(ellipse at 30% 70%, var(--nebula-dark) 0%, var(--void) 40%, var(--deep-space) 100%);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .cosmic-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20% 30%, white, transparent),
+                radial-gradient(2px 2px at 60% 70%, white, transparent),
+                radial-gradient(1px 1px at 50% 50%, white, transparent);
+            background-size: 200px 200px, 300px 300px, 180px 180px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+            opacity: 0.1;
+            animation: drift 200s linear infinite;
+        }
+
+        @keyframes drift {
+            to { transform: translate(-200px, -200px); }
+        }
+
+        .solar-system {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .ingredient {
+            position: absolute;
+            cursor: grab;
+            transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ingredient:active {
+            cursor: grabbing;
+        }
+
+        .ingredient-core {
+            position: relative;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 
+                0 0 40px var(--cosmic-dust),
+                inset 0 0 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .ingredient-core.protein {
+            background: radial-gradient(circle at 30% 30%, #ff7979, #eb4d4b);
+            width: 80px;
+            height: 80px;
+        }
+
+        .ingredient-core.vegetable {
+            background: radial-gradient(circle at 30% 30%, #6ab04c, #44bd32);
+            width: 60px;
+            height: 60px;
+        }
+
+        .ingredient-core.dairy {
+            background: radial-gradient(circle at 30% 30%, #f9ca24, #f0932b);
+            width: 70px;
+            height: 70px;
+        }
+
+        .ingredient-core.grain {
+            background: radial-gradient(circle at 30% 30%, #c7a17a, #8b6f47);
+            width: 65px;
+            height: 65px;
+        }
+
+        .ingredient-core.spice {
+            background: radial-gradient(circle at 30% 30%, #ee5a6f, #c44569);
+            width: 45px;
+            height: 45px;
+        }
+
+        .ingredient-label {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .orbit-ring {
+            position: absolute;
+            border: 1px dashed var(--orbit-trail);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .ingredient:hover .orbit-ring {
+            opacity: 0.3;
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            to { transform: rotate(360deg); }
+        }
+
+        .gravity-field {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            left: -50%;
+            top: -50%;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .ingredient:hover .gravity-field {
+            opacity: 0.15;
+        }
+
+        .gravity-field.strong {
+            background: radial-gradient(circle, var(--gravity-strong) 0%, transparent 70%);
+        }
+
+        .gravity-field.medium {
+            background: radial-gradient(circle, var(--gravity-medium) 0%, transparent 70%);
+        }
+
+        .gravity-field.weak {
+            background: radial-gradient(circle, var(--gravity-weak) 0%, transparent 70%);
+        }
+
+        .constellation-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--instruction-glow), transparent);
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .constellation-line.active {
+            opacity: 0.6;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            50% { opacity: 1; }
+        }
+
+        .instruction-node {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--instruction-glow);
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 10px var(--instruction-glow);
+        }
+
+        .instruction-text {
+            position: absolute;
+            font-size: 11px;
+            color: var(--instruction-glow);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            transform: translate(-50%, -150%);
+        }
+
+        .instruction-node:hover + .instruction-text {
+            opacity: 1;
+        }
+
+        .control-rings {
+            position: absolute;
+            right: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 300px;
+            height: 400px;
+        }
+
+        .ring-control {
+            position: relative;
+            margin: 40px 0;
+        }
+
+        .ring-label {
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        .ring-track {
+            position: relative;
+            height: 60px;
+            background: var(--ring-inactive);
+            border-radius: 30px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .ring-asteroids {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            gap: 20px;
+        }
+
+        .asteroid {
+            width: 12px;
+            height: 12px;
+            background: var(--starfield);
+            border-radius: 30%;
+            transform: rotate(45deg);
+            transition: all 0.3s;
+        }
+
+        .asteroid.active {
+            background: var(--ring-active);
+            box-shadow: 0 0 15px var(--ring-active);
+        }
+
+        .fridge-upload {
+            position: absolute;
+            left: 60px;
+            top: 60px;
+            width: 280px;
+            height: 400px;
+            background: linear-gradient(135deg, var(--nebula-dark) 0%, var(--starfield) 100%);
+            border: 1px solid var(--orbit-trail);
+            border-radius: 20px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .upload-zone {
+            flex: 1;
+            border: 2px dashed var(--orbit-trail);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--flavor-compatible);
+            background: rgba(78, 204, 163, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .upload-preview {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.3;
+        }
+
+        .recipe-output {
+            position: absolute;
+            right: 60px;
+            bottom: 60px;
+            width: 300px;
+            background: rgba(30, 30, 46, 0.8);
+            border: 1px solid var(--orbit-trail);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .recipe-title {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: var(--flavor-compatible);
+        }
+
+        .recipe-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .recipe-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .complexity-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .complexity-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--ring-inactive);
+            transition: background 0.3s;
+        }
+
+        .complexity-dot.active {
+            background: var(--flavor-compatible);
+        }
+
+        .flavor-harmony {
+            position: absolute;
+            left: 60px;
+            bottom: 60px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .harmony-meter {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .harmony-bar {
+            width: 40px;
+            height: 6px;
+            background: var(--ring-inactive);
+            transition: all 0.3s;
+        }
+
+        .harmony-bar.compatible {
+            background: var(--flavor-compatible);
+            box-shadow: 0 0 10px var(--flavor-compatible);
+        }
+
+        .harmony-bar.neutral {
+            background: var(--flavor-neutral);
+            opacity: 0.5;
+        }
+
+        .harmony-bar.clash {
+            background: var(--flavor-clash);
+            box-shadow: 0 0 10px var(--flavor-clash);
+        }
+
+        .cosmic-title {
+            position: absolute;
+            left: 50%;
+            top: 40px;
+            transform: translateX(-50%);
+            font-size: 32px;
+            font-weight: 200;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: var(--text-primary);
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmic-particles"></div>
+    
+    <h1 class="cosmic-title">Culinary Cosmos</h1>
+    
+    <div class="fridge-upload">
+        <div class="upload-zone">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">Drop your fridge photo<br>to begin the cosmic cooking</div>
+        </div>
+    </div>
+    
+    <div class="solar-system">
+        <div class="ingredient" style="left: 400px; top: 200px;">
+            <div class="gravity-field strong"></div>
+            <div class="ingredient-core protein">🥩</div>
+            <div class="ingredient-label">Beef</div>
+            <div class="orbit-ring" style="width: 120px; height: 120px; left: -20px; top: -20px;"></div>
+        </div>
+        
+        <div class="ingredient" style="left: 300px; top: 350px;">
+            <div class="gravity-field medium"></div>
+            <div class="ingredient-core vegetable">🥦</div>
+            <div class="ingredient-label">Broccoli</div>
+            <div class="orbit-ring" style="width: 100px; height: 100px; left: -20px; top: -20px;"></div>
+        </div>
+        
+        <div class="ingredient" style="left: 500px; top: 400px;">
+            <div class="gravity-field medium"></div>
+            <div class="ingredient-core dairy">🧀</div>
+            <div class="ingredient-label">Cheddar</div>
+            <div class="orbit-ring" style="width: 110px; height: 110px; left: -20px; top: -20px;"></div>
+        </div>
+        
+        <div class="ingredient" style="left: 450px; top: 300px;">
+            <div class="gravity-field weak"></div>
+            <div class="ingredient-core grain">🌾</div>
+            <div class="ingredient-label">Rice</div>
+            <div class="orbit-ring" style="width: 105px; height: 105px; left: -20px; top: -20px;"></div>
+        </div>
+        
+        <div class="ingredient" style="left: 350px; top: 250px;">
+            <div class="gravity-field weak"></div>
+            <div class="ingredient-core spice">🌶️</div>
+            <div class="ingredient-label">Chili</div>
+            <div class="orbit-ring" style="width: 90px; height: 90px; left: -22.5px; top: -22.5px;"></div>
+        </div>
+        
+        <div class="constellation-line active" style="left: 440px; top: 240px; width: 80px; transform: rotate(45deg);"></div>
+        <div class="instruction-node" style="left: 480px; top: 280px;"></div>
+        <div class="instruction-text" style="left: 480px; top: 280px;">Sear 3min</div>
+        
+        <div class="constellation-line active" style="left: 330px; top: 370px; width: 170px; transform: rotate(-10deg);"></div>
+        <div class="instruction-node" style="left: 415px; top: 360px;"></div>
+        <div class="instruction-text" style="left: 415px; top: 360px;">Steam 5min</div>
+        
+        <div class="constellation-line active" style="left: 380px; top: 280px; width: 90px; transform: rotate(60deg);"></div>
+        <div class="instruction-node" style="left: 425px; top: 325px;"></div>
+        <div class="instruction-text" style="left: 425px; top: 325px;">Combine</div>
+    </div>
+    
+    <div class="control-rings">
+        <div class="ring-control">
+            <div class="ring-label">Time</div>
+            <div class="ring-track">
+                <div class="ring-asteroids">
+                    <div class="asteroid active"></div>
+                    <div class="asteroid active"></div>
+                    <div class="asteroid active"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ring-control">
+            <div class="ring-label">Difficulty</div>
+            <div class="ring-track">
+                <div class="ring-asteroids">
+                    <div class="asteroid active"></div>
+                    <div class="asteroid active"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ring-control">
+            <div class="ring-label">Dietary</div>
+            <div class="ring-track">
+                <div class="ring-asteroids">
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid active"></div>
+                    <div class="asteroid"></div>
+                    <div class="asteroid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="recipe-output">
+        <h2 class="recipe-title">Cosmic Beef Stir-Fry</h2>
+        <div class="recipe-stats">
+            <div class="recipe-stat">
+                <span>⏱️</span>
+                <span>25 min</span>
+            </div>
+            <div class="recipe-stat">
+                <span>🔥</span>
+                <span>Medium heat</span>
+            </div>
+        </div>
+        <div class="complexity-indicator">
+            <span style="font-size: 13px; color: var(--text-secondary); margin-right: 8px;">Complexity</span>
+            <div class="complexity-dot active"></div>
+            <div class="complexity-dot active"></div>
+            <div class="complexity-dot active"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+        </div>
+    </div>
+    
+    <div class="flavor-harmony">
+        <div>Flavor Harmony</div>
+        <div class="harmony-meter">
+            <div class="harmony-bar compatible"></div>
+            <div class="harmony-bar compatible"></div>
+            <div class="harmony-bar neutral"></div>
+            <div class="harmony-bar neutral"></div>
+            <div class="harmony-bar"></div>
+        </div>
+    </div>
+</body>
+</html>

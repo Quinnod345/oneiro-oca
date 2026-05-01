@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Navigator</title>
+    <style>
+        :root {
+            --bg: #000308;
+            --primary: #ffffff;
+            --secondary: #4a5568;
+            --accent: #667eea;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            max-width: 1200px;
+            width: 90%;
+            padding: 2rem;
+        }
+
+        .memory-node {
+            position: relative;
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .memory-node:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent);
+            transform: translateY(-4px);
+        }
+
+        .memory-node.active {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: var(--accent);
+        }
+
+        .node-title {
+            color: var(--primary);
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .node-date {
+            color: var(--secondary);
+            font-size: 0.875rem;
+            opacity: 0.7;
+        }
+
+        .node-indicator {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-node:hover .node-indicator,
+        .memory-node.active .node-indicator {
+            opacity: 1;
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.3), transparent);
+            pointer-events: none;
+            transform-origin: left center;
+            z-index: -1;
+        }
+
+        .navigation-header {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            color: var(--primary);
+        }
+
+        .nav-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .nav-subtitle {
+            color: var(--secondary);
+            font-size: 0.875rem;
+            opacity: 0.7;
+        }
+
+        .detail-panel {
+            position: absolute;
+            right: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 300px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 2rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .detail-panel.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .detail-title {
+            color: var(--primary);
+            font-size: 1.125rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        .detail-content {
+            color: var(--secondary);
+            font-size: 0.875rem;
+            line-height: 1.6;
+            opacity: 0.7;
+        }
+
+        .timeline-indicator {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .timeline-dot {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-dot:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .timeline-dot.active {
+            background: var(--accent);
+            transform: scale(1.5);
+        }
+
+        @media (max-width: 1024px) {
+            .memory-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .detail-panel {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .memory-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="navigation-header">
+        <h1 class="nav-title">Memory Archive</h1>
+        <p class="nav-subtitle">Navigate through time</p>
+    </div>
+
+    <div class="memory-grid" id="memoryGrid">
+        <div class="memory-node" data-id="1">
+            <h3 class="node-title">First Steps</h3>
+            <p class="node-date">January 2020</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="2">
+            <h3 class="node-title">Discovery</h3>
+            <p class="node-date">March 2020</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="3">
+            <h3 class="node-title">Breakthrough</h3>
+            <p class="node-date">June 2020</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="4">
+            <h3 class="node-title">Reflection</h3>
+            <p class="node-date">September 2020</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="5">
+            <h3 class="node-title">New Path</h3>
+            <p class="node-date">December 2020</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="6">
+            <h3 class="node-title">Growth</h3>
+            <p class="node-date">February 2021</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="7">
+            <h3 class="node-title">Challenge</h3>
+            <p class="node-date">May 2021</p>
+            <div class="node-indicator"></div>
+        </div>
+        <div class="memory-node" data-id="8">
+            <h3 class="node-title">Resolution</h3>
+            <p class="node-date">August 2021</p>
+            <div class="node-indicator"></div>
+        </div>
+    </div>
+
+    <div class="detail-panel" id="detailPanel">
+        <h3 class="detail-title" id="detailTitle">Select a memory</h3>
+        <p class="detail-content" id="detailContent">Click on any memory node to explore its details and connections.</p>
+    </div>
+
+    <div class="timeline-indicator">
+        <div class="timeline-dot active" data-year="2020"></div>
+        <div class="timeline-dot" data-year="2021"></div>
+        <div class="timeline-dot" data-year="2022"></div>
+    </div>
+
+    <svg id="connectionContainer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;">
+    </svg>
+
+    <script>
+        const memoryNodes = document.querySelectorAll('.memory-node');
+        const detailPanel = document.getElementById('detailPanel');
+        const detailTitle = document.getElementById('detailTitle');
+        const detailContent = document.getElementById('detailContent');
+        const connectionContainer = document.getElementById('connectionContainer');
+        const timelineDots = document.querySelectorAll('.timeline-dot');
+        
+        const memoryDetails = {
+            1: { title: 'First Steps', content: 'The journey began with a single decision to move forward.' },
+            2: { title: 'Discovery', content: 'Uncovering new possibilities and expanding horizons.' },
+            3: { title: 'Breakthrough', content: 'A moment of clarity that changed everything.' },
+            4: { title: 'Reflection', content: 'Taking time to understand the path traveled.' },
+            5: { title: 'New Path', content: 'Choosing a different direction with newfound wisdom.' },
+            6: { title: 'Growth', content: 'Building upon the foundation of past experiences.' },
+            7: { title: 'Challenge', content: 'Facing obstacles with determination and resilience.' },
+            8: { title: 'Resolution', content: 'Finding peace and completion in the journey.' }
+        };
+
+        let activeNode = null;
+        let connections = [];
+
+        memoryNodes.forEach(node => {
+            node.addEventListener('click', function() {
+                if (activeNode) {
+                    activeNode.classList.remove('active');
+                }
+                
+                this.classList.add('active');
+                activeNode = this;
+                
+                const id = this.dataset.id;
+                detailTitle.textContent = memoryDetails[id].title;
+                detailContent.textContent = memoryDetails[id].content;
+                detailPanel.classList.add('visible');
+                
+                drawConnections(this);
+            });
+        });
+
+        function drawConnections(targetNode) {
+            connectionContainer.innerHTML = '';
+            connections = [];
+            
+            const targetRect = targetNode.getBoundingClientRect();
+            const targetX = targetRect.left + targetRect.width / 2;
+            const targetY = targetRect.top + targetRect.height / 2;
+            
+            memoryNodes.forEach(node => {
+                if (node !== targetNode && Math.random() > 0.6) {
+                    const nodeRect = node.getBoundingClientRect();
+                    const nodeX = nodeRect.left + nodeRect.width / 2;
+                    const nodeY = nodeRect.top + nodeRect.height / 2;
+                    
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', targetX);
+                    line.setAttribute('y1', targetY);
+                    line.setAttribute('x2', nodeX);
+                    line.setAttribute('y2', nodeY);
+                    line.setAttribute('stroke', 'rgba(102, 126, 234, 0.2)');
+                    line.setAttribute('stroke-width', '1');
+                    
+                    connectionContainer.appendChild(line);
+                }
+            });
+        }
+
+        timelineDots.forEach(dot => {
+            dot.addEventListener('click', function() {
+                timelineDots.forEach(d => d.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.memory-node') && !e.target.closest('.detail-panel')) {
+                if (activeNode) {
+                    activeNode.classList.remove('active');
+                    activeNode = null;
+                }
+                detailPanel.classList.remove('visible');
+                connectionContainer.innerHTML = '';
+            }
+        });
+    </script>
+</body>
+</html>

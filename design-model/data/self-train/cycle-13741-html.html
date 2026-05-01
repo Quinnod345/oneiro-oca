@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Reconstruction Chamber</title>
+    <style>
+        :root {
+            --void-black: #0a0a0c;
+            --neural-dark: #181820;
+            --shard-glass: rgba(255, 255, 255, 0.08);
+            --shard-edge: rgba(255, 255, 255, 0.15);
+            --memory-glow: #e3f2fd;
+            --pulse-red: #ff6b6b;
+            --pulse-fade: #ff9999;
+            --connection-blue: #4fc3f7;
+            --connection-fade: rgba(79, 195, 247, 0.3);
+            --reject-orange: #ff8a65;
+            --crystallize-white: #ffffff;
+            --text-primary: #e1e8ed;
+            --text-ghost: #657786;
+            --heartbeat: #ff5252;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+            perspective: 1200px;
+        }
+
+        .neural-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.3;
+            animation: grid-pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes grid-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.1; }
+        }
+
+        .chamber-container {
+            position: absolute;
+            width: 1100px;
+            height: 700px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotateX(5deg);
+            transform-style: preserve-3d;
+        }
+
+        .memory-shard {
+            position: absolute;
+            width: 180px;
+            height: 240px;
+            background: var(--shard-glass);
+            border: 1px solid var(--shard-edge);
+            backdrop-filter: blur(8px);
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            cursor: grab;
+            clip-path: polygon(20% 0%, 100% 15%, 95% 100%, 0% 85%);
+        }
+
+        .memory-shard::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, 
+                transparent 40%, 
+                rgba(255, 255, 255, 0.1) 50%, 
+                transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .memory-shard:hover::before {
+            opacity: 1;
+        }
+
+        .shard-1 {
+            top: 120px;
+            left: 180px;
+            transform: rotateY(-25deg) rotateZ(-15deg) translateZ(50px);
+        }
+
+        .shard-2 {
+            top: 250px;
+            left: 420px;
+            transform: rotateY(30deg) rotateZ(10deg) translateZ(80px);
+        }
+
+        .shard-3 {
+            top: 180px;
+            right: 280px;
+            transform: rotateY(-45deg) rotateZ(5deg) translateZ(30px);
+        }
+
+        .shard-4 {
+            bottom: 200px;
+            left: 300px;
+            transform: rotateY(20deg) rotateZ(-20deg) translateZ(60px);
+        }
+
+        .shard-5 {
+            top: 350px;
+            right: 180px;
+            transform: rotateY(-15deg) rotateZ(25deg) translateZ(40px);
+        }
+
+        .memory-content {
+            position: absolute;
+            inset: 20px;
+            overflow: hidden;
+            opacity: 0.7;
+            filter: saturate(0.3);
+            transition: all 0.6s;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            font-size: 11px;
+            line-height: 1.4;
+            color: var(--text-ghost);
+            transform: rotate(-5deg);
+            white-space: nowrap;
+        }
+
+        .visual-fragment {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--connection-fade) 0%, transparent 70%);
+            filter: blur(20px);
+        }
+
+        .heartbeat-monitor {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 200px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .heartbeat-line {
+            width: 100%;
+            height: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pulse-wave {
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            background: url("data:image/svg+xml,%3Csvg width='400' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,20 L50,20 L60,5 L70,35 L80,20 L400,20' stroke='%23ff5252' stroke-width='2' fill='none'/%3E%3C/svg%3E") repeat-x;
+            animation: heartbeat 2s linear infinite;
+        }
+
+        @keyframes heartbeat {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-200px); }
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--connection-blue), transparent);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .crystallized-memory {
+            position: absolute;
+            width: 300px;
+            height: 400px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid var(--crystallize-white);
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+            opacity: 0;
+            transition: all 0.8s cubic-bezier(0.4, 0.0, 0.2, 1);
+            display: none;
+        }
+
+        .crystallized-memory.active {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+            display: block;
+        }
+
+        .scatter-effect {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .scatter-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--reject-orange);
+            border-radius: 50%;
+            opacity: 0;
+        }
+
+        .patient-info {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            font-size: 14px;
+            color: var(--text-ghost);
+        }
+
+        .patient-name {
+            font-size: 24px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .reconstruction-progress {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            text-align: right;
+        }
+
+        .progress-label {
+            font-size: 12px;
+            color: var(--text-ghost);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .progress-percentage {
+            font-size: 48px;
+            font-weight: 200;
+            color: var(--connection-blue);
+            letter-spacing: -2px;
+        }
+
+        .control-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            font-size: 13px;
+            color: var(--text-ghost);
+            opacity: 0.6;
+        }
+
+        .memory-shard.connecting {
+            animation: shard-pulse 0.6s ease-in-out;
+        }
+
+        @keyframes shard-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .memory-shard.rejected {
+            animation: shard-reject 0.5s ease-out;
+        }
+
+        @keyframes shard-reject {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="neural-grid"></div>
+    
+    <div class="patient-info">
+        <div class="patient-name">Subject 4412</div>
+        <div>Memory Fragment Analysis</div>
+    </div>
+    
+    <div class="reconstruction-progress">
+        <div class="progress-label">Reconstruction</div>
+        <div class="progress-percentage">23%</div>
+    </div>
+    
+    <div class="chamber-container">
+        <div class="memory-shard shard-1" data-memory="childhood">
+            <div class="memory-content">
+                <div class="memory-fragment" style="top: 20px; left: 15px;">summer afternoon</div>
+                <div class="memory-fragment" style="bottom: 30px; right: 20px;">grandmother's voice</div>
+                <div class="visual-fragment" style="top: 50px; left: 40px;"></div>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-2" data-memory="accident">
+            <div class="memory-content">
+                <div class="memory-fragment" style="top: 40px; left: 25px;">screeching tires</div>
+                <div class="memory-fragment" style="bottom: 50px; left: 30px;">broken glass</div>
+                <div class="visual-fragment" style="top: 20px; right: 30px; background: radial-gradient(circle, rgba(255, 107, 107, 0.3) 0%, transparent 70%);"></div>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-3" data-memory="love">
+            <div class="memory-content">
+                <div class="memory-fragment" style="top: 60px; left: 20px;">first dance</div>
+                <div class="memory-fragment" style="bottom: 40px; right: 25px;">wedding ring</div>
+                <div class="visual-fragment" style="bottom: 20px; left: 35px;"></div>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-4" data-memory="childhood">
+            <div class="memory-content">
+                <div class="memory-fragment" style="top: 30px; right: 20px;">bicycle wheels</div>
+                <div class="memory-fragment" style="bottom: 60px; left: 40px;">scraped knees</div>
+                <div class="visual-fragment" style="top: 70px; right: 40px;"></div>
+            </div>
+        </div>
+        
+        <div class="memory-shard shard-5" data-memory="loss">
+            <div class="memory-content">
+                <div class="memory-fragment" style="top: 45px; left: 30px;">hospital corridor</div>
+                <div class="memory-fragment" style="bottom: 35px; right: 15px;">last goodbye</div>
+                <div class="visual-fragment" style="top: 30px; left: 50px; background: radial-gradient(circle, rgba(101, 119, 134, 0.4) 0%, transparent 70%);"></div>
+            </div>
+        </div>
+        
+        <div class="connection-line" id="connection1"></div>
+        <div class="connection-line" id="connection2"></div>
+        <div class="connection-line" id="connection3"></div>
+        
+        <div class="crystallized-memory">
+            <div style="padding: 30px;">
+                <h3 style="margin-bottom: 20px; color: #1a1a1a;">Memory Reconstructed</h3>
+                <p style="color: #444; line-height: 1.6;">The summer bicycle, grandmother watching from the porch...</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="heartbeat-monitor">
+        <div class="heartbeat-line">
+            <div class="pulse-wave"></div>
+        </div>
+    </div>
+    
+    <div class="control-hint">
+        Drag and rotate shards to find connections • Overlapping memories will reveal hidden patterns
+    </div>
+    
+    <div class="scatter-effect">
+        <div class="scatter-particle" style="top: 10px; left: 10px;"></div>
+        <div class="scatter-particle" style="top: 20px; left: 30px;"></div>
+        <div class="scatter-particle" style="top: 5px; left: 50px;"></div>
+        <div class="scatter-particle" style="top: 25px; left: 70px;"></div>
+        <div class="scatter-particle" style="top: 15px; left: 90px;"></div>
+    </div>
+</body>
+</html>

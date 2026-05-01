@@ -1,116 +1,71 @@
-// Design Evaluation API — standalone design evaluation for any agent
-// No OCA dependency. Import and call evaluateDesign() from anywhere.
+// Design Evaluation API — Phase 5 only.
+// The model is the Phase 5 MLX inference server (DesignHeadV5 on M4 GPU,
+// MobileNet V2 feature extractor) at /tmp/design-model-v2.sock. Earlier
+// phases were purged 2026-04-28 — there is no fallback. If the server
+// isn't running, this throws so callers fail loudly instead of silently
+// degrading to a weaker model.
+//
+// To start the server:
+//   python3 mlx/inference_server.py --warmup &
 
-import { loadModel } from './model.js';
-import { encodeFromCode, encodeFromScreenshot, analyzeDesignCode, INPUT_DIM } from './encoder.js';
-import { SCORE_NAMES, DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_EMOTIONS, NORMAN_LEVELS } from './knowledge.js';
+import { encodeFromCode, analyzeDesignCode } from './encoder.js';
+import { DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_EMOTIONS, NORMAN_LEVELS } from './knowledge.js';
 
-// ═══════════════════════════════════════════════════
-// MAIN EVALUATION FUNCTION
-// ═══════════════════════════════════════════════════
+const SERVER_HINT =
+  'Phase 5 design server is not running. Start it with:\n' +
+  '  cd /Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/mlx && \\\n' +
+  '  python3 inference_server.py --warmup &';
 
 /**
- * Evaluate a design artifact and return scores, suggestions, and analysis.
+ * Evaluate a design artifact and return scores + suggestions + analysis.
  *
  * @param {object} input - { code: string, path: string, screenshot: string, context: object }
- *   - code: Raw HTML/CSS/JSX code
- *   - path: Path to a code file
- *   - screenshot: Path to a screenshot (Phase 2+)
+ *   - code: Raw HTML/CSS/JSX/Svelte code
+ *   - path: Path to a code file (alternative to code)
+ *   - screenshot: Path to a PNG/JPG of the rendered surface (preferred — vision head sees it)
  *   - context: Optional context signals for the encoder
  * @param {object} options - { detailed: boolean }
- * @returns {object} Evaluation result
+ * @returns {object} Evaluation result with scores, weakest/strongest, suggestions
  */
 export async function evaluateDesign(input, options = {}) {
   const t0 = Date.now();
-
-  // ── Try Phase 2b server first (MobileNet V2 + trained head) ──
-  try {
-    const client = await import('./client.js');
-    if (client.isServerRunning()) {
-      const serverInput = {};
-
-      if (input.screenshot) {
-        serverInput.screenshot = input.screenshot;
-      }
-
-      // Add code features if we have code
-      if (input.code || input.path) {
-        const code = input.code || input.path || '';
-        const codeFeatures = encodeFromCode(code, input.context || {});
-        serverInput.codeFeatures = Array.from(codeFeatures);
-      }
-
-      // Need at least screenshot or code features
-      if (serverInput.screenshot || serverInput.codeFeatures) {
-        const serverResult = await client.evaluate(serverInput);
-        const elapsed = Date.now() - t0;
-
-        const result = {
-          scores: serverResult.scores,
-          overall: serverResult.overall,
-          norman: serverResult.norman,
-          weakest: findWeakest(serverResult.scores, 3),
-          strongest: findStrongest(serverResult.scores, 3),
-          suggestions: generateSuggestions(serverResult.scores),
-          modelVersion: 'phase_2b',
-          paramCount: serverResult.param_count,
-          inferenceMs: elapsed,
-          backend: 'phase_2b',
-        };
-
-        if (options.detailed && (input.code || input.path)) {
-          const code = input.code || input.path;
-          result.analysis = analyzeDesignCode(code);
-          result.antiPatterns = detectAntiPatternDetails(code);
-          result.emotionalProfile = assessEmotionalProfile(result.scores);
-          result.referenceComparison = compareToReferences(result.scores);
-        }
-
-        return result;
-      }
-    }
-  } catch (e) {
-    // Phase 2b server unavailable — fall back to JS MLP
+  const client = await import('./client.js');
+  if (!client.isServerRunning()) {
+    throw new Error(SERVER_HINT);
   }
 
-  // ── Fallback: Phase 1 JS MLP ──
-  const model = loadModel();
-
-  let features;
-  if (input.screenshot) {
-    features = await encodeFromScreenshot(input.screenshot);
-  } else {
+  const serverInput = {};
+  if (input.screenshot) serverInput.screenshot = input.screenshot;
+  if (input.code || input.path) {
     const code = input.code || input.path || '';
-    features = encodeFromCode(code, input.context || {});
+    serverInput.codeFeatures = Array.from(encodeFromCode(code, input.context || {}));
+  }
+  if (!serverInput.screenshot && !serverInput.codeFeatures) {
+    throw new Error('Provide at least one of: { screenshot, code, path }.');
   }
 
-  const rawScores = model.predict(features);
-  const scores = Object.fromEntries(SCORE_NAMES.map((n, i) => [n, rawScores[i]]));
+  const serverResult = await client.evaluate(serverInput);
   const elapsed = Date.now() - t0;
 
   const result = {
-    scores,
-    overall: scores.overall_aesthetic,
-    norman: {
-      visceral: scores.visceral_score,
-      behavioral: scores.behavioral_score,
-      reflective: scores.reflective_score,
-    },
-    weakest: findWeakest(scores, 3),
-    strongest: findStrongest(scores, 3),
-    suggestions: generateSuggestions(scores),
-    modelVersion: model.config.schemaVersion,
-    paramCount: model.getParamCount(),
+    scores: serverResult.scores,
+    overall: serverResult.overall,
+    norman: serverResult.norman,
+    weakest: findWeakest(serverResult.scores, 3),
+    strongest: findStrongest(serverResult.scores, 3),
+    suggestions: generateSuggestions(serverResult.scores),
+    modelVersion: serverResult.model_version || 'phase_5',
+    paramCount: serverResult.param_count,
     inferenceMs: elapsed,
-    backend: 'phase_1_mlp',
+    backend: 'phase_5',
   };
 
   if (options.detailed && (input.code || input.path)) {
     const code = input.code || input.path;
     result.analysis = analyzeDesignCode(code);
     result.antiPatterns = detectAntiPatternDetails(code);
-    result.emotionalProfile = assessEmotionalProfile(scores);
-    result.referenceComparison = compareToReferences(scores);
+    result.emotionalProfile = assessEmotionalProfile(result.scores);
+    result.referenceComparison = compareToReferences(result.scores);
   }
 
   return result;
@@ -122,20 +77,11 @@ export async function evaluateDesign(input, options = {}) {
 
 export async function quickScore(code, context = {}) {
   // Try Phase 2b server
-  try {
-    const client = await import('./client.js');
-    if (client.isServerRunning()) {
-      const codeFeatures = encodeFromCode(code, context);
-      const result = await client.evaluate({ codeFeatures: Array.from(codeFeatures) });
-      return result.overall;
-    }
-  } catch {}
-
-  // Fallback: JS MLP
-  const model = loadModel();
-  const features = encodeFromCode(code, context);
-  const rawScores = model.predict(features);
-  return rawScores[11]; // overall_aesthetic
+  const client = await import('./client.js');
+  if (!client.isServerRunning()) throw new Error(SERVER_HINT);
+  const codeFeatures = encodeFromCode(code, context);
+  const result = await client.evaluate({ codeFeatures: Array.from(codeFeatures) });
+  return result.overall;
 }
 
 // ═══════════════════════════════════════════════════

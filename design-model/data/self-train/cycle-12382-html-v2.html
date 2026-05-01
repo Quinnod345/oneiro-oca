@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Tracker - Deep Rest Analytics</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --accent-blue: #3b82f6;
+            --accent-teal: #14b8a6;
+            --accent-purple: #8b5cf6;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --surface: #1f2937;
+            --border: #374151;
+            --sleep-deep: #1e40af;
+            --sleep-rem: #7c3aed;
+            --sleep-light: #06b6d4;
+            --sleep-awake: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.6;
+        }
+
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            flex: 1;
+        }
+
+        h1 {
+            font-size: 1.875rem;
+            font-weight: 600;
+            background: linear-gradient(to right, var(--accent-teal), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .sleep-input {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        input[type="time"],
+        input[type="number"],
+        select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="time"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .button {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .sleep-chart {
+            height: 300px;
+            background: var(--bg-primary);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-bars {
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+            gap: 0.5rem;
+            padding-bottom: 2rem;
+        }
+
+        .sleep-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--sleep-deep), var(--sleep-light));
+            border-radius: 0.25rem 0.25rem 0 0;
+            position: relative;
+            min-height: 20px;
+            transition: height 0.3s ease;
+        }
+
+        .sleep-bar:hover::after {
+            content: attr(data-hours) 'h';
+            position: absolute;
+            top: -1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            background: var(--surface);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .metric {
+            background: var(--bg-primary);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-teal);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .sleep-quality-indicator {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .quality-segment {
+            height: 0.5rem;
+            flex: 1;
+            background: var(--border);
+            border-radius: 0.25rem;
+            transition: background 0.3s;
+        }
+
+        .quality-segment.active {
+            background: var(--accent-teal);
+        }
+
+        .insights {
+            margin-top: 2rem;
+        }
+
+        .insight-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .insight-icon {
+            width: 2rem;
+            height: 2rem;
+            background: var(--accent-blue);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .insight-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .wave-decoration {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .wave {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, var(--accent-teal), transparent);
+            clip-path: polygon(0 50%, 100% 30%, 100% 100%, 0 100%);
+            animation: wave-motion 20s ease-in-out infinite;
+        }
+
+        @keyframes wave-motion {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Sleep Tracker</h1>
+    </header>
+
+    <div class="container">
+        <div class="dashboard">
+            <aside>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Log Sleep</h2>
+                    </div>
+                    <form class="sleep-input" id="sleepForm">
+                        <div class="input-group">
+                            <label for="bedtime">Bedtime</label>
+                            <input type="time" id="bedtime" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="waketime">Wake Time</label>
+                            <input type="time" id="waketime" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="quality">Sleep Quality</label>
+                            <select id="quality" required>
+                                <option value="5">Excellent</option>
+                                <option value="4">Good</option>
+                                <option value="3" selected>Average</option>
+                                <option value="2">Poor</option>
+                                <option value="1">Very Poor</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="interruptions">Interruptions</label>
+                            <input type="number" id="interruptions" min="0" max="10" value="0">
+                        </div>
+                        <button type="submit" class="button">Log Sleep</button>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">Insights</h2>
+                    </div>
+                    <div class="insights">
+                        <div class="insight-item">
+                            <div class="insight-icon">🌙</div>
+                            <div class="insight-text">Your average sleep time is 7.5 hours</div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon">📈</div>
+                            <div class="insight-text">Sleep quality improved 15% this week</div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon">⏰</div>
+                            <div class="insight-text">Most consistent bedtime: 10:30 PM</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <main>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Weekly Sleep Pattern</h2>
+                    </div>
+                    <div class="sleep-chart">
+                        <div class="chart-bars">
+                            <div class="sleep-bar" style="height: 70%" data-hours="7.2"></div>
+                            <div class="sleep-bar" style="height: 85%" data-hours="8.1"></div>
+                            <div class="sleep-bar" style="height: 65%" data-hours="6.5"></div>
+                            <div class="sleep-bar" style="height: 80%" data-hours="7.8"></div>
+                            <div class="sleep-bar" style="height: 75%" data-hours="7.5"></div>
+                            <div class="sleep-bar" style="height: 90%" data-hours="8.5"></div>
+                            <div class="sleep-bar" style="height: 70%" data-hours="7.0"></div>
+                        </div>
+                    </div>
+                    <div class="sleep-quality-indicator">
+                        <div class="quality-segment active"></div>
+                        <div class="quality-segment active"></div>
+                        <div class="quality-segment active"></div>
+                        <div class="quality-segment active"></div>
+                        <div class="quality-segment"></div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-header">
+                        <h2 class="card-title">Sleep Metrics</h2>
+                    </div>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-value">7h 30m</div>
+                            <div class="metric-label">Average Duration</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">82%</div>
+                            <div class="metric-label">Sleep Efficiency</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">23:15</div>
+                            <div class="metric-label">Avg Bedtime</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">1.2</div>
+                            <div class="metric-label">Avg Interruptions</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="wave-decoration">
+        <div class="wave"></div>
+    </div>
+
+    <script>
+        document.getElementById('sleepForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const bedtime = document.getElementById('bedtime').value;
+            const waketime = document.getElementById('waketime').value;
+            const quality = document.getElementById('quality').value;
+            
+            // Update quality indicator
+            const segments = document.querySelectorAll('.quality-segment');
+            segments.forEach((seg, index) => {
+                seg.classList.toggle('active', index < quality);
+            });
+            
+            // Add new bar to chart (simplified demo)
+            const chart = document.querySelector('.chart-bars');
+            const lastBar = chart.lastElementChild;
+            if (lastBar) {
+                const height = 50 + Math.random() * 40;
+                lastBar.style.height = height + '%';
+                lastBar.setAttribute('data-hours', (height / 10).toFixed(1));
+            }
+        });
+    </script>
+</body>
+</html>

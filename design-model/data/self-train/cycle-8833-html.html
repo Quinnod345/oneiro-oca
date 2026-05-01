@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linguistic Archaeology Tool</title>
+    <style>
+        :root {
+            --obsidian: #0a0a0b;
+            --sediment-1: #1a1618;
+            --sediment-2: #2d2427;
+            --sediment-3: #453935;
+            --sediment-4: #5e4a44;
+            --amber: #d4a574;
+            --glow: #f4e4c1;
+            --dust: #8b7355;
+            --ancient: #ff6b35;
+            --sanskrit: #c9184a;
+            --latin: #7209b7;
+            --modern: #4cc9f0;
+            --thread: rgba(244, 228, 193, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            font-family: Garamond, Georgia, serif;
+            background: var(--obsidian);
+            color: var(--dust);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .excavation-site {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .strata-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform: perspective(1200px) rotateX(15deg);
+            transform-origin: center bottom;
+        }
+
+        .stratum {
+            position: absolute;
+            width: 100%;
+            left: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .stratum-proto {
+            height: 25%;
+            bottom: 0;
+            background: linear-gradient(180deg, var(--sediment-1) 0%, var(--obsidian) 100%);
+        }
+
+        .stratum-ancient {
+            height: 30%;
+            bottom: 20%;
+            background: linear-gradient(180deg, var(--sediment-2) 0%, var(--sediment-1) 100%);
+        }
+
+        .stratum-classical {
+            height: 30%;
+            bottom: 45%;
+            background: linear-gradient(180deg, var(--sediment-3) 0%, var(--sediment-2) 100%);
+        }
+
+        .stratum-modern {
+            height: 30%;
+            top: 0;
+            background: linear-gradient(180deg, var(--sediment-4) 0%, var(--sediment-3) 100%);
+        }
+
+        .linguistic-artifact {
+            position: absolute;
+            font-size: 14px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .artifact-proto {
+            color: var(--ancient);
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .artifact-sanskrit {
+            color: var(--sanskrit);
+            font-style: italic;
+        }
+
+        .artifact-latin {
+            color: var(--latin);
+        }
+
+        .artifact-modern {
+            color: var(--modern);
+            font-size: 16px;
+        }
+
+        .artifact-revealed {
+            opacity: 1;
+        }
+
+        .dust-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(139, 115, 85, 0.02) 35px, rgba(139, 115, 85, 0.02) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(139, 115, 85, 0.02) 35px, rgba(139, 115, 85, 0.02) 70px);
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .etymology-thread {
+            position: absolute;
+            height: 2px;
+            background: var(--thread);
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            box-shadow: 0 0 10px var(--glow);
+        }
+
+        .thread-active {
+            opacity: 1;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 10px var(--glow); }
+            50% { box-shadow: 0 0 20px var(--glow), 0 0 30px var(--amber); }
+        }
+
+        .brush-cursor {
+            position: fixed;
+            width: 80px;
+            height: 80px;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+        }
+
+        .brush-bristles {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(212, 165, 116, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .brush-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--dust);
+            border-radius: 50%;
+            opacity: 0;
+        }
+
+        .constellation-map {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            height: 300px;
+            background: rgba(10, 10, 11, 0.9);
+            border: 1px solid var(--sediment-2);
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        .constellation-node {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--glow);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px var(--glow);
+        }
+
+        .excavation-tools {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: rgba(26, 22, 24, 0.8);
+            padding: 15px 30px;
+            border-radius: 30px;
+            border: 1px solid var(--sediment-2);
+        }
+
+        .tool {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--sediment-1);
+            border: 1px solid var(--sediment-3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--dust);
+            font-size: 20px;
+        }
+
+        .tool:hover {
+            background: var(--sediment-2);
+            border-color: var(--amber);
+        }
+
+        .tool.active {
+            background: var(--sediment-3);
+            border-color: var(--amber);
+            box-shadow: 0 0 20px rgba(212, 165, 116, 0.3);
+        }
+
+        .discovery-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--sediment-2);
+            padding: 15px 30px;
+            border-radius: 25px;
+            border: 1px solid var(--amber);
+            opacity: 0;
+            transition: all 0.5s ease;
+            font-size: 14px;
+            color: var(--glow);
+        }
+
+        .discovery-notification.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .stratum-label {
+            position: absolute;
+            left: 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            opacity: 0.3;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+        }
+
+        .crumble-effect {
+            animation: crumble 0.5s ease-out forwards;
+        }
+
+        @keyframes crumble {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: scale(0.3) rotate(15deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="excavation-site">
+        <div class="strata-container">
+            <div class="stratum stratum-proto" data-layer="proto">
+                <span class="stratum-label">Proto-Indo-European</span>
+                <div class="linguistic-artifact artifact-proto" style="left: 25%; bottom: 40%;">*gʷṓws</div>
+                <div class="linguistic-artifact artifact-proto" style="left: 60%; bottom: 60%;">*h₂ŕ̥tḱos</div>
+                <div class="linguistic-artifact artifact-proto" style="left: 45%; bottom: 25%;">*wódr̥</div>
+                <div class="linguistic-artifact artifact-proto" style="left: 80%; bottom: 45%;">*ph₂tḗr</div>
+                <div class="dust-overlay"></div>
+            </div>
+            
+            <div class="stratum stratum-ancient" data-layer="ancient">
+                <span class="stratum-label">Sanskrit</span>
+                <div class="linguistic-artifact artifact-sanskrit" style="left: 25%; bottom: 30%;">गौः (gauh)</div>
+                <div class="linguistic-artifact artifact-sanskrit" style="left: 60%; bottom: 50%;">ऋक्ष (ṛkṣa)</div>
+                <div class="linguistic-artifact artifact-sanskrit" style="left: 45%; bottom: 20%;">उदन् (udan)</div>
+                <div class="linguistic-artifact artifact-sanskrit" style="left: 80%; bottom: 40%;">पितृ (pitṛ)</div>
+                <div class="dust-overlay"></div>
+            </div>
+            
+            <div class="stratum stratum-classical" data-layer="classical">
+                <span class="stratum-label">Latin</span>
+                <div class="linguistic-artifact artifact-latin" style="left: 26%; top: 40%;">bōs</div>
+                <div class="linguistic-artifact artifact-latin" style="left: 61%; top: 20%;">ursus</div>
+                <div class="linguistic-artifact artifact-latin" style="left: 46%; top: 60%;">aqua</div>
+                <div class="linguistic-artifact artifact-latin" style="left: 81%; top: 35%;">pater</div>
+                <div class="dust-overlay"></div>
+            </div>
+            
+            <div class="stratum stratum-modern" data-layer="modern">
+                <span class="stratum-label">Modern Languages</span>
+                <div class="linguistic-artifact artifact-modern" style="left: 20%; top: 30%;">cow</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 30%; top: 40%;">गाय (gāy)</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 55%; top: 25%;">bear</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 65%; top: 35%;">oso</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 40%; top: 45%;">water</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 50%; top: 55%;">agua</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 75%; top: 30%;">father</div>
+                <div class="linguistic-artifact artifact-modern" style="left: 85%; top: 40%;">पिता (pitā)</div>
+                <div class="dust-overlay"></div>
+            </div>
+        </div>
+        
+        <canvas class="etymology-thread" id="connections"></canvas>
+        
+        <div class="constellation-map" id="constellation">
+            <svg width="300" height="300" style="position: absolute; top: 0; left: 0;">
+                <defs>
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+            </svg>
+        </div>
+        
+        <div class="excavation-tools">
+            <div class="tool active" data-tool="brush">🖌</div>
+            <div class="tool" data-tool="precision">🪶</div>
+            <div class="tool" data-tool="heavy">🪓</div>
+        </div>
+        
+        <div class="discovery-notification" id="notification"></div>
+    </div>
+    
+    <div class="brush-cursor" id="cursor">
+        <div class="brush-bristles">
+            <div class="brush-particle"></div>
+            <div class="brush-particle"></div>
+            <div class="brush-particle"></div>
+            <div class="brush-particle"></div>
+            <div class="brush-particle"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentTool = 'brush';
+        let brushStrength = 0.5;
+        let excavatedAreas = new Map();
+        let connections = [];
+        let discovered = new Set();
+        let isMouseDown = false;
+        
+        const cursor = document.getElementById('cursor');
+        const notification = document.getElementById('notification');
+        
+        // Mouse tracking
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+            
+            if (isMouseDown) {
+                excavate(e.clientX, e.clientY);
+            }
+        });
+        
+        document.addEventListener('mousedown', () => isMouseDown = true);
+        document.addEventListener('mouseup', () => isMouseDown = false);
+        
+        // Tool selection
+        document.querySelectorAll('.tool').forEach(tool => {
+            tool.addEventListener('click', (e) => {
+                document.querySelector('.tool.active').classList.remove('active');
+                e.target.classList.add('active');
+                currentTool = e.target.dataset.tool;
+                
+                switch(currentTool) {
+                    case 'precision':
+                        brushStrength = 0.2;
+                        cursor.style.width = '40px';
+                        cursor.style.height = '40px';
+                        break;
+                    case 'heavy':
+                        brushStrength = 1.0;
+                        cursor.style.width = '120px';
+                        cursor.style.height = '120px';
+                        break;
+                    default:
+                        brushStrength = 0.5;
+                        cursor.style.width = '80px';
+                        cursor.style.height = '80px';
+                }
+            });
+        });
+        
+        function excavate(x, y) {
+            const artifacts = document.querySelectorAll('.linguistic-artifact');
+            
+            artifacts.forEach(artifact => {
+                const rect = artifact.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(x - (rect.left + rect.width/2), 2) + 
+                    Math.pow(y - (rect.top + rect.height/2), 2)
+                );
+                
+                if (distance < 100) {
+                    const overlay = artifact.parentElement.querySelector('.dust-overlay');
+                    const currentOpacity = parseFloat(overlay.style.opacity || 1);
+                    
+                    if (currentTool === 'heavy' && brushStrength > 0.8) {
+                        // Too aggressive - artifact crumbles
+                        if (Math.random() > 0.95 && !artifact.classList.contains('artifact-revealed')) {
+                            artifact.classList.add('crumble-effect');
+                            showNotification('Artifact damaged! Use gentler technique');
+                            setTimeout(() => {
+                                artifact.style.display = 'none';
+                            }, 500);
+                        }
+                    }
+                    
+                    overlay.style.opacity = Math.max(0, currentOpacity - brushStrength * 0.05);
+                    
+                    if (currentOpacity < 0.3 && !artifact.classList.contains('artifact-revealed')) {
+                        artifact.classList.add('artifact-revealed');
+                        discovered.add(artifact.textContent);
+                        checkConnections(artifact);
+                        addParticleEffect(x, y);
+                    }
+                }
+            });
+        }
+        
+        function checkConnections(artifact) {
+            const word = artifact.textContent;
+            const layer = artifact.parentElement.dataset.layer;
+            
+            // Define etymological connections
+            const etymologies = {
+                '*gʷṓws': ['गौः (gauh)', 'bōs', 'cow', 'गाय (gāy)'],
+                '*h₂ŕ̥tḱos': ['ऋक्ष (ṛkṣa)', 'ursus', 'bear', 'oso'],
+                '*wódr̥': ['उदन् (udan)', 'aqua', 'water', 'agua'],
+                '*ph₂tḗr': ['पितृ (pitṛ)', 'pater', 'father', 'पिता (pitā)']
+            };
+            
+            Object.entries(etymologies).forEach(([root, descendants]) => {
+                if (root === word || descendants.includes(word)) {
+                    const relatedWords = [root, ...descendants].filter(w => discovered.has(w));
+                    if (relatedWords.length > 1) {
+                        drawConnections(relatedWords);
+                        showNotification(`Etymology discovered: ${root} → ${descendants.join(' → ')}`);
+                        updateConstellation(root, descendants);
+                    }
+                }
+            });
+        }
+        
+        function drawConnections(words) {
+            const svg = document.querySelector('#constellation svg');
+            
+            words.forEach((word, i) => {
+                if (i < words.length - 1) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', Math.random() * 300);
+                    line.setAttribute('y1', Math.random() * 300);
+                    line.setAttribute('x2', Math.random() * 300);
+                    line.setAttribute('y2', Math.random() * 300);
+                    line.setAttribute('stroke', '#f4e4c1');
+                    line.setAttribute('stroke-width', '1');
+                    line.setAttribute('opacity', '0.3');
+                    line.setAttribute('filter', 'url(#glow)');
+                    svg.appendChild(line);
+                }
+            });
+        }
+        
+        function updateConstellation(root, descendants) {
+            const constellation = document.getElementById('constellation');
+            const centerX = 150;
+            const centerY = 150;
+            
+            // Add root node at center
+            const rootNode = document.createElement('div');
+            rootNode.className = 'constellation-node';
+            rootNode.style.left = centerX + 'px';
+            rootNode.style.top = centerY + 'px';
+            rootNode.style.background = '#ff6b35';
+            constellation.appendChild(rootNode);
+            
+            // Add descendant nodes around it
+            descendants.forEach((word, i) => {
+                if (discovered.has(word)) {
+                    const angle = (i / descendants.length) * Math.PI * 2;
+                    const radius = 80;
+                    const node = document.createElement('div');
+                    node.className = 'constellation-node';
+                    node.style.left = (centerX + Math.cos(angle) * radius) + 'px';
+                    node.style.top = (centerY + Math.sin(angle) * radius) + 'px';
+                    constellation.appendChild(node);
+                }
+            });
+        }
+        
+        function addParticleEffect(x, y) {
+            const particles = cursor.querySelectorAll('.brush-particle');
+            particles.forEach((particle, i) => {
+                particle.style.opacity = '1';
+                particle.style.left = Math.random() * 80 + 'px';
+                particle.style.top = Math.random() * 80 + 'px';
+                particle.style.transition = 'all 0.5s ease-out';
+                
+                setTimeout(() => {
+                    particle.style.transform = `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 + 20}px)`;
+                    particle.style.opacity = '0';
+                }, 100 * i);
+            });
+        }
+        
+        function showNotification(text) {
+            notification.textContent = text;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

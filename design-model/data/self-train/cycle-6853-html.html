@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Logic Calculator</title>
+    <style>
+        :root {
+            --wake-white: #f9f7f4;
+            --dream-violet: #6b5b95;
+            --sleep-deep: #2e1a47;
+            --number-blue: #4a90e2;
+            --equation-gold: #f5a623;
+            --portal-green: #7ed321;
+            --blur-pink: #ff6b9d;
+            --consciousness: 0.5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, var(--wake-white) 0%, #e8e3f0 50%, var(--dream-violet) 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+            transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.dreaming {
+            background: radial-gradient(ellipse at center, var(--sleep-deep) 0%, #1a0f2e 100%);
+        }
+
+        .consciousness-meter {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            width: 300px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .consciousness-level {
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(90deg, var(--wake-white), var(--dream-violet));
+            transition: width 1s ease-out;
+            position: relative;
+        }
+
+        .consciousness-level::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: -20px;
+            width: 48px;
+            height: 48px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.8), transparent);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.3; }
+        }
+
+        .calculator-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 480px;
+            height: 640px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 40px;
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.1);
+            transition: all 1s ease;
+        }
+
+        body.dreaming .calculator-frame {
+            transform: translate(-50%, -50%) rotate(5deg) scale(0.95);
+            backdrop-filter: blur(40px);
+            box-shadow: 0 40px 120px rgba(107, 91, 149, 0.3);
+        }
+
+        .display {
+            width: 100%;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .equation-flow {
+            position: absolute;
+            top: 50%;
+            left: 30px;
+            transform: translateY(-50%);
+            font-size: 32px;
+            color: var(--number-blue);
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            transition: all 0.5s ease;
+        }
+
+        body.dreaming .equation-flow {
+            animation: dreamFloat 3s infinite ease-in-out;
+            filter: hue-rotate(180deg);
+        }
+
+        @keyframes dreamFloat {
+            0%, 100% { transform: translateY(-50%) translateX(0); }
+            33% { transform: translateY(-70%) translateX(20px); }
+            66% { transform: translateY(-30%) translateX(-10px); }
+        }
+
+        .portal-equals {
+            position: absolute;
+            right: 100px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--portal-green), transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        body.dreaming .portal-equals {
+            animation: portalSpin 4s linear infinite;
+            background: radial-gradient(circle, var(--blur-pink), var(--dream-violet));
+        }
+
+        @keyframes portalSpin {
+            0% { transform: translateY(-50%) rotate(0deg) scale(1); }
+            50% { transform: translateY(-50%) rotate(180deg) scale(1.2); }
+            100% { transform: translateY(-50%) rotate(360deg) scale(1); }
+        }
+
+        .result-area {
+            position: absolute;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 36px;
+            color: var(--equation-gold);
+            font-weight: 200;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .result-area.visible {
+            opacity: 1;
+        }
+
+        .number-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .dream-number {
+            height: 80px;
+            border: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            font-size: 24px;
+            color: var(--number-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dream-number:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        body.dreaming .dream-number {
+            background: rgba(107, 91, 149, 0.2);
+            color: var(--blur-pink);
+        }
+
+        body.dreaming .dream-number:hover {
+            animation: colorMorph 1s ease;
+        }
+
+        @keyframes colorMorph {
+            0% { background: rgba(107, 91, 149, 0.2); }
+            50% { background: rgba(255, 107, 157, 0.3); }
+            100% { background: rgba(126, 211, 33, 0.2); }
+        }
+
+        .operator-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .dream-operator {
+            height: 60px;
+            border: none;
+            background: rgba(245, 166, 35, 0.15);
+            border-radius: 15px;
+            font-size: 20px;
+            color: var(--equation-gold);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        body.dreaming .dream-operator {
+            animation: operatorDance 2s infinite alternate;
+        }
+
+        @keyframes operatorDance {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(5deg); }
+        }
+
+        .clear-dream {
+            width: 100%;
+            height: 60px;
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            letter-spacing: 0.2em;
+            transition: all 0.3s ease;
+        }
+
+        body.dreaming .clear-dream {
+            background: rgba(46, 26, 71, 0.5);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .floating-symbols {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .symbol {
+            position: absolute;
+            font-size: 24px;
+            opacity: 0.1;
+            animation: float 10s infinite linear;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(100vh) rotate(0deg); }
+            100% { transform: translateY(-100px) rotate(360deg); }
+        }
+
+        body.dreaming .symbol {
+            opacity: 0.3;
+            filter: blur(2px);
+            animation-duration: 6s;
+        }
+
+        .dream-state-indicator {
+            position: absolute;
+            bottom: 40px;
+            right: 60px;
+            font-size: 14px;
+            color: rgba(0, 0, 0, 0.3);
+            letter-spacing: 0.1em;
+            transition: all 1s ease;
+        }
+
+        body.dreaming .dream-state-indicator {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .number-trail {
+            position: absolute;
+            pointer-events: none;
+            font-size: 20px;
+            color: var(--number-blue);
+            opacity: 0;
+            animation: trail 2s ease-out;
+        }
+
+        @keyframes trail {
+            0% { opacity: 0.8; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(0.5) translateY(-50px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="consciousness-meter">
+        <div class="consciousness-level" id="consciousness"></div>
+    </div>
+
+    <div class="calculator-frame">
+        <div class="display">
+            <div class="equation-flow" id="equation">0</div>
+            <div class="portal-equals" id="equals">=</div>
+            <div class="result-area" id="result"></div>
+        </div>
+
+        <div class="number-grid">
+            <button class="dream-number" data-value="7">7</button>
+            <button class="dream-number" data-value="8">8</button>
+            <button class="dream-number" data-value="9">9</button>
+            <button class="dream-number" data-value="4">4</button>
+            <button class="dream-number" data-value="5">5</button>
+            <button class="dream-number" data-value="6">6</button>
+            <button class="dream-number" data-value="1">1</button>
+            <button class="dream-number" data-value="2">2</button>
+            <button class="dream-number" data-value="3">3</button>
+        </div>
+
+        <div class="operator-row">
+            <button class="dream-operator" data-op="+">+</button>
+            <button class="dream-operator" data-op="-">−</button>
+            <button class="dream-operator" data-op="*">×</button>
+            <button class="dream-operator" data-op="/">÷</button>
+        </div>
+
+        <div class="number-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <button class="dream-number" data-value="0">0</button>
+            <button class="dream-number" data-value=".">.</button>
+        </div>
+
+        <button class="clear-dream" id="clear">CLEAR DREAM</button>
+    </div>
+
+    <div class="floating-symbols" id="symbols"></div>
+
+    <div class="dream-state-indicator" id="stateIndicator">CONSCIOUSNESS: LIMINAL</div>
+
+    <script>
+        let equation = '0';
+        let consciousness = 0.5;
+        let lastActivity = Date.now();
+        let isDreaming = false;
+
+        const equationEl = document.getElementById('equation');
+        const resultEl = document.getElementById('result');
+        const consciousnessEl = document.getElementById('consciousness');
+        const stateEl = document.getElementById('stateIndicator');
+        const symbolsEl = document.getElementById('symbols');
+
+        // Create floating symbols
+        const symbols = ['∞', '√', 'π', '∑', '∫', 'φ', '∂', '∇'];
+        for (let i = 0; i < 15; i++) {
+            const symbol = document.createElement('div');
+            symbol.className = 'symbol';
+            symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+            symbol.style.left = Math.random() * 100 + '%';
+            symbol.style.animationDelay = Math.random() * 10 + 's';
+            symbolsEl.appendChild(symbol);
+        }
+
+        // Update consciousness based on interaction
+        function updateConsciousness() {
+            const timeSinceActivity = Date.now() - lastActivity;
+            
+            if (timeSinceActivity > 3000) {
+                consciousness = Math.max(0, consciousness - 0.01);
+            } else {
+                consciousness = Math.min(1, consciousness + 0.05);
+            }
+
+            consciousnessEl.style.width = (consciousness * 100) + '%';
+            
+            if (consciousness < 0.3 && !isDreaming) {
+                enterDreamState();
+            } else if (consciousness > 0.7 && isDreaming) {
+                exitDreamState();
+            }
+
+            updateStateIndicator();
+        }
+
+        function updateStateIndicator() {
+            if (consciousness > 0.7) {
+                stateEl.textContent = 'CONSCIOUSNESS: AWAKE';
+            } else if (consciousness > 0.3) {
+                stateEl.textContent = 'CONSCIOUSNESS: LIMINAL';
+            } else {
+                stateEl.textContent = 'CONSCIOUSNESS: DREAMING';
+            }
+        }
+
+        function enterDreamState() {
+            isDreaming = true;
+            document.body.classList.add('dreaming');
+        }
+
+        function exitDreamState() {
+            isDreaming = false;
+            document.body.classList.remove('dreaming');
+        }
+
+        function createNumberTrail(x, y, value) {
+            const trail = document.createElement('div');
+            trail.className = 'number-trail';
+            trail.textContent = value;
+            trail.style.left = x + 'px';
+            trail.style.top = y + 'px';
+            document.body.appendChild(trail);
+            setTimeout(() => trail.remove(), 2000);
+        }
+
+        // Dream logic calculations
+        function dreamCalculate(eq) {
+            if (isDreaming) {
+                // In dream state, numbers behave strangely
+                const nums = eq.match(/\d+/g);
+                if (nums && nums.length > 1) {
+                    const dreamResults = [
+                        Math.sqrt(nums[0] * nums[1]),
+                        nums[0] ** 2 + nums[1],
+                        Math.abs(nums[0] - nums[1]) * Math.PI,
+                        (nums[0] + nums[1]) / Math.E
+                    ];
+                    return dreamResults[Math.floor(Math.random() * dreamResults.length)].toFixed(2);
+                }
+            }
+            
+            try {
+                return eval(eq.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-'));
+            } catch {
+                return 'NaN';
+            }
+        }
+
+        // Number buttons
+        document.querySelectorAll('.dream-number').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                lastActivity = Date.now();
+                const value = btn.dataset.value;
+                
+                if (equation === '0' && value !== '.') {
+                    equation = value;
+                } else {
+                    equation += value;
+                }
+                
+                equationEl.textContent = equation;
+                createNumberTrail(e.pageX, e.pageY, value);
+            });
+        });
+
+        // Operator buttons
+        document.querySelectorAll('.dream-operator').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                lastActivity = Date.now();
+                const op = btn.dataset.op;
+                equation += ' ' + btn.textContent + ' ';
+                equationEl.textContent = equation;
+            });
+        });
+
+        // Equals portal
+        document.getElementById('equals').addEventListener('click', () => {
+            lastActivity = Date.now();
+            const result = dreamCalculate(equation);
+            resultEl.textContent = result;
+            resultEl.classList.add('visible');
+            
+            if (isDreaming) {
+                setTimeout(() => {
+                    equation = result.toString();
+                    equationEl.textContent = equation;
+                    resultEl.classList.remove('visible');
+                }, 2000);
+            }
+        });
+
+        // Clear button
+        document.getElementById('clear').addEventListener('click', () => {
+            lastActivity = Date.now();
+            equation = '0';
+            equationEl.textContent = equation;
+            resultEl.textContent = '';
+            resultEl.classList.remove('visible');
+            consciousness = 0.5;
+        });
+
+        // Consciousness monitoring
+        setInterval(updateConsciousness, 100);
+    </script>
+</body>
+</html>

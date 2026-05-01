@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Foam - Sculptural Thought Interface</title>
+    <style>
+        :root {
+            --foam-neutral: #2a2e3a;
+            --foam-compressed: #1a1d26;
+            --foam-raised: #3d4254;
+            --thought-fresh: #4a7c9e;
+            --thought-settling: #5d6b8a;
+            --thought-baked: #d4a574;
+            --ripple-active: #6aa3cc;
+            --text-primary: #e8e9ed;
+            --text-ghost: #666d7a;
+            --grid-subtle: rgba(255, 255, 255, 0.03);
+            --pressure-light: 0.2;
+            --pressure-medium: 0.5;
+            --pressure-heavy: 0.9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: var(--foam-compressed);
+            width: 1440px;
+            height: 900px;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .interface-split {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .input-panel {
+            width: 42%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--foam-compressed) 0%, var(--foam-neutral) 100%);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 60px 50px;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .thought-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            font-size: 18px;
+            line-height: 32px;
+            color: var(--text-primary);
+            width: 100%;
+            height: 100%;
+            resize: none;
+            font-weight: 300;
+            letter-spacing: 0.02em;
+            position: relative;
+            z-index: 10;
+            padding-right: 20px;
+        }
+
+        .thought-input::placeholder {
+            color: var(--text-ghost);
+            font-style: italic;
+        }
+
+        .ripple-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--ripple-active) 0%, transparent 70%);
+            transform: scale(0);
+            opacity: 0;
+            animation: ripple-expand 1.2s ease-out;
+        }
+
+        @keyframes ripple-expand {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .pressure-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pressure-bar {
+            width: 120px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .pressure-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--thought-fresh), var(--thought-baked));
+            width: 0%;
+            transition: width 0.15s ease-out;
+        }
+
+        .pressure-label {
+            font-size: 11px;
+            color: var(--text-ghost);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .terrain-view {
+            width: 58%;
+            height: 100%;
+            background: var(--foam-compressed);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .isometric-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(30deg) rotateY(-45deg) scale(0.8);
+            transform-origin: center center;
+        }
+
+        .foam-surface {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            grid-template-rows: repeat(20, 1fr);
+            gap: 2px;
+        }
+
+        .foam-cell {
+            background: var(--foam-neutral);
+            position: relative;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            box-shadow: 
+                inset 0 0 0 1px var(--grid-subtle),
+                0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .foam-cell.compressed {
+            transform: translateZ(-20px);
+            background: var(--foam-compressed);
+            box-shadow: 
+                inset 0 2px 8px rgba(0, 0, 0, 0.4),
+                0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .foam-cell.raised {
+            transform: translateZ(30px);
+            background: var(--foam-raised);
+            box-shadow: 
+                inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+                0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .foam-cell.baked {
+            background: var(--thought-baked);
+            transition: none;
+        }
+
+        .foam-cell.fresh {
+            background: var(--thought-fresh);
+        }
+
+        .foam-cell.settling {
+            background: var(--thought-settling);
+        }
+
+        .control-strip {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+            z-index: 20;
+        }
+
+        .control-btn {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 4px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .control-btn.active {
+            background: var(--thought-baked);
+            color: var(--foam-compressed);
+            border-color: var(--thought-baked);
+        }
+
+        .memory-timeline {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 300px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .timeline-segment {
+            flex: 1;
+            height: 100%;
+            background: var(--foam-neutral);
+            border-radius: 2px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .timeline-segment.active {
+            background: linear-gradient(180deg, var(--thought-fresh) 0%, var(--thought-settling) 100%);
+        }
+
+        .timeline-segment.baked {
+            background: var(--thought-baked);
+        }
+
+        .gestural-feedback {
+            position: fixed;
+            pointer-events: none;
+            font-size: 11px;
+            color: var(--text-ghost);
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 3px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.2s;
+            z-index: 100;
+        }
+
+        .gestural-feedback.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .depth-indicator {
+            position: absolute;
+            left: 40px;
+            bottom: 100px;
+            width: 4px;
+            height: 200px;
+            background: linear-gradient(180deg, var(--foam-raised) 0%, var(--foam-neutral) 50%, var(--foam-compressed) 100%);
+            border-radius: 2px;
+            opacity: 0.5;
+        }
+
+        .depth-marker {
+            position: absolute;
+            left: -8px;
+            width: 20px;
+            height: 2px;
+            background: var(--text-ghost);
+            transition: top 0.3s;
+        }
+
+        .word-weight {
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            font-size: 72px;
+            font-weight: 100;
+            color: rgba(255, 255, 255, 0.08);
+            letter-spacing: -0.02em;
+            pointer-events: none;
+            transition: all 0.4s;
+        }
+
+        .cursor-trail {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--ripple-active);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            animation: trail-fade 0.8s ease-out;
+        }
+
+        @keyframes trail-fade {
+            0% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="interface-split">
+        <div class="input-panel">
+            <div class="word-weight" id="wordWeight">0.0</div>
+            <textarea class="thought-input" id="thoughtInput" placeholder="Press keys with intention... let your fingers sculpt the terrain"></textarea>
+            <div class="ripple-overlay" id="rippleOverlay"></div>
+            <div class="pressure-indicator">
+                <span class="pressure-label">Pressure</span>
+                <div class="pressure-bar">
+                    <div class="pressure-fill" id="pressureFill"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="terrain-view">
+            <div class="control-strip">
+                <button class="control-btn" id="bakeBtn">Bake Formation</button>
+                <button class="control-btn" id="clearBtn">Release All</button>
+            </div>
+            
+            <div class="isometric-container">
+                <div class="foam-surface" id="foamSurface"></div>
+            </div>
+            
+            <div class="depth-indicator">
+                <div class="depth-marker" id="depthMarker" style="top: 50%"></div>
+            </div>
+            
+            <div class="memory-timeline" id="memoryTimeline"></div>
+        </div>
+    </div>
+    
+    <div class="gestural-feedback" id="gesturalFeedback"></div>
+
+    <script>
+        const thoughtInput = document.getElementById('thoughtInput');
+        const rippleOverlay = document.getElementById('rippleOverlay');
+        const foamSurface = document.getElementById('foamSurface');
+        const pressureFill = document.getElementById('pressureFill');
+        const wordWeight = document.getElementById('wordWeight');
+        const depthMarker = document.getElementById('depthMarker');
+        const gesturalFeedback = document.getElementById('gesturalFeedback');
+        const bakeBtn = document.getElementById('bakeBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const memoryTimeline = document.getElementById('memoryTimeline');
+        
+        // Initialize foam grid
+        for (let i = 0; i < 400; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'foam-cell';
+            cell.dataset.index = i;
+            cell.dataset.pressure = '0';
+            foamSurface.appendChild(cell);
+        }
+        
+        // Initialize timeline
+        for (let i = 0; i < 20; i++) {
+            const segment = document.createElement('div');
+            segment.className = 'timeline-segment';
+            memoryTimeline.appendChild(segment);
+        }
+        
+        let keyPressures = {};
+        let currentPressure = 0;
+        let lastKeyTime = Date.now();
+        let keyRhythm = [];
+        let bakeMode = false;
+        
+        // Simulate pressure based on typing patterns
+        thoughtInput.addEventListener('keydown', (e) => {
+            const now = Date.now();
+            const timeDiff = now - lastKeyTime;
+            lastKeyTime = now;
+            
+            // Calculate pressure based on rhythm and key hold
+            const rhythmPressure = Math.min(1, 1000 / timeDiff);
+            const keyPressure = keyPressures[e.key] || 0;
+            currentPressure = (rhythmPressure + keyPressure) / 2;
+            
+            // Update pressure indicator
+            pressureFill.style.width = `${currentPressure * 100}%`;
+            wordWeight.textContent = currentPressure.toFixed(1);
+            wordWeight.style.transform = `scale(${1 + currentPressure * 0.2})`;
+            
+            // Create ripple effect
+            createRipple(e);
+            
+            // Deform foam surface
+            deformFoam(currentPressure);
+            
+            // Track rhythm
+            keyRhythm.push({ time: now, pressure: currentPressure });
+            if (keyRhythm.length > 20) keyRhythm.shift();
+            
+            updateTimeline();
+        });
+        
+        thoughtInput.addEventListener('keyup', (e) => {
+            delete keyPressures[e.key];
+        });
+        
+        function createRipple(e) {
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            
+            const rect = thoughtInput.getBoundingClientRect();
+            const x = Math.random() * rect.width;
+            const y = thoughtInput.selectionStart * 2 % rect.height;
+            
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            ripple.style.width = `${50 + currentPressure * 100}px`;
+            ripple.style.height = `${50 + currentPressure * 100}px`;
+            
+            rippleOverlay.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 1200);
+        }
+        
+        function deformFoam(pressure) {
+            const cells = foamSurface.children;
+            const centerX = 10;
+            const centerY = 10;
+            const radius = 3 + pressure * 4;
+            
+            for (let i = 0; i < cells.length; i++) {
+                const x = i % 20;
+                const y = Math.floor(i / 20);
+                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                
+                if (distance < radius) {
+                    const intensity = 1 - (distance / radius);
+                    const cell = cells[i];
+                    
+                    if (pressure > 0.7) {
+                        cell.classList.add('raised');
+                        cell.classList.remove('compressed');
+                        cell.classList.add('fresh');
+                    } else if (pressure < 0.3) {
+                        cell.classList.add('compressed');
+                        cell.classList.remove('raised');
+                    }
+                    
+                    cell.dataset.pressure = intensity * pressure;
+                    
+                    // Gradual rebound
+                    setTimeout(() => {
+                        if (!cell.classList.contains('baked')) {
+                            cell.classList.remove('raised', 'compressed', 'fresh');
+                            cell.classList.add('settling');
+                            setTimeout(() => cell.classList.remove('settling'), 2000);
+                        }
+                    }, 3000 + Math.random() * 2000);
+                }
+            }
+            
+            // Update depth marker
+            depthMarker.style.top = `${50 - pressure * 40}%`;
+        }
+        
+        function updateTimeline() {
+            const segments = memoryTimeline.children;
+            keyRhythm.forEach((beat, i) => {
+                if (segments[i]) {
+                    segments[i].classList.add('active');
+                    segments[i].style.opacity = beat.pressure;
+                }
+            });
+        }
+        
+        bakeBtn.addEventListener('click', () => {
+            bakeMode = !bakeMode;
+            bakeBtn.classList.toggle('active');
+            
+            if (bakeMode) {
+                showFeedback('Baking mode: formations will be preserved');
+                const cells = foamSurface.querySelectorAll('.raised, .compressed');
+                cells.forEach(cell => cell.classList.add('baked'));
+            } else {
+                showFeedback('Baking mode disabled');
+            }
+        });
+        
+        clearBtn.addEventListener('click', () => {
+            const cells = foamSurface.children;
+            for (let cell of cells) {
+                cell.className = 'foam-cell';
+                cell.dataset.pressure = '0';
+            }
+            showFeedback('Surface released');
+        });
+        
+        function showFeedback(text) {
+            gesturalFeedback.textContent = text;
+            gesturalFeedback.classList.add('visible');
+            gesturalFeedback.style.left = `${window.innerWidth / 2 - 50}px`;
+            gesturalFeedback.style.top = `${window.innerHeight / 2}px`;
+            
+            setTimeout(() => {
+                gesturalFeedback.classList.remove('visible');
+            }, 2000);
+        }
+        
+        // Simulate varying key pressure
+        thoughtInput.addEventListener('keypress', (e) => {
+            keyPressures[e.key] = Math.random() * 0.5 + 0.5;
+        });
+    </script>
+</body>
+</html>

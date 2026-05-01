@@ -1,0 +1,36 @@
+{
+  "cycle": 13739,
+  "captured_at": "2026-04-15T19:36:20Z",
+  "language": "swiftui",
+  "brief": "Design an interface for a \"Memory Decay Simulator\" where users manipulate their own forgotten memories represented as deteriorating Polaroid photographs floating in a dark void, with each photo gradually losing pixels and color saturation based on how long ago the memory occurred, requiring users to physically \"shake\" their mouse to temporarily restore clarity to fading images while typing fragmentary details into glitching text fields that randomly delete characters to simulate the frustration ",
+  "scores": {
+    "typography_quality": 0.3,
+    "color_harmony": 0.2,
+    "spatial_composition": 0.4,
+    "motion_elegance": 0.5,
+    "emotional_resonance": 0.7,
+    "craft_visibility": 0.3,
+    "minimalism_coherence": 0.2,
+    "native_integration": 0.4,
+    "visceral_score": 0.3,
+    "behavioral_score": 0.4,
+    "reflective_score": 0.6,
+    "overall_aesthetic": 0.3,
+    "innovation_score": 0.5,
+    "system_creativity": 0.4,
+    "design_distinctiveness": 0.3,
+    "problem_level": 0.8
+  },
+  "overall": 0.3,
+  "innovation": 0.5,
+  "critique": "The polaroid memory concept shows promise but suffers from weak visual hierarchy and poor contrast ratios that make text barely readable. The grayscale palette feels lifeless rather than nostalgic, and the proximity hover effect adds unnecessary complexity without meaningful interaction value.",
+  "fixes": [
+    "Eliminate 75% of visual elements: choose either polaroids OR particles OR heartbeat as the single dominant metaphor and execute it with restraint",
+    "Replace timer-based animations with SwiftUI's native animation modifiers and @State-driven transitions for smoother, more efficient motion",
+    "Establish a clear visual hierarchy with proper typography scale (currently all text is too small) and use color purposefully rather than defaulting to opacity variations"
+  ],
+  "compiled": true,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13739-swiftui-v2.swift",
+  "png_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13739-swiftui-v2.png",
+  "code_snippet": "struct ContentView: View {\n    @State private var memories: [PolaroidMemory] = []\n    @State private var selectedMemory: UUID?\n    @State private var memoryInputs: [UUID: String] = [:]\n    @State private var mouseLocation: CGPoint = .zero\n    \n    let memoryImages = [\n        \"summer afternoon by the lake\",\n        \"grandmother's kitchen\",\n        \"first day of school\",\n        \"wedding dance floor\",\n        \"childhood bedroom\",\n        \"family road trip\"\n    ]\n    \n    var body: some View {\n        GeometryReader { geometry in\n            ZStack {\n                // Subtle gradient background\n                LinearGradient(\n                    colors: [\n                        Color(red: 0.05, green: 0.05, blue: 0.08),\n                        Color.black\n                    ],\n                    startPoint: .top,\n                    endPoint: .bottom\n                )\n                .ignoresSafeArea()\n                \n                // Memory polaroids\n                ForEach(memories) { memory in\n                    PolaroidView(\n                        memory: memory,\n                        isSelected: selectedMemory == memory.id,\n                        mouseDistance: distance(from: mouseLocation, to: memory.position)\n                    )\n                    .position(memory.position)\n                    .onTapGesture {\n                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {\n                            selectedMemory = selectedMemory == memory.id ? nil : memory.id\n                        }\n                    }\n                }\n                \n                // Selected memory detail\n                if let selected = selectedMemory,\n                   let memory = memories.first(where: { $0.id == selected }) {\n                    VStack(spacing: 0) {\n                        Spacer()\n                        \n                        VStack(spacing: 20) {\n                            Text(memory.caption)\n                                .font(.system(size: 18, weight: .medium))\n                                .foregroundColor(.white.opacity(0.9))\n                            \n                            TextField(\"What do you remember?\", text: Binding(\n                                get: { memoryInputs[selected] ?? \"\" },\n                                set: { memoryInputs[selected] = $0 }\n                            ))\n                            .textFieldStyle(PlainTextFieldStyle())\n                            .font(.system(size: 16))\n                            .foregroundColor(.white.opacity(0.8))\n                            .padding(.horizontal, 20)\n                            .padding(.vertical, 12)\n                            .background(\n                                RoundedRectangle(cornerRadius: 8)\n                                    .fill(Color.white.opacity(0.1))\n                                    .overlay(\n                                        RoundedRectangle(cornerRadius: 8)\n               "
+}

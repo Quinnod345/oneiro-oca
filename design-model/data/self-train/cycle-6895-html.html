@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silence Auction House</title>
+    <style>
+        :root {
+            --void-black: #0a0a0a;
+            --frequency-blue: #0066ff;
+            --interference-cyan: #00ffcc;
+            --bid-magenta: #ff0066;
+            --quiet-white: #fafafa;
+            --noise-gradient: linear-gradient(135deg, #ff3366 0%, #ff6633 50%, #ffcc00 100%);
+            --silence-gradient: linear-gradient(135deg, #001133 0%, #003366 50%, #0066cc 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--void-black);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+            color: var(--quiet-white);
+            position: relative;
+        }
+
+        .noise-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(255, 51, 102, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(0, 255, 204, 0.05) 0%, transparent 40%),
+                        radial-gradient(circle at 40% 20%, rgba(0, 102, 255, 0.08) 0%, transparent 60%);
+            animation: fieldPulse 20s ease-in-out infinite;
+        }
+
+        @keyframes fieldPulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+        }
+
+        .auction-interface {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            gap: 0;
+        }
+
+        .bid-panel {
+            background: rgba(10, 10, 10, 0.8);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 32px 24px;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 24px;
+        }
+
+        .current-noise {
+            background: rgba(255, 51, 102, 0.1);
+            border: 1px solid rgba(255, 51, 102, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 32px;
+        }
+
+        .noise-level {
+            font-size: 48px;
+            font-weight: 200;
+            color: var(--bid-magenta);
+            margin-bottom: 8px;
+        }
+
+        .noise-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .bid-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .time-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .time-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 12px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .duration-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+            margin: 16px 0;
+        }
+
+        .duration-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--frequency-blue);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .bid-button {
+            background: var(--frequency-blue);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bid-button:hover {
+            background: #0055dd;
+            transform: translateY(-1px);
+        }
+
+        .timeline-view {
+            position: relative;
+            padding: 32px;
+            overflow: hidden;
+        }
+
+        .timeline-header {
+            position: absolute;
+            top: 32px;
+            left: 32px;
+            right: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .equity-meter {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .equity-value {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--interference-cyan);
+        }
+
+        .equity-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .timeline-canvas {
+            position: absolute;
+            top: 100px;
+            left: 32px;
+            right: 32px;
+            bottom: 32px;
+            perspective: 1000px;
+        }
+
+        .hour-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: repeat(24, 1fr);
+            pointer-events: none;
+        }
+
+        .hour-line {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+
+        .hour-label {
+            position: absolute;
+            left: -40px;
+            top: -8px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .silence-block {
+            position: absolute;
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.3) 0%, rgba(0, 255, 204, 0.2) 100%);
+            border: 1px solid rgba(0, 255, 204, 0.4);
+            backdrop-filter: blur(10px);
+            cursor: grab;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        .silence-block:hover {
+            transform: translateZ(20px);
+            box-shadow: 0 10px 40px rgba(0, 255, 204, 0.3);
+        }
+
+        .silence-block.active {
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.5) 0%, rgba(0, 255, 204, 0.4) 100%);
+            border-color: var(--interference-cyan);
+        }
+
+        .silence-block.conflict {
+            background: linear-gradient(135deg, rgba(255, 0, 102, 0.3) 0%, rgba(255, 102, 0, 0.2) 100%);
+            border-color: var(--bid-magenta);
+            animation: conflict-pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes conflict-pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .block-info {
+            padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .block-owner {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .block-duration {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .interference-pattern {
+            position: absolute;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                45deg,
+                rgba(255, 0, 102, 0.1),
+                rgba(255, 0, 102, 0.1) 2px,
+                transparent 2px,
+                transparent 4px
+            );
+            mix-blend-mode: multiply;
+        }
+
+        .activity-panel {
+            background: rgba(10, 10, 10, 0.8);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 32px 24px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .activity-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--interference-cyan);
+            margin-bottom: 4px;
+        }
+
+        .activity-detail {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 4px;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .negotiation-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 10, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 32px;
+            min-width: 400px;
+            backdrop-filter: blur(20px);
+            display: none;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 24px;
+            color: var(--interference-cyan);
+        }
+
+        .physics-viz {
+            width: 100%;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--frequency-blue);
+            border-radius: 50%;
+            animation: particle-flow 3s linear infinite;
+        }
+
+        @keyframes particle-flow {
+            0% { transform: translateX(-10px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateX(410px); opacity: 0; }
+        }
+
+        .floating-indicator {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        .indicator-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--interference-cyan);
+            border-radius: 50%;
+            animation: dot-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .indicator-text {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="noise-field"></div>
+    
+    <div class="auction-interface">
+        <div class="bid-panel">
+            <div class="panel-title">Current Environment</div>
+            
+            <div class="current-noise">
+                <div class="noise-level">47dB</div>
+                <div class="noise-label">Ambient Noise Level</div>
+            </div>
+            
+            <div class="panel-title">Place Bid</div>
+            
+            <div class="bid-form">
+                <div class="time-selector">
+                    <input type="text" class="time-input" placeholder="Start: 10:00 PM">
+                    <input type="text" class="time-input" placeholder="End: 11:30 PM">
+                </div>
+                
+                <div style="margin: 16px 0;">
+                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 8px;">Duration: 1.5 hours</div>
+                    <input type="range" class="duration-slider" min="30" max="240" value="90">
+                </div>
+                
+                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 8px;">
+                    Max bid: <span style="color: var(--frequency-blue); font-weight: 600;">3.5 quiet tokens</span>
+                </div>
+                
+                <button class="bid-button">Place Silence Bid</button>
+            </div>
+        </div>
+        
+        <div class="timeline-view">
+            <div class="timeline-header">
+                <div>
+                    <div style="font-size: 20px; font-weight: 300; margin-bottom: 4px;">Thursday, March 21</div>
+                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5);">3 active bids • 2 conflicts</div>
+                </div>
+                
+                <div class="equity-meter">
+                    <div>
+                        <div class="equity-value">87.3</div>
+                        <div class="equity-label">Silence Equity</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="timeline-canvas">
+                <div class="hour-grid">
+                    <div class="hour-line"><span class="hour-label">8 AM</span></div>
+                    <div class="hour-line"><span class="hour-label">9 AM</span></div>
+                    <div class="hour-line"><span class="hour-label">10 AM</span></div>
+                    <div class="hour-line"><span class="hour-label">11 AM</span></div>
+                    <div class="hour-line"><span class="hour-label">12 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">1 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">2 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">3 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">4 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">5 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">6 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">7 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">8 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">9 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">10 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">11 PM</span></div>
+                    <div class="hour-line"><span class="hour-label">12 AM</span></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                    <div class="hour-line"></div>
+                </div>
+                
+                <div class="silence-block active" style="top: 120px; left: 80px; width: 200px; height: 80px;">
+                    <div class="block-info">
+                        <div class="block-owner">Sarah M.</div>
+                        <div class="block-duration">10:00 AM - 12:00 PM</div>
+                    </div>
+                </div>
+                
+                <div class="silence-block" style="top: 280px; left: 140px; width: 150px; height: 60px;">
+                    <div class="block-info">
+                        <div class="block-owner">Alex K.</div>
+                        <div class="block-duration">2:00 PM - 3:30 PM</div>
+                    </div>
+                </div>
+                
+                <div class="silence-block conflict" style="top: 480px; left: 200px; width: 180px; height: 90px;">
+                    <div class="block-info">
+                        <div class="block-owner">Jordan L.</div>
+                        <div class="block-duration">7:00 PM - 9:00 PM</div>
+                    </div>
+                </div>
+                
+                <div class="silence-block conflict" style="top: 500px; left: 260px; width: 140px; height: 70px;">
+                    <div class="block-info">
+                        <div class="block-owner">Maya P.</div>
+                        <div class="block-duration">7:30 PM - 8:45 PM</div>
+                    </div>
+                </div>
+                
+                <div class="interference-pattern" style="top: 480px; left: 260px; width: 120px; height: 90px;"></div>
+            </div>
+        </div>
+        
+        <div class="activity-panel">
+            <div class="panel-title">Activity Stream</div>
+            
+            <div class="activity-item">
+                <div class="activity-type">Conflict Detected</div>
+                <div class="activity-detail">Jordan L. and Maya P. - 7:30-8:45 PM</div>
+                <div class="activity-time">2 minutes ago</div>
+            </div>
+            
+            <div class="activity-item">
+                <div class="activity-type">Bid Placed</div>
+                <div class="activity-detail">Maya P. - 1.25 hours @ 2.5 tokens</div>
+                <div class="activity-time">5 minutes ago</div>
+            </div>
+            
+            <div class="activity-item">
+                <div class="activity-type">Silence Completed</div>
+                <div class="activity-detail">Sarah M. - 98% compliance</div>
+                <div class="activity-time">1 hour ago</div>
+            </div>
+            
+            <div class="activity-item">
+                <div class="activity-type">Trade Accepted</div>
+                <div class="activity-detail">Alex K. ← → Jordan L. - 2 hours</div>
+                <div class="activity-time">3 hours ago</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="floating-indicator">
+        <div class="indicator-dot"></div>
+        <div class="indicator-text">Monitoring ambient noise levels</div>
+    </div>
+    
+    <div class="negotiation-modal">
+        <div class="modal-title">Resolving Conflict - Physics Negotiation</div>
+        <div class="physics-viz">
+            <div class="particle" style="top: 50%; left: 0; animation-delay: 0s;"></div>
+            <div class="particle" style="top: 45%; left: 0; animation-delay: 0.5s;"></div>
+            <div class="particle" style="top: 55%; left: 0; animation-delay: 1s;"></div>
+            <div class="particle" style="top: 48%; left: 0; animation-delay: 1.5s;"></div>
+            <div class="particle" style="top: 52%; left: 0; animation-delay: 2s;"></div>
+        </div>
+    </div>
+</body>
+</html>

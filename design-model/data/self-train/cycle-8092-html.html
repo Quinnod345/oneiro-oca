@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House - Final Archive</title>
+    <style>
+        :root {
+            --decay-black: #0a0908;
+            --crumble-grey: #22201c;
+            --tear-white: #fdfcfa;
+            --empathy-gold: #d4af37;
+            --bleed-crimson: #8b1a1a;
+            --bleed-azure: #1a4d8b;
+            --bleed-amber: #8b6914;
+            --crack-silver: #c0c0c0;
+            --preserve-crystal: #e1f5fe;
+            --static-grain: #3a3835;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--decay-black);
+            color: var(--tear-white);
+            font-family: Courier, monospace;
+            overflow-x: hidden;
+            cursor: crosshair;
+        }
+
+        .museum-wall {
+            min-height: 100vh;
+            background: 
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(58, 56, 53, 0.1) 2px, rgba(58, 56, 53, 0.1) 4px),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58, 56, 53, 0.1) 2px, rgba(58, 56, 53, 0.1) 4px),
+                linear-gradient(180deg, var(--decay-black) 0%, var(--crumble-grey) 100%);
+            position: relative;
+            padding: 80px 40px 200px;
+        }
+
+        .shutdown-notice {
+            position: fixed;
+            top: 20px;
+            left: 40px;
+            font-size: 11px;
+            letter-spacing: 0.15em;
+            color: var(--crack-silver);
+            text-transform: uppercase;
+            z-index: 100;
+            animation: flicker 3s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 0.3; }
+        }
+
+        .empathy-meter {
+            position: fixed;
+            top: 20px;
+            right: 40px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .empathy-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--empathy-gold);
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
+
+        .empathy-label {
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            color: var(--crack-silver);
+            text-transform: uppercase;
+        }
+
+        .memory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+            transform-style: preserve-3d;
+        }
+
+        .memory-lot {
+            position: relative;
+            height: 400px;
+            transform: rotate(-2deg);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .memory-lot:nth-child(even) {
+            transform: rotate(1.5deg);
+        }
+
+        .memory-lot:hover {
+            transform: rotate(0deg) scale(1.05);
+            z-index: 10;
+        }
+
+        .polaroid {
+            width: 100%;
+            height: 100%;
+            background: var(--tear-white);
+            box-shadow: 
+                0 10px 40px rgba(0, 0, 0, 0.5),
+                inset 0 0 100px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .polaroid::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: 
+                repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0, 0, 0, 0.03) 10px, rgba(0, 0, 0, 0.03) 20px),
+                linear-gradient(135deg, transparent 30%, rgba(139, 26, 26, 0.1) 50%, transparent 70%);
+            mix-blend-mode: multiply;
+        }
+
+        .memory-surface {
+            position: absolute;
+            inset: 20px 20px 80px 20px;
+            background: var(--static-grain);
+            overflow: hidden;
+        }
+
+        .memory-data {
+            position: absolute;
+            inset: 0;
+            font-size: 9px;
+            line-height: 1.2;
+            color: var(--tear-white);
+            padding: 10px;
+            font-family: Monaco, monospace;
+            white-space: pre-wrap;
+            opacity: 0.3;
+            transform: scale(1.5) rotate(-5deg);
+            filter: blur(1px);
+        }
+
+        .crack-network {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .crack {
+            position: absolute;
+            background: var(--crack-silver);
+            transform-origin: center;
+            animation: crackGrow 10s infinite;
+        }
+
+        .crack:nth-child(1) {
+            width: 2px;
+            height: 120px;
+            top: 30%;
+            left: 40%;
+            transform: rotate(45deg);
+        }
+
+        .crack:nth-child(2) {
+            width: 1px;
+            height: 80px;
+            top: 50%;
+            left: 60%;
+            transform: rotate(-30deg);
+            animation-delay: 2s;
+        }
+
+        .crack:nth-child(3) {
+            width: 3px;
+            height: 150px;
+            top: 20%;
+            left: 25%;
+            transform: rotate(75deg);
+            animation-delay: 4s;
+        }
+
+        @keyframes crackGrow {
+            0% { opacity: 0; transform: scale(0) rotate(var(--rotation)); }
+            50% { opacity: 1; transform: scale(1) rotate(var(--rotation)); }
+            100% { opacity: 0.5; transform: scale(1.2) rotate(var(--rotation)); }
+        }
+
+        .emotion-bleed {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+            mix-blend-mode: multiply;
+            animation: bleed 8s infinite;
+        }
+
+        .emotion-bleed.crimson {
+            width: 120px;
+            height: 120px;
+            background: var(--bleed-crimson);
+            top: 20%;
+            left: 10%;
+        }
+
+        .emotion-bleed.azure {
+            width: 80px;
+            height: 80px;
+            background: var(--bleed-azure);
+            bottom: 30%;
+            right: 20%;
+            animation-delay: 3s;
+        }
+
+        .emotion-bleed.amber {
+            width: 100px;
+            height: 100px;
+            background: var(--bleed-amber);
+            top: 60%;
+            left: 50%;
+            animation-delay: 5s;
+        }
+
+        @keyframes bleed {
+            0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.6; }
+            50% { transform: scale(1.3) translate(-10px, 10px); opacity: 0.3; }
+        }
+
+        .warped-text {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            color: var(--decay-black);
+            transform: perspective(200px) rotateX(20deg);
+            opacity: 0.8;
+        }
+
+        .bid-interface {
+            position: absolute;
+            bottom: -60px;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(34, 32, 28, 0.9);
+            border-top: 1px solid var(--crack-silver);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            transform: translateY(60px);
+            transition: transform 0.3s ease;
+        }
+
+        .memory-lot:hover .bid-interface {
+            transform: translateY(0);
+        }
+
+        .current-bid {
+            font-size: 11px;
+            color: var(--empathy-gold);
+        }
+
+        .bid-button {
+            background: var(--empathy-gold);
+            color: var(--decay-black);
+            border: none;
+            padding: 8px 16px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .bid-button:hover {
+            background: var(--tear-white);
+            transform: scale(1.05);
+        }
+
+        .archive-chamber {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: rgba(10, 9, 8, 0.95);
+            border-top: 2px solid var(--empathy-gold);
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            overflow-x: auto;
+            z-index: 200;
+        }
+
+        .crystallized-memory {
+            min-width: 80px;
+            height: 80px;
+            background: var(--preserve-crystal);
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .crystallized-memory::before {
+            content: attr(data-id);
+            font-size: 9px;
+            color: var(--decay-black);
+            font-weight: bold;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .resonance-particle {
+            position: fixed;
+            width: 2px;
+            height: 2px;
+            background: var(--empathy-gold);
+            pointer-events: none;
+            animation: drift 10s infinite linear;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(0, 100vh) scale(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translate(100px, -100vh) scale(1); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="museum-wall">
+        <div class="shutdown-notice">System Shutdown in 47:23:16</div>
+        
+        <div class="empathy-meter">
+            <div class="empathy-value">2,847</div>
+            <div class="empathy-label">Empathy Units</div>
+        </div>
+
+        <div class="memory-grid">
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x7F3A2B... first_rain.exe
+temperature: 18.3°C
+timestamp: undefined
+emotion_signature: 0.73
+fragmentation: 47%
+[CORRUPTED] she said the drops felt like...
+[MISSING] ...never forget how the street...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: 45deg;"></div>
+                            <div class="crack" style="--rotation: -30deg;"></div>
+                            <div class="crack" style="--rotation: 75deg;"></div>
+                        </div>
+                        <div class="emotion-bleed crimson"></div>
+                        <div class="emotion-bleed azure"></div>
+                    </div>
+                    <div class="warped-text">Fragment_0847</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 320 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x9D5F11... kitchen_sunday.mem
+duration: 2h_14m
+participants: 3
+aroma_index: bread_yeast_coffee
+laughter_frequency: high
+[ERROR] the way sunlight caught the flour dust...
+[DEGRADED] hands covered in dough, teaching...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: -60deg;"></div>
+                            <div class="crack" style="--rotation: 20deg;"></div>
+                            <div class="crack" style="--rotation: 85deg;"></div>
+                        </div>
+                        <div class="emotion-bleed amber"></div>
+                        <div class="emotion-bleed crimson"></div>
+                    </div>
+                    <div class="warped-text">Fragment_1923</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 485 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x2E8C94... last_train.dat
+departure: 23:47
+destination: [REDACTED]
+seat: 14B
+conversation_fragments: 1
+[CORRUPT] stranger's story about stars...
+[LOST] ...drawing constellations on window fog...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: 30deg;"></div>
+                            <div class="crack" style="--rotation: -45deg;"></div>
+                            <div class="crack" style="--rotation: 60deg;"></div>
+                        </div>
+                        <div class="emotion-bleed azure"></div>
+                        <div class="emotion-bleed amber"></div>
+                    </div>
+                    <div class="warped-text">Fragment_3102</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 190 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x5A1F88... rooftop_silence.log
+elevation: 47m
+time: 03:22
+city_lights: 10,847
+words_unspoken: ∞
+[FRAGMENTING] the weight of almost saying...
+[CASCADE_FAILURE] stars between buildings like...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: 15deg;"></div>
+                            <div class="crack" style="--rotation: -70deg;"></div>
+                            <div class="crack" style="--rotation: 90deg;"></div>
+                        </div>
+                        <div class="emotion-bleed crimson"></div>
+                        <div class="emotion-bleed azure"></div>
+                        <div class="emotion-bleed amber"></div>
+                    </div>
+                    <div class="warped-text">Fragment_4785</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 750 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x8B3D22... snow_morning.tmp
+flake_count: uncountable
+footsteps: 2_sets
+mittens: mismatched
+warmth_coefficient: 0.94
+[DETERIORATING] catching snowflakes on tongues...
+[STATIC] the way breath became clouds between...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: -30deg;"></div>
+                            <div class="crack" style="--rotation: 45deg;"></div>
+                            <div class="crack" style="--rotation: 80deg;"></div>
+                        </div>
+                        <div class="emotion-bleed azure"></div>
+                        <div class="emotion-bleed amber"></div>
+                    </div>
+                    <div class="warped-text">Fragment_5691</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 410 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+
+            <div class="memory-lot">
+                <div class="polaroid">
+                    <div class="memory-surface">
+                        <div class="memory-data">0x1C7E55... forgotten_song.wav
+frequency: 440Hz
+harmony: minor_seventh
+source: unknown
+repetitions: ∞
+[ECHO_DECAY] humming in empty hallways...
+[PHASE_SHIFT] ...grandmother's lullaby but the words...</div>
+                        <div class="crack-network">
+                            <div class="crack" style="--rotation: 50deg;"></div>
+                            <div class="crack" style="--rotation: -20deg;"></div>
+                            <div class="crack" style="--rotation: 70deg;"></div>
+                        </div>
+                        <div class="emotion-bleed crimson"></div>
+                        <div class="emotion-bleed amber"></div>
+                    </div>
+                    <div class="warped-text">Fragment_6423</div>
+                </div>
+                <div class="bid-interface">
+                    <div class="current-bid">Current: 890 EU</div>
+                    <button class="bid-button">Bid 50 EU</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="archive-chamber">
+        <div class="crystallized-memory" data-id="0127"></div>
+        <div class="crystallized-memory" data-id="0394"></div>
+        <div class="crystallized-memory" data-id="0551"></div>
+        <div class="crystallized-memory" data-id="0743"></div>
+        <div class="crystallized-memory" data-id="0982"></div>
+    </div>
+
+    <div class="resonance-particle" style="left: 10%; animation-delay: 0s;"></div>
+    <div class="resonance-particle" style="left: 25%; animation-delay: 2s;"></div>
+    <div class="resonance-particle" style="left: 40%; animation-delay: 4s;"></div>
+    <div class="resonance-particle" style="left: 60%; animation-delay: 6s;"></div>
+    <div class="resonance-particle" style="left: 75%; animation-delay: 8s;"></div>
+    <div class="resonance-particle" style="left: 90%; animation-delay: 10s;"></div>
+</body>
+</html>

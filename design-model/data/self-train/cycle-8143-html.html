@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Palace Builder</title>
+    <style>
+        :root {
+            --void-black: #0a0a0f;
+            --neural-violet: #4a3f7c;
+            --thought-amber: #f4a460;
+            --connection-cyan: #00d4ff;
+            --heavy-crimson: #8b1538;
+            --light-pearl: #f5f5dc;
+            --grid-silver: #2a2a3e;
+            --pulse-green: #39ff14;
+            --depth-shadow: rgba(10, 10, 15, 0.4);
+            --glow-radius: 0 0 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--void-black);
+            color: var(--light-pearl);
+            font-family: Courier, monospace;
+            overflow: hidden;
+            height: 100vh;
+            perspective: 1000px;
+            cursor: crosshair;
+        }
+
+        .consciousness-field {
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse at 30% 40%, rgba(74, 63, 124, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 60%, rgba(0, 212, 255, 0.05) 0%, transparent 40%),
+                linear-gradient(180deg, var(--void-black) 0%, rgba(42, 42, 62, 0.3) 100%);
+        }
+
+        .isometric-chamber {
+            position: absolute;
+            width: 800px;
+            height: 600px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotateX(30deg) rotateY(-45deg);
+            transform-style: preserve-3d;
+            transition: transform 0.3s ease;
+        }
+
+        .floor-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--grid-silver) 0px,
+                var(--grid-silver) 2px,
+                transparent 2px,
+                transparent 40px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                var(--grid-silver) 0px,
+                var(--grid-silver) 2px,
+                transparent 2px,
+                transparent 40px
+            );
+            transform: rotateX(90deg) translateZ(-300px);
+            opacity: 0.3;
+        }
+
+        .thought-fragment {
+            position: absolute;
+            padding: 12px 20px;
+            background: rgba(74, 63, 124, 0.2);
+            border: 1px solid var(--neural-violet);
+            border-radius: 0;
+            cursor: move;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transform-style: preserve-3d;
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: lowercase;
+            user-select: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .thought-fragment::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, transparent, var(--neural-violet), transparent);
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s;
+        }
+
+        .thought-fragment:hover::before {
+            opacity: 0.7;
+        }
+
+        .thought-fragment.heavy {
+            background: rgba(139, 21, 56, 0.3);
+            border-color: var(--heavy-crimson);
+            transform: translateZ(-50px);
+            box-shadow: 0 30px 40px var(--depth-shadow);
+            font-weight: bold;
+        }
+
+        .thought-fragment.light {
+            background: rgba(245, 245, 220, 0.1);
+            border-color: var(--light-pearl);
+            transform: translateZ(100px);
+            opacity: 0.8;
+            font-weight: 100;
+        }
+
+        .connection-thread {
+            position: absolute;
+            height: 2px;
+            background: var(--connection-cyan);
+            transform-origin: left center;
+            box-shadow: var(--glow-radius) var(--connection-cyan);
+            opacity: 0.6;
+            animation: pulse-connection 2s infinite;
+        }
+
+        @keyframes pulse-connection {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.9; }
+        }
+
+        .portal-door {
+            position: absolute;
+            width: 120px;
+            height: 180px;
+            background: radial-gradient(ellipse at center, rgba(57, 255, 20, 0.2), transparent);
+            border: 2px solid var(--pulse-green);
+            opacity: 0;
+            transition: opacity 0.5s;
+            transform: translateZ(0);
+        }
+
+        .portal-door.active {
+            opacity: 1;
+            box-shadow: var(--glow-radius) var(--pulse-green);
+            animation: portal-breathe 3s infinite;
+        }
+
+        @keyframes portal-breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .control-membrane {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            background: rgba(42, 42, 62, 0.8);
+            border: 1px solid var(--grid-silver);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 300px;
+        }
+
+        .control-membrane h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: var(--thought-amber);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .control-membrane p {
+            font-size: 11px;
+            line-height: 1.6;
+            opacity: 0.7;
+            margin-bottom: 10px;
+        }
+
+        .weight-indicator {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            display: flex;
+            gap: 30px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .weight-scale {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .weight-scale span {
+            width: 20px;
+            height: 20px;
+            border: 1px solid;
+        }
+
+        .navigation-keys {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            font-size: 11px;
+            opacity: 0.5;
+            letter-spacing: 1px;
+        }
+
+        .thought-gravity-field {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            pointer-events: none;
+            opacity: 0.3;
+            filter: blur(60px);
+            mix-blend-mode: screen;
+        }
+
+        .memory-distortion {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-conic-gradient(
+                from 45deg at 50% 50%,
+                transparent 0deg,
+                rgba(74, 63, 124, 0.1) 20deg,
+                transparent 40deg
+            );
+            animation: distort-rotate 30s linear infinite;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @keyframes distort-rotate {
+            to { transform: rotate(360deg); }
+        }
+
+        .conceptual-anchor {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--thought-amber);
+            border-radius: 50%;
+            box-shadow: var(--glow-radius) var(--thought-amber);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .conceptual-anchor.visible {
+            opacity: 0.8;
+            animation: anchor-pulse 1.5s infinite;
+        }
+
+        @keyframes anchor-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.5); }
+        }
+
+        .room-label {
+            position: absolute;
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            letter-spacing: 5px;
+            color: var(--neural-violet);
+            text-transform: uppercase;
+            opacity: 0.3;
+            font-weight: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="consciousness-field">
+        <div class="memory-distortion"></div>
+    </div>
+
+    <div class="isometric-chamber" id="chamber">
+        <div class="floor-grid"></div>
+        <div class="room-label">MATHEMATICS</div>
+        
+        <div class="thought-gravity-field" style="background: radial-gradient(circle at 30% 40%, var(--heavy-crimson), transparent);"></div>
+        
+        <div class="thought-fragment heavy" style="left: 200px; top: 300px;" draggable="true">calculus foundations</div>
+        <div class="thought-fragment" style="left: 400px; top: 200px;" draggable="true">derivatives</div>
+        <div class="thought-fragment light" style="left: 300px; top: 100px;" draggable="true">limits</div>
+        <div class="thought-fragment heavy" style="left: 150px; top: 400px;" draggable="true">integral theorems</div>
+        <div class="thought-fragment" style="left: 500px; top: 250px;" draggable="true">chain rule</div>
+        <div class="thought-fragment light" style="left: 600px; top: 150px;" draggable="true">infinity</div>
+        
+        <div class="connection-thread" style="left: 220px; top: 320px; width: 180px; transform: rotate(-30deg);"></div>
+        <div class="connection-thread" style="left: 420px; top: 220px; width: 100px; transform: rotate(45deg);"></div>
+        <div class="connection-thread" style="left: 320px; top: 120px; width: 200px; transform: rotate(15deg);"></div>
+        
+        <div class="portal-door" style="right: -60px; top: 200px; transform: rotateY(90deg);"></div>
+        
+        <div class="conceptual-anchor visible" style="left: 350px; top: 250px;"></div>
+        <div class="conceptual-anchor" style="left: 450px; top: 180px;"></div>
+    </div>
+
+    <div class="control-membrane">
+        <h2>Memory Architecture</h2>
+        <p>Drag concepts to build spatial knowledge. Heavy ideas sink, creating valleys. Light thoughts float as translucent planes.</p>
+        <p>Connections form automatically between related concepts. Balance the gravitational field to create stable structures.</p>
+    </div>
+
+    <div class="weight-indicator">
+        <div class="weight-scale">
+            <span style="border-color: var(--heavy-crimson); background: rgba(139, 21, 56, 0.3);"></span>
+            heavy concept
+        </div>
+        <div class="weight-scale">
+            <span style="border-color: var(--neural-violet); background: rgba(74, 63, 124, 0.2);"></span>
+            medium concept
+        </div>
+        <div class="weight-scale">
+            <span style="border-color: var(--light-pearl); background: rgba(245, 245, 220, 0.1);"></span>
+            light concept
+        </div>
+    </div>
+
+    <div class="navigation-keys">
+        WASD: navigate | SPACE: interact | ESC: overview
+    </div>
+
+    <script>
+        const chamber = document.getElementById('chamber');
+        let rotateY = -45;
+        let rotateX = 30;
+        
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth - 0.5) * 20;
+            const y = (e.clientY / window.innerHeight - 0.5) * 20;
+            chamber.style.transform = `translate(-50%, -50%) rotateX(${rotateX + y}deg) rotateY(${rotateY + x}deg)`;
+        });
+
+        const thoughts = document.querySelectorAll('.thought-fragment');
+        thoughts.forEach(thought => {
+            let isDragging = false;
+            
+            thought.addEventListener('mousedown', () => isDragging = true);
+            thought.addEventListener('mouseup', () => isDragging = false);
+            
+            thought.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    thought.style.left = e.offsetX + 'px';
+                    thought.style.top = e.offsetY + 'px';
+                    
+                    // Create random connections
+                    if (Math.random() > 0.95) {
+                        const portal = document.querySelector('.portal-door');
+                        portal.classList.add('active');
+                    }
+                }
+            });
+        });
+
+        // Simulate thought weight changes
+        setInterval(() => {
+            const randomThought = thoughts[Math.floor(Math.random() * thoughts.length)];
+            const weights = ['heavy', 'light', ''];
+            randomThought.className = 'thought-fragment ' + weights[Math.floor(Math.random() * weights.length)];
+        }, 5000);
+    </script>
+</body>
+</html>

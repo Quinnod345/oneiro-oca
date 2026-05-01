@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Fragments</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background: #0f0f12;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90vh;
+            position: relative;
+            padding: 60px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            margin-bottom: 48px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .assembly-area {
+            width: 100%;
+            height: calc(100% - 100px);
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .placeholder-text {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.3);
+            text-align: center;
+            line-height: 1.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .placeholder-text.hidden {
+            opacity: 0;
+        }
+
+        .memory-shard {
+            position: absolute;
+            width: 200px;
+            height: 260px;
+            cursor: move;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .memory-shard:hover {
+            transform: scale(1.02);
+        }
+
+        .memory-shard.dragging {
+            z-index: 100;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transition: none;
+        }
+
+        .shard-content {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #1a1a1f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .shard-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.85;
+        }
+
+        .shard-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+        }
+
+        .shard-title {
+            font-size: 14px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 4px;
+        }
+
+        .shard-meta {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .fragment-indicator {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .fragment-indicator.active {
+            opacity: 1;
+        }
+
+        .snap-guide {
+            position: absolute;
+            width: 200px;
+            height: 260px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .snap-guide.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Memory Assembly</h1>
+        
+        <div class="assembly-area" id="assemblyArea">
+            <p class="placeholder-text" id="placeholderText">
+                Drag memory fragments here<br>
+                to reconstruct the timeline
+            </p>
+        </div>
+    </div>
+
+    <div class="fragment-indicator" id="fragmentIndicator">
+        <span id="fragmentCount">0</span> / 4 fragments placed
+    </div>
+
+    <div class="memory-shard" style="top: 100px; left: 40px;" data-id="1">
+        <div class="shard-content">
+            <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 260'%3E%3Crect fill='%23334455' width='200' height='260'/%3E%3Ccircle cx='100' cy='100' r='40' fill='%23556677' opacity='0.6'/%3E%3C/svg%3E" alt="Memory fragment">
+            <div class="shard-label">
+                <div class="shard-title">Morning Light</div>
+                <div class="shard-meta">6:34 AM</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="memory-shard" style="top: 400px; left: 60px;" data-id="2">
+        <div class="shard-content">
+            <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 260'%3E%3Crect fill='%23443344' width='200' height='260'/%3E%3Crect x='50' y='80' width='100' height='100' fill='%23665566' opacity='0.6'/%3E%3C/svg%3E" alt="Memory fragment">
+            <div class="shard-label">
+                <div class="shard-title">Coffee Shop</div>
+                <div class="shard-meta">10:15 AM</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="memory-shard" style="top: 150px; right: 80px;" data-id="3">
+        <div class="shard-content">
+            <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 260'%3E%3Crect fill='%23354535' width='200' height='260'/%3E%3Cpath d='M50 130 L100 80 L150 130' fill='%23576757' opacity='0.6'/%3E%3C/svg%3E" alt="Memory fragment">
+            <div class="shard-label">
+                <div class="shard-title">Park Bench</div>
+                <div class="shard-meta">2:45 PM</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="memory-shard" style="top: 420px; right: 50px;" data-id="4">
+        <div class="shard-content">
+            <img class="shard-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 260'%3E%3Crect fill='%23453545' width='200' height='260'/%3E%3Cellipse cx='100' cy='130' rx='60' ry='30' fill='%23675767' opacity='0.6'/%3E%3C/svg%3E" alt="Memory fragment">
+            <div class="shard-label">
+                <div class="shard-title">Sunset View</div>
+                <div class="shard-meta">7:22 PM</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const shards = document.querySelectorAll('.memory-shard');
+        const assemblyArea = document.getElementById('assemblyArea');
+        const placeholderText = document.getElementById('placeholderText');
+        const fragmentIndicator = document.getElementById('fragmentIndicator');
+        const fragmentCount = document.getElementById('fragmentCount');
+        
+        let draggedElement = null;
+        let offset = { x: 0, y: 0 };
+        let placedFragments = new Set();
+
+        shards.forEach(shard => {
+            shard.addEventListener('mousedown', startDrag);
+        });
+
+        function startDrag(e) {
+            draggedElement = e.currentTarget;
+            draggedElement.classList.add('dragging');
+            
+            const rect = draggedElement.getBoundingClientRect();
+            offset.x = e.clientX - rect.left;
+            offset.y = e.clientY - rect.top;
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!draggedElement) return;
+            
+            draggedElement.style.left = (e.clientX - offset.x) + 'px';
+            draggedElement.style.top = (e.clientY - offset.y) + 'px';
+            
+            const rect = draggedElement.getBoundingClientRect();
+            const areaRect = assemblyArea.getBoundingClientRect();
+            
+            if (rect.left > areaRect.left && rect.right < areaRect.right &&
+                rect.top > areaRect.top && rect.bottom < areaRect.bottom) {
+                assemblyArea.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            } else {
+                assemblyArea.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            }
+        }
+
+        function stopDrag(e) {
+            if (!draggedElement) return;
+            
+            const rect = draggedElement.getBoundingClientRect();
+            const areaRect = assemblyArea.getBoundingClientRect();
+            
+            if (rect.left > areaRect.left && rect.right < areaRect.right &&
+                rect.top > areaRect.top && rect.bottom < areaRect.bottom) {
+                
+                const shardId = draggedElement.dataset.id;
+                placedFragments.add(shardId);
+                
+                placeholderText.classList.add('hidden');
+                fragmentIndicator.classList.add('active');
+                fragmentCount.textContent = placedFragments.size;
+            }
+            
+            draggedElement.classList.remove('dragging');
+            assemblyArea.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            draggedElement = null;
+        }
+    </script>
+</body>
+</html>

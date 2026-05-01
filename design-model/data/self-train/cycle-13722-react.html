@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#root { width: 100vw; min-height: 100vh; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [memories, setMemories] = React.useState([
+    { id: 1, title: "First Day of School", baseClarity: 0.3, currentBid: 12, position: { x: -20, z: -10 }, rotation: 0 },
+    { id: 2, title: "Grandmother's Kitchen", baseClarity: 0.25, currentBid: 8, position: { x: 25, z: -15 }, rotation: 45 },
+    { id: 3, title: "Lost Pet's Name", baseClarity: 0.15, currentBid: 3, position: { x: 0, z: -25 }, rotation: 90 },
+    { id: 4, title: "Birthday, Age Seven", baseClarity: 0.4, currentBid: 15, position: { x: -30, z: -5 }, rotation: 135 },
+    { id: 5, title: "Phone Number from 1998", baseClarity: 0.1, currentBid: 2, position: { x: 35, z: -20 }, rotation: 180 }
+  ]);
+  
+  const [focusLevel, setFocusLevel] = React.useState(5);
+  const [selectedMemory, setSelectedMemory] = React.useState(null);
+  const [bidAmount, setBidAmount] = React.useState(0);
+  const [etherealHands, setEtherealHands] = React.useState([]);
+  const [warpIntensity, setWarpIntensity] = React.useState(0);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      // Simulate other users' bids
+      if (Math.random() > 0.7) {
+        const memoryId = Math.floor(Math.random() * memories.length) + 1;
+        const handId = Date.now();
+        setEtherealHands(prev => [...prev, {
+          id: handId,
+          memoryId,
+          x: Math.random() * 100,
+          y: Math.random() * 100
+        }]);
+        
+        setTimeout(() => {
+          setEtherealHands(prev => prev.filter(h => h.id !== handId));
+        }, 3000);
+        
+        setMemories(prev => prev.map(m => 
+          m.id === memoryId ? {...m, currentBid: m.currentBid + Math.floor(Math.random() * 3) + 1} : m
+        ));
+      }
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleFocusChange = (value) => {
+    setFocusLevel(value);
+    setBidAmount(Math.floor(value * 1.5));
+    setWarpIntensity(Math.sin(value * 0.3) * 0.5);
+  };
+
+  const placeBid = () => {
+    if (selectedMemory && bidAmount > 0) {
+      setMemories(prev => prev.map(m => 
+        m.id === selectedMemory.id 
+          ? {...m, currentBid: m.currentBid + bidAmount, baseClarity: Math.min(1, m.baseClarity + bidAmount * 0.02)}
+          : m
+      ));
+      setBidAmount(0);
+      setSelectedMemory(null);
+    }
+  };
+
+  const containerStyle = {
+    width: '100vw',
+    height: '100vh',
+    background: 'linear-gradient(180deg, #1a1612 0%, #2d241c 50%, #1a1612 100%)',
+    position: 'relative',
+    overflow: 'hidden',
+    fontFamily: 'Didot, Georgia, serif',
+    perspective: '1000px',
+    transform: `scale(${1 + warpIntensity * 0.02}) translateZ(${warpIntensity * 10}px)`,
+    transition: 'transform 0.3s ease-out'
+  };
+
+  const auctionRoomStyle = {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: `
+      radial-gradient(ellipse at center top, rgba(139, 89, 44, 0.1) 0%, transparent 50%),
+      repeating-linear-gradient(90deg, rgba(101, 67, 33, 0.03) 0px, transparent 2px, transparent 100px, rgba(101, 67, 33, 0.03) 102px),
+      repeating-linear-gradient(0deg, rgba(101, 67, 33, 0.03) 0px, transparent 2px, transparent 100px, rgba(101, 67, 33, 0.03) 102px)
+    `,
+    filter: `blur(${warpIntensity * 2}px)`,
+    transition: 'filter 0.3s ease-out'
+  };
+
+  const gasLampStyle = {
+    position: 'absolute',
+    width: '60px',
+    height: '60px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(255, 195, 87, 0.8) 0%, rgba(255, 140, 0, 0.4) 40%, transparent 70%)',
+    boxShadow: '0 0 40px rgba(255, 195, 87, 0.6), 0 0 80px rgba(255, 140, 0, 0.3)',
+    animation: 'flicker 3s infinite alternate'
+  };
+
+  const titleStyle = {
+    position: 'absolute',
+    top: '40px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '42px',
+    letterSpacing: '8px',
+    color: '#d4af37',
+    textShadow: '0 2px 20px rgba(212, 175, 55, 0.3)',
+    opacity: 0.9,
+    fontWeight: '300',
+    textTransform: 'uppercase'
+  };
+
+  const focusSliderContainerStyle = {
+    position: 'absolute',
+    bottom: '60px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '600px',
+    padding: '30px',
+    background: 'rgba(26, 22, 18, 0.8)',
+    border: '1px solid rgba(212, 175, 55, 0.3)',
+    borderRadius: '4px',
+    boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.5)'
+  };
+
+  const sliderTrackStyle = {
+    position: 'relative',
+    height: '40px',
+    background: 'linear-gradient(90deg, rgba(101, 67, 33, 0.2) 0%, rgba(212, 175, 55, 0.2) 100%)',
+    border: '1px solid rgba(212, 175, 55, 0.2)',
+    borderRadius: '2px',
+    overflow: 'hidden',
+    cursor: 'pointer'
+  };
+
+  const sliderFillStyle = {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    width: `${(focusLevel / 20) * 100}%`,
+    background: 'linear-gradient(90deg, rgba(139, 89, 44, 0.6) 0%, rgba(212, 175, 55, 0.8) 100%)',
+    transition: 'width 0.3s ease-out',
+    boxShadow: 'inset 0 0 10px rgba(212, 175, 55, 0.4)'
+  };
+
+  const sliderHandleStyle = {
+    position: 'absolute',
+    top: '50%',
+    left: `${(focusLevel / 20) * 100}%`,
+    transform: 'translate(-50%, -50%)',
+    width: '24px',
+    height: '24px',
+    background: '#d4af37',
+    borderRadius: '50%',
+    boxShadow: '0 0 20px rgba(212, 175, 55, 0.8), inset 0 0 4px rgba(0, 0, 0, 0.3)',
+    cursor: 'grab'
+  };
+
+  const memoryPedestalStyle = {
+    position: 'absolute',
+    transform: 'translate(-50%, -50%)',
+    width: '120px',
+    height: '160px',
+    transformStyle: 'preserve-3d',
+    cursor: 'pointer'
+  };
+
+  const pedestalBaseStyle = {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    height: '40px',
+    background: 'linear-gradient(180deg, #3d3229 0%, #2d241c 100%)',
+    border: '1px solid rgba(212, 175, 55, 0.2)',
+    borderTop: '2px solid rgba(212, 175, 55, 0.4)'
+  };
+
+  const memoryHologramStyle = (memory) => ({
+    position: 'absolute',
+    top: '0',
+    left: '50%',
+    transform: `translateX(-50%) rotateY(${memory.rotation + Date.now() * 0.01}deg)`,
+    width: '100px',
+    height: '100px',
+    opacity: memory.baseClarity + (memory.currentBid * 0.02),
+    filter: `blur(${Math.max(0, 5 - memory.currentBid * 0.3)}px)`,
+    transition: 'opacity 0.5s ease-out, filter 0.5s ease-out'
+  });
+
+  const memoryTitleStyle = (clarity) => ({
+    position: 'absolute',
+    bottom: '-30px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '14px',
+    color: '#d4af37',
+    opacity: Math.min(1, clarity + 0.3),
+    letterSpacing: `${2 - clarity}px`,
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    textShadow: '0 0 10px rgba(212, 175, 55, 0.4)'
+  });
+
+  const bidDisplayStyle = {
+    position: 'absolute',
+    top: '-40px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    fontSize: '18px',
+    color: '#8b5a2c',
+    fontWeight: '300'
+  };
+
+  const etherealHandStyle = {
+    position: 'absolute',
+    width: '40px',
+    height: '40px',
+    opacity: 0.3,
+    filter: 'blur(1px)',
+    pointerEvents: 'none',
+    animation: 'reachingHand 3s ease-out forwards'
+  };
+
+  const bidPanelStyle = {
+    position: 'absolute',
+    top: '50%',
+    right: '40px',
+    transform: 'translateY(-50%)',
+    width: '300px',
+    padding: '30px',
+    background: 'rgba(26, 22, 18, 0.9)',
+    border: '1px solid rgba(212, 175, 55, 0.3)',
+    borderRadius: '4px',
+    opacity: selectedMemory ? 1 : 0,
+    pointerEvents: selectedMemory ? 'all' : 'none',
+    transition: 'opacity 0.3s ease-out'
+  };
+
+  return React.createElement('div', { style: containerStyle },
+    React.createElement('style', null, `
+      @keyframes flicker {
+        0% { opacity: 0.8; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+      }
+      @keyframes reachingHand {
+        0% { transform: scale(0.5) translate(0, 20px); opacity: 0; }
+        50% { opacity: 0.3; }
+        100% { transform: scale(1) translate(0, 0); opacity: 0; }
+      }
+    `),
+    
+    React.createElement('div', { style: auctionRoomStyle }),
+    
+    // Gas lamps
+    React.createElement('div', { style: {...gasLampStyle, top: '60px', left: '60px'} }),
+    React.createElement('div', { style: {...gasLampStyle, top: '60px', right: '60px'} }),
+    React.createElement('div', { style: {...gasLampStyle, bottom: '200px', left: '60px'} }),
+    React.createElement('div', { style: {...gasLampStyle, bottom: '200px', right: '60px'} }),
+    
+    React.createElement('h1', { style: titleStyle }, 'Memory Auction House'),
+    
+    // Memory pedestals
+    ...memories.map(memory => 
+      React.createElement('div', {
+        key: memory.id,
+        style: {
+          ...memoryPedestalStyle,
+          left: `${50 + memory.position.x}%`,
+          top: `${40 + memory.position.z}%`
+        },
+        onClick: () => setSelectedMemory(memory)
+      },
+        React.createElement('div', { style: pedestalBaseStyle }),
+        React.createElement('div', { style: memoryHologramStyle(memory) },
+          React.createElement('div', {
+            style: {
+              width: '100%',
+              height: '100%',
+              background: `radial-gradient(ellipse, rgba(212, 175, 55, ${memory.baseClarity * 0.5}) 0%, transparent 70%)`,
+              borderRadius: '50%',
+              boxShadow: `0 0 ${20 + memory.currentBid * 2}px rgba(212, 175, 55, ${memory.baseClarity * 0.6})`
+            }
+          })
+        ),
+        React.createElement('div', { style: bidDisplayStyle }, `${memory.currentBid} pts`),
+        React.createElement('div', { style: memoryTitleStyle(memory.baseClarity) }, memory.title)
+      )
+    ),
+    
+    // Ethereal hands
+    ...etherealHands.map(hand => 
+      React.createElement('div', {
+        key: hand.id,
+        style: {
+          ...etherealHandStyle,
+          left: `${hand.x}%`,
+          top: `${hand.y}%`,
+          background: 'radial-gradient(circle, rgba(212, 175, 55, 0.3) 0%, transparent 70%)'
+        }
+      }, '👻')
+    ),
+    
+    // Focus slider
+    React.createElement('div', { style: focusSliderContainerStyle },
+      React.createElement('div', { style: { marginBottom: '20px', fontSize: '18px', color: '#8b5a2c' } }, 
+        `Attention Focus: ${focusLevel} units`
+      ),
+      React.createElement('div', {
+        style: sliderTrackStyle,
+        onClick: (e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const value = Math.round((x / rect.width) * 20);
+          handleFocusChange(Math.max(0, Math.min(20, value)));
+        }
+      },
+        React.createElement('div', { style: sliderFillStyle }),
+        React.createElement('div', { 
+          style: sliderHandleStyle,
+          onMouseDown: (e) => {
+            const startX = e.clientX;
+            const startValue = focusLevel;
+            
+            const handleMouseMove = (e) => {
+              const delta = e.clientX - startX;
+              const newValue = startValue + Math.round(delta / 30);
+              handleFocusChange(Math.max(0, Math.min(20, newValue)));
+            };
+            
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }
+        })
+      ),
+      React.createElement('div', { style: { marginTop: '20px', fontSize: '14px', color: '#655843' } },
+        `Bid Amount: ${bidAmount} attention points`
+      )
+    ),
+    
+    // Bid panel
+    React.createElement('div', { style: bidPanelStyle },
+      React.createElement('h3', { style: { color: '#d4af37', marginBottom: '20px' } }, 
+        selectedMemory ? selectedMemory.title : ''
+      ),
+      React.createElement('div', { style: { color: '#8b5a2c', marginBottom: '10px' } },
+        `Current Bid: ${selectedMemory ? selectedMemory.currentBid : 0} pts`
+      ),
+      React.createElement('div', { style: { color: '#655843', marginBottom: '20px' } },
+        `Your Bid: ${bidAmount} pts`
+      ),
+      React.createElement('button', {
+        style: {
+          width: '100%',
+          padding: '12px',
+          background: bidAmount > 0 ? '#8b5a2c' : '#3d3229',
+          border: '1px solid rgba(212, 175, 55, 0.3)',
+          color: '#d4af37',
+          fontSize: '16px',
+          cursor: bidAmount > 0 ? 'pointer' : 'not-allowed',
+          transition: 'all 0.2s ease-out'
+        },
+        onClick: placeBid,
+        disabled: bidAmount === 0
+      }, 'Place Bid')
+    )
+  );
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+// Try to find the main component — user should export default or define App
+if (typeof App !== 'undefined') {
+  root.render(React.createElement(App));
+} else {
+  root.render(React.createElement('div', {style: {padding: 20}}, 'No App component found'));
+}
+</script>
+</body>
+</html>

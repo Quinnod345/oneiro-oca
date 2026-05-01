@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Foam - Digital Topography</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --surface: #1a1a1a;
+            --ridge: #2a2a2a;
+            --peak: #f5f5f5;
+            --depth-1: #141414;
+            --depth-2: #0f0f0f;
+            --depth-3: #070707;
+            --accent: #e0e0e0;
+            --shadow: rgba(0, 0, 0, 0.8);
+            --highlight: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--accent);
+        }
+
+        .interface {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 320px 1fr 280px;
+            position: relative;
+        }
+
+        .timeline-sediment {
+            background: var(--depth-2);
+            padding: 40px 30px;
+            border-right: 1px solid var(--ridge);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .layer-indicator {
+            margin-bottom: 35px;
+        }
+
+        .year-stratum {
+            height: 4px;
+            background: var(--surface);
+            margin: 20px 0;
+            position: relative;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .year-stratum::before {
+            content: attr(data-year);
+            position: absolute;
+            left: -35px;
+            top: -8px;
+            font-size: 11px;
+            color: var(--ridge);
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .year-stratum:hover {
+            height: 12px;
+            background: var(--ridge);
+        }
+
+        .year-stratum:hover::before {
+            color: var(--accent);
+        }
+
+        .year-stratum.active {
+            height: 24px;
+            background: linear-gradient(to right, var(--ridge), var(--surface));
+        }
+
+        .sculpting-surface {
+            background: var(--void);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .topography-canvas {
+            width: 90%;
+            height: 80%;
+            background: var(--surface);
+            position: relative;
+            border-radius: 3px;
+            box-shadow: 
+                inset 0 0 100px var(--shadow),
+                0 0 80px var(--shadow);
+            overflow: hidden;
+        }
+
+        .memory-impression {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: imprint 2s ease-out forwards;
+        }
+
+        @keyframes imprint {
+            0% {
+                transform: scale(0) translateZ(0);
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1) translateZ(-20px);
+                opacity: 1;
+            }
+        }
+
+        .depth-shadow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 30%, var(--shadow) 70%);
+            mix-blend-mode: multiply;
+        }
+
+        .contour-lines {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .contour {
+            position: absolute;
+            border: 1px solid var(--highlight);
+            border-radius: 50%;
+            opacity: 0.3;
+        }
+
+        .data-panel {
+            background: var(--depth-1);
+            padding: 40px 25px;
+            border-left: 1px solid var(--ridge);
+        }
+
+        .pressure-meter {
+            margin-bottom: 40px;
+        }
+
+        .meter-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--ridge);
+            margin-bottom: 12px;
+        }
+
+        .meter-bar {
+            height: 180px;
+            width: 40px;
+            background: var(--depth-3);
+            position: relative;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, var(--ridge), var(--accent));
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .emotional-weights {
+            margin-top: 50px;
+        }
+
+        .weight-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid var(--depth-3);
+        }
+
+        .weight-label {
+            font-size: 12px;
+            color: var(--ridge);
+        }
+
+        .weight-value {
+            width: 120px;
+            height: 3px;
+            background: var(--depth-3);
+            position: relative;
+            border-radius: 1px;
+        }
+
+        .weight-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.4s ease;
+        }
+
+        .sculpt-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            background: var(--depth-2);
+            padding: 20px 40px;
+            border-radius: 4px;
+            box-shadow: 0 10px 40px var(--shadow);
+        }
+
+        .control-btn {
+            background: var(--surface);
+            border: 1px solid var(--ridge);
+            color: var(--accent);
+            padding: 12px 24px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 2px;
+        }
+
+        .control-btn:hover {
+            background: var(--ridge);
+            transform: translateY(-2px);
+        }
+
+        .control-btn.primary {
+            background: var(--accent);
+            color: var(--void);
+            border-color: var(--accent);
+        }
+
+        .control-btn.primary:hover {
+            background: var(--peak);
+        }
+
+        .time-slice {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--ridge);
+        }
+
+        .crosshair {
+            position: fixed;
+            pointer-events: none;
+            width: 20px;
+            height: 20px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: var(--accent);
+        }
+
+        .crosshair::before {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .crosshair::after {
+            height: 1px;
+            width: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .sculpting-surface:hover .crosshair {
+            opacity: 0.5;
+        }
+
+        .erosion-particles {
+            position: absolute;
+            pointer-events: none;
+            width: 2px;
+            height: 2px;
+            background: var(--accent);
+            opacity: 0;
+        }
+
+        @keyframes erode {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translate(var(--drift-x), 80px) scale(0);
+                opacity: 0;
+            }
+        }
+
+        .memory-tooltip {
+            position: absolute;
+            background: var(--depth-1);
+            padding: 8px 12px;
+            font-size: 11px;
+            border-radius: 2px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 12px var(--shadow);
+            z-index: 1000;
+        }
+
+        .watershed-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .watershed-path {
+            stroke: var(--accent);
+            stroke-width: 1;
+            fill: none;
+            opacity: 0.3;
+            stroke-dasharray: 5, 5;
+            animation: flow 20s linear infinite;
+        }
+
+        @keyframes flow {
+            to {
+                stroke-dashoffset: -100;
+            }
+        }
+
+        .export-preview {
+            position: fixed;
+            top: 40px;
+            right: 320px;
+            background: var(--depth-1);
+            padding: 15px;
+            border-radius: 3px;
+            font-size: 11px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s;
+            box-shadow: 0 8px 24px var(--shadow);
+        }
+
+        .export-preview.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="interface">
+        <aside class="timeline-sediment">
+            <div class="layer-indicator">
+                <div class="meter-label">Temporal Strata</div>
+            </div>
+            <div class="year-stratum" data-year="2024"></div>
+            <div class="year-stratum active" data-year="2023"></div>
+            <div class="year-stratum" data-year="2022"></div>
+            <div class="year-stratum" data-year="2021"></div>
+            <div class="year-stratum" data-year="2020"></div>
+            <div class="year-stratum" data-year="2019"></div>
+            <div class="year-stratum" data-year="2018"></div>
+            <div class="year-stratum" data-year="2017"></div>
+            <div class="year-stratum" data-year="2016"></div>
+            <div class="year-stratum" data-year="2015"></div>
+            <div class="year-stratum" data-year="2014"></div>
+            <div class="year-stratum" data-year="2013"></div>
+        </aside>
+
+        <main class="sculpting-surface">
+            <div class="time-slice">2023.04 - 2023.09</div>
+            <div class="topography-canvas" id="canvas">
+                <div class="depth-shadow"></div>
+                <svg class="contour-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <circle cx="30" cy="40" r="15" class="contour" />
+                    <circle cx="30" cy="40" r="25" class="contour" />
+                    <circle cx="70" cy="65" r="20" class="contour" />
+                    <circle cx="70" cy="65" r="30" class="contour" />
+                </svg>
+                <svg class="watershed-overlay" id="watershed">
+                    <path class="watershed-path" d="M 20 20 Q 50 50 80 30 T 120 80" />
+                </svg>
+            </div>
+            <div class="crosshair" id="crosshair"></div>
+            <div class="memory-tooltip" id="tooltip"></div>
+        </main>
+
+        <aside class="data-panel">
+            <div class="pressure-meter">
+                <div class="meter-label">Compression Depth</div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="pressure" style="height: 45%;"></div>
+                </div>
+            </div>
+
+            <div class="emotional-weights">
+                <div class="meter-label">Emotional Density</div>
+                <div class="weight-item">
+                    <span class="weight-label">Joy</span>
+                    <div class="weight-value">
+                        <div class="weight-fill" style="width: 75%;"></div>
+                    </div>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-label">Melancholy</span>
+                    <div class="weight-value">
+                        <div class="weight-fill" style="width: 40%;"></div>
+                    </div>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-label">Anxiety</span>
+                    <div class="weight-value">
+                        <div class="weight-fill" style="width: 25%;"></div>
+                    </div>
+                </div>
+                <div class="weight-item">
+                    <span class="weight-label">Contentment</span>
+                    <div class="weight-value">
+                        <div class="weight-fill" style="width: 60%;"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="sculpt-controls">
+        <button class="control-btn" onclick="erodeMemories()">Erode</button>
+        <button class="control-btn" onclick="compressLayer()">Compress</button>
+        <button class="control-btn" onclick="overlayFamily()">Overlay Family</button>
+        <button class="control-btn primary" onclick="exportTerrain()">Export Terrain</button>
+    </div>
+
+    <div class="export-preview" id="exportPreview">
+        Preparing 3D topology for export...
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const crosshair = document.getElementById('crosshair');
+        const tooltip = document.getElementById('tooltip');
+        const pressure = document.getElementById('pressure');
+        const watershed = document.getElementById('watershed');
+        const exportPreview = document.getElementById('exportPreview');
+        
+        let isPressed = false;
+        let currentPressure = 45;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isPressed = true;
+            createImpression(e);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isPressed = false;
+            currentPressure = Math.max(20, currentPressure - 5);
+            pressure.style.height = currentPressure + '%';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            crosshair.style.left = e.clientX + 'px';
+            crosshair.style.top = e.clientY + 'px';
+            
+            if (isPressed) {
+                currentPressure = Math.min(100, currentPressure + 0.5);
+                pressure.style.height = currentPressure + '%';
+                if (Math.random() > 0.9) createImpression(e);
+            }
+        });
+
+        function createImpression(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const impression = document.createElement('div');
+            impression.className = 'memory-impression';
+            const size = 20 + Math.random() * 80 + (currentPressure * 0.5);
+            const depth = Math.min(currentPressure / 100, 0.8);
+            
+            impression.style.left = (x - size/2) + 'px';
+            impression.style.top = (y - size/2) + 'px';
+            impression.style.width = size + 'px';
+            impression.style.height = size + 'px';
+            impression.style.background = `radial-gradient(ellipse at center, 
+                rgba(26, 26, 26, ${depth}) 0%, 
+                rgba(26, 26, 26, ${depth * 0.5}) 50%, 
+                transparent 70%)`;
+            impression.style.boxShadow = `inset 0 0 ${size/2}px rgba(0,0,0,${depth})`;
+            
+            canvas.appendChild(impression);
+
+            // Show tooltip for significant impressions
+            if (size > 60) {
+                tooltip.textContent = getRandomMemory();
+                tooltip.style.left = e.clientX + 15 + 'px';
+                tooltip.style.top = e.clientY - 30 + 'px';
+                tooltip.style.opacity = '1';
+                setTimeout(() => { tooltip.style.opacity = '0'; }, 2000);
+            }
+        }
+
+        function getRandomMemory() {
+            const memories = [
+                'Summer vacation, Lake Tahoe',
+                'Mom\'s birthday dinner',
+                'First day at new job',
+                'Concert with friends',
+                'Graduation ceremony',
+                'Moving day chaos',
+                'Anniversary surprise'
+            ];
+            return memories[Math.floor(Math.random() * memories.length)];
+        }
+
+        function erodeMemories() {
+            const impressions = document.querySelectorAll('.memory-impression');
+            impressions.forEach((imp, i) => {
+                if (Math.random() > 0.5) {
+                    setTimeout(() => {
+                        for (let j = 0; j < 5; j++) {
+                            createParticle(imp);
+                        }
+                        imp.style.transform = 'scale(0.8)';
+                        imp.style.opacity = '0.5';
+                    }, i * 50);
+                }
+            });
+        }
+
+        function createParticle(element) {
+            const particle = document.createElement('div');
+            particle.className = 'erosion-particles';
+            const rect = element.getBoundingClientRect();
+            
+            particle.style.left = rect.left + rect.width/2 + 'px';
+            particle.style.top = rect.top + rect.height/2 + 'px';
+            particle.style.setProperty('--drift-x', (Math.random() - 0.5) * 100 + 'px');
+            particle.style.animation = 'erode 2s ease-out forwards';
+            
+            document.body.appendChild(particle);
+            setTimeout(() => particle.remove(), 2000);
+        }
+
+        function compressLayer() {
+            const impressions = document.querySelectorAll('.memory-impression');
+            impressions.forEach(imp => {
+                imp.style.transform = 'scale(0.9) translateZ(-30px)';
+            });
+            currentPressure = Math.min(100, currentPressure + 20);
+            pressure.style.height = currentPressure + '%';
+        }
+
+        function overlayFamily() {
+            watershed.style.opacity = watershed.style.opacity === '1' ? '0' : '1';
+        }
+
+        function exportTerrain() {
+            exportPreview.classList.add('visible');
+            setTimeout(() => {
+                exportPreview.classList.remove('visible');
+            }, 3000);
+        }
+
+        // Year strata interaction
+        document.querySelectorAll('.year-stratum').forEach(stratum => {
+            stratum.addEventListener('click', function() {
+                document.querySelectorAll('.year-stratum').forEach(s => s.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Clear and regenerate terrain
+                document.querySelectorAll('.memory-impression').forEach(imp => imp.remove());
+                
+                // Generate new random impressions for selected year
+                for (let i = 0; i < 3 + Math.random() * 5; i++) {
+                    const fakeEvent = {
+                        clientX: canvas.getBoundingClientRect().left + Math.random() * canvas.offsetWidth,
+                        clientY: canvas.getBoundingClientRect().top + Math.random() * canvas.offsetHeight
+                    };
+                    createImpression(fakeEvent);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

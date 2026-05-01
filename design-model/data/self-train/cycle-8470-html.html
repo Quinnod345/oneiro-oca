@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Texture Library</title>
+    <style>
+        :root {
+            --charcoal: #1a1a1a;
+            --bone: #f5f2ed;
+            --rust: #b85c4e;
+            --sage: #7a8b7f;
+            --dust: #d4c8b8;
+            --thread: #e8dfd6;
+            --shadow: rgba(26, 26, 26, 0.12);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bone);
+            color: var(--charcoal);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .cursor {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--charcoal);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            mix-blend-mode: difference;
+        }
+
+        .cursor.touching {
+            transform: scale(1.5);
+            border-width: 1px;
+        }
+
+        .workspace {
+            width: 100%;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            position: relative;
+        }
+
+        .library {
+            background: var(--thread);
+            border-right: 1px solid var(--dust);
+            padding: 40px 30px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .library h2 {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            margin-bottom: 30px;
+            opacity: 0.7;
+        }
+
+        .fabric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .fabric-swatch {
+            width: 120px;
+            height: 120px;
+            background: var(--bone);
+            border-radius: 3px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: grab;
+        }
+
+        .fabric-swatch:active {
+            cursor: grabbing;
+        }
+
+        .fabric-swatch.dragging {
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .fabric-texture {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fabric-swatch[data-texture="silk"] .fabric-texture {
+            background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%, #f0f0f0),
+                        linear-gradient(-45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%, #f0f0f0);
+            background-size: 3px 3px;
+            background-position: 0 0, 1.5px 1.5px;
+        }
+
+        .fabric-swatch[data-texture="burlap"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+            background-size: 4px 4px;
+        }
+
+        .fabric-swatch[data-texture="velvet"] .fabric-texture {
+            background: radial-gradient(ellipse at top, rgba(0,0,0,0.1), transparent 70%);
+            background-size: 100% 200%;
+        }
+
+        .fabric-swatch[data-texture="linen"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 6px),
+                repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 6px);
+        }
+
+        .fabric-swatch[data-texture="wool"] .fabric-texture {
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0,0,0,0.08) 0%, transparent 2%),
+                radial-gradient(circle at 80% 50%, rgba(0,0,0,0.08) 0%, transparent 2%),
+                radial-gradient(circle at 50% 20%, rgba(0,0,0,0.08) 0%, transparent 2%),
+                radial-gradient(circle at 50% 80%, rgba(0,0,0,0.08) 0%, transparent 2%);
+            background-size: 8px 8px;
+        }
+
+        .fabric-swatch[data-texture="canvas"] .fabric-texture {
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px),
+                repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3), transparent);
+            pointer-events: none;
+            transform: scale(0);
+            animation: ripple-effect 0.8s ease-out;
+        }
+
+        @keyframes ripple-effect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .fabric-label {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.9);
+            padding: 4px 8px;
+            border-radius: 2px;
+            letter-spacing: 0.02em;
+        }
+
+        .quilt-area {
+            position: relative;
+            background: var(--bone);
+            overflow: hidden;
+        }
+
+        .quilt-canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 600px;
+            background: white;
+            box-shadow: 0 10px 40px var(--shadow);
+            border-radius: 2px;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 1px;
+            background: var(--dust);
+            padding: 1px;
+        }
+
+        .quilt-cell {
+            background: white;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .quilt-cell.occupied {
+            background: transparent;
+        }
+
+        .placed-fabric {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .stitch-line {
+            position: absolute;
+            background: var(--charcoal);
+            opacity: 0.2;
+        }
+
+        .stitch-line.horizontal {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+        }
+
+        .stitch-line.vertical {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+        }
+
+        .compatibility-glow {
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border: 2px solid var(--sage);
+            border-radius: 2px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .compatible {
+            opacity: 1;
+        }
+
+        .tools {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .tool-button {
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--charcoal);
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .tool-button:hover {
+            background: var(--charcoal);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .sound-info {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 20px 30px;
+            border-radius: 4px;
+            box-shadow: 0 4px 20px var(--shadow);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .sound-info.visible {
+            opacity: 1;
+        }
+
+        .sound-info h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .sound-info p {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .texture-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            font-size: 11px;
+            opacity: 0.5;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body>
+    <div class="cursor"></div>
+    
+    <div class="workspace">
+        <div class="library">
+            <h2>TEXTURE SAMPLES</h2>
+            
+            <div class="fabric-grid">
+                <div class="fabric-swatch" draggable="true" data-texture="silk" data-sound="rain-leaves" data-compatible="velvet,linen">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">rain on leaves</div>
+                </div>
+                
+                <div class="fabric-swatch" draggable="true" data-texture="burlap" data-sound="gravel-steps" data-compatible="canvas,wool">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">gravel footsteps</div>
+                </div>
+                
+                <div class="fabric-swatch" draggable="true" data-texture="velvet" data-sound="distant-thunder" data-compatible="silk,wool">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">distant thunder</div>
+                </div>
+                
+                <div class="fabric-swatch" draggable="true" data-texture="linen" data-sound="wind-grass" data-compatible="silk,canvas">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">wind through grass</div>
+                </div>
+                
+                <div class="fabric-swatch" draggable="true" data-texture="wool" data-sound="fire-crackle" data-compatible="burlap,velvet">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">fire crackling</div>
+                </div>
+                
+                <div class="fabric-swatch" draggable="true" data-texture="canvas" data-sound="ocean-waves" data-compatible="linen,burlap">
+                    <div class="fabric-texture"></div>
+                    <div class="fabric-label">ocean waves</div>
+                </div>
+            </div>
+            
+            <div class="texture-legend">
+                drag textures to compose • adjacent compatible sounds create harmonic layers
+            </div>
+        </div>
+        
+        <div class="quilt-area">
+            <div class="quilt-canvas">
+                <!-- Grid cells generated by JS -->
+            </div>
+            
+            <div class="tools">
+                <button class="tool-button" title="Clear quilt">×</button>
+                <button class="tool-button" title="Play composition">▶</button>
+                <button class="tool-button" title="Export layers">↓</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="sound-info">
+        <h3></h3>
+        <p></p>
+    </div>
+
+    <script>
+        // Custom cursor
+        const cursor = document.querySelector('.cursor');
+        let mouseX = 0, mouseY = 0;
+        
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursor.style.left = mouseX - 20 + 'px';
+            cursor.style.top = mouseY - 20 + 'px';
+        });
+
+        // Generate quilt grid
+        const quiltCanvas = document.querySelector('.quilt-canvas');
+        for (let i = 0; i < 48; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'quilt-cell';
+            cell.dataset.index = i;
+            quiltCanvas.appendChild(cell);
+        }
+
+        // Fabric swatch interactions
+        const swatches = document.querySelectorAll('.fabric-swatch');
+        const soundInfo = document.querySelector('.sound-info');
+        
+        swatches.forEach(swatch => {
+            // Proximity ripple effect
+            swatch.addEventListener('mouseenter', function(e) {
+                cursor.classList.add('touching');
+                
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const ripple = document.createElement('div');
+                ripple.className = 'ripple';
+                ripple.style.width = '20px';
+                ripple.style.height = '20px';
+                ripple.style.left = x - 10 + 'px';
+                ripple.style.top = y - 10 + 'px';
+                
+                this.querySelector('.fabric-texture').appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 800);
+                
+                // Show sound info
+                soundInfo.querySelector('h3').textContent = this.querySelector('.fabric-label').textContent;
+                soundInfo.querySelector('p').textContent = `Texture: ${this.dataset.texture} • Compatible with: ${this.dataset.compatible.replace(',', ', ')}`;
+                soundInfo.classList.add('visible');
+            });
+            
+            swatch.addEventListener('mouseleave', function() {
+                cursor.classList.remove('touching');
+                soundInfo.classList.remove('visible');
+            });
+            
+            // Drag functionality
+            swatch.addEventListener('dragstart', function(e) {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('texture', this.dataset.texture);
+                e.dataTransfer.setData('sound', this.dataset.sound);
+                e.dataTransfer.setData('compatible', this.dataset.compatible);
+                this.classList.add('dragging');
+            });
+            
+            swatch.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+            });
+        });
+
+        // Quilt cell interactions
+        const cells = document.querySelectorAll('.quilt-cell');
+        
+        cells.forEach(cell => {
+            cell.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                
+                // Check compatibility with neighbors
+                const index = parseInt(this.dataset.index);
+                const neighbors = getNeighbors(index);
+                let compatible = true;
+                
+                neighbors.forEach(neighborIndex => {
+                    const neighbor = document.querySelector(`[data-index="${neighborIndex}"]`);
+                    if (neighbor && neighbor.classList.contains('occupied')) {
+                        // Check texture compatibility logic here
+                    }
+                });
+                
+                if (compatible) {
+                    this.querySelector('.compatibility-glow')?.classList.add('compatible');
+                }
+            });
+            
+            cell.addEventListener('dragleave', function() {
+                this.querySelector('.compatibility-glow')?.classList.remove('compatible');
+            });
+            
+            cell.addEventListener('drop', function(e) {
+                e.preventDefault();
+                
+                if (!this.classList.contains('occupied')) {
+                    const texture = e.dataTransfer.getData('texture');
+                    const sound = e.dataTransfer.getData('sound');
+                    
+                    this.classList.add('occupied');
+                    
+                    const fabric = document.createElement('div');
+                    fabric.className = 'placed-fabric';
+                    
+                    // Copy texture pattern
+                    const textureDiv = document.createElement('div');
+                    textureDiv.className = 'fabric-texture';
+                    fabric.appendChild(textureDiv);
+                    
+                    // Add stitch lines
+                    const stitchH = document.createElement('div');
+                    stitchH.className = 'stitch-line horizontal';
+                    fabric.appendChild(stitchH);
+                    
+                    const stitchV = document.createElement('div');
+                    stitchV.className = 'stitch-line vertical';
+                    fabric.appendChild(stitchV);
+                    
+                    // Add compatibility glow
+                    const glow = document.createElement('div');
+                    glow.className = 'compatibility-glow';
+                    fabric.appendChild(glow);
+                    
+                    this.appendChild(fabric);
+                    this.dataset.texture = texture;
+                    this.dataset.sound = sound;
+                    
+                    // Apply texture styles
+                    const sourceTexture = document.querySelector(`[data-texture="${texture}"] .fabric-texture`);
+                    if (sourceTexture) {
+                        const styles = window.getComputedStyle(sourceTexture);
+                        textureDiv.style.background = styles.background;
+                        textureDiv.style.backgroundImage = styles.backgroundImage;
+                        textureDiv.style.backgroundSize = styles.backgroundSize;
+                        textureDiv.style.backgroundPosition = styles.backgroundPosition;
+                    }
+                }
+            });
+        });
+
+        function getNeighbors(index) {
+            const neighbors = [];
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+            
+            if (col > 0) neighbors.push(index - 1); // left
+            if (col < 7) neighbors.push(index + 1); // right
+            if (row > 0) neighbors.push(index - 8); // top
+            if (row < 5) neighbors.push(index + 8); // bottom
+            
+            return neighbors;
+        }
+
+        // Clear button
+        document.querySelector('.tool-button').addEventListener('click', () => {
+            cells.forEach(cell => {
+                cell.classList.remove('occupied');
+                cell.innerHTML = '';
+                delete cell.dataset.texture;
+                delete cell.dataset.sound;
+            });
+        });
+
+        // Subtle animation on load
+        swatches.forEach((swatch, i) => {
+            swatch.style.opacity = '0';
+            swatch.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                swatch.style.transition = 'opacity 0.5s, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                swatch.style.opacity = '1';
+                swatch.style.transform = 'translateY(0)';
+            }, i * 100);
+        });
+    </script>
+</body>
+</html>

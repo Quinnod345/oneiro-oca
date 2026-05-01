@@ -1,0 +1,36 @@
+{
+  "cycle": 13724,
+  "captured_at": "2026-04-15T19:02:45Z",
+  "language": "swiftui",
+  "brief": "Design an interface for a \"Memory Constellation Navigator\" where users arrange forgotten moments from their digital life (orphaned photos, draft emails, abandoned playlists) as stars in a personal night sky, with each memory's brightness determined by how long it's been forgotten, allowing users to gravitationally pull related memories together to form constellations that tell unexpected stories about their past selves, while distant memories slowly fade unless periodically revisited, creating a",
+  "scores": {
+    "typography_quality": 0.3,
+    "color_harmony": 0.4,
+    "spatial_composition": 0.2,
+    "motion_elegance": 0.3,
+    "emotional_resonance": 0.5,
+    "craft_visibility": 0.2,
+    "minimalism_coherence": 0.1,
+    "native_integration": 0.2,
+    "visceral_score": 0.3,
+    "behavioral_score": 0.2,
+    "reflective_score": 0.4,
+    "overall_aesthetic": 0.25,
+    "innovation_score": 0.6,
+    "system_creativity": 0.5,
+    "design_distinctiveness": 0.6,
+    "problem_level": 0.7
+  },
+  "overall": 0.25,
+  "innovation": 0.6,
+  "critique": "The memory constellation concept is poetic but drowns in technical implementation details, with jarring default fonts, arbitrary color values, and a cluttered Canvas-based approach that fights SwiftUI's declarative nature. The interaction model is confused, mixing hover states with drag gestures while the visual hierarchy gets lost in overlapping transparent hit targets and incomplete popup code.",
+  "fixes": [
+    "Replace Canvas drawing with declarative SwiftUI views using proper view modifiers, animations, and transitions for a more native feel",
+    "Establish a clear visual hierarchy with thoughtful typography (custom fonts, consistent sizing) and a refined color palette with semantic meaning",
+    "Simplify the interaction model to focus on either touch or hover, not both, with clear visual feedback and smooth state transitions"
+  ],
+  "compiled": false,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13724-swiftui.swift",
+  "png_path": null,
+  "code_snippet": "struct ContentView: View {\n    @State private var memories: [MemoryParticle] = []\n    @State private var constellations: [Constellation] = []\n    @State private var draggedMemory: UUID?\n    @State private var hoveredMemory: UUID?\n    @State private var viewCenter: CGPoint = CGPoint(x: 720, y: 450)\n    @State private var zoom: Double = 1.0\n    @State private var isDraggingCanvas: Bool = false\n    @State private var lastDragLocation: CGPoint = .zero\n    @State private var selectedConstellation: UUID?\n    @State private var timeElapsed: Double = 0\n    \n    let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()\n    \n    var body: some View {\n        GeometryReader { geometry in\n            ZStack {\n                // Deep space background\n                Canvas { context, size in\n                    let rect = CGRect(origin: .zero, size: size)\n                    context.fill(Path(rect), with: .color(Color(red: 0.02, green: 0.02, blue: 0.05)))\n                    \n                    // Distant star field\n                    for i in 0..<200 {\n                        let x = Double(i * 7) % size.width\n                        let y = Double(i * 13) % size.height\n                        let opacity = 0.1 + (Double(i % 3) * 0.1)\n                        context.fill(\n                            Path(ellipseIn: CGRect(x: x - 0.5, y: y - 0.5, width: 1, height: 1)),\n                            with: .color(Color.white.opacity(opacity))\n                        )\n                    }\n                }\n                .ignoresSafeArea()\n                \n                // Memory constellation canvas\n                Canvas { context, size in\n                    // Draw constellation connections\n                    for constellation in constellations {\n                        let memoryPositions = memories\n                            .filter { constellation.memories.contains($0.id) }\n                            .map { $0.position }\n                        \n                        if memoryPositions.count > 1 {\n                            var path = Path()\n                            path.move(to: transformPoint(memoryPositions[0]))\n                            \n                            for i in 1..<memoryPositions.count {\n                                path.addLine(to: transformPoint(memoryPositions[i]))\n                            }\n                            \n                            context.stroke(\n                                path,\n                                with: .color(Color.white.opacity(0.15)),\n                                style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 8])\n                            )\n                        }\n                    }\n                    \n                    // Draw memories as stars\n                    for memory in memories {\n                        let transformedPos = transformPoint(memory.position)\n                        let baseSize = 4.0 + (memory.gravitationalM"
+}

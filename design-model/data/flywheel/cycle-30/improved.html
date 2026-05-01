@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delete Confirmation</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #070810;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .scene-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 25% 35%, rgba(180, 30, 30, 0.1) 0%, transparent 55%),
+        radial-gradient(ellipse at 75% 70%, rgba(40, 20, 80, 0.18) 0%, transparent 50%),
+        #070810;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(10px) saturate(0.7);
+      -webkit-backdrop-filter: blur(10px) saturate(0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    @keyframes pulseRing {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%       { opacity: 1;   transform: scale(1.03); }
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Modal shell ── */
+    .modal {
+      width: 100%;
+      max-width: 448px;
+      background: #0c0d16;
+      border: 1px solid rgba(255, 255, 255, 0.055);
+      border-radius: 26px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.02),
+        0 40px 100px rgba(0, 0, 0, 0.85),
+        0 0 80px rgba(220, 38, 38, 0.07);
+      animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* ── Danger header band ── */
+    .danger-band {
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        #dc2626 20%,
+        #f97316 50%,
+        #dc2626 80%,
+        transparent 100%
+      );
+      background-size: 300% 100%;
+      animation: shimmer 3s linear infinite;
+    }
+
+    /* ── Header ── */
+    .modal-header {
+      position: relative;
+      padding: 36px 32px 24px;
+      overflow: hidden;
+    }
+
+    .modal-header::after {
+      content: '';
+      position: absolute;
+      top: -60px;
+      left: -60px;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(220, 38, 38, 0.12) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    /* ── Icon with layered rings ── */
+    .icon-wrap {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 26px;
+    }
+
+    .icon-ring {
+      position: absolute;
+      border-radius: 16px;
+      border: 1px solid rgba(220, 38, 38, 0.18);
+      background: rgba(220, 38, 38, 0.08);
+      inset: 0;
+      animation: pulseRing 2.8s ease-in-out infinite;
+    }
+
+    .icon-ring-mid {
+      position: absolute;
+      border-radius: 20px;
+      border: 1px solid rgba(220, 38, 38, 0.09);
+      inset: -8px;
+      animation: pulseRing 2.8s ease-in-out infinite 0.4s;
+    }
+
+    .icon-ring-outer {
+      position: absolute;
+      border-radius: 24px;
+      border: 1px solid rgba(220, 38, 38, 0.04);
+      inset: -16px;
+      animation: pulseRing 2.8s ease-in-out infinite 0.8s;
+    }
+
+    .icon-glyph {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-glyph svg {
+      width: 20px;
+      height: 20px;
+      color: #ef4444;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 650;
+      color: #f3f3f5;
+      letter-spacing: -0.45px;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+
+    .modal-sub {
+      font-size: 13.5px;
+      color: #5b6170;
+      line-height: 1.65;
+    }
+
+    /* ── Impact section ── */
+    .impact-section {
+      padding: 0 32px 26px;
+    }
+
+    .section-eyebrow {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #374151;
+      margin-bottom: 12px;
+    }
+
+    /* Primary target */
+    .target-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(220, 38, 38, 0.07);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+    }
+
+    .target-icon {
+      width: 36px;
+      height: 36px;
+      background: rgba(220, 38, 38, 0.12);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .target-icon svg {
+      width: 16px;
+      height: 16px;
+      color: #ef4444;
+    }
+
+    .target-text { flex: 1; min-width: 0; }
+
+    .target-name {
+      font-size: 13.5px;
+      font-weight: 550;
+      color: #e5e7eb;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .target-meta {
+      font-size: 11.5px;
+      color: #4b5563;
+      margin-top: 2px;
+    }
+
+    .target-badge {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.22);
+      padding: 3px 8px;
+      border-radius: 5px;
+      flex-shrink: 0;
+    }
+
+    /* Cascade tree */
+    .cascade-tree {
+      padding-left: 18px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .cascade-tree::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 16px;
+      width: 1px;
+      background: linear-gradient(180deg,
+        rgba(220, 38, 38, 0.35) 0%,
+        rgba(220, 38, 38, 0.0) 100%
+      );
+    }
+
+    .cascade-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.018);
+      border: 1px solid rgba(255, 255, 255, 0.042);
+      border-radius: 9px;
+    }
+
+    .cascade-row::before {
+      content: '';
+      position: absolute;
+      left: -18px;
+      top: 50%;
+      width: 13px;
+      height: 1px;
+      background: rgba(220, 38, 38, 0.25);
+    }
+
+    .cascade-dot {
+      width: 5px;
+      height: 5px;
+      background: #374151;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .cascade-label {
+      font-size: 12px;
+      color: #5b6170;
+      flex: 1;
+    }
+
+    .cascade-count {
+      font-size: 11px;
+      color: #374151;
+      font-feature-settings: 'tnum';
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.046);
+      margin: 0 32px 24px;
+    }
+
+    /* ── Confirm input ── */
+    .confirm-section {
+      padding: 0 32px 24px;
+    }
+
+    .confirm-prompt {
+      font-size: 12.5px;
+      color: #4b5563;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+
+    .confirm-prompt code {
+      font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 11.5px;
+      color: #9ca3af;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      padding: 1px 6px;
+      border-radius: 5px;
+    }
+
+    .confirm-field {
+      position: relative;
+    }
+
+    .confirm-input {
+      width: 100%;
+      height: 42px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 11px;
+      padding: 0 14px;
+      font-family: inherit;
+      font-size: 13.5px;
+      color: #e5e7eb;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .confirm-input::placeholder { color: #2d3241; }
+
+    .confirm-input:focus {
+      border-color: rgba(220, 38, 38, 0.28);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.07);
+    }
+
+    .confirm-input.valid {
+      border-color: rgba(220, 38, 38, 0.42);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.09);
+    }
+
+    /* ── Actions ── */
+    .modal-footer {
+      padding: 0 24px 26px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      height: 44px;
+      border: none;
+      border-radius: 13px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.14s ease;
+      outline: none;
+      letter-spacing: -0.1px;
+    }
+
+    .btn:focus-visible {
+      box-shadow: 0 0 0 2px #0c0d16, 0 0 0 4px rgba(220, 38, 38, 0.4);
+    }
+
+    .btn-cancel {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.038);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: #4b5563;
+    }
+
+    .btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.065);
+      color: #6b7280;
+    }
+
+    .btn-cancel:active { transform: scale(0.98); }
+
+    .btn-delete {
+      flex: 2;
+      background: linear-gradient(160deg, #dc2626 0%, #991b1b 100%);
+      color: #fff;
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.1) inset,
+        0 6px 24px rgba(220, 38, 38, 0.28);
+    }
+
+    .btn-delete:not(:disabled):hover {
+      background: linear-gradient(160deg, #ef4444 0%, #dc2626 100%);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.12) inset,
+        0 8px 28px rgba(220, 38, 38, 0.38);
+      transform: translateY(-1px);
+    }
+
+    .btn-delete:not(:disabled):active {
+      transform: scale(0.98) translateY(0);
+    }
+
+    .btn-delete:disabled {
+      opacity: 0.28;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ── Member avatars (social proof of impact) ── */
+    .member-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: rgba(245, 158, 11, 0.04);
+      border: 1px solid rgba(245, 158, 11, 0.1);
+      border-radius: 10px;
+      margin-top: 4px;
+    }
+
+    .avatar-stack {
+      display: flex;
+    }
+
+    .avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid #0c0d16;
+      font-size: 9px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .avatar:not(:first-child) { margin-left: -7px; }
+
+    .avatar-1 { background: #7c3aed; }
+    .avatar-2 { background: #0ea5e9; }
+    .avatar-3 { background: #10b981; }
+    .avatar-4 { background: #f59e0b; }
+    .avatar-more {
+      background: #1f2937;
+      color: #6b7280;
+      font-size: 8.5px;
+    }
+
+    .member-warning {
+      font-size: 12px;
+      color: #78716c;
+      line-height: 1.45;
+    }
+
+    .member-warning strong {
+      color: #a78256;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="scene-bg"></div>
+
+  <div class="overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+
+      <div class="danger-band"></div>
+
+      <!-- Header -->
+      <div class="modal-header">
+        <div class="icon-wrap">
+          <div class="icon-ring-outer"></div>
+          <div class="icon-ring-mid"></div>
+          <div class="icon-ring"></div>
+          <div class="icon-glyph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4h6v2"/>
+            </svg>
+          </div>
+        </div>
+        <h2 class="modal-title" id="modal-title">Delete workspace permanently?</h2>
+        <p class="modal-sub">Everything inside will be destroyed — this cannot be reversed or recovered.</p>
+      </div>
+
+      <!-- Impact -->
+      <div class="impact-section">
+        <p class="section-eyebrow">Deletion scope</p>
+
+        <div class="target-card">
+          <div class="target-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div class="target-text">
+            <div class="target-name">Design System — v2.4</div>
+            <div class="target-meta">Created Mar 12, 2024 &middot; 847 MB</div>
+          </div>
+          <span class="target-badge">Primary</span>
+        </div>
+
+        <div class="cascade-tree">
+          <div class="cascade-row">
+            <span class="cascade-dot"></span>
+            <span class="cascade-label">Component library</span>
+            <span class="cascade-count">312 files</span>
+          </div>
+          <div class="cascade-row">
+            <span class="cascade-dot"></span>
+            <span class="cascade-label">Version history &amp; backups</span>
+            <span class="cascade-count">94 snapshots</span>
+          </div>
+          <div class="member-row">
+            <div class="avatar-stack">
+              <div class="avatar avatar-1">AK</div>
+              <div class="avatar avatar-2">JL</div>
+              <div class="avatar avatar-3">SR</div>
+              <div class="avatar avatar-4">MP</div>
+              <div class="avatar avatar-more">+4</div>
+            </div>
+            <p class="member-warning"><strong>8 members</strong> will lose access immediately</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Confirm input -->
+      <div class="confirm-section">
+        <p class="confirm-prompt">Type <code>Design System</code> to confirm</p>
+        <div class="confirm-field">
+          <input
+            class="confirm-input"
+            id="confirmInput"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Type to confirm…"
+            oninput="
+              const match = this.value === 'Design System';
+              this.classList.toggle('valid', match);
+              document.getElementById('deleteBtn').disabled = !match;
+            "
+          />
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="modal-footer">
+        <button class="btn btn-cancel" type="button">Cancel</button>
+        <button class="btn btn-delete" id="deleteBtn" type="button" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+          </svg>
+          Delete Workspace
+        </button>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

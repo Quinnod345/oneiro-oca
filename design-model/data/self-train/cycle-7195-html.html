@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Residue Collector</title>
+    <style>
+        :root {
+            --twilight: #1a1825;
+            --deep-void: #0f0e13;
+            --shard-edge: rgba(147, 129, 255, 0.3);
+            --anxiety-red: rgba(255, 71, 87, 0.4);
+            --calm-amber: rgba(255, 193, 7, 0.6);
+            --dissolve-blue: rgba(64, 169, 255, 0.5);
+            --mist: rgba(255, 255, 255, 0.02);
+            --wake: rgba(255, 255, 255, 0.08);
+            --sleep: rgba(0, 0, 0, 0.7);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            background: var(--deep-void);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .custom-cursor {
+            width: 40px;
+            height: 40px;
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            mix-blend-mode: screen;
+            transition: transform 0.2s ease-out;
+        }
+
+        .cursor-inner {
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            position: relative;
+            animation: cursorPulse 2s infinite;
+        }
+
+        .cursor-trail {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: scale(1.5);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .cursor-active .cursor-trail {
+            opacity: 1;
+        }
+
+        @keyframes cursorPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .liminal-space {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at 50% 50%, var(--twilight) 0%, var(--deep-void) 100%);
+        }
+
+        .parallax-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .parallax-layer.back {
+            background: 
+                radial-gradient(circle at 20% 30%, var(--mist) 0%, transparent 40%),
+                radial-gradient(circle at 70% 60%, var(--mist) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, var(--mist) 0%, transparent 35%);
+        }
+
+        .parallax-layer.mid {
+            background: 
+                radial-gradient(circle at 80% 20%, rgba(147, 129, 255, 0.05) 0%, transparent 30%),
+                radial-gradient(circle at 30% 70%, rgba(64, 169, 255, 0.05) 0%, transparent 40%);
+        }
+
+        .vortex-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            pointer-events: auto;
+        }
+
+        .vortex {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            animation: vortexRotate 20s linear infinite;
+        }
+
+        @keyframes vortexRotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .vortex-ring {
+            position: absolute;
+            border: 1px solid;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.3;
+            animation: vortexPulse 4s ease-in-out infinite alternate;
+        }
+
+        .vortex-ring:nth-child(1) {
+            width: 100%;
+            height: 100%;
+            border-color: var(--dissolve-blue);
+            animation-delay: 0s;
+        }
+
+        .vortex-ring:nth-child(2) {
+            width: 70%;
+            height: 70%;
+            border-color: var(--calm-amber);
+            animation-delay: 0.5s;
+        }
+
+        .vortex-ring:nth-child(3) {
+            width: 40%;
+            height: 40%;
+            border-color: var(--wake);
+            animation-delay: 1s;
+        }
+
+        @keyframes vortexPulse {
+            from { 
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.3;
+            }
+            to { 
+                transform: translate(-50%, -50%) scale(1.1);
+                opacity: 0.6;
+            }
+        }
+
+        .vortex-core {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, var(--deep-void) 0%, transparent 70%);
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 
+                0 0 40px rgba(64, 169, 255, 0.4),
+                inset 0 0 20px var(--sleep);
+        }
+
+        .nightmare-shard {
+            position: absolute;
+            pointer-events: auto;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            filter: drop-shadow(0 0 10px var(--shard-edge));
+        }
+
+        .shard-shape {
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(20% 0%, 80% 10%, 100% 50%, 70% 100%, 30% 90%, 0% 40%);
+            background: linear-gradient(135deg, var(--anxiety-red) 0%, var(--shard-edge) 100%);
+            opacity: 0.7;
+            transition: all 0.8s ease-out;
+        }
+
+        .nightmare-shard.dissolving .shard-shape {
+            clip-path: polygon(30% 10%, 70% 10%, 90% 40%, 70% 90%, 30% 90%, 10% 40%);
+            background: linear-gradient(135deg, var(--calm-amber) 0%, var(--dissolve-blue) 100%);
+            opacity: 0.4;
+            filter: blur(2px);
+        }
+
+        .nightmare-shard.collected {
+            animation: collectShard 1.2s ease-out forwards;
+        }
+
+        @keyframes collectShard {
+            to {
+                transform: translate(var(--vortex-x), var(--vortex-y)) scale(0.1) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .dream-residue {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--calm-amber);
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .dream-residue.active {
+            animation: residueFloat 3s ease-out forwards;
+        }
+
+        @keyframes residueFloat {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0) scale(0);
+            }
+            20% {
+                opacity: 0.8;
+                transform: translate(var(--float-x), var(--float-y)) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(var(--float-x) * 2), calc(var(--float-y) * 2)) scale(0.5);
+            }
+        }
+
+        .ripple-effect {
+            position: absolute;
+            border-radius: 50%;
+            border: 1px solid var(--wake);
+            pointer-events: none;
+            animation: ripple 1.5s ease-out forwards;
+        }
+
+        @keyframes ripple {
+            from {
+                width: 0;
+                height: 0;
+                opacity: 0.8;
+            }
+            to {
+                width: 200px;
+                height: 200px;
+                opacity: 0;
+            }
+        }
+
+        .sleep-meter {
+            position: absolute;
+            bottom: 60px;
+            left: 60px;
+            width: 200px;
+        }
+
+        .meter-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--wake);
+            margin-bottom: 8px;
+        }
+
+        .meter-track {
+            width: 100%;
+            height: 3px;
+            background: var(--mist);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--dissolve-blue) 0%, var(--calm-amber) 100%);
+            border-radius: 3px;
+            transition: width 1s ease-out;
+            box-shadow: 0 0 10px var(--dissolve-blue);
+        }
+
+        .instruction-overlay {
+            position: absolute;
+            top: 60px;
+            right: 60px;
+            max-width: 280px;
+            text-align: right;
+        }
+
+        .instruction-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--wake);
+            opacity: 0.6;
+            font-weight: 300;
+        }
+
+        .shard-counter {
+            position: absolute;
+            top: 60px;
+            left: 60px;
+            font-size: 48px;
+            font-weight: 100;
+            color: var(--wake);
+            letter-spacing: -2px;
+        }
+
+        .shard-counter span {
+            font-size: 14px;
+            letter-spacing: 1px;
+            opacity: 0.4;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .ambient-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--wake);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: drift 20s infinite linear;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translateY(100vh) translateX(0);
+            }
+            to {
+                transform: translateY(-100px) translateX(50px);
+            }
+        }
+
+        .gestural-trail {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+
+        .trail-segment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--wake) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: fadeTrail 1s ease-out forwards;
+        }
+
+        @keyframes fadeTrail {
+            to {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="liminal-space">
+        <div class="parallax-layer back"></div>
+        <div class="parallax-layer mid"></div>
+        
+        <div class="ambient-particles"></div>
+        
+        <div class="shard-counter">
+            <span id="shardCount">0</span>
+            <span>fragments dissolved</span>
+        </div>
+        
+        <div class="instruction-overlay">
+            <p class="instruction-text">
+                sweep nightmare fragments into the center<br>
+                watch them transform and dissolve<br>
+                clear your mind for sleep
+            </p>
+        </div>
+        
+        <div class="vortex-container">
+            <div class="vortex">
+                <div class="vortex-ring"></div>
+                <div class="vortex-ring"></div>
+                <div class="vortex-ring"></div>
+                <div class="vortex-core"></div>
+            </div>
+        </div>
+        
+        <div class="sleep-meter">
+            <div class="meter-label">sleep readiness</div>
+            <div class="meter-track">
+                <div class="meter-fill" id="sleepMeter"></div>
+            </div>
+        </div>
+        
+        <div class="gestural-trail" id="gesturalTrail"></div>
+    </div>
+    
+    <div class="custom-cursor" id="customCursor">
+        <div class="cursor-inner"></div>
+        <div class="cursor-trail"></div>
+    </div>
+
+    <script>
+        let mouseX = 0, mouseY = 0;
+        let isMouseDown = false;
+        let shardCount = 0;
+        let draggedShard = null;
+        const vortexCenter = { x: 720, y: 450 };
+        
+        // Custom cursor
+        const cursor = document.getElementById('customCursor');
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursor.style.left = mouseX - 20 + 'px';
+            cursor.style.top = mouseY - 20 + 'px';
+            
+            // Parallax effect
+            const layers = document.querySelectorAll('.parallax-layer');
+            layers.forEach((layer, index) => {
+                const speed = (index + 1) * 0.02;
+                const x = (mouseX - 720) * speed;
+                const y = (mouseY - 450) * speed;
+                layer.style.transform = `translate(${x}px, ${y}px)`;
+            });
+            
+            // Create ripple near vortex
+            const distToVortex = Math.sqrt(Math.pow(mouseX - vortexCenter.x, 2) + Math.pow(mouseY - vortexCenter.y, 2));
+            if (distToVortex < 200 && Math.random() < 0.02) {
+                createRipple(mouseX, mouseY);
+            }
+        });
+        
+        document.addEventListener('mousedown', () => {
+            isMouseDown = true;
+            cursor.classList.add('cursor-active');
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            cursor.classList.remove('cursor-active');
+            if (draggedShard) {
+                checkVortexProximity(draggedShard);
+                draggedShard = null;
+            }
+        });
+        
+        // Create nightmare shards
+        function createShard() {
+            const shard = document.createElement('div');
+            shard.className = 'nightmare-shard';
+            const size = 60 + Math.random() * 40;
+            shard.style.width = size + 'px';
+            shard.style.height = size + 'px';
+            
+            // Random position away from center
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 300 + Math.random() * 200;
+            shard.style.left = vortexCenter.x + Math.cos(angle) * distance - size/2 + 'px';
+            shard.style.top = vortexCenter.y + Math.sin(angle) * distance - size/2 + 'px';
+            
+            const shardShape = document.createElement('div');
+            shardShape.className = 'shard-shape';
+            shard.appendChild(shardShape);
+            
+            shard.addEventListener('mouseenter', () => {
+                if (!shard.classList.contains('collected')) {
+                    shard.classList.add('dissolving');
+                }
+            });
+            
+            shard.addEventListener('mouseleave', () => {
+                if (!shard.classList.contains('collected')) {
+                    setTimeout(() => {
+                        shard.classList.remove('dissolving');
+                    }, 200);
+                }
+            });
+            
+            shard.addEventListener('mousedown', (e) => {
+                if (!shard.classList.contains('collected')) {
+                    draggedShard = shard;
+                    e.preventDefault();
+                }
+            });
+            
+            document.querySelector('.liminal-space').appendChild(shard);
+        }
+        
+        // Gestural trail
+        document.addEventListener('mousemove', (e) => {
+            if (isMouseDown && Math.random() < 0.3) {
+                const trail = document.createElement('div');
+                trail.className = 'trail-segment';
+                trail.style.left = e.clientX - 20 + 'px';
+                trail.style.top = e.clientY - 20 + 'px';
+                document.getElementById('gesturalTrail').appendChild(trail);
+                setTimeout(() => trail.remove(), 1000);
+            }
+            
+            if (draggedShard && isMouseDown) {
+                const rect = draggedShard.getBoundingClientRect();
+                draggedShard.style.left = e.clientX - rect.width/2 + 'px';
+                draggedShard.style.top = e.clientY - rect.height/2 + 'px';
+                
+                // Create dream residue particles
+                if (Math.random() < 0.2) {
+                    createResidueParticle(e.clientX, e.clientY);
+                }
+            }
+        });
+        
+        function checkVortexProximity(shard) {
+            const rect = shard.getBoundingClientRect();
+            const shardCenter = {
+                x: rect.left + rect.width/2,
+                y: rect.top + rect.height/2
+            };
+            
+            const distance = Math.sqrt(
+                Math.pow(shardCenter.x - vortexCenter.x, 2) + 
+                Math.pow(shardCenter.y - vortexCenter.y, 2)
+            );
+            
+            if (distance < 150) {
+                collectShard(shard);
+            }
+        }
+        
+        function collectShard(shard) {
+            if (shard.classList.contains('collected')) return;
+            
+            const rect = shard.getBoundingClientRect();
+            const shardCenter = {
+                x: rect.left + rect.width/2,
+                y: rect.top + rect.height/2
+            };
+            
+            shard.style.setProperty('--vortex-x', (vortexCenter.x - shardCenter.x) + 'px');
+            shard.style.setProperty('--vortex-y', (vortexCenter.y - shardCenter.y) + 'px');
+            shard.classList.add('collected');
+            
+            // Update counter
+            shardCount++;
+            document.getElementById('shardCount').textContent = shardCount;
+            
+            // Update sleep meter
+            const meterFill = document.getElementById('sleepMeter');
+            const progress = Math.min((shardCount / 10) * 100, 100);
+            meterFill.style.width = progress + '%';
+            
+            // Create burst of particles
+            for (let i = 0; i < 8; i++) {
+                setTimeout(() => {
+                    createResidueParticle(vortexCenter.x, vortexCenter.y, true);
+                }, i * 50);
+            }
+            
+            setTimeout(() => shard.remove(), 1200);
+        }
+        
+        function createResidueParticle(x, y, isBurst = false) {
+            const particle = document.createElement('div');
+            particle.className = 'dream-residue active';
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            
+            const angle = Math.random() * Math.PI * 2;
+            const distance = isBurst ? 50 + Math.random() * 100 : 20 + Math.random() * 30;
+            particle.style.setProperty('--float-x', Math.cos(angle) * distance + 'px');
+            particle.style.setProperty('--float-y', Math.sin(angle) * distance + 'px');
+            
+            if (isBurst) {
+                particle.style.width = '6px';
+                particle.style.height = '6px';
+            }
+            
+            document.querySelector('.liminal-space').appendChild(particle);
+            setTimeout(() => particle.remove(), 3000);
+        }
+        
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple-effect';
+            ripple.style.left = x - 100 + 'px';
+            ripple.style.top = y - 100 + 'px';
+            document.querySelector('.liminal-space').appendChild(ripple);
+            setTimeout(() => ripple.remove(), 1500);
+        }
+        
+        // Create ambient particles
+        function createAmbientParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 1440 + 'px';
+            particle.style.animationDelay = Math.random() * 20 + 's';
+            particle.style.animationDuration = 15 + Math.random() * 10 + 's';
+            document.querySelector('.ambient-particles').appendChild(particle);
+            setTimeout(() => particle.remove(), 25000);
+        }
+        
+        // Initialize
+        for (let i = 0; i < 7; i++) {
+            setTimeout(() => createShard(), i * 1000);
+        }
+        
+        for (let i = 0; i < 20; i++) {
+            createAmbientParticle();
+        }
+        
+        setInterval(createAmbientParticle, 2000);
+        setInterval(() => {
+            if (document.querySelectorAll('.nightmare-shard:not(.collected)').length < 5) {
+                createShard();
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#root { width: 100vw; min-height: 100vh; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [tension, setTension] = React.useState(0.8);
+  const [breathPhase, setBreathPhase] = React.useState(0);
+  const [goldenThreads, setGoldenThreads] = React.useState([]);
+  const [userPulls, setUserPulls] = React.useState({ left: [], right: [] });
+  const [phase, setPhase] = React.useState('conflict');
+  const [particles, setParticles] = React.useState([]);
+  const animationRef = React.useRef();
+  const tensionRef = React.useRef(tension);
+  
+  // Spring physics for smooth animations
+  const spring = (current, target, velocity = 0, stiffness = 0.1, damping = 0.8) => {
+    const force = (target - current) * stiffness;
+    velocity += force;
+    velocity *= damping;
+    return current + velocity;
+  };
+  
+  React.useEffect(() => {
+    tensionRef.current = tension;
+  }, [tension]);
+  
+  React.useEffect(() => {
+    let lastTime = Date.now();
+    
+    const animate = () => {
+      const currentTime = Date.now();
+      const deltaTime = currentTime - lastTime;
+      lastTime = currentTime;
+      
+      // Smooth breath animation
+      setBreathPhase(prev => (prev + deltaTime * 0.001) % (Math.PI * 2));
+      
+      // Natural tension release with spring physics
+      setTension(prev => {
+        const target = Math.max(0.1, prev - 0.0005 * deltaTime);
+        return spring(prev, target, 0, 0.05, 0.95);
+      });
+      
+      // Particle system for resolution phase
+      if (tensionRef.current < 0.3 && Math.random() < 0.05) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 150 + Math.random() * 100;
+        setParticles(prev => [...prev.slice(-20), {
+          id: Date.now() + Math.random(),
+          x: 400 + Math.cos(angle) * radius,
+          y: 300 + Math.sin(angle) * radius,
+          vx: (Math.random() - 0.5) * 2,
+          vy: (Math.random() - 0.5) * 2,
+          life: 1
+        }]);
+      }
+      
+      // Update particles
+      setParticles(prev => prev
+        .map(p => ({
+          ...p,
+          x: p.x + p.vx,
+          y: p.y + p.vy,
+          vy: p.vy + 0.05,
+          life: p.life - 0.01
+        }))
+        .filter(p => p.life > 0)
+      );
+      
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
+  
+  React.useEffect(() => {
+    // Phase transitions
+    if (tension < 0.4 && phase === 'conflict') {
+      setPhase('unwinding');
+      
+      // Generate golden threads
+      const numThreads = 3 + Math.floor(Math.random() * 3);
+      const newThreads = Array.from({ length: numThreads }, (_, i) => ({
+        id: Date.now() + i,
+        path: generateGoldenPath(i, numThreads),
+        opacity: 0,
+        delay: i * 200
+      }));
+      
+      setGoldenThreads(newThreads);
+    }
+    
+    if (tension < 0.2 && goldenThreads.length > 0 && phase === 'unwinding') {
+      setPhase('resolution');
+    }
+  }, [tension, phase, goldenThreads.length]);
+  
+  function generateGoldenPath(index, total) {
+    const angle = (index / total) * Math.PI * 2;
+    const points = [];
+    const segments = 8;
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const curve = Math.sin(t * Math.PI) * 80;
+      const x = 400 + Math.cos(angle + t * 0.5) * (100 + curve);
+      const y = 300 + Math.sin(angle + t * 0.5) * (100 + curve);
+      
+      points.push({ x, y });
+    }
+    
+    return points.reduce((path, point, i) => {
+      if (i === 0) return `M ${point.x} ${point.y}`;
+      
+      const prev = points[i - 1];
+      const cpx = (prev.x + point.x) / 2;
+      const cpy = (prev.y + point.y) / 2;
+      
+      return `${path} Q ${cpx} ${cpy}, ${point.x} ${point.y}`;
+    }, '');
+  }
+  
+  function handlePull(side, e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const centerX = side === 'left' ? 100 : rect.width - 100;
+    const centerY = rect.height / 2;
+    
+    const angle = Math.atan2(y - centerY, x - centerX);
+    const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+    const pullStrength = Math.min(1, distance / 200);
+    
+    const newPull = {
+      id: Date.now(),
+      x: x,
+      y: y,
+      angle: angle,
+      strength: pullStrength,
+      side: side
+    };
+    
+    setUserPulls(prev => ({
+      ...prev,
+      [side]: [...prev[side].slice(-5), newPull]
+    }));
+    
+    setTension(prev => Math.min(1, prev + pullStrength * 0.1));
+  }
+  
+  const knotPath = React.useMemo(() => {
+    const points = [];
+    const segments = 24;
+    const breathEffect = Math.sin(breathPhase) * 0.2;
+    
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const radius = 80 + tension * 60;
+      
+      // Apply user pulls influence
+      let pullInfluence = { x: 0, y: 0 };
+      [...userPulls.left, ...userPulls.right].forEach(pull => {
+        const dist = Math.sqrt((pull.x - 400) ** 2 + (pull.y - 300) ** 2);
+        const influence = Math.max(0, 1 - dist / 300) * pull.strength * 20;
+        pullInfluence.x += Math.cos(pull.angle) * influence;
+        pullInfluence.y += Math.sin(pull.angle) * influence;
+      });
+      
+      const wobble = Math.sin(angle * 3 + breathPhase) * tension * 15;
+      const x = 400 + Math.cos(angle) * (radius + wobble) + pullInfluence.x * (1 + breathEffect);
+      const y = 300 + Math.sin(angle) * (radius + wobble) + pullInfluence.y * (1 + breathEffect);
+      
+      points.push({ x, y });
+    }
+    
+    return points.reduce((path, point, i) => {
+      if (i === 0) return `M ${point.x} ${point.y}`;
+      
+      const prev = points[i - 1];
+      const next = points[i + 1] || points[0];
+      
+      const cp1x = prev.x + (point.x - prev.x) * 0.5;
+      const cp1y = prev.y + (point.y - prev.y) * 0.5;
+      
+      return `${path} C ${cp1x} ${cp1y}, ${point.x} ${point.y}, ${point.x} ${point.y}`;
+    }, '') + ' Z';
+  }, [tension, breathPhase, userPulls]);
+  
+  const phaseColors = {
+    conflict: { primary: '#e74c3c', secondary: '#c0392b', glow: 'rgba(231, 76, 60, 0.3)' },
+    unwinding: { primary: '#f39c12', secondary: '#d68910', glow: 'rgba(243, 156, 18, 0.3)' },
+    resolution: { primary: '#ffd700', secondary: '#ffed4e', glow: 'rgba(255, 215, 0, 0.4)' }
+  };
+  
+  const currentColors = phaseColors[phase];
+  
+  return React.createElement('div', {
+    style: {
+      width: '100vw',
+      height: '100vh',
+      background: `radial-gradient(circle at center, ${phase === 'resolution' ? '#1a1a2e' : '#0f0f12'} 0%, #050506 100%)`,
+      position: 'relative',
+      overflow: 'hidden',
+      transition: 'background 2s ease'
+    }
+  },
+    // SVG Canvas
+    React.createElement('svg', {
+      style: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        left: 0,
+        top: 0
+      }
+    },
+      // Glow effect
+      React.createElement('defs', null,
+        React.createElement('filter', { id: 'glow' },
+          React.createElement('feGaussianBlur', { stdDeviation: '4', result: 'coloredBlur' }),
+          React.createElement('feMerge', null,
+            React.createElement('feMergeNode', { in: 'coloredBlur' }),
+            React.createElement('feMergeNode', { in: 'SourceGraphic' })
+          )
+        ),
+        React.createElement('radialGradient', { id: 'knotGradient', cx: '50%', cy: '50%', r: '50%' },
+          React.createElement('stop', { offset: '0%', stopColor: currentColors.secondary }),
+          React.createElement('stop', { offset: '100%', stopColor: currentColors.primary })
+        )
+      ),
+      
+      // Connection lines from avatars
+      React.createElement('path', {
+        d: `M 100 300 Q 250 ${300 - tension * 100} 400 300`,
+        stroke: currentColors.primary,
+        strokeWidth: 2,
+        fill: 'none',
+        opacity: 0.5,
+        className: 'tension-thread'
+      }),
+      React.createElement('path', {
+        d: `M 700 300 Q 550 ${300 - tension * 100} 400 300`,
+        stroke: currentColors.primary,
+        strokeWidth: 2,
+        fill: 'none',
+        opacity: 0.5,
+        className: 'tension-thread'
+      }),
+      
+      // Central knot
+      React.createElement('path', {
+        d: knotPath,
+        fill: 'none',
+        stroke: 'url(#knotGradient)',
+        strokeWidth: 3 + tension * 2,
+        filter: 'url(#glow)',
+        className: 'tension-thread'
+      }),
+      
+      // Golden threads
+      goldenThreads.map((thread, i) =>
+        React.createElement('path', {
+          key: thread.id,
+          d: thread.path,
+          stroke: '#ffd700',
+          strokeWidth: 2,
+          fill: 'none',
+          opacity: phase === 'resolution' ? 0.8 : 0.4,
+          filter: 'url(#glow)',
+          className: 'golden-thread',
+          style: {
+            strokeDasharray: '5 10',
+            strokeDashoffset: -i * 5,
+            animation: `shimmer ${3 + i * 0.5}s ease-in-out infinite`,
+            animationDelay: `${thread.delay}ms`
+          }
+        })
+      )
+    ),
+    
+    // Particles
+    particles.map(particle =>
+      React.createElement('div', {
+        key: particle.id,
+        className: 'particle',
+        style: {
+          left: particle.x + 'px',
+          top: particle.y + 'px',
+          opacity: particle.life
+        }
+      })
+    ),
+    
+    // Left participant
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: '35%',
+        height: '100%',
+        cursor: tension > 0.5 ? 'grab' : 'default',
+        zIndex: 2
+      },
+      onMouseDown: (e) => tension > 0.2 && handlePull('left', e)
+    },
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          left: '50px',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        }
+      },
+        React.createElement('div', {
+          className: 'breath-ring',
+          style: {
+            position: 'absolute',
+            width: '160px',
+            height: '160px',
+            border: `2px solid ${currentColors.glow}`,
+            borderRadius: '50%',
+            left: '-30px',
+            top: '-30px',
+            transform: `scale(${1 + Math.sin(breathPhase) * 0.1})`
+          }
+        }),
+        React.createElement('div', {
+          style: {
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: `linear-gradient(135deg, ${currentColors.secondary} 0%, ${currentColors.primary} 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '36px',
+            color: '#ffffff',
+            fontWeight: '200',
+            boxShadow: `0 0 30px ${currentColors.glow}`,
+            transition: 'all 0.5s ease'
+          }
+        }, 'A'),
+        React.createElement('div', {
+          style: {
+            position: 'absolute',
+            top: '130px',
+            left: '0',
+            width: '100px',
+            textAlign: 'center',
+            color: currentColors.primary,
+            fontSize: '11px',
+            letterSpacing: '3px',
+            textTransform: 'uppercase',
+            opacity: 0.8,
+            transition: 'all 0.5s ease'
+          }
+        }, phase === 'conflict' ? 'Holding' : phase === 'unwinding' ? 'Releasing' : 'Harmonizing')
+      )
+    ),
+    
+    // Right participant
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        width: '35%',
+        height: '100%',
+        cursor: tension > 0.5 ? 'grab' : 'default',
+        zIndex: 2
+      },
+      onMouseDown: (e) => tension > 0.2 && handlePull('right', e)
+    },
+      React.createElement('div', {
+        style: {
+          position: 'absolute',
+          right: '50px',
+          top: '50%',
+          transform: 'translateY(-50%)'
+        }
+      },
+        React.createElement('div', {
+          className: 'breath-ring',
+          style: {
+            position: 'absolute',
+            width: '160px',
+            height: '160px',
+            border: `2px solid ${currentColors.glow}`,
+            borderRadius: '50%',
+            left: '-30px',
+            top: '-30px',
+            transform: `scale(${1 + Math.sin(breathPhase + Math.PI) * 0.1})`
+          }
+        }),
+        React.createElement('div', {
+          style: {
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: `linear-gradient(135deg, ${currentColors.secondary} 0%, ${currentColors.primary} 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '36px',
+            color: '#ffffff',
+            fontWeight: '200',
+            boxShadow: `0 0 30px ${currentColors.glow}`,
+            transition: 'all 0.5s ease'
+          }
+        }, 'B'),
+        React.createElement('div', {
+          style: {
+            position: 'absolute',
+            top: '130px',
+            left: '0',
+            width: '100px',
+            textAlign: 'center',
+            color: currentColors.primary,
+            fontSize: '11px',
+            letterSpacing: '3px',
+            textTransform: 'uppercase',
+            opacity: 0.8,
+            transition: 'all 0.5s ease'
+          }
+        }, phase === 'conflict' ? 'Holding' : phase === 'unwinding' ? 'Releasing' : 'Harmonizing')
+      )
+    ),
+    
+    // Center status
+    React.createElement('div', {
+      style: {
+        position: 'absolute',
+        left: '50%',
+        bottom: '80px',
+        transform: 'translateX(-50%)',
+        textAlign: 'center',
+        color: currentColors.primary,
+        transition: 'all 1s ease'
+      }
+    },
+      React.createElement('div', {
+        style: {
+          fontSize: '14px',
+          letterSpacing: '4px',
+          textTransform: 'uppercase',
+          marginBottom: '10px',
+          opacity: 0.8
+        }
+      }, phase.replace('_', ' ')),
+      React.createElement('div', {
+        style: {
+          width: '200px',
+          height: '2px',
+          background: `linear-gradient(90deg, transparent 0%, ${currentColors.primary} 50%, transparent 100%)`,
+          margin: '0 auto'
+        }
+      })
+    )
+  );
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+// Try to find the main component — user should export default or define App
+if (typeof App !== 'undefined') {
+  root.render(React.createElement(App));
+} else {
+  root.render(React.createElement('div', {style: {padding: 20}}, 'No App component found'));
+}
+</script>
+</body>
+</html>

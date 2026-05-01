@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River of Unsent Words</title>
+    <style>
+        :root {
+            --river-deep: #0a1628;
+            --river-surface: #1e3a5f;
+            --moon-glow: #f5f3f0;
+            --paper-raw: #faf8f3;
+            --ink-fresh: #2c3e50;
+            --ink-faded: #7f8c8d;
+            --burn-edge: #8b6914;
+            --water-stain: #4a5f7a;
+            --token-copper: #b87333;
+            --token-silver: #c0c0c0;
+            --shore-sand: #d4c5b0;
+            --night-fog: rgba(224, 224, 224, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Georgia, serif;
+            background: var(--river-deep);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .river-container {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, var(--river-deep) 0%, var(--river-surface) 100%);
+            overflow: hidden;
+        }
+
+        .moon {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, var(--moon-glow) 0%, rgba(245, 243, 240, 0.6) 100%);
+            border-radius: 50%;
+            top: 80px;
+            right: 200px;
+            filter: blur(2px);
+            box-shadow: 0 0 60px 20px rgba(245, 243, 240, 0.3);
+        }
+
+        .river-current {
+            position: absolute;
+            width: 200%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 40px,
+                var(--night-fog) 40px,
+                var(--night-fog) 80px
+            );
+            animation: flow 20s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .writing-desk {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 320px;
+            background: linear-gradient(to bottom, transparent, rgba(10, 22, 40, 0.8));
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .letter-input {
+            width: 100%;
+            height: 180px;
+            background: var(--paper-raw);
+            border: none;
+            padding: 20px 30px;
+            font-family: Georgia, serif;
+            font-size: 16px;
+            color: var(--ink-fresh);
+            resize: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .letter-input:focus {
+            outline: none;
+            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .letter-input::placeholder {
+            color: var(--ink-faded);
+            font-style: italic;
+        }
+
+        .release-button {
+            margin-top: 30px;
+            padding: 12px 40px;
+            background: transparent;
+            border: 1px solid var(--moon-glow);
+            color: var(--moon-glow);
+            font-family: Georgia, serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .release-button:hover {
+            background: rgba(245, 243, 240, 0.1);
+            box-shadow: 0 0 20px rgba(245, 243, 240, 0.2);
+        }
+
+        .boat {
+            position: absolute;
+            width: 60px;
+            height: 40px;
+            transition: all 0.5s ease;
+            cursor: pointer;
+            transform-origin: center bottom;
+            animation: bob 3s ease-in-out infinite;
+        }
+
+        @keyframes bob {
+            0%, 100% { transform: rotate(-2deg) translateY(0); }
+            50% { transform: rotate(2deg) translateY(-3px); }
+        }
+
+        .boat-paper {
+            width: 100%;
+            height: 100%;
+            background: var(--paper-raw);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .boat-grief {
+            filter: brightness(0.7) saturate(0.8);
+        }
+
+        .boat-grief .boat-paper::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at bottom, var(--water-stain) 0%, transparent 70%);
+            opacity: 0.6;
+        }
+
+        .boat-anger .boat-paper {
+            background: linear-gradient(135deg, var(--paper-raw) 60%, var(--burn-edge) 100%);
+        }
+
+        .boat-love .boat-paper::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255, 182, 193, 0.2) 10px,
+                rgba(255, 182, 193, 0.2) 20px
+            );
+        }
+
+        .emotion-island {
+            position: absolute;
+            border-radius: 50%;
+            background: var(--shore-sand);
+            opacity: 0.3;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .emotion-island:hover {
+            opacity: 0.6;
+            transform: scale(1.05);
+        }
+
+        .island-grief {
+            width: 180px;
+            height: 140px;
+            top: 300px;
+            left: 200px;
+            background: radial-gradient(ellipse, var(--water-stain) 0%, transparent 100%);
+        }
+
+        .island-anger {
+            width: 150px;
+            height: 120px;
+            top: 400px;
+            right: 250px;
+            background: radial-gradient(ellipse, var(--burn-edge) 0%, transparent 100%);
+        }
+
+        .island-love {
+            width: 200px;
+            height: 150px;
+            top: 200px;
+            right: 100px;
+            background: radial-gradient(ellipse, rgba(255, 182, 193, 0.3) 0%, transparent 100%);
+        }
+
+        .token {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--token-copper);
+            box-shadow: 0 0 6px rgba(184, 115, 51, 0.5);
+            animation: glimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes glimmer {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .memory-count {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            color: var(--moon-glow);
+            font-size: 14px;
+            opacity: 0.7;
+            letter-spacing: 1px;
+        }
+
+        .ripple {
+            position: absolute;
+            border: 1px solid rgba(245, 243, 240, 0.2);
+            border-radius: 50%;
+            animation: ripple-out 3s ease-out;
+            pointer-events: none;
+        }
+
+        @keyframes ripple-out {
+            0% {
+                width: 10px;
+                height: 10px;
+                opacity: 1;
+            }
+            100% {
+                width: 100px;
+                height: 100px;
+                opacity: 0;
+            }
+        }
+
+        .sidebar {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 80px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 30px;
+            padding: 40px 20px;
+        }
+
+        .emotion-filter {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.4;
+        }
+
+        .emotion-filter:hover {
+            opacity: 0.8;
+            transform: scale(1.1);
+        }
+
+        .filter-grief { background: var(--water-stain); }
+        .filter-anger { background: var(--burn-edge); }
+        .filter-love { background: rgba(255, 182, 193, 0.5); }
+        .filter-regret { background: var(--ink-faded); }
+
+        .boat-message {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 22, 40, 0.9);
+            color: var(--moon-glow);
+            padding: 10px 15px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .boat:hover .boat-message {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="river-container">
+        <div class="moon"></div>
+        <div class="river-current"></div>
+        
+        <div class="memory-count">147 messages released tonight</div>
+        
+        <div class="emotion-island island-grief" onclick="visitIsland('grief')">
+            <div class="token" style="top: 30%; left: 40%;"></div>
+            <div class="token" style="top: 50%; left: 60%; background: var(--token-silver);"></div>
+            <div class="token" style="top: 70%; left: 35%;"></div>
+        </div>
+        
+        <div class="emotion-island island-anger" onclick="visitIsland('anger')">
+            <div class="token" style="top: 40%; left: 50%;"></div>
+            <div class="token" style="top: 60%; left: 30%; background: var(--token-silver);"></div>
+        </div>
+        
+        <div class="emotion-island island-love" onclick="visitIsland('love')">
+            <div class="token" style="top: 25%; left: 45%;"></div>
+            <div class="token" style="top: 45%; left: 65%; background: var(--token-silver);"></div>
+            <div class="token" style="top: 65%; left: 40%;"></div>
+            <div class="token" style="top: 55%; left: 55%;"></div>
+        </div>
+
+        <div class="boat boat-grief" style="top: 250px; left: 300px;">
+            <div class="boat-paper"></div>
+            <div class="boat-message">I never got to say goodbye...</div>
+        </div>
+        
+        <div class="boat boat-anger" style="top: 350px; left: 600px;">
+            <div class="boat-paper"></div>
+            <div class="boat-message">You promised you'd be there</div>
+        </div>
+        
+        <div class="boat boat-love" style="top: 180px; left: 800px;">
+            <div class="boat-paper"></div>
+            <div class="boat-message">I still think of you in spring</div>
+        </div>
+
+        <div class="writing-desk">
+            <textarea class="letter-input" placeholder="Write to someone you'll never send this to..."></textarea>
+            <button class="release-button" onclick="releaseBoat()">Release</button>
+        </div>
+        
+        <div class="sidebar">
+            <div class="emotion-filter filter-grief" title="Grief"></div>
+            <div class="emotion-filter filter-anger" title="Anger"></div>
+            <div class="emotion-filter filter-love" title="Love"></div>
+            <div class="emotion-filter filter-regret" title="Regret"></div>
+        </div>
+    </div>
+
+    <script>
+        function releaseBoat() {
+            const input = document.querySelector('.letter-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            const boat = document.createElement('div');
+            boat.className = 'boat boat-' + detectEmotion(message);
+            boat.style.bottom = '250px';
+            boat.style.left = '720px';
+            boat.innerHTML = `
+                <div class="boat-paper"></div>
+                <div class="boat-message">${message.substring(0, 50)}...</div>
+            `;
+            
+            document.querySelector('.river-container').appendChild(boat);
+            
+            setTimeout(() => {
+                boat.style.transition = 'all 20s ease-out';
+                boat.style.transform = `translate(${Math.random() * 400 - 200}px, -600px)`;
+                boat.style.opacity = '0.3';
+            }, 100);
+            
+            createRipple(720, 650);
+            input.value = '';
+            
+            updateCount();
+        }
+        
+        function detectEmotion(text) {
+            const emotions = ['grief', 'anger', 'love'];
+            return emotions[Math.floor(Math.random() * emotions.length)];
+        }
+        
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.left = x + 'px';
+            ripple.style.top = y + 'px';
+            document.querySelector('.river-container').appendChild(ripple);
+            
+            setTimeout(() => ripple.remove(), 3000);
+        }
+        
+        function visitIsland(emotion) {
+            createRipple(event.clientX, event.clientY);
+        }
+        
+        function updateCount() {
+            const count = document.querySelector('.memory-count');
+            const current = parseInt(count.textContent.match(/\d+/)[0]);
+            count.textContent = `${current + 1} messages released tonight`;
+        }
+        
+        document.querySelectorAll('.boat').forEach(boat => {
+            boat.addEventListener('click', function() {
+                createRipple(
+                    parseInt(this.style.left) + 30,
+                    parseInt(this.style.top) + 20
+                );
+            });
+        });
+    </script>
+</body>
+</html>

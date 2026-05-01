@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Palace Builder</title>
+    <style>
+        :root {
+            --depth: #0f0e13;
+            --wall: #1e1c24;
+            --floor: #2a2833;
+            --highlight: #e4d4c1;
+            --memory-active: #ff9b54;
+            --ghost-trail: rgba(255, 155, 84, 0.15);
+            --surface-base: #3a3744;
+            --text-primary: #f2efe9;
+            --text-secondary: #a89f91;
+            --morph-duration: 0.6s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--depth);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        .palace-container {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px;
+        }
+
+        .isometric-room {
+            position: relative;
+            width: 720px;
+            height: 520px;
+            transform: rotateX(-30deg) rotateY(-45deg);
+            transform-style: preserve-3d;
+        }
+
+        .floor {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            transform: rotateX(90deg) translateZ(-200px);
+            background: var(--floor);
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 1px;
+            padding: 1px;
+            background-image: 
+                repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, transparent 1px, transparent 50px, rgba(255,255,255,0.02) 50px),
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, transparent 1px, transparent 50px, rgba(255,255,255,0.02) 50px);
+        }
+
+        .floor-tile {
+            background: var(--surface-base);
+            position: relative;
+            cursor: pointer;
+            transition: all var(--morph-duration) cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .floor-tile::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, transparent 30%, var(--ghost-trail) 50%, transparent 70%);
+            opacity: 0;
+            transform: translateX(-100%);
+            transition: all 0.6s;
+        }
+
+        .floor-tile.has-memory {
+            background: var(--wall);
+        }
+
+        .floor-tile.has-memory:hover::before {
+            opacity: 1;
+            transform: translateX(100%);
+        }
+
+        .wall {
+            position: absolute;
+            background: var(--wall);
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: all var(--morph-duration);
+        }
+
+        .wall-north {
+            width: 400px;
+            height: 400px;
+            transform: translateZ(200px);
+            background-image: 
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.01) 0px, transparent 2px, transparent 40px, rgba(255,255,255,0.01) 42px);
+        }
+
+        .wall-south {
+            width: 400px;
+            height: 400px;
+            transform: translateZ(-200px) rotateY(180deg);
+        }
+
+        .wall-east {
+            width: 400px;
+            height: 400px;
+            transform: rotateY(90deg) translateZ(200px);
+            background: linear-gradient(to bottom, var(--wall), rgba(30, 28, 36, 0.8));
+        }
+
+        .wall-west {
+            width: 400px;
+            height: 400px;
+            transform: rotateY(-90deg) translateZ(200px);
+            background: linear-gradient(to bottom, var(--wall), rgba(30, 28, 36, 0.9));
+        }
+
+        .furniture {
+            position: absolute;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .desk {
+            width: 120px;
+            height: 80px;
+            transform: translate3d(140px, 320px, 100px);
+        }
+
+        .desk-top {
+            position: absolute;
+            width: 120px;
+            height: 60px;
+            background: #4a3f36;
+            transform: rotateX(90deg) translateZ(40px);
+            transition: all var(--morph-duration);
+        }
+
+        .desk-top.morphing {
+            background-image: 
+                repeating-linear-gradient(0deg, var(--memory-active) 0px, transparent 2px, transparent 4px),
+                repeating-linear-gradient(90deg, transparent 0px, var(--memory-active) 1px, transparent 3px);
+            background-size: 4px 4px;
+        }
+
+        .chair {
+            width: 60px;
+            height: 60px;
+            transform: translate3d(180px, 340px, 30px);
+        }
+
+        .chair-seat {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: #5a4a3a;
+            transform: rotateX(90deg) translateZ(30px);
+        }
+
+        .shelf {
+            width: 160px;
+            height: 200px;
+            transform: translate3d(20px, 200px, 100px);
+        }
+
+        .shelf-board {
+            position: absolute;
+            width: 160px;
+            height: 20px;
+            background: #3a2f26;
+            transform: rotateX(90deg);
+        }
+
+        .shelf-board:nth-child(1) { transform: rotateX(90deg) translateZ(150px); }
+        .shelf-board:nth-child(2) { transform: rotateX(90deg) translateZ(100px); }
+        .shelf-board:nth-child(3) { transform: rotateX(90deg) translateZ(50px); }
+
+        .memory-marker {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--memory-active);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.8;
+            pointer-events: none;
+            box-shadow: 0 0 20px var(--memory-active);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
+        }
+
+        .ghost-trail {
+            position: absolute;
+            pointer-events: none;
+            transform-style: preserve-3d;
+        }
+
+        .trail-segment {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: var(--ghost-trail);
+            opacity: 0.3;
+            animation: fadeTrail 3s forwards;
+        }
+
+        @keyframes fadeTrail {
+            to { opacity: 0; transform: translateY(10px); }
+        }
+
+        .memory-panel {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            width: 280px;
+            background: rgba(30, 28, 36, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            z-index: 10;
+        }
+
+        .memory-panel h2 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--highlight);
+        }
+
+        .memory-input {
+            width: 100%;
+            background: var(--depth);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .memory-input:focus {
+            outline: none;
+            border-color: var(--memory-active);
+        }
+
+        .memory-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .memory-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-left: 2px solid var(--memory-active);
+            cursor: grab;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .memory-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(4px);
+        }
+
+        .memory-item.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .navigation-controls {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            background: rgba(30, 28, 36, 0.9);
+            padding: 1rem;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            background: var(--surface-base);
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .nav-btn:hover {
+            background: var(--wall);
+            color: var(--highlight);
+        }
+
+        .nav-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 1px solid currentColor;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .nav-btn:hover::after {
+            opacity: 0.3;
+        }
+
+        .memory-tooltip {
+            position: fixed;
+            background: rgba(30, 28, 36, 0.95);
+            padding: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 300px;
+            font-size: 0.9rem;
+            z-index: 100;
+        }
+
+        .memory-tooltip.visible {
+            opacity: 1;
+        }
+
+        .wall.has-memory::after {
+            content: '';
+            position: absolute;
+            inset: 20px;
+            border: 2px solid var(--memory-active);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .wall.has-memory:hover::after {
+            opacity: 0.3;
+        }
+
+        .morph-overlay {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity var(--morph-duration);
+            pointer-events: none;
+            background-size: 100% 100%;
+            mix-blend-mode: screen;
+        }
+
+        .surface-morphing .morph-overlay {
+            opacity: 0.7;
+        }
+
+        .text-morph {
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='10' y='50' font-family='monospace' font-size='8' fill='%23ff9b54' opacity='0.3'%3Ememory%3C/text%3E%3C/svg%3E");
+            background-repeat: repeat;
+        }
+
+        .diagram-morph {
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 10px, var(--memory-active) 10px, var(--memory-active) 11px),
+                repeating-linear-gradient(-45deg, transparent, transparent 10px, var(--memory-active) 10px, var(--memory-active) 11px);
+            background-size: 20px 20px;
+        }
+
+        .symbol-morph {
+            background-image: radial-gradient(circle at 25% 25%, var(--memory-active) 2px, transparent 2px),
+                              radial-gradient(circle at 75% 75%, var(--memory-active) 2px, transparent 2px);
+            background-size: 20px 20px;
+        }
+
+        .room-indicator {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .path-visualization {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            transform-style: preserve-3d;
+        }
+
+        .path-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--ghost-trail);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        .drop-zone-active {
+            background: rgba(255, 155, 84, 0.1) !important;
+            animation: dropPulse 0.5s infinite;
+        }
+
+        @keyframes dropPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+    </style>
+</head>
+<body>
+    <div class="palace-container">
+        <div class="isometric-room">
+            <div class="floor">
+                <div class="floor-tile" data-position="0,0"></div>
+                <div class="floor-tile" data-position="1,0"></div>
+                <div class="floor-tile" data-position="2,0"></div>
+                <div class="floor-tile" data-position="3,0"></div>
+                <div class="floor-tile" data-position="4,0"></div>
+                <div class="floor-tile" data-position="5,0"></div>
+                <div class="floor-tile" data-position="6,0"></div>
+                <div class="floor-tile" data-position="7,0"></div>
+                <div class="floor-tile" data-position="0,1"></div>
+                <div class="floor-tile" data-position="1,1"></div>
+                <div class="floor-tile" data-position="2,1"></div>
+                <div class="floor-tile" data-position="3,1"></div>
+                <div class="floor-tile" data-position="4,1"></div>
+                <div class="floor-tile" data-position="5,1"></div>
+                <div class="floor-tile" data-position="6,1"></div>
+                <div class="floor-tile" data-position="7,1"></div>
+                <div class="floor-tile" data-position="0,2"></div>
+                <div class="floor-tile" data-position="1,2"></div>
+                <div class="floor-tile" data-position="2,2"></div>
+                <div class="floor-tile" data-position="3,2"></div>
+                <div class="floor-tile" data-position="4,2"></div>
+                <div class="floor-tile" data-position="5,2"></div>
+                <div class="floor-tile" data-position="6,2"></div>
+                <div class="floor-tile" data-position="7,2"></div>
+                <div class="floor-tile" data-position="0,3"></div>
+                <div class="floor-tile" data-position="1,3"></div>
+                <div class="floor-tile" data-position="2,3"></div>
+                <div class="floor-tile" data-position="3,3"></div>
+                <div class="floor-tile" data-position="4,3"></div>
+                <div class="floor-tile" data-position="5,3"></div>
+                <div class="floor-tile" data-position="6,3"></div>
+                <div class="floor-tile" data-position="7,3"></div>
+                <div class="floor-tile" data-position="0,4"></div>
+                <div class="floor-tile" data-position="1,4"></div>
+                <div class="floor-tile" data-position="2,4"></div>
+                <div class="floor-tile" data-position="3,4"></div>
+                <div class="floor-tile" data-position="4,4"></div>
+                <div class="floor-tile" data-position="5,4"></div>
+                <div class="floor-tile" data-position="6,4"></div>
+                <div class="floor-tile" data-position="7,4"></div>
+                <div class="floor-tile" data-position="0,5"></div>
+                <div class="floor-tile" data-position="1,5"></div>
+                <div class="floor-tile" data-position="2,5"></div>
+                <div class="floor-tile" data-position="3,5"></div>
+                <div class="floor-tile" data-position="4,5"></div>
+                <div class="floor-tile" data-position="5,5"></div>
+                <div class="floor-tile" data-position="6,5"></div>
+                <div class="floor-tile" data-position="7,5"></div>
+                <div class="floor-tile" data-position="0,6"></div>
+                <div class="floor-tile" data-position="1,6"></div>
+                <div class="floor-tile" data-position="2,6"></div>
+                <div class="floor-tile" data-position="3,6"></div>
+                <div class="floor-tile" data-position="4,6"></div>
+                <div class="floor-tile" data-position="5,6"></div>
+                <div class="floor-tile" data-position="6,6"></div>
+                <div class="floor-tile" data-position="7,6"></div>
+                <div class="floor-tile" data-position="0,7"></div>
+                <div class="floor-tile" data-position="1,7"></div>
+                <div class="floor-tile" data-position="2,7"></div>
+                <div class="floor-tile" data-position="3,7"></div>
+                <div class="floor-tile" data-position="4,7"></div>
+                <div class="floor-tile" data-position="5,7"></div>
+                <div class="floor-tile" data-position="6,7"></div>
+                <div class="floor-tile" data-position="7,7"></div>
+            </div>
+            
+            <div class="wall wall-north" data-wall="north">
+                <div class="morph-overlay text-morph"></div>
+            </div>
+            <div class="wall wall-south" data-wall="south">
+                <div class="morph-overlay diagram-morph"></div>
+            </div>
+            <div class="wall wall-east" data-wall="east">
+                <div class="morph-overlay symbol-morph"></div>
+            </div>
+            <div class="wall wall-west" data-wall="west">
+                <div class="morph-overlay text-morph"></div>
+            </div>
+            
+            <div class="furniture desk">
+                <div class="desk-top" data-furniture="desk">
+                    <div class="morph-overlay diagram-morph"></div>
+                </div>
+            </div>
+            
+            <div class="furniture chair">
+                <div class="chair-seat" data-furniture="chair">
+                    <div class="morph-overlay symbol-morph"></div>
+                </div>
+            </div>
+            
+            <div class="furniture shelf">
+                <div class="shelf-board" data-furniture="shelf-1"></div>
+                <div class="shelf-board" data-furniture="shelf-2"></div>
+                <div class="shelf-board" data-furniture="shelf-3"></div>
+            </div>
+            
+            <div class="ghost-trail" id="ghostTrail"></div>
+            <div class="path-visualization" id="pathViz"></div>
+        </div>
+    </div>
+    
+    <div class="memory-panel">
+        <h2>Memory Constructor</h2>
+        <input type="text" class="memory-input" placeholder="Enter a concept to remember..." id="memoryInput">
+        <div class="memory-list" id="memoryList">
+            <div class="memory-item" draggable="true" data-memory="Pythagorean theorem">Pythagorean theorem</div>
+            <div class="memory-item" draggable="true" data-memory="Photosynthesis process">Photosynthesis process</div>
+            <div class="memory-item" draggable="true" data-memory="French Revolution dates">French Revolution dates</div>
+        </div>
+    </div>
+    
+    <div class="navigation-controls">
+        <button class="nav-btn" id="rotateLeft">←</button>
+        <button class="nav-btn" id="zoomIn">+</button>
+        <button class="nav-btn" id="zoomOut">−</button>
+        <button class="nav-btn" id="rotateRight">→</button>
+    </div>
+    
+    <div class="room-indicator">North Wall · Main Chamber</div>
+    
+    <div class="memory-tooltip" id="tooltip"></div>
+    
+    <script>
+        const palace = {
+            memories: new Map(),
+            trail: [],
+            currentRotation: -45,
+            currentScale: 1,
+            
+            init() {
+                this.bindEvents();
+                this.initializeDragDrop();
+                this.startTrailAnimation();
+            },
+            
+            bindEvents() {
+                document.querySelectorAll('.floor-tile, .wall, [data-furniture]').forEach(el => {
+                    el.addEventListener('mouseenter', (e) => this.handleHover(e));
+                    el.addEventListener('mouseleave', (e) => this.handleLeave(e));
+                    el.addEventListener('click', (e) => this.handleClick(e));
+                });
+                
+                document.getElementById('rotateLeft').addEventListener('click', () => this.rotate(-15));
+                document.getElementById('rotateRight').addEventListener('click', () => this.rotate(15));
+                document.getElementById('zoomIn').addEventListener('click', () => this.zoom(0.1));
+                document.getElementById('zoomOut').addEventListener('click', () => this.zoom(-0.1));
+                
+                document.getElementById('memoryInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && e.target.value.trim()) {
+                        this.addMemoryItem(e.target.value.trim());
+                        e.target.value = '';
+                    }
+                });
+            },
+            
+            handleHover(e) {
+                const el = e.target;
+                const memory = this.memories.get(el);
+                
+                if (memory) {
+                    el.classList.add('surface-morphing');
+                    this.showTooltip(e, memory);
+                    this.addToTrail(e.pageX, e.pageY);
+                }
+            },
+            
+            handleLeave(e) {
+                e.target.classList.remove('surface-morphing');
+                this.hideTooltip();
+            },
+            
+            handleClick(e) {
+                const memory = this.memories.get(e.target);
+                if (memory) {
+                    this.createMemoryMarker(e.target);
+                }
+            },
+            
+            initializeDragDrop() {
+                let draggedElement = null;
+                
+                document.querySelectorAll('.memory-item').forEach(item => {
+                    item.addEventListener('dragstart', (e) => {
+                        draggedElement = e.target;
+                        e.target.classList.add('dragging');
+                    });
+                    
+                    item.addEventListener('dragend', (e) => {
+                        e.target.classList.remove('dragging');
+                    });
+                });
+                
+                document.querySelectorAll('.floor-tile, .wall, [data-furniture]').forEach(surface => {
+                    surface.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        surface.classList.add('drop-zone-active');
+                    });
+                    
+                    surface.addEventListener('dragleave', (e) => {
+                        surface.classList.remove('drop-zone-active');
+                    });
+                    
+                    surface.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        surface.classList.remove('drop-zone-active');
+                        
+                        if (draggedElement) {
+                            const memoryText = draggedElement.dataset.memory;
+                            this.attachMemory(surface, memoryText);
+                            draggedElement.style.opacity = '0.5';
+                            draggedElement.draggable = false;
+                        }
+                    });
+                });
+            },
+            
+            attachMemory(surface, memory) {
+                this.memories.set(surface, memory);
+                surface.classList.add('has-memory');
+                
+                const morphTypes = ['text-morph', 'diagram-morph', 'symbol-morph'];
+                const morphType = morphTypes[Math.floor(Math.random() * morphTypes.length)];
+                
+                let overlay = surface.querySelector('.morph-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.className = `morph-overlay ${morphType}`;
+                    surface.appendChild(overlay);
+                } else {
+                    overlay.className = `morph-overlay ${morphType}`;
+                }
+            },
+            
+            addMemoryItem(text) {
+                const item = document.createElement('div');
+                item.className = 'memory-item';
+                item.draggable = true;
+                item.dataset.memory = text;
+                item.textContent = text;
+                
+                item.addEventListener('dragstart', (e) => {
+                    e.target.classList.add('dragging');
+                });
+                
+                item.addEventListener('dragend', (e) => {
+                    e.target.classList.remove('dragging');
+                });
+                
+                document.getElementById('memoryList').appendChild(item);
+            },
+            
+            showTooltip(e, memory) {
+                const tooltip = document.getElementById('tooltip');
+                tooltip.textContent = memory;
+                tooltip.style.left = e.pageX + 20 + 'px';
+                tooltip.style.top = e.pageY - 10 + 'px';
+                tooltip.classList.add('visible');
+            },
+            
+            hideTooltip() {
+                document.getElementById('tooltip').classList.remove('visible');
+            },
+            
+            createMemoryMarker(surface) {
+                const marker = document.createElement('div');
+                marker.className = 'memory-marker';
+                const rect = surface.getBoundingClientRect();
+                marker.style.left = rect.left + rect.width / 2 + 'px';
+                marker.style.top = rect.top + rect.height / 2 + 'px';
+                document.body.appendChild(marker);
+                
+                setTimeout(() => marker.remove(), 3000);
+            },
+            
+            addToTrail(x, y) {
+                this.trail.push({ x, y, time: Date.now() });
+                if (this.trail.length > 50) this.trail.shift();
+                
+                const segment = document.createElement('div');
+                segment.className = 'trail-segment';
+                segment.style.left = x + 'px';
+                segment.style.top = y + 'px';
+                document.getElementById('ghostTrail').appendChild(segment);
+                
+                setTimeout(() => segment.remove(), 3000);
+            },
+            
+            rotate(deg) {
+                this.currentRotation += deg;
+                const room = document.querySelector('.isometric-room');
+                room.style.transform = `rotateX(-30deg) rotateY(${this.currentRotation}deg) scale(${this.currentScale})`;
+            },
+            
+            zoom(delta) {
+                this.currentScale = Math.max(0.5, Math.min(1.5, this.currentScale + delta));
+                const room = document.querySelector('.isometric-room');
+                room.style.transform = `rotateX(-30deg) rotateY(${this.currentRotation}deg) scale(${this.currentScale})`;
+            },
+            
+            startTrailAnimation() {
+                setInterval(() => {
+                    const pathViz = document.getElementById('pathViz');
+                    pathViz.innerHTML = '';
+                    
+                    this.trail.forEach((point, i) => {
+                        const age = Date.now() - point.time;
+                        const opacity = Math.max(0, 1 - age / 3000);
+                        
+                        if (opacity > 0) {
+                            const node = document.createElement('div');
+                            node.className = 'path-node';
+                            node.style.left = point.x + 'px';
+                            node.style.top = point.y + 'px';
+                            node.style.opacity = opacity * 0.6;
+                            node.style.transform = `scale(${1 + (1 - opacity) * 0.5})`;
+                            pathViz.appendChild(node);
+                        }
+                    });
+                }, 100);
+            }
+        };
+        
+        palace.init();
+    </script>
+</body>
+</html>

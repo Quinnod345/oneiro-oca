@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1440, height=900">
+    <title>Temporal Recipe Composer</title>
+    <style>
+        :root {
+            --almanac-cream: #f4f1e8;
+            --tide-blue: #4a6b8a;
+            --season-rust: #b87333;
+            --ghost-text: #d4c5b0;
+            --active-ink: #2c3e50;
+            --dormant-grey: #a8a297;
+            --timeline-track: #e8e2d5;
+            --weather-violet: #7d6b8a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Baskerville, 'Times New Roman', serif;
+            background: var(--almanac-cream);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tide-chart-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            background-image: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 40px,
+                var(--tide-blue) 40px,
+                var(--tide-blue) 41px
+            );
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 480px 1fr 320px;
+            height: 100%;
+            position: relative;
+        }
+
+        .temporal-timeline {
+            background: linear-gradient(to right, var(--almanac-cream) 0%, transparent 100%);
+            padding: 60px 40px;
+            position: relative;
+            border-right: 1px dashed var(--ghost-text);
+        }
+
+        .season-wheel {
+            width: 380px;
+            height: 380px;
+            position: relative;
+            margin: 40px auto;
+        }
+
+        .wheel-track {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--timeline-track);
+            border-radius: 50%;
+        }
+
+        .season-marker {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: var(--season-rust);
+            border-radius: 50%;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 12px rgba(184, 115, 51, 0.3);
+            transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        .season-marker:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        .season-marker.spring {
+            top: -30px;
+            left: calc(50% - 30px);
+        }
+
+        .season-marker.summer {
+            top: calc(50% - 30px);
+            right: -30px;
+        }
+
+        .season-marker.autumn {
+            bottom: -30px;
+            left: calc(50% - 30px);
+        }
+
+        .season-marker.winter {
+            top: calc(50% - 30px);
+            left: -30px;
+        }
+
+        .temporal-controls {
+            margin-top: 60px;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .control-label {
+            font-size: 13px;
+            color: var(--dormant-grey);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            width: 100px;
+        }
+
+        .weather-slider {
+            flex: 1;
+            height: 4px;
+            background: var(--timeline-track);
+            border-radius: 2px;
+            position: relative;
+            margin: 0 20px;
+        }
+
+        .weather-handle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: var(--weather-violet);
+            border-radius: 50%;
+            top: -10px;
+            left: 30%;
+            cursor: ew-resize;
+            box-shadow: 0 2px 8px rgba(125, 107, 138, 0.3);
+        }
+
+        .recipe-canvas {
+            padding: 80px 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .recipe-title {
+            font-size: 42px;
+            color: var(--active-ink);
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .breathing-text {
+            animation: textBreathe 8s ease-in-out infinite;
+        }
+
+        @keyframes textBreathe {
+            0%, 100% { opacity: 1; letter-spacing: 0; }
+            50% { opacity: 0.7; letter-spacing: 1px; }
+        }
+
+        .ingredient-layer {
+            position: relative;
+            margin-bottom: 30px;
+            min-height: 40px;
+        }
+
+        .ingredient {
+            position: absolute;
+            font-size: 18px;
+            line-height: 1.6;
+            transition: all 1.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+        }
+
+        .ingredient.active {
+            color: var(--active-ink);
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .ingredient.dormant {
+            color: var(--ghost-text);
+            opacity: 0.3;
+            transform: translateX(-10px);
+        }
+
+        .ingredient.ghost {
+            color: var(--ghost-text);
+            opacity: 0.15;
+            transform: translateX(20px);
+        }
+
+        .quantity {
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.8s ease;
+        }
+
+        .elastic-quantity {
+            animation: quantityStretch 6s ease-in-out infinite;
+        }
+
+        @keyframes quantityStretch {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.2); }
+        }
+
+        .method-steps {
+            margin-top: 60px;
+            position: relative;
+        }
+
+        .step-card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: relative;
+            transition: all 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+            cursor: move;
+        }
+
+        .step-card.sliding {
+            transform: translateY(-10px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+
+        .step-number {
+            position: absolute;
+            left: -40px;
+            top: 25px;
+            width: 30px;
+            height: 30px;
+            background: var(--tide-blue);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .cooking-time {
+            display: inline-block;
+            background: var(--timeline-track);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            margin-left: 10px;
+            transition: all 0.5s ease;
+        }
+
+        .cooking-time.variable {
+            animation: timePulse 4s ease-in-out infinite;
+        }
+
+        @keyframes timePulse {
+            0%, 100% { padding: 4px 12px; }
+            50% { padding: 4px 20px; }
+        }
+
+        .environmental-panel {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 60px 40px;
+            border-left: 1px dashed var(--ghost-text);
+        }
+
+        .env-indicator {
+            margin-bottom: 40px;
+        }
+
+        .env-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--dormant-grey);
+            margin-bottom: 10px;
+        }
+
+        .env-value {
+            font-size: 24px;
+            color: var(--active-ink);
+            font-style: italic;
+        }
+
+        .almanac-notes {
+            margin-top: 60px;
+            padding: 20px;
+            background: var(--almanac-cream);
+            border: 1px solid var(--timeline-track);
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--dormant-grey);
+            font-style: italic;
+        }
+
+        .tide-marker {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: var(--tide-blue);
+            opacity: 0.1;
+            animation: tideFlow 20s linear infinite;
+        }
+
+        @keyframes tideFlow {
+            0% { transform: translateX(-100px); }
+            100% { transform: translateX(1440px); }
+        }
+
+        .compass-rose {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 80px;
+            height: 80px;
+            opacity: 0.1;
+        }
+
+        .compass-rose::before {
+            content: "N";
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--tide-blue);
+        }
+
+        .compass-rose::after {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--tide-blue);
+            border-radius: 50%;
+            transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="tide-chart-bg"></div>
+    <div class="tide-marker"></div>
+    
+    <div class="main-container">
+        <section class="temporal-timeline">
+            <h2 style="font-size: 24px; color: var(--active-ink); margin-bottom: 20px; text-align: center;">Temporal Composition</h2>
+            
+            <div class="season-wheel">
+                <div class="wheel-track"></div>
+                <div class="season-marker spring">SPRING</div>
+                <div class="season-marker summer">SUMMER</div>
+                <div class="season-marker autumn">AUTUMN</div>
+                <div class="season-marker winter">WINTER</div>
+            </div>
+            
+            <div class="temporal-controls">
+                <div class="control-row">
+                    <span class="control-label">Weather</span>
+                    <div class="weather-slider">
+                        <div class="weather-handle"></div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <span class="control-label">Time</span>
+                    <div class="weather-slider">
+                        <div class="weather-handle" style="left: 70%; background: var(--season-rust)"></div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <span class="control-label">Humidity</span>
+                    <div class="weather-slider">
+                        <div class="weather-handle" style="left: 45%; background: var(--tide-blue)"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="recipe-canvas">
+            <h1 class="recipe-title breathing-text">Adaptive Root Vegetable Stew</h1>
+            
+            <div class="ingredient-layer">
+                <div class="ingredient active"><span class="quantity elastic-quantity">2 cups</span> winter squash, cubed</div>
+                <div class="ingredient ghost" style="top: 0;"><span class="quantity">3 cups</span> summer tomatoes, fresh</div>
+            </div>
+            
+            <div class="ingredient-layer">
+                <div class="ingredient active"><span class="quantity">1 pound</span> parsnips, roasted</div>
+                <div class="ingredient dormant" style="top: 0;"><span class="quantity">1 pound</span> zucchini, grilled</div>
+            </div>
+            
+            <div class="ingredient-layer">
+                <div class="ingredient active"><span class="quantity elastic-quantity">4-6 cups</span> vegetable stock</div>
+            </div>
+            
+            <div class="ingredient-layer">
+                <div class="ingredient ghost"><span class="quantity">1 bunch</span> fresh basil</div>
+                <div class="ingredient active" style="top: 0;"><span class="quantity">2 sprigs</span> rosemary, dried</div>
+            </div>
+            
+            <div class="method-steps">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <p>Begin by warming oil in a heavy pot. <span class="cooking-time variable">20-30 min</span> for root vegetables to soften, adjusting for seasonal density.</p>
+                </div>
+                
+                <div class="step-card sliding">
+                    <div class="step-number">2</div>
+                    <p>Layer ingredients according to current moon phase—densest at bottom during waning, lighter during waxing. <span class="cooking-time">15 min</span></p>
+                </div>
+                
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <p>Simmer until vegetables surrender their essence. <span class="cooking-time variable">45-90 min</span> depending on barometric pressure.</p>
+                </div>
+            </div>
+        </section>
+        
+        <aside class="environmental-panel">
+            <div class="env-indicator">
+                <div class="env-label">Current Season</div>
+                <div class="env-value">Late Autumn</div>
+            </div>
+            
+            <div class="env-indicator">
+                <div class="env-label">Weather Pattern</div>
+                <div class="env-value">Cool & Dry</div>
+            </div>
+            
+            <div class="env-indicator">
+                <div class="env-label">Time of Day</div>
+                <div class="env-value">Evening</div>
+            </div>
+            
+            <div class="almanac-notes">
+                "As the wheel turns toward winter solstice, heartier roots replace tender greens. Cooking times extend like shadows at dusk. The recipe breathes with the season, each iteration a conversation with the present moment."
+            </div>
+            
+            <div class="compass-rose"></div>
+        </aside>
+    </div>
+</body>
+</html>

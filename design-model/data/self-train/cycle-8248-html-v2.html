@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bone: #fdfcfa;
+            --ash: #2a2826;
+            --fade: #a8a5a0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bone);
+            color: var(--ash);
+            font-family: 'Crimson Pro', serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 720px;
+            display: flex;
+            flex-direction: column;
+            gap: 80px;
+        }
+
+        .prompt {
+            font-size: clamp(28px, 4vw, 36px);
+            font-weight: 300;
+            letter-spacing: -0.01em;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        .memory-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(42, 40, 38, 0.15);
+            font-family: inherit;
+            font-size: 20px;
+            font-weight: 400;
+            line-height: 1.8;
+            color: var(--ash);
+            resize: none;
+            outline: none;
+            width: 100%;
+            padding: 30px 0;
+            transition: border-color 0.4s;
+        }
+
+        .memory-input:focus {
+            border-bottom-color: rgba(42, 40, 38, 0.3);
+        }
+
+        .memory-input::placeholder {
+            color: var(--fade);
+            opacity: 0.5;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            align-items: center;
+            margin: 40px 0;
+        }
+
+        .begin-decay {
+            background: transparent;
+            color: var(--ash);
+            border: 1px solid var(--ash);
+            padding: 16px 40px;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 300;
+            cursor: pointer;
+            transition: all 0.4s;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .begin-decay:hover {
+            background: var(--ash);
+            color: var(--bone);
+        }
+
+        .decay-rate {
+            font-size: 14px;
+            color: var(--fade);
+            letter-spacing: 0.03em;
+            font-weight: 300;
+        }
+
+        .memory-display {
+            min-height: 300px;
+            font-size: 22px;
+            line-height: 2;
+            color: var(--ash);
+            text-align: center;
+            padding: 60px 0;
+        }
+
+        .memory-fragment {
+            display: inline-block;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .memory-fragment.decay-1 {
+            opacity: 0.8;
+        }
+
+        .memory-fragment.decay-2 {
+            opacity: 0.6;
+            filter: blur(0.5px);
+        }
+
+        .memory-fragment.decay-3 {
+            opacity: 0.4;
+            filter: blur(1px);
+            color: var(--fade);
+        }
+
+        .memory-fragment.decay-4 {
+            opacity: 0.2;
+            filter: blur(2px);
+            transform: translateY(2px);
+        }
+
+        .memory-fragment.decay-5 {
+            opacity: 0.05;
+            filter: blur(4px);
+            transform: translateY(4px);
+            pointer-events: none;
+        }
+
+        .memory-fragment.refreshing {
+            animation: recall 0.6s ease-out;
+        }
+
+        @keyframes recall {
+            0% {
+                opacity: 1;
+                filter: blur(0);
+                transform: scale(1.05);
+            }
+            100% {
+                opacity: inherit;
+                filter: inherit;
+                transform: inherit;
+            }
+        }
+
+        .entropy-visualization {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 120px;
+            height: 1px;
+            background: var(--fade);
+            opacity: 0;
+            transition: opacity 2s;
+        }
+
+        .entropy-visualization.active {
+            opacity: 0.3;
+            animation: entropy 20s linear infinite;
+        }
+
+        @keyframes entropy {
+            to {
+                transform: scaleX(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="prompt">What do you wish to remember?</h1>
+        
+        <textarea class="memory-input" 
+                  placeholder="Type a memory here..." 
+                  maxlength="500"></textarea>
+        
+        <div class="controls">
+            <button class="begin-decay">Begin Decay</button>
+            <span class="decay-rate">Entropy: 2.3s</span>
+        </div>
+        
+        <div class="memory-display"></div>
+    </div>
+
+    <div class="entropy-visualization"></div>
+
+    <script>
+        const input = document.querySelector('.memory-input');
+        const display = document.querySelector('.memory-display');
+        const button = document.querySelector('.begin-decay');
+        const entropyViz = document.querySelector('.entropy-visualization');
+        
+        let decayInterval;
+        let fragments = [];
+
+        button.addEventListener('click', () => {
+            if (!input.value.trim()) return;
+            
+            clearInterval(decayInterval);
+            display.innerHTML = '';
+            fragments = [];
+            entropyViz.classList.add('active');
+            
+            const words = input.value.split(' ');
+            words.forEach(word => {
+                const span = document.createElement('span');
+                span.className = 'memory-fragment';
+                span.textContent = word + ' ';
+                span.dataset.decay = '0';
+                display.appendChild(span);
+                fragments.push(span);
+            });
+            
+            decayInterval = setInterval(() => {
+                fragments.forEach(fragment => {
+                    if (Math.random() < 0.15) {
+                        const currentDecay = parseInt(fragment.dataset.decay);
+                        if (currentDecay < 5) {
+                            fragment.dataset.decay = currentDecay + 1;
+                            fragment.className = `memory-fragment decay-${currentDecay + 1}`;
+                        }
+                    }
+                });
+                
+                if (fragments.every(f => parseInt(f.dataset.decay) >= 5)) {
+                    clearInterval(decayInterval);
+                    entropyViz.classList.remove('active');
+                }
+            }, 2300);
+        });
+        
+        display.addEventListener('click', (e) => {
+            if (e.target.classList.contains('memory-fragment')) {
+                const fragment = e.target;
+                const currentDecay = parseInt(fragment.dataset.decay);
+                
+                if (currentDecay > 0 && currentDecay < 5) {
+                    fragment.dataset.decay = Math.max(0, currentDecay - 1);
+                    fragment.className = currentDecay > 1 
+                        ? `memory-fragment decay-${currentDecay - 1} refreshing` 
+                        : 'memory-fragment refreshing';
+                    
+                    setTimeout(() => {
+                        fragment.classList.remove('refreshing');
+                    }, 600);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

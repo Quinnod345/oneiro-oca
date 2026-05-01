@@ -1,0 +1,36 @@
+{
+  "cycle": 13731,
+  "captured_at": "2026-04-15T19:18:22Z",
+  "language": "react",
+  "brief": "Design an interface for a \"Temporal Recipe Reconstructor\" where users drag fragments of their grandmother's handwritten recipe cards\u2014torn pieces showing partial ingredients, smudged instructions, and faded measurements\u2014onto a central cooking pot that acts as a smart assembly canvas, automatically detecting overlapping text, completing partial words using contextual clues, and revealing the full recipe through a time-lapse animation that shows the paper aging in reverse, while allowing users to t",
+  "scores": {
+    "typography_quality": 0.3,
+    "color_harmony": 0.4,
+    "spatial_composition": 0.2,
+    "motion_elegance": 0.3,
+    "emotional_resonance": 0.5,
+    "craft_visibility": 0.2,
+    "minimalism_coherence": 0.1,
+    "native_integration": 0.2,
+    "visceral_score": 0.3,
+    "behavioral_score": 0.4,
+    "reflective_score": 0.3,
+    "overall_aesthetic": 0.3,
+    "innovation_score": 0.6,
+    "system_creativity": 0.4,
+    "design_distinctiveness": 0.5,
+    "problem_level": 0.7
+  },
+  "overall": 0.3,
+  "innovation": 0.6,
+  "critique": "The design attempts an interesting recipe reconstruction metaphor but fails in execution with cluttered fragment placement, inconsistent visual hierarchy, and poor spatial organization. The beige-brown color palette lacks vibrancy, the typography is barely legible at italic 18px, and the pot illustration feels amateurish with basic SVG shapes.",
+  "fixes": [
+    "Implement a clear grid system for fragment placement with proper spacing and visual hierarchy instead of random positioning",
+    "Replace the monotonous brown palette with warmer, contrasting colors and improve typography with better size hierarchy and readability",
+    "Redesign the pot as a more sophisticated visual element with better shadows, depth, and refined animation states"
+  ],
+  "compiled": true,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13731-react.jsx",
+  "png_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13731-react.png",
+  "code_snippet": "const style = document.createElement('style');\nstyle.textContent = `\n  @import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital@0;1&display=swap');\n  \n  * {\n    margin: 0;\n    padding: 0;\n    box-sizing: border-box;\n  }\n  \n  body {\n    overflow: hidden;\n    background: #faf8f3;\n  }\n  \n  @keyframes shimmer {\n    0% { transform: translateX(-100%); }\n    100% { transform: translateX(100%); }\n  }\n  \n  @keyframes fadeIn {\n    from { opacity: 0; }\n    to { opacity: 1; }\n  }\n  \n  @keyframes pulse {\n    0%, 100% { opacity: 0.3; }\n    50% { opacity: 0.6; }\n  }\n`;\ndocument.head.appendChild(style);\n\nfunction App() {\n  const [fragments, setFragments] = React.useState([\n    { id: 1, text: '2 cups fl', x: 80, y: 120, width: 120, height: 80, angle: -15, opacity: 0.7 },\n    { id: 2, text: '...beat until', x: 320, y: 80, width: 140, height: 70, angle: 8, opacity: 0.6 },\n    { id: 3, text: 'tsp van...', x: 500, y: 140, width: 100, height: 60, angle: -5, opacity: 0.8 },\n    { id: 4, text: '350\u00b0F for', x: 680, y: 100, width: 130, height: 75, angle: 12, opacity: 0.65 },\n    { id: 5, text: '...utter, soft', x: 150, y: 280, width: 150, height: 85, angle: -20, opacity: 0.75 },\n    { id: 6, text: 'eggs, room t...', x: 420, y: 320, width: 160, height: 70, angle: 4, opacity: 0.7 },\n    { id: 7, text: '...sugar', x: 650, y: 300, width: 90, height: 65, angle: -8, opacity: 0.6 }\n  ]);\n  \n  const [potFragments, setPotFragments] = React.useState([]);\n  const [isReconstructing, setIsReconstructing] = React.useState(false);\n  const [reconstructed, setReconstructed] = React.useState(null);\n  const [draggedFragment, setDraggedFragment] = React.useState(null);\n  const [alternatives, setAlternatives] = React.useState({});\n  const [showAlternative, setShowAlternative] = React.useState(null);\n  \n  const potRef = React.useRef(null);\n  \n  const handleDragStart = (e, fragment) => {\n    setDraggedFragment(fragment);\n    e.dataTransfer.effectAllowed = 'move';\n  };\n  \n  const handleDragOver = (e) => {\n    e.preventDefault();\n    e.dataTransfer.dropEffect = 'move';\n  };\n  \n  const handleDrop = (e) => {\n    e.preventDefault();\n    if (!draggedFragment || !potRef.current) return;\n    \n    const potRect = potRef.current.getBoundingClientRect();\n    const potCenterX = potRect.left + potRect.width / 2;\n    const potCenterY = potRect.top + potRect.height / 2;\n    const distance = Math.sqrt(\n      Math.pow(e.clientX - potCenterX, 2) + \n      Math.pow(e.clientY - potCenterY, 2)\n    );\n    \n    if (distance < 150) {\n      setPotFragments([...potFragments, draggedFragment]);\n      setFragments(fragments.filter(f => f.id !== draggedFragment.id));\n      \n      if (potFragments.length >= 2) {\n        setTimeout(() => setIsReconstructing(true), 500);\n      }\n    }\n    setDraggedFragment(null);\n  };\n  \n  React.useEffect(() => {\n    if (isReconstructing) {\n      setTimeout(() => {\n        setReconstructed({\n          title: \"Grandmother's Vanilla Dream Cake\",\n          ingredients: [\n         "
+}

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Archive</title>
+    <style>
+        :root {
+            --void: #0a0a0a;
+            --dust: #1a1612;
+            --ash: #2e2925;
+            --bone: #f7f3f0;
+            --ember: #ff4a3d;
+            --moss: #7a9a65;
+            --rust: #b85938;
+            --fog: #e8e4e1;
+            --decay-1: rgba(255, 74, 61, 0.9);
+            --decay-2: rgba(255, 74, 61, 0.6);
+            --decay-3: rgba(255, 74, 61, 0.3);
+            --decay-4: rgba(255, 74, 61, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--void);
+            color: var(--bone);
+            font-family: Georgia, 'Times New Roman', serif;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .archive-matrix {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 0;
+            transform: rotate(-0.5deg);
+        }
+
+        .memory-cell {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--dust);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .memory-cell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 2px,
+                var(--ash) 2px,
+                var(--ash) 4px
+            );
+            opacity: 0;
+            transition: opacity 0.6s;
+        }
+
+        .memory-cell:hover::before {
+            opacity: 0.3;
+        }
+
+        .memory-content {
+            position: absolute;
+            inset: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: var(--dust);
+            transform-origin: center;
+            transition: transform 0.3s;
+        }
+
+        .memory-cell:hover .memory-content {
+            transform: scale(1.02);
+        }
+
+        .thought-fragment {
+            font-size: 14px;
+            line-height: 1.6;
+            letter-spacing: 0.02em;
+            color: var(--bone);
+            filter: contrast(1) brightness(1);
+            transition: all 1s;
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: var(--rust);
+            font-style: italic;
+            opacity: 0.7;
+            letter-spacing: 0.05em;
+        }
+
+        /* Decay stages */
+        .decay-stage-1 .thought-fragment {
+            filter: contrast(0.9) brightness(0.95);
+            text-shadow: 0 0 2px var(--ember);
+        }
+
+        .decay-stage-2 .thought-fragment {
+            filter: contrast(0.7) brightness(0.8) blur(0.5px);
+            color: var(--ash);
+            text-shadow: 0 0 4px var(--rust);
+        }
+
+        .decay-stage-2 .memory-content {
+            background: linear-gradient(135deg, var(--dust) 0%, var(--ash) 100%);
+        }
+
+        .decay-stage-3 .thought-fragment {
+            filter: contrast(0.5) brightness(0.6) blur(1px);
+            color: var(--dust);
+            text-shadow: 0 0 8px var(--void);
+            letter-spacing: 0.1em;
+        }
+
+        .decay-stage-3 .memory-content {
+            background: radial-gradient(circle at 30% 40%, var(--ash) 0%, var(--void) 100%);
+            mask-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.9' numOctaves='2' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noiseFilter)' /%3E%3C/svg%3E");
+            mask-size: 100px 100px;
+        }
+
+        .decay-stage-4 .thought-fragment {
+            filter: contrast(0.3) brightness(0.4) blur(2px);
+            color: var(--void);
+            text-shadow: 0 0 12px var(--void);
+            letter-spacing: 0.2em;
+            word-spacing: 0.5em;
+        }
+
+        .decay-stage-4 .memory-content {
+            background: var(--void);
+            animation: flicker 4s infinite;
+        }
+
+        .decay-stage-5 {
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .decay-stage-5 .memory-content {
+            background: transparent;
+        }
+
+        .decay-stage-5 .thought-fragment {
+            display: none;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.15; }
+        }
+
+        /* Pixelation effect */
+        .pixelated {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        /* Text fragmentation */
+        .fragment-1 { transform: translateX(-1px); }
+        .fragment-2 { transform: translateX(1px) translateY(-1px); }
+        .fragment-3 { transform: translateY(1px); opacity: 0.8; }
+        .fragment-4 { transform: translateX(-1px) translateY(1px); opacity: 0.6; }
+        .fragment-5 { opacity: 0.4; }
+
+        /* Input panel */
+        .input-void {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) rotate(0.2deg);
+            width: 600px;
+            background: var(--dust);
+            border: 2px solid var(--ash);
+            padding: 30px;
+            z-index: 100;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+        }
+
+        .thought-input {
+            width: 100%;
+            background: var(--void);
+            border: none;
+            color: var(--bone);
+            font-family: Georgia, serif;
+            font-size: 16px;
+            line-height: 1.8;
+            padding: 15px;
+            resize: none;
+            height: 80px;
+            letter-spacing: 0.03em;
+        }
+
+        .thought-input:focus {
+            outline: 1px solid var(--rust);
+            outline-offset: -1px;
+        }
+
+        .archive-button {
+            margin-top: 15px;
+            background: var(--rust);
+            color: var(--bone);
+            border: none;
+            padding: 12px 30px;
+            font-family: Georgia, serif;
+            font-size: 14px;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            float: right;
+        }
+
+        .archive-button:hover {
+            background: var(--ember);
+            transform: translateY(-1px);
+        }
+
+        /* Restoration effect */
+        .restoring {
+            animation: restore 1.5s forwards;
+        }
+
+        @keyframes restore {
+            0% { filter: contrast(0.3) brightness(0.4) blur(2px); }
+            100% { filter: contrast(1) brightness(1) blur(0); }
+        }
+
+        /* Abstract pattern overlay */
+        .pattern-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 2s;
+            background: 
+                repeating-conic-gradient(from 45deg at 40% 40%, 
+                    transparent 0deg, 
+                    var(--decay-1) 10deg, 
+                    transparent 20deg, 
+                    transparent 60deg),
+                repeating-conic-gradient(from -45deg at 60% 60%, 
+                    transparent 0deg, 
+                    var(--decay-2) 15deg, 
+                    transparent 30deg, 
+                    transparent 90deg);
+            mix-blend-mode: multiply;
+        }
+
+        .decay-stage-4 .pattern-layer,
+        .decay-stage-5 .pattern-layer {
+            opacity: 0.6;
+        }
+
+        /* Counter */
+        .decay-counter {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            font-family: Georgia, serif;
+            font-style: italic;
+            color: var(--rust);
+            font-size: 14px;
+            letter-spacing: 0.05em;
+        }
+
+        /* Glitch text effect for severe decay */
+        @keyframes glitch {
+            0%, 100% { text-shadow: 2px 0 var(--ember), -2px 0 var(--moss); }
+            25% { text-shadow: -2px 0 var(--ember), 2px 0 var(--moss); }
+            50% { text-shadow: 2px 2px var(--ember), -2px -2px var(--moss); }
+            75% { text-shadow: -2px -2px var(--ember), 2px 2px var(--moss); }
+        }
+
+        .decay-stage-3 .thought-fragment,
+        .decay-stage-4 .thought-fragment {
+            animation: glitch 3s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="decay-counter">
+        <span id="activeCount">0</span> memories preserved / <span id="totalCount">0</span> archived
+    </div>
+
+    <div class="archive-matrix" id="archiveMatrix">
+        <!-- Memory cells will be dynamically inserted here -->
+    </div>
+
+    <div class="input-void">
+        <textarea 
+            class="thought-input" 
+            id="thoughtInput" 
+            placeholder="Document a fleeting thought before it vanishes..."
+        ></textarea>
+        <button class="archive-button" onclick="archiveThought()">Archive</button>
+    </div>
+
+    <script>
+        const memories = [];
+        let memoryId = 0;
+
+        function archiveThought() {
+            const input = document.getElementById('thoughtInput');
+            const thought = input.value.trim();
+            
+            if (!thought) return;
+
+            const memory = {
+                id: memoryId++,
+                text: thought,
+                timestamp: new Date(),
+                decayStage: 0,
+                cellIndex: findEmptyCell()
+            };
+
+            memories.push(memory);
+            renderMemory(memory);
+            input.value = '';
+            updateCounter();
+        }
+
+        function findEmptyCell() {
+            const cells = document.querySelectorAll('.memory-cell');
+            const occupied = memories.map(m => m.cellIndex);
+            
+            for (let i = 0; i < 48; i++) {
+                if (!occupied.includes(i)) return i;
+            }
+            return Math.floor(Math.random() * 48);
+        }
+
+        function renderMemory(memory) {
+            const matrix = document.getElementById('archiveMatrix');
+            let cell = matrix.children[memory.cellIndex];
+            
+            if (!cell) {
+                cell = document.createElement('div');
+                cell.className = 'memory-cell';
+                matrix.appendChild(cell);
+            }
+
+            cell.innerHTML = `
+                <div class="memory-content">
+                    <div class="thought-fragment">${fragmentText(memory.text, memory.decayStage)}</div>
+                    <div class="timestamp">${formatTime(memory.timestamp)}</div>
+                    <div class="pattern-layer"></div>
+                </div>
+            `;
+
+            cell.className = `memory-cell decay-stage-${memory.decayStage}`;
+            cell.onclick = () => restoreMemory(memory.id);
+        }
+
+        function fragmentText(text, decayStage) {
+            if (decayStage === 0 || decayStage === 1) return text;
+            
+            const words = text.split(' ');
+            return words.map((word, i) => {
+                if (decayStage >= 2 && Math.random() < 0.1) return '█'.repeat(word.length);
+                if (decayStage >= 3 && Math.random() < 0.2) return '▓'.repeat(word.length);
+                if (decayStage >= 4 && Math.random() < 0.3) return '░'.repeat(word.length);
+                return `<span class="fragment-${Math.min(i % 5 + 1, decayStage)}">${word}</span>`;
+            }).join(' ');
+        }
+
+        function formatTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
+        }
+
+        function restoreMemory(id) {
+            const memory = memories.find(m => m.id === id);
+            if (memory && memory.decayStage > 0) {
+                memory.decayStage = 0;
+                memory.timestamp = new Date();
+                renderMemory(memory);
+                
+                const cell = document.getElementById('archiveMatrix').children[memory.cellIndex];
+                cell.classList.add('restoring');
+                setTimeout(() => cell.classList.remove('restoring'), 1500);
+            }
+        }
+
+        function decayMemories() {
+            memories.forEach(memory => {
+                const age = new Date() - memory.timestamp;
+                const newStage = Math.min(5, Math.floor(age / 30000)); // Decay every 30 seconds
+                
+                if (newStage > memory.decayStage) {
+                    memory.decayStage = newStage;
+                    renderMemory(memory);
+                }
+            });
+            updateCounter();
+        }
+
+        function updateCounter() {
+            document.getElementById('activeCount').textContent = memories.filter(m => m.decayStage < 5).length;
+            document.getElementById('totalCount').textContent = memories.length;
+        }
+
+        // Initialize empty cells
+        function initializeMatrix() {
+            const matrix = document.getElementById('archiveMatrix');
+            for (let i = 0; i < 48; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'memory-cell decay-stage-5';
+                cell.innerHTML = '<div class="memory-content"><div class="pattern-layer"></div></div>';
+                matrix.appendChild(cell);
+            }
+        }
+
+        // Start decay process
+        initializeMatrix();
+        setInterval(decayMemories, 5000);
+
+        // Handle Enter key in textarea
+        document.getElementById('thoughtInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                archiveThought();
+            }
+        });
+    </script>
+</body>
+</html>

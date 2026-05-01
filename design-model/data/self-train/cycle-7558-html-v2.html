@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phoneme Archive</title>
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1f29;
+            --text-primary: #e1e8ed;
+            --text-secondary: #8899a6;
+            --accent: #1da1f2;
+            --accent-hover: #1a91da;
+            --glass: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.1);
+            --glow: rgba(29, 161, 242, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .header {
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 2rem;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .active-section,
+        .extinct-section {
+            flex: 1;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .extinct-section .status-indicator {
+            background: var(--text-secondary);
+        }
+
+        .phoneme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+
+        .phoneme-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phoneme-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px var(--glow);
+        }
+
+        .phoneme-card:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .phoneme-symbol {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            display: block;
+            color: var(--text-primary);
+        }
+
+        .phoneme-name {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+            display: block;
+        }
+
+        .phoneme-card.extinct .phoneme-symbol {
+            opacity: 0.5;
+        }
+
+        .phoneme-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 30%, var(--glow) 50%, transparent 70%);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+
+        .phoneme-card:hover::after {
+            transform: translateX(100%);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .control-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 24px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .phoneme-detail {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .phoneme-detail.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: all;
+        }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-symbol {
+            font-size: 3rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            line-height: 1;
+        }
+
+        .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .detail-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .info-label {
+            font-weight: 600;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                padding: 1rem;
+            }
+
+            .phoneme-grid {
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            }
+
+            .controls {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Phoneme Archive</h1>
+        <p>Preserving the sounds of language evolution</p>
+    </header>
+
+    <main class="main-content">
+        <section class="active-section">
+            <div class="section-header">
+                <h2>Active Phonemes</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="phoneme-grid">
+                <button class="phoneme-card" tabindex="0" data-phoneme="æ">
+                    <span class="phoneme-symbol">æ</span>
+                    <span class="phoneme-name">Near-open front</span>
+                </button>
+                <button class="phoneme-card" tabindex="0" data-phoneme="θ">
+                    <span class="phoneme-symbol">θ</span>
+                    <span class="phoneme-name">Voiceless dental</span>
+                </button>
+                <button class="phoneme-card" tabindex="0" data-phoneme="ʃ">
+                    <span class="phoneme-symbol">ʃ</span>
+                    <span class="phoneme-name">Voiceless postalveolar</span>
+                </button>
+                <button class="phoneme-card" tabindex="0" data-phoneme="ŋ">
+                    <span class="phoneme-symbol">ŋ</span>
+                    <span class="phoneme-name">Velar nasal</span>
+                </button>
+                <button class="phoneme-card" tabindex="0" data-phoneme="ɔ">
+                    <span class="phoneme-symbol">ɔ</span>
+                    <span class="phoneme-name">Open-mid back</span>
+                </button>
+            </div>
+        </section>
+
+        <section class="extinct-section">
+            <div class="section-header">
+                <h2>Extinct Phonemes</h2>
+                <div class="status-indicator"></div>
+            </div>
+            <div class="phoneme-grid">
+                <button class="phoneme-card extinct" tabindex="0" data-phoneme="ɸ">
+                    <span class="phoneme-symbol">ɸ</span>
+                    <span class="phoneme-name">Bilabial fricative</span>
+                </button>
+                <button class="phoneme-card extinct" tabindex="0" data-phoneme="ɬ">
+                    <span class="phoneme-symbol">ɬ</span>
+                    <span class="phoneme-name">Lateral fricative</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <div class="controls">
+        <button class="control-btn" id="recordBtn">Record Phoneme</button>
+        <button class="control-btn" id="playBtn">Play Archive</button>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+    
+    <div class="phoneme-detail" id="phonemeDetail">
+        <div class="detail-header">
+            <span class="detail-symbol" id="detailSymbol">æ</span>
+            <button class="close-btn" id="closeBtn">&times;</button>
+        </div>
+        <div class="detail-info">
+            <div class="info-row">
+                <span class="info-label">Type:</span>
+                <span id="detailType">Vowel</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Position:</span>
+                <span id="detailPosition">Near-open front unrounded</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Usage:</span>
+                <span id="detailUsage">Common in English</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Status:</span>
+                <span id="detailStatus">Active</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const phonemeCards = document.querySelectorAll('.phoneme-card');
+        const overlay = document.getElementById('overlay');
+        const phonemeDetail = document.getElementById('phonemeDetail');
+        const closeBtn = document.getElementById('closeBtn');
+        const detailSymbol = document.getElementById('detailSymbol');
+
+        const phonemeData = {
+            'æ': { type: 'Vowel', position: 'Near-open front unrounded', usage: 'Common in English', status: 'Active' },
+            'θ': { type: 'Consonant', position: 'Voiceless dental fricative', usage: 'English "th"', status: 'Active' },
+            'ʃ': { type: 'Consonant', position: 'Voiceless postalveolar fricative', usage: 'English "sh"', status: 'Active' },
+            'ŋ': { type: 'Consonant', position: 'Velar nasal', usage: 'English "ng"', status: 'Active' },
+            'ɔ': { type: 'Vowel', position: 'Open-mid back rounded', usage: 'Common in many languages', status: 'Active' },
+            'ɸ': { type: 'Consonant', position: 'Voiceless bilabial fricative', usage: 'Historical Japanese', status: 'Extinct' },
+            'ɬ': { type: 'Consonant', position: 'Voiceless lateral fricative', usage: 'Welsh, some Native American', status: 'Extinct' }
+        };
+
+        phonemeCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const phoneme = card.dataset.phoneme;
+                const data = phonemeData[phoneme];
+                
+                detailSymbol.textContent = phoneme;
+                document.getElementById('detailType').textContent = data.type;
+                document.getElementById('detailPosition').textContent = data.position;
+                document.getElementById('detailUsage').textContent = data.usage;
+                document.getElementById('detailStatus').textContent = data.status;
+                
+                overlay.classList.add('active');
+                phonemeDetail.classList.add('active');
+            });
+        });
+
+        function closeDetail() {
+            overlay.classList.remove('active');
+            phonemeDetail.classList.remove('active');
+        }
+
+        closeBtn.addEventListener('click', closeDetail);
+        overlay.addEventListener('click', closeDetail);
+
+        document.getElementById('recordBtn').addEventListener('click', () => {
+            alert('Recording functionality would be implemented here');
+        });
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            alert('Playback functionality would be implemented here');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Calculator</title>
+    <style>
+        :root {
+            --depth-0: #0a0f14;
+            --depth-10: #111922;
+            --depth-20: #1a2633;
+            --depth-30: #243344;
+            --ice-blue: #a8d5e2;
+            --ice-white: #e8f4f8;
+            --crystal-edge: #5a9fb5;
+            --dissolve-green: #3a6b5c;
+            --dissolve-yellow: #8b7355;
+            --fluid-pink: #6b4455;
+            --preserve-glow: #bfe3f0;
+            --text-primary: #c8d6e5;
+            --text-secondary: #7a8896;
+            --memory-fresh: #ffffff;
+            --memory-fading: #ccddee;
+            --memory-ghost: #556677;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(ellipse at center bottom, var(--depth-30) 0%, var(--depth-0) 100%);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            color: var(--text-primary);
+        }
+
+        .ice-shelf {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 120px;
+            background: linear-gradient(180deg, var(--ice-white) 0%, var(--ice-blue) 40%, transparent 100%);
+            border-bottom: 2px solid var(--crystal-edge);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            gap: 20px;
+        }
+
+        .ice-shelf::before {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(180deg, rgba(168, 213, 226, 0.3) 0%, transparent 100%);
+            filter: blur(10px);
+        }
+
+        .preserved-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--crystal-edge);
+            opacity: 0.7;
+        }
+
+        .preserved-memories {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .water-container {
+            position: absolute;
+            top: 120px;
+            left: 0;
+            right: 0;
+            bottom: 140px;
+            perspective: 1000px;
+            overflow: hidden;
+        }
+
+        .depth-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, 
+                rgba(26, 38, 51, 0.2) 0%, 
+                rgba(26, 38, 51, 0.5) 50%, 
+                rgba(10, 15, 20, 0.9) 100%);
+            pointer-events: none;
+        }
+
+        .water-ripples {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(168, 213, 226, 0.1) 20%, 
+                transparent 40%,
+                rgba(168, 213, 226, 0.05) 60%,
+                transparent 100%);
+            animation: ripple 20s linear infinite;
+        }
+
+        @keyframes ripple {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .memory-object {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.3s ease;
+            transform-style: preserve-3d;
+        }
+
+        .memory-object:active {
+            cursor: grabbing;
+        }
+
+        .memory-crystal {
+            width: 120px;
+            height: 120px;
+            position: relative;
+            transform: rotateX(-15deg) rotateY(25deg);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: rotateX(-15deg) rotateY(25deg) translateY(0); }
+            50% { transform: rotateX(-15deg) rotateY(25deg) translateY(-10px); }
+        }
+
+        .crystal-face {
+            position: absolute;
+            background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.9) 0%, 
+                rgba(200, 221, 238, 0.7) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+        }
+
+        .crystal-face.back {
+            transform: rotateY(180deg);
+            opacity: 0.6;
+        }
+
+        .memory-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            color: var(--depth-0);
+            font-weight: 500;
+            max-width: 80px;
+            line-height: 1.3;
+        }
+
+        .memory-dissolving {
+            animation: dissolve 3s ease-out forwards;
+        }
+
+        @keyframes dissolve {
+            0% { opacity: 1; filter: blur(0); }
+            100% { opacity: 0.3; filter: blur(4px); transform: translateY(20px); }
+        }
+
+        .memory-fluid {
+            width: 150px;
+            height: 150px;
+            position: relative;
+            filter: blur(2px);
+            opacity: 0.6;
+        }
+
+        .fluid-shape {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, 
+                rgba(107, 68, 85, 0.4) 0%, 
+                transparent 70%);
+            border-radius: 50%;
+            animation: morph 8s ease-in-out infinite;
+        }
+
+        @keyframes morph {
+            0%, 100% { border-radius: 50% 40% 60% 50%; transform: scale(1) rotate(0deg); }
+            33% { border-radius: 60% 50% 40% 60%; transform: scale(1.1) rotate(120deg); }
+            66% { border-radius: 40% 60% 50% 40%; transform: scale(0.9) rotate(240deg); }
+        }
+
+        .timeline {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 140px;
+            background: linear-gradient(180deg, var(--depth-20) 0%, var(--depth-10) 100%);
+            border-top: 1px solid var(--depth-30);
+            padding: 20px 40px;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .timeline-title {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-secondary);
+        }
+
+        .half-life-indicator {
+            font-size: 11px;
+            color: var(--dissolve-yellow);
+        }
+
+        .timeline-track {
+            position: relative;
+            height: 60px;
+            background: rgba(36, 51, 68, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .timeline-grid {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+        }
+
+        .timeline-marker {
+            width: 1px;
+            height: 100%;
+            background: var(--depth-30);
+            position: relative;
+        }
+
+        .timeline-label {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .memory-trace {
+            position: absolute;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                var(--memory-fresh) 0%, 
+                var(--memory-fading) 50%, 
+                var(--memory-ghost) 100%);
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .decay-particles {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(200, 221, 238, 0.6);
+            border-radius: 50%;
+            animation: drift 4s linear infinite;
+        }
+
+        @keyframes drift {
+            0% { transform: translateY(0) translateX(0); opacity: 0.6; }
+            100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
+        }
+
+        .preserved-crystal {
+            width: 60px;
+            height: 60px;
+            position: relative;
+            transform: scale(0.8);
+            filter: drop-shadow(0 4px 8px rgba(168, 213, 226, 0.3));
+        }
+
+        .mini-crystal {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--ice-white) 0%, var(--ice-blue) 100%);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .freeze-glow {
+            position: absolute;
+            inset: -20px;
+            background: radial-gradient(circle at center, var(--preserve-glow) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(0.9); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+
+        .interaction-hint {
+            position: absolute;
+            top: 140px;
+            right: 40px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-style: italic;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="ice-shelf">
+        <span class="preserved-label">Preserved</span>
+        <div class="preserved-memories">
+            <div class="preserved-crystal">
+                <div class="freeze-glow"></div>
+                <div class="mini-crystal"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="water-container">
+        <div class="depth-gradient"></div>
+        <div class="water-ripples"></div>
+        
+        <div class="memory-object" style="left: 200px; top: 50px;">
+            <div class="memory-crystal">
+                <div class="crystal-face">
+                    <div class="memory-content">First kiss</div>
+                </div>
+                <div class="crystal-face back"></div>
+            </div>
+        </div>
+
+        <div class="memory-object" style="left: 500px; top: 150px;">
+            <div class="memory-crystal" style="opacity: 0.8; filter: blur(1px);">
+                <div class="crystal-face">
+                    <div class="memory-content">Mother's voice</div>
+                </div>
+                <div class="crystal-face back"></div>
+            </div>
+        </div>
+
+        <div class="memory-object" style="left: 800px; top: 100px;">
+            <div class="memory-fluid">
+                <div class="fluid-shape"></div>
+                <div class="memory-content" style="color: var(--text-primary);">Childhood home</div>
+            </div>
+        </div>
+
+        <div class="memory-object memory-dissolving" style="left: 350px; top: 300px;">
+            <div class="memory-crystal" style="opacity: 0.5;">
+                <div class="crystal-face">
+                    <div class="memory-content">Yesterday's lunch</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="decay-particles" style="left: 350px; top: 300px;">
+            <div class="particle" style="animation-delay: 0s;"></div>
+            <div class="particle" style="left: 10px; animation-delay: 0.5s;"></div>
+            <div class="particle" style="left: -10px; animation-delay: 1s;"></div>
+            <div class="particle" style="left: 20px; animation-delay: 1.5s;"></div>
+        </div>
+
+        <div class="memory-object" style="left: 650px; top: 280px;">
+            <div class="memory-fluid" style="opacity: 0.4;">
+                <div class="fluid-shape" style="background: radial-gradient(ellipse at center, rgba(58, 107, 92, 0.3) 0%, transparent 70%);"></div>
+                <div class="memory-content" style="color: var(--text-secondary);">Someone's name</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="interaction-hint">Drag memories upward to preserve them</div>
+
+    <div class="timeline">
+        <div class="timeline-header">
+            <span class="timeline-title">Memory Half-Life Prediction</span>
+            <span class="half-life-indicator">⚠ 3 memories at critical decay</span>
+        </div>
+        <div class="timeline-track">
+            <div class="timeline-grid">
+                <div class="timeline-marker"><span class="timeline-label">Now</span></div>
+                <div class="timeline-marker"><span class="timeline-label">1 Day</span></div>
+                <div class="timeline-marker"><span class="timeline-label">1 Week</span></div>
+                <div class="timeline-marker"><span class="timeline-label">1 Month</span></div>
+                <div class="timeline-marker"><span class="timeline-label">1 Year</span></div>
+            </div>
+            <div class="memory-trace" style="left: 0; width: 95%; top: 20%;"></div>
+            <div class="memory-trace" style="left: 0; width: 70%; top: 35%; opacity: 0.8;"></div>
+            <div class="memory-trace" style="left: 0; width: 40%; top: 50%; opacity: 0.6;"></div>
+            <div class="memory-trace" style="left: 0; width: 20%; top: 65%; opacity: 0.4;"></div>
+        </div>
+    </div>
+</body>
+</html>

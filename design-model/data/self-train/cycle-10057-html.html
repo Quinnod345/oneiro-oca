@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Auction House</title>
+    <style>
+        :root {
+            --void-black: #0a0a0c;
+            --memory-glass: rgba(224, 231, 255, 0.08);
+            --emotional-gold: #ffd700;
+            --bid-crimson: #dc143c;
+            --bid-azure: #1e90ff;
+            --bid-emerald: #2ecc40;
+            --particle-glow: #fff8dc;
+            --breath-fog: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--void-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        #central-void {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, transparent 0%, var(--void-black) 70%);
+            border-radius: 50%;
+            box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.9);
+            transition: all 3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #central-void.growing {
+            width: 180px;
+            height: 180px;
+        }
+
+        .memory-orb {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: var(--memory-glass);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.6s ease;
+            overflow: hidden;
+        }
+
+        .memory-scene {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            opacity: 0.2;
+            filter: blur(12px);
+            transition: all 2s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .memory-orb.breathing .memory-scene {
+            opacity: 0.9;
+            filter: blur(0px);
+        }
+
+        .breath-detector {
+            position: absolute;
+            width: 240px;
+            height: 240px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .bid-aura {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.1); opacity: 0.6; }
+        }
+
+        .bid-aura.crimson {
+            box-shadow: 0 0 40px var(--bid-crimson), inset 0 0 20px var(--bid-crimson);
+        }
+
+        .bid-aura.azure {
+            box-shadow: 0 0 40px var(--bid-azure), inset 0 0 20px var(--bid-azure);
+        }
+
+        .bid-aura.emerald {
+            box-shadow: 0 0 40px var(--bid-emerald), inset 0 0 20px var(--bid-emerald);
+        }
+
+        .memory-orb.contested .bid-aura {
+            opacity: 1;
+        }
+
+        #emotion-reserve {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            width: 200px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            overflow: hidden;
+        }
+
+        .emotion-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--particle-glow);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--emotional-gold);
+            animation: float 3s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .draining-particle {
+            animation: drain 1s ease-out forwards;
+        }
+
+        @keyframes drain {
+            to {
+                transform: translate(var(--target-x), var(--target-y));
+                opacity: 0;
+            }
+        }
+
+        #reserve-count {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--emotional-gold);
+            font-size: 24px;
+            font-weight: 200;
+            text-shadow: 0 0 20px var(--emotional-gold);
+        }
+
+        .memory-title {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .memory-orb.breathing .memory-title {
+            opacity: 1;
+        }
+
+        #bid-interface {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        #bid-interface.active {
+            display: block;
+        }
+
+        .bid-amount {
+            color: var(--emotional-gold);
+            font-size: 36px;
+            font-weight: 100;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .competing-bids {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .competitor-bid {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .bid-actions {
+            display: flex;
+            gap: 20px;
+        }
+
+        button {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        button.release {
+            color: var(--bid-crimson);
+            border-color: var(--bid-crimson);
+        }
+
+        .fog-overlay {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+            background: radial-gradient(circle at var(--mouse-x) var(--mouse-y), var(--breath-fog) 0%, transparent 30%);
+        }
+
+        .fog-overlay.visible {
+            opacity: 1;
+        }
+
+        #instructions {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 12px;
+            line-height: 1.6;
+            max-width: 300px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div id="central-void"></div>
+    
+    <div id="emotion-reserve">
+        <div class="emotion-particles" id="particles-container"></div>
+        <div id="reserve-count">127</div>
+    </div>
+
+    <div id="memories-container"></div>
+
+    <div id="bid-interface">
+        <div class="bid-amount">42</div>
+        <div class="competing-bids">
+            <span class="competitor-bid" style="color: var(--bid-crimson)">38</span>
+            <span class="competitor-bid" style="color: var(--bid-azure)">41</span>
+            <span class="competitor-bid" style="color: var(--bid-emerald)">37</span>
+        </div>
+        <div class="bid-actions">
+            <button onclick="increaseBid()">Raise Bid</button>
+            <button class="release" onclick="releaseMemory()">Let Go</button>
+        </div>
+    </div>
+
+    <div class="fog-overlay" id="fog"></div>
+
+    <div id="instructions">
+        Hover close to breathe life into memories<br>
+        Each moment of clarity costs emotional tokens<br>
+        Others are bidding — decide what to keep
+    </div>
+
+    <script>
+        const memories = [
+            { id: 1, title: "Summer rain on tin roof", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='rain' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%234a90e2' stop-opacity='0.3'/%3E%3Cstop offset='100%25' stop-color='%232c5aa0' stop-opacity='0.6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='200' height='200' fill='url(%23rain)'/%3E%3Cpath d='M20,50 Q30,80 20,110 M40,40 Q50,70 40,100 M60,55 Q70,85 60,115 M80,45 Q90,75 80,105 M100,50 Q110,80 100,110 M120,40 Q130,70 120,100' stroke='%23fff' stroke-width='0.5' fill='none' opacity='0.4'/%3E%3C/svg%3E", x: 300, y: 200 },
+            { id: 2, title: "Mother's hands braiding hair", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3CradialGradient id='warmth'%3E%3Cstop offset='0%25' stop-color='%23f4e4c1' stop-opacity='0.4'/%3E%3Cstop offset='100%25' stop-color='%23d4a574' stop-opacity='0.7'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='200' height='200' fill='url(%23warmth)'/%3E%3Cpath d='M50,100 Q100,50 150,100 Q100,150 50,100' fill='none' stroke='%238b6f47' stroke-width='2' opacity='0.5'/%3E%3C/svg%3E", x: 900, y: 150 },
+            { id: 3, title: "First bicycle without training wheels", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='sky' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2387ceeb' stop-opacity='0.3'/%3E%3Cstop offset='100%25' stop-color='%23f0e68c' stop-opacity='0.5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='200' height='200' fill='url(%23sky)'/%3E%3Ccircle cx='50' cy='150' r='30' fill='none' stroke='%23333' stroke-width='3' opacity='0.5'/%3E%3Ccircle cx='150' cy='150' r='30' fill='none' stroke='%23333' stroke-width='3' opacity='0.5'/%3E%3Cline x1='50' y1='150' x2='100' y2='120' stroke='%23333' stroke-width='3' opacity='0.5'/%3E%3Cline x1='100' y1='120' x2='150' y2='150' stroke='%23333' stroke-width='3' opacity='0.5'/%3E%3C/svg%3E", x: 1100, y: 400 },
+            { id: 4, title: "Grandfather's tobacco pipe smoke", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3CradialGradient id='smoke'%3E%3Cstop offset='0%25' stop-color='%23d3d3d3' stop-opacity='0.2'/%3E%3Cstop offset='100%25' stop-color='%23696969' stop-opacity='0.4'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='200' height='200' fill='%23222'/%3E%3Ccircle cx='100' cy='80' r='40' fill='url(%23smoke)' opacity='0.6'/%3E%3Ccircle cx='120' cy='60' r='35' fill='url(%23smoke)' opacity='0.5'/%3E%3Ccircle cx='90' cy='50' r='30' fill='url(%23smoke)' opacity='0.4'/%3E%3C/svg%3E", x: 200, y: 500 },
+            { id: 5, title: "Library card first signature", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23faf0e6'/%3E%3Cpath d='M30,100 Q60,90 90,100 T150,100' fill='none' stroke='%23191970' stroke-width='2' opacity='0.6'/%3E%3Cline x1='20' y1='130' x2='180' y2='130' stroke='%23ccc' stroke-width='0.5'/%3E%3Cline x1='20' y1='150' x2='180' y2='150' stroke='%23ccc' stroke-width='0.5'/%3E%3C/svg%3E", x: 600, y: 600 },
+            { id: 6, title: "Dog's collar jingling at dawn", image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='dawn' x1='0%25' y1='100%25' x2='0%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23ff6b6b' stop-opacity='0.3'/%3E%3Cstop offset='100%25' stop-color='%23ffd93d' stop-opacity='0.5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='200' height='200' fill='url(%23dawn)'/%3E%3Ccircle cx='100' cy='100' r='15' fill='none' stroke='%238b4513' stroke-width='3' opacity='0.6'/%3E%3Ccircle cx='100' cy='120' r='5' fill='%23ffd700' opacity='0.8'/%3E%3C/svg%3E", x: 1000, y: 650 }
+        ];
+
+        let emotionalTokens = 127;
+        let activeMemory = null;
+        let breathTimer = null;
+        let drainInterval = null;
+        let mouseX = 0, mouseY = 0;
+
+        function initializeParticles() {
+            const container = document.getElementById('particles-container');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 3 + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        function createMemoryOrbs() {
+            const container = document.getElementById('memories-container');
+            memories.forEach((memory, index) => {
+                const orb = document.createElement('div');
+                orb.className = 'memory-orb';
+                orb.style.left = memory.x + 'px';
+                orb.style.top = memory.y + 'px';
+                orb.dataset.memoryId = memory.id;
+
+                const scene = document.createElement('div');
+                scene.className = 'memory-scene';
+                scene.style.backgroundImage = `url("${memory.image}")`;
+
+                const breathDetector = document.createElement('div');
+                breathDetector.className = 'breath-detector';
+
+                const bidAura = document.createElement('div');
+                bidAura.className = 'bid-aura ' + ['crimson', 'azure', 'emerald'][index % 3];
+
+                const title = document.createElement('div');
+                title.className = 'memory-title';
+                title.textContent = memory.title;
+
+                orb.appendChild(scene);
+                orb.appendChild(breathDetector);
+                orb.appendChild(bidAura);
+                orb.appendChild(title);
+                container.appendChild(orb);
+
+                orb.addEventListener('mouseenter', () => startBreathing(orb));
+                orb.addEventListener('mouseleave', () => stopBreathing(orb));
+                orb.addEventListener('click', () => openBidInterface(orb));
+
+                if (Math.random() > 0.5) {
+                    orb.classList.add('contested');
+                }
+            });
+        }
+
+        function startBreathing(orb) {
+            if (emotionalTokens <= 0) return;
+            
+            breathTimer = setTimeout(() => {
+                orb.classList.add('breathing');
+                activeMemory = orb;
+                startDraining();
+                document.getElementById('fog').classList.add('visible');
+            }, 1000);
+        }
+
+        function stopBreathing(orb) {
+            clearTimeout(breathTimer);
+            orb.classList.remove('breathing');
+            activeMemory = null;
+            stopDraining();
+            document.getElementById('fog').classList.remove('visible');
+        }
+
+        function startDraining() {
+            drainInterval = setInterval(() => {
+                if (emotionalTokens > 0 && activeMemory) {
+                    emotionalTokens--;
+                    document.getElementById('reserve-count').textContent = emotionalTokens;
+                    animateDrainingParticle();
+                }
+            }, 200);
+        }
+
+        function stopDraining() {
+            clearInterval(drainInterval);
+        }
+
+        function animateDrainingParticle() {
+            const particles = document.querySelectorAll('.particle:not(.draining-particle)');
+            if (particles.length === 0) return;
+
+            const particle = particles[Math.floor(Math.random() * particles.length)];
+            const rect = activeMemory.getBoundingClientRect();
+            const particleRect = particle.getBoundingClientRect();
+            
+            particle.style.setProperty('--target-x', (rect.left + rect.width / 2 - particleRect.left) + 'px');
+            particle.style.setProperty('--target-y', (rect.top + rect.height / 2 - particleRect.top) + 'px');
+            particle.classList.add('draining-particle');
+            
+            setTimeout(() => particle.remove(), 1000);
+        }
+
+        function openBidInterface(orb) {
+            document.getElementById('bid-interface').classList.add('active');
+            activeMemory = orb;
+        }
+
+        function increaseBid() {
+            const bidAmount = document.querySelector('.bid-amount');
+            let current = parseInt(bidAmount.textContent);
+            if (emotionalTokens >= 5) {
+                bidAmount.textContent = current + 5;
+                emotionalTokens -= 5;
+                document.getElementById('reserve-count').textContent = emotionalTokens;
+            }
+        }
+
+        function releaseMemory() {
+            if (activeMemory) {
+                activeMemory.style.opacity = '0';
+                document.getElementById('central-void').classList.add('growing');
+                setTimeout(() => {
+                    activeMemory.remove();
+                    document.getElementById('central-void').classList.remove('growing');
+                }, 3000);
+            }
+            document.getElementById('bid-interface').classList.remove('active');
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            document.getElementById('fog').style.setProperty('--mouse-x', mouseX + 'px');
+            document.getElementById('fog').style.setProperty('--mouse-y', mouseY + 'px');
+        });
+
+        initializeParticles();
+        createMemoryOrbs();
+    </script>
+</body>
+</html>

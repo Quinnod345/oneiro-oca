@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Adjuster</title>
+    <style>
+        :root {
+            --parchment: #f4e8d0;
+            --ink-medieval: #3a2317;
+            --gold-leaf: #c9a961;
+            --copper-patina: #7a9d96;
+            --ivory: #faf7f0;
+            --shadow-soft: rgba(58, 35, 23, 0.1);
+            --radius: 400px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Baskerville, Georgia, serif;
+            background: var(--ivory);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .temporal-wheel {
+            width: 800px;
+            height: 800px;
+            position: relative;
+            transform: translateY(-20px);
+        }
+
+        .era-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--copper-patina);
+            opacity: 0.3;
+        }
+
+        .era-ring.inner {
+            width: 70%;
+            height: 70%;
+            top: 15%;
+            left: 15%;
+            border-style: dashed;
+        }
+
+        .era-ring.outer {
+            width: 130%;
+            height: 130%;
+            top: -15%;
+            left: -15%;
+            border-width: 1px;
+        }
+
+        .time-selector {
+            position: absolute;
+            width: var(--radius);
+            height: var(--radius);
+            border-radius: 50%;
+            top: calc(50% - var(--radius)/2);
+            left: calc(50% - var(--radius)/2);
+            cursor: grab;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .time-selector:active {
+            cursor: grabbing;
+        }
+
+        .selector-disc {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                var(--ink-medieval) 0deg,
+                var(--copper-patina) 90deg,
+                var(--gold-leaf) 180deg,
+                var(--parchment) 270deg,
+                var(--ink-medieval) 360deg
+            );
+            opacity: 0.1;
+            position: absolute;
+        }
+
+        .era-markers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            font-size: 14px;
+            color: var(--ink-medieval);
+        }
+
+        .era-marker {
+            position: absolute;
+            transform-origin: center;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .era-marker:hover {
+            background: var(--shadow-soft);
+            font-weight: bold;
+        }
+
+        .era-marker.active {
+            color: var(--gold-leaf);
+            font-weight: bold;
+            text-shadow: 1px 1px 2px var(--shadow-soft);
+        }
+
+        .era-marker:nth-child(1) {
+            top: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .era-marker:nth-child(2) {
+            top: 25%;
+            right: 10%;
+        }
+
+        .era-marker:nth-child(3) {
+            bottom: 25%;
+            right: 10%;
+        }
+
+        .era-marker:nth-child(4) {
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .era-marker:nth-child(5) {
+            bottom: 25%;
+            left: 10%;
+        }
+
+        .era-marker:nth-child(6) {
+            top: 25%;
+            left: 10%;
+        }
+
+        .center-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            height: 280px;
+            background: var(--parchment);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 40px var(--shadow-soft);
+            border: 3px solid var(--gold-leaf);
+        }
+
+        .current-era {
+            text-align: center;
+            color: var(--ink-medieval);
+        }
+
+        .current-era h2 {
+            font-size: 36px;
+            margin-bottom: 8px;
+            font-weight: normal;
+            font-variant: small-caps;
+        }
+
+        .current-era .year-range {
+            font-size: 18px;
+            color: var(--copper-patina);
+            letter-spacing: 2px;
+        }
+
+        .ingredient-cards {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 600px;
+            height: 600px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .ingredient-card {
+            position: absolute;
+            width: 180px;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px var(--shadow-soft);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: all;
+            cursor: pointer;
+            border: 1px solid var(--copper-patina);
+            opacity: 0;
+        }
+
+        .ingredient-card.active {
+            opacity: 1;
+        }
+
+        .ingredient-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px var(--shadow-soft);
+        }
+
+        .ingredient-card:nth-child(1) {
+            top: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .ingredient-card:nth-child(2) {
+            top: 80px;
+            right: -20px;
+        }
+
+        .ingredient-card:nth-child(3) {
+            bottom: 80px;
+            right: -20px;
+        }
+
+        .ingredient-card:nth-child(4) {
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .ingredient-card:nth-child(5) {
+            bottom: 80px;
+            left: -20px;
+        }
+
+        .ingredient-card:nth-child(6) {
+            top: 80px;
+            left: -20px;
+        }
+
+        .historical-term {
+            font-size: 18px;
+            color: var(--ink-medieval);
+            margin-bottom: 8px;
+            font-style: italic;
+            text-decoration: line-through;
+            text-decoration-color: var(--copper-patina);
+            text-decoration-thickness: 1px;
+        }
+
+        .modern-equivalent {
+            font-size: 20px;
+            color: var(--gold-leaf);
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+
+        .measurement-note {
+            font-size: 13px;
+            color: var(--copper-patina);
+            line-height: 1.4;
+        }
+
+        .timeline-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: var(--radius);
+            background: var(--gold-leaf);
+            transform-origin: center bottom;
+            transform: translate(-50%, -100%) rotate(0deg);
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .timeline-indicator::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -7px;
+            width: 16px;
+            height: 16px;
+            background: var(--gold-leaf);
+            border-radius: 50%;
+            box-shadow: 0 2px 8px var(--shadow-soft);
+        }
+
+        .recipe-panel {
+            position: absolute;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 320px;
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 8px 40px var(--shadow-soft);
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--copper-patina);
+        }
+
+        .recipe-title {
+            font-size: 28px;
+            color: var(--ink-medieval);
+            margin-bottom: 8px;
+            font-variant: small-caps;
+        }
+
+        .recipe-origin {
+            font-size: 14px;
+            color: var(--copper-patina);
+            margin-bottom: 24px;
+            font-style: italic;
+        }
+
+        .language-toggle {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: var(--parchment);
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .language-btn {
+            flex: 1;
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: var(--ink-medieval);
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .language-btn.active {
+            background: white;
+            color: var(--gold-leaf);
+            box-shadow: 0 2px 8px var(--shadow-soft);
+        }
+
+        .instructions {
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--ink-medieval);
+        }
+
+        .instructions.historical {
+            font-style: italic;
+            letter-spacing: 0.5px;
+        }
+
+        .instructions p {
+            margin-bottom: 16px;
+        }
+
+        .navigation-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--copper-patina);
+            text-align: center;
+            font-style: italic;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .ingredient-card.active {
+            animation: float 3s ease-in-out infinite;
+            animation-delay: calc(var(--index) * 0.2s);
+        }
+    </style>
+</head>
+<body>
+    <div class="temporal-wheel">
+        <div class="era-ring outer"></div>
+        <div class="era-ring"></div>
+        <div class="era-ring inner"></div>
+        
+        <div class="time-selector">
+            <div class="selector-disc"></div>
+            <div class="era-markers">
+                <div class="era-marker active" data-era="medieval">Medieval</div>
+                <div class="era-marker" data-era="renaissance">Renaissance</div>
+                <div class="era-marker" data-era="enlightenment">Enlightenment</div>
+                <div class="era-marker" data-era="victorian">Victorian</div>
+                <div class="era-marker" data-era="edwardian">Edwardian</div>
+                <div class="era-marker" data-era="art-deco">Art Deco</div>
+            </div>
+        </div>
+
+        <div class="timeline-indicator"></div>
+
+        <div class="center-display">
+            <div class="current-era">
+                <h2>Medieval</h2>
+                <div class="year-range">1066 - 1485</div>
+            </div>
+        </div>
+
+        <div class="ingredient-cards">
+            <div class="ingredient-card active" style="--index: 0">
+                <div class="historical-term">Dragon's blood</div>
+                <div class="modern-equivalent">Red food coloring</div>
+                <div class="measurement-note">2-3 drops for deep crimson</div>
+            </div>
+            <div class="ingredient-card active" style="--index: 1">
+                <div class="historical-term">A goodly handful</div>
+                <div class="modern-equivalent">¾ cup</div>
+                <div class="measurement-note">Loosely packed herbs</div>
+            </div>
+            <div class="ingredient-card active" style="--index: 2">
+                <div class="historical-term">Verjuice</div>
+                <div class="modern-equivalent">White wine vinegar</div>
+                <div class="measurement-note">Mixed with grape juice 3:1</div>
+            </div>
+            <div class="ingredient-card active" style="--index: 3">
+                <div class="historical-term">Long pepper</div>
+                <div class="modern-equivalent">Black pepper + cinnamon</div>
+                <div class="measurement-note">Equal parts, freshly ground</div>
+            </div>
+            <div class="ingredient-card active" style="--index: 4">
+                <div class="historical-term">Grains of paradise</div>
+                <div class="modern-equivalent">Cardamom + black pepper</div>
+                <div class="measurement-note">2:1 ratio, crushed</div>
+            </div>
+            <div class="ingredient-card active" style="--index: 5">
+                <div class="historical-term">Hypocras spices</div>
+                <div class="modern-equivalent">Cinnamon, ginger, nutmeg</div>
+                <div class="measurement-note">4:2:1 ratio for mulled wine</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="recipe-panel">
+        <h1 class="recipe-title">Capon in Galyntyne</h1>
+        <div class="recipe-origin">From The Forme of Cury, 1390</div>
+        
+        <div class="language-toggle">
+            <button class="language-btn" onclick="toggleLanguage('historical')">Historical</button>
+            <button class="language-btn active" onclick="toggleLanguage('modern')">Modern</button>
+        </div>
+
+        <div class="instructions modern">
+            <p>Season a whole chicken with salt and pepper. Roast at 375°F for 1 hour until golden.</p>
+            <p>For the sauce: Sauté 2 minced shallots in butter. Add ½ cup white wine, ¼ cup vinegar, and 2 tbsp honey.</p>
+            <p>Mix in ½ tsp each of cinnamon, ginger, and a pinch of cloves. Simmer until reduced by half.</p>
+            <p>Strain the sauce and serve over the carved chicken. Garnish with fresh herbs.</p>
+        </div>
+    </div>
+
+    <div class="navigation-hint">
+        Rotate the wheel to explore culinary history
+    </div>
+
+    <script>
+        let currentRotation = 0;
+        let isDragging = false;
+        let startAngle = 0;
+        let currentAngle = 0;
+
+        const timeSelector = document.querySelector('.time-selector');
+        const timelineIndicator = document.querySelector('.timeline-indicator');
+
+        timeSelector.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+
+        function startDrag(e) {
+            isDragging = true;
+            const rect = timeSelector.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            
+            const rect = timeSelector.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            
+            const deltaAngle = currentAngle - startAngle;
+            currentRotation += deltaAngle * (180 / Math.PI);
+            
+            timeSelector.style.transform = `rotate(${currentRotation}deg)`;
+            timelineIndicator.style.transform = `translate(-50%, -100%) rotate(${currentRotation}deg)`;
+            
+            startAngle = currentAngle;
+            updateEra();
+        }
+
+        function endDrag() {
+            isDragging = false;
+        }
+
+        function updateEra() {
+            const normalizedRotation = ((currentRotation % 360) + 360) % 360;
+            const eraIndex = Math.floor(normalizedRotation / 60);
+            const eras = ['medieval', 'renaissance', 'enlightenment', 'victorian', 'edwardian', 'art-deco'];
+            const currentEra = eras[eraIndex];
+            
+            document.querySelectorAll('.era-marker').forEach(marker => {
+                marker.classList.toggle('active', marker.dataset.era === currentEra);
+            });
+            
+            updateIngredients(currentEra);
+        }
+
+        function updateIngredients(era) {
+            // This would update ingredient cards based on era
+            // For demo purposes, cards remain static
+        }
+
+        function toggleLanguage(type) {
+            document.querySelectorAll('.language-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Would toggle between historical and modern recipe text
+        }
+    </script>
+</body>
+</html>

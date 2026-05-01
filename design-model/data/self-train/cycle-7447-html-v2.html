@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay</title>
+    <style>
+        :root {
+            --primary: #1a1a1a;
+            --accent: #e8d5d5;
+            --fade: #f5f5f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--primary);
+            height: 100vh;
+            font-family: Georgia, serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .memory-container {
+            position: relative;
+            width: 90vw;
+            max-width: 1200px;
+            height: 80vh;
+        }
+
+        .photograph {
+            position: absolute;
+            left: 15%;
+            top: 20%;
+            width: 480px;
+            height: 320px;
+            background-image: url('data:image/jpeg;base64,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');
+            background-size: cover;
+            background-position: center;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .photograph::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 0%, rgba(26, 26, 26, 0.2) 100%);
+            opacity: 0;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .photograph:hover::before {
+            opacity: 1;
+        }
+
+        .text-fragment {
+            position: absolute;
+            color: var(--accent);
+            font-size: 18px;
+            line-height: 1.6;
+            opacity: 0;
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fragment-1 {
+            right: 20%;
+            top: 25%;
+            max-width: 280px;
+            text-align: left;
+        }
+
+        .fragment-2 {
+            left: 20%;
+            bottom: 15%;
+            max-width: 320px;
+            font-size: 16px;
+            color: var(--fade);
+        }
+
+        .photograph:hover ~ .text-fragment,
+        .text-fragment:hover {
+            opacity: 1;
+        }
+
+        .time-marker {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            color: var(--accent);
+            font-size: 14px;
+            opacity: 0.4;
+            letter-spacing: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .photograph {
+                left: 10%;
+                top: 15%;
+                width: 80%;
+                height: auto;
+                aspect-ratio: 3/2;
+            }
+
+            .fragment-1 {
+                right: 10%;
+                top: auto;
+                bottom: 25%;
+            }
+
+            .fragment-2 {
+                left: 10%;
+                bottom: 10%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="memory-container">
+        <div class="photograph"></div>
+        
+        <div class="text-fragment fragment-1">
+            The edges blur where memory meets imagination. Each glance erodes another detail, replacing substance with suggestion.
+        </div>
+        
+        <div class="text-fragment fragment-2">
+            Time doesn't preserve; it selects. What remains is not truth but the story we've chosen to remember.
+        </div>
+        
+        <div class="time-marker">1987—2024</div>
+    </div>
+</body>
+</html>

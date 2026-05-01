@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Message Composer</title>
+    <style>
+        :root {
+            --void: #0a0a0c;
+            --lunar-surface: #1a1a1f;
+            --crater-shadow: #131316;
+            --moon-glow: #e8e3d3;
+            --text-light: rgba(232, 227, 211, 0.9);
+            --text-dim: rgba(232, 227, 211, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--void);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .cosmos {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #0f0f14 0%, var(--void) 70%);
+            z-index: -1;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3rem;
+        }
+
+        .moon-composer {
+            position: relative;
+            width: min(80vw, 400px);
+            height: min(80vw, 400px);
+        }
+
+        .moon {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--lunar-surface);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                inset -40px -40px 80px var(--crater-shadow),
+                inset 20px 20px 60px rgba(232, 227, 211, 0.02);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .moon.active {
+            background: radial-gradient(circle at 30% 30%, var(--moon-glow), var(--lunar-surface));
+            box-shadow: 
+                0 0 60px rgba(232, 227, 211, 0.2),
+                inset -20px -20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .craters {
+            position: absolute;
+            inset: 0;
+            opacity: 0.5;
+            transition: opacity 0.6s ease;
+        }
+
+        .moon.active .craters {
+            opacity: 0.2;
+        }
+
+        .crater {
+            position: absolute;
+            border-radius: 50%;
+            background: var(--crater-shadow);
+            box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .crater:nth-child(1) {
+            width: 20%;
+            height: 20%;
+            top: 15%;
+            left: 30%;
+        }
+
+        .crater:nth-child(2) {
+            width: 10%;
+            height: 10%;
+            top: 50%;
+            left: 20%;
+        }
+
+        .crater:nth-child(3) {
+            width: 15%;
+            height: 15%;
+            bottom: 20%;
+            right: 25%;
+        }
+
+        .message-input {
+            position: absolute;
+            inset: 15%;
+            background: none;
+            border: none;
+            color: var(--text-light);
+            font-size: clamp(14px, 3vw, 16px);
+            line-height: 1.6;
+            letter-spacing: 0.02em;
+            resize: none;
+            outline: none;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+            font-family: inherit;
+        }
+
+        .message-input:focus {
+            opacity: 1;
+        }
+
+        .message-input::placeholder {
+            color: var(--text-dim);
+            text-align: center;
+        }
+
+        .phase-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            color: var(--text-dim);
+        }
+
+        .phase-label {
+            font-size: clamp(12px, 2vw, 14px);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .phase-indicators {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .phase-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--crater-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .phase-dot.active {
+            background: var(--moon-glow);
+            box-shadow: 0 0 10px var(--moon-glow);
+        }
+
+        .send-button {
+            background: var(--lunar-surface);
+            border: 1px solid rgba(232, 227, 211, 0.1);
+            color: var(--text-dim);
+            padding: 0.8rem 2rem;
+            font-size: clamp(13px, 2vw, 14px);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 2rem;
+            font-family: inherit;
+        }
+
+        .send-button:hover {
+            background: rgba(232, 227, 211, 0.1);
+            color: var(--text-light);
+            border-color: rgba(232, 227, 211, 0.3);
+        }
+
+        .send-button:active {
+            transform: scale(0.98);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                gap: 2rem;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cosmos"></div>
+    
+    <div class="container">
+        <div class="phase-display">
+            <span class="phase-label">Message Phase</span>
+            <div class="phase-indicators">
+                <div class="phase-dot" data-phase="1"></div>
+                <div class="phase-dot" data-phase="2"></div>
+                <div class="phase-dot" data-phase="3"></div>
+                <div class="phase-dot" data-phase="4"></div>
+                <div class="phase-dot" data-phase="5"></div>
+            </div>
+        </div>
+
+        <div class="moon-composer">
+            <div class="moon" id="moon">
+                <div class="craters">
+                    <div class="crater"></div>
+                    <div class="crater"></div>
+                    <div class="crater"></div>
+                </div>
+                <textarea 
+                    class="message-input" 
+                    id="messageInput"
+                    placeholder="Write your message to the cosmos..."
+                    maxlength="200"
+                ></textarea>
+            </div>
+        </div>
+
+        <button class="send-button" id="sendButton">Send to Space</button>
+    </div>
+
+    <script>
+        const moon = document.getElementById('moon');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const phaseDots = document.querySelectorAll('.phase-dot');
+
+        messageInput.addEventListener('input', (e) => {
+            const length = e.target.value.length;
+            const maxLength = 200;
+            const progress = length / maxLength;
+            
+            if (length > 0) {
+                moon.classList.add('active');
+            } else {
+                moon.classList.remove('active');
+            }
+            
+            const activePhases = Math.ceil(progress * 5);
+            phaseDots.forEach((dot, index) => {
+                if (index < activePhases) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+        });
+
+        sendButton.addEventListener('click', () => {
+            if (messageInput.value.trim()) {
+                moon.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    moon.style.transform = 'scale(1)';
+                    messageInput.value = '';
+                    moon.classList.remove('active');
+                    phaseDots.forEach(dot => dot.classList.remove('active'));
+                }, 300);
+            }
+        });
+
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendButton.click();
+            }
+        });
+    </script>
+</body>
+</html>

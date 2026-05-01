@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Forensics Lab</title>
+    <style>
+        :root {
+            --excavation-dark: #0a0e1a;
+            --sediment-1: #1a1f2e;
+            --sediment-2: #252b3d;
+            --sediment-3: #30374c;
+            --fragment-warm: #ff6b4a;
+            --fragment-cold: #4a9eff;
+            --corruption-purple: #9d4edd;
+            --data-green: #00ff88;
+            --artifact-gold: #ffd700;
+            --cascade-red: #ff3366;
+            --brush-cursor: rgba(255, 255, 255, 0.1);
+            --grid-lines: rgba(74, 158, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--excavation-dark);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: none;
+        }
+
+        .excavation-tool {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease-out;
+        }
+
+        .tool-brush {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, var(--brush-cursor) 0%, transparent 70%);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            animation: toolPulse 2s infinite;
+        }
+
+        @keyframes toolPulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .dig-site {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, 
+                var(--excavation-dark) 0%, 
+                var(--sediment-1) 30%, 
+                var(--sediment-2) 60%, 
+                var(--sediment-3) 100%);
+        }
+
+        .timeline-layers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sediment-layer {
+            flex: 1;
+            position: relative;
+            border-top: 1px solid var(--grid-lines);
+            overflow: hidden;
+        }
+
+        .layer-indicator {
+            position: absolute;
+            left: 20px;
+            top: 10px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .memory-fragment {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .memory-fragment:hover {
+            transform: translateY(-2px);
+        }
+
+        .memory-fragment.dragging {
+            cursor: grabbing;
+            z-index: 1000;
+            transition: none;
+        }
+
+        .fragment-core {
+            width: 80px;
+            height: 80px;
+            position: relative;
+            transform: rotate(var(--rotation));
+        }
+
+        .fragment-crystal {
+            width: 100%;
+            height: 100%;
+            background: conic-gradient(
+                from var(--gradient-angle) at 50% 50%,
+                var(--fragment-warm) 0deg,
+                var(--fragment-cold) 90deg,
+                var(--corruption-purple) 180deg,
+                var(--fragment-warm) 360deg
+            );
+            clip-path: polygon(50% 0%, 80% 20%, 100% 50%, 80% 80%, 50% 100%, 20% 80%, 0% 50%, 20% 20%);
+            animation: temperatureShift 4s infinite alternate;
+            filter: drop-shadow(0 0 20px currentColor);
+        }
+
+        @keyframes temperatureShift {
+            0% { filter: hue-rotate(0deg) brightness(1) drop-shadow(0 0 20px var(--fragment-warm)); }
+            100% { filter: hue-rotate(180deg) brightness(1.2) drop-shadow(0 0 30px var(--fragment-cold)); }
+        }
+
+        .fragment-data {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+        }
+
+        .glitch-pixel {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--data-green);
+            animation: pixelGlitch 0.5s infinite alternate;
+        }
+
+        @keyframes pixelGlitch {
+            0% { opacity: 0; transform: translate(0, 0); }
+            100% { opacity: 1; transform: translate(var(--glitch-x), var(--glitch-y)); }
+        }
+
+        .buried-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: radial-gradient(circle at center, transparent 30%, var(--sediment-2) 80%);
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-fragment.excavated .buried-overlay {
+            opacity: 0;
+        }
+
+        .magnetic-field {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .memory-fragment.attracting .magnetic-field {
+            opacity: 1;
+            animation: magnetPulse 1s infinite;
+        }
+
+        @keyframes magnetPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+            50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.1; }
+        }
+
+        .magnetic-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--data-green);
+            border-radius: 50%;
+            animation: ringExpand 2s infinite;
+        }
+
+        @keyframes ringExpand {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .reconstruction-zone {
+            position: fixed;
+            top: 50px;
+            right: 50px;
+            width: 400px;
+            height: 300px;
+            background: rgba(26, 31, 46, 0.8);
+            border: 1px solid var(--grid-lines);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+        }
+
+        .zone-title {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 20px;
+        }
+
+        .memory-canvas {
+            width: 100%;
+            height: calc(100% - 40px);
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--grid-lines);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .assembled-memory {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        .assembled-memory.complete {
+            opacity: 1;
+        }
+
+        .cascade-warning {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--cascade-red);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 10px 40px rgba(255, 51, 102, 0.4);
+        }
+
+        .cascade-warning.active {
+            opacity: 1;
+            animation: warningShake 0.5s;
+        }
+
+        @keyframes warningShake {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            25% { transform: translateX(-52%) translateY(-2px); }
+            75% { transform: translateX(-48%) translateY(2px); }
+        }
+
+        .depth-indicator {
+            position: fixed;
+            left: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 400px;
+        }
+
+        .depth-scale {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, 
+                rgba(74, 158, 255, 0.1) 0%, 
+                rgba(74, 158, 255, 0.3) 100%);
+            border: 1px solid var(--grid-lines);
+            position: relative;
+        }
+
+        .depth-marker {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: var(--artifact-gold);
+            left: 0;
+            transition: top 0.3s ease;
+            box-shadow: 0 0 10px var(--artifact-gold);
+        }
+
+        .depth-label {
+            position: absolute;
+            right: -50px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: var(--artifact-gold);
+            white-space: nowrap;
+        }
+
+        .fragment-1 { --rotation: 15deg; --gradient-angle: 45deg; --glitch-x: 2px; --glitch-y: -2px; }
+        .fragment-2 { --rotation: -30deg; --gradient-angle: 120deg; --glitch-x: -3px; --glitch-y: 1px; }
+        .fragment-3 { --rotation: 60deg; --gradient-angle: 200deg; --glitch-x: 1px; --glitch-y: 3px; }
+        .fragment-4 { --rotation: -45deg; --gradient-angle: 270deg; --glitch-x: -2px; --glitch-y: -1px; }
+        .fragment-5 { --rotation: 90deg; --gradient-angle: 315deg; --glitch-x: 3px; --glitch-y: 2px; }
+    </style>
+</head>
+<body>
+    <div class="excavation-tool">
+        <div class="tool-brush"></div>
+    </div>
+
+    <div class="dig-site">
+        <div class="timeline-layers">
+            <div class="sediment-layer" data-depth="0">
+                <span class="layer-indicator">Surface Memories</span>
+                <div class="memory-fragment fragment-1" style="left: 200px; top: 50px;">
+                    <div class="fragment-core">
+                        <div class="fragment-crystal"></div>
+                        <div class="fragment-data">
+                            <div class="glitch-pixel" style="top: 20%; left: 30%;"></div>
+                            <div class="glitch-pixel" style="top: 50%; left: 60%;"></div>
+                            <div class="glitch-pixel" style="top: 80%; left: 40%;"></div>
+                        </div>
+                        <div class="buried-overlay"></div>
+                    </div>
+                    <div class="magnetic-field">
+                        <div class="magnetic-ring"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sediment-layer" data-depth="1">
+                <span class="layer-indicator">Recent Past</span>
+                <div class="memory-fragment fragment-2" style="left: 500px; top: 80px;">
+                    <div class="fragment-core">
+                        <div class="fragment-crystal"></div>
+                        <div class="fragment-data">
+                            <div class="glitch-pixel" style="top: 10%; left: 50%;"></div>
+                            <div class="glitch-pixel" style="top: 70%; left: 20%;"></div>
+                            <div class="glitch-pixel" style="top: 40%; left: 80%;"></div>
+                        </div>
+                        <div class="buried-overlay"></div>
+                    </div>
+                    <div class="magnetic-field">
+                        <div class="magnetic-ring"></div>
+                    </div>
+                </div>
+                <div class="memory-fragment fragment-3" style="left: 800px; top: 60px;">
+                    <div class="fragment-core">
+                        <div class="fragment-crystal"></div>
+                        <div class="fragment-data">
+                            <div class="glitch-pixel" style="top: 30%; left: 10%;"></div>
+                            <div class="glitch-pixel" style="top: 60%; left: 70%;"></div>
+                            <div class="glitch-pixel" style="top: 90%; left: 50%;"></div>
+                        </div>
+                        <div class="buried-overlay"></div>
+                    </div>
+                    <div class="magnetic-field">
+                        <div class="magnetic-ring"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sediment-layer" data-depth="2">
+                <span class="layer-indicator">Deep Archives</span>
+                <div class="memory-fragment fragment-4" style="left: 350px; top: 40px;">
+                    <div class="fragment-core">
+                        <div class="fragment-crystal"></div>
+                        <div class="fragment-data">
+                            <div class="glitch-pixel" style="top: 25%; left: 45%;"></div>
+                            <div class="glitch-pixel" style="top: 55%; left: 15%;"></div>
+                            <div class="glitch-pixel" style="top: 85%; left: 75%;"></div>
+                        </div>
+                        <div class="buried-overlay"></div>
+                    </div>
+                    <div class="magnetic-field">
+                        <div class="magnetic-ring"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sediment-layer" data-depth="3">
+                <span class="layer-indicator">Core Formation</span>
+                <div class="memory-fragment fragment-5" style="left: 600px; top: 50px;">
+                    <div class="fragment-core">
+                        <div class="fragment-crystal"></div>
+                        <div class="fragment-data">
+                            <div class="glitch-pixel" style="top: 15%; left: 25%;"></div>
+                            <div class="glitch-pixel" style="top: 45%; left: 55%;"></div>
+                            <div class="glitch-pixel" style="top: 75%; left: 35%;"></div>
+                        </div>
+                        <div class="buried-overlay"></div>
+                    </div>
+                    <div class="magnetic-field">
+                        <div class="magnetic-ring"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="reconstruction-zone">
+        <div class="zone-title">Reconstruction Chamber</div>
+        <div class="memory-canvas">
+            <div class="assembled-memory"></div>
+        </div>
+    </div>
+
+    <div class="depth-indicator">
+        <div class="depth-scale">
+            <div class="depth-marker" style="top: 10%;">
+                <span class="depth-label">0.2m</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="cascade-warning">
+        DATA CASCADE IMMINENT - EXTRACTION TOO AGGRESSIVE
+    </div>
+
+    <script>
+        const tool = document.querySelector('.excavation-tool');
+        const fragments = document.querySelectorAll('.memory-fragment');
+        const cascadeWarning = document.querySelector('.cascade-warning');
+        let isDragging = false;
+        let currentFragment = null;
+        let excavationSpeed = 0;
+        let lastMousePos = { x: 0, y: 0 };
+
+        document.addEventListener('mousemove', (e) => {
+            tool.style.left = e.clientX + 'px';
+            tool.style.top = e.clientY + 'px';
+            
+            const speed = Math.sqrt(
+                Math.pow(e.clientX - lastMousePos.x, 2) + 
+                Math.pow(e.clientY - lastMousePos.y, 2)
+            );
+            excavationSpeed = speed;
+            lastMousePos = { x: e.clientX, y: e.clientY };
+
+            if (excavationSpeed > 20) {
+                cascadeWarning.classList.add('active');
+                setTimeout(() => cascadeWarning.classList.remove('active'), 2000);
+            }
+        });
+
+        fragments.forEach(fragment => {
+            fragment.addEventListener('mouseenter', () => {
+                if (excavationSpeed < 10) {
+                    fragment.classList.add('excavated');
+                }
+            });
+
+            fragment.addEventListener('mousedown', (e) => {
+                if (fragment.classList.contains('excavated')) {
+                    isDragging = true;
+                    currentFragment = fragment;
+                    fragment.classList.add('dragging');
+                }
+            });
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (currentFragment) {
+                currentFragment.classList.remove('dragging');
+                checkMagneticAttraction(currentFragment);
+            }
+            isDragging = false;
+            currentFragment = null;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && currentFragment) {
+                currentFragment.style.left = (e.clientX - 40) + 'px';
+                currentFragment.style.top = (e.clientY - 40) + 'px';
+            }
+        });
+
+        function checkMagneticAttraction(fragment) {
+            fragments.forEach(other => {
+                if (other !== fragment && other.classList.contains('excavated')) {
+                    const rect1 = fragment.getBoundingClientRect();
+                    const rect2 = other.getBoundingClientRect();
+                    const distance = Math.sqrt(
+                        Math.pow(rect1.left - rect2.left, 2) + 
+                        Math.pow(rect1.top - rect2.top, 2)
+                    );
+                    
+                    if (distance < 150) {
+                        fragment.classList.add('attracting');
+                        other.classList.add('attracting');
+                        setTimeout(() => {
+                            fragment.classList.remove('attracting');
+                            other.classList.remove('attracting');
+                        }, 1000);
+                    }
+                }
+            });
+        }
+
+        const depthMarker = document.querySelector('.depth-marker');
+        document.addEventListener('scroll', (e) => {
+            const scrollPercent = window.scrollY / (document.body.scrollHeight - window.innerHeight);
+            depthMarker.style.top = (10 + scrollPercent * 80) + '%';
+        });
+    </script>
+</body>
+</html>

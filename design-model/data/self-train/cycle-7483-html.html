@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Archaeology</title>
+    <style>
+        :root {
+            --strata-base: #1a0f0a;
+            --rem-layer-1: #3d2817;
+            --rem-layer-2: #2a3d4a;
+            --rem-layer-3: #1f2937;
+            --nightmare-crust: #0f0607;
+            --crystal-deep: #0a1628;
+            --fragment-glow: #f59e0b;
+            --fragment-pulse: #dc2626;
+            --tool-metal: #94a3b8;
+            --dust-particle: #fbbf24;
+            --scan-line: #10b981;
+            --warning: #ef4444;
+            --text-main: #e5e7eb;
+            --text-dim: #6b7280;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--strata-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            cursor: crosshair;
+        }
+
+        .excavation-site {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+        }
+
+        .strata-viewer {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, var(--strata-base) 0%, var(--crystal-deep) 100%);
+        }
+
+        .geological-layer {
+            position: absolute;
+            width: 100%;
+            transform-origin: center;
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .layer-rem-1 {
+            height: 180px;
+            top: 120px;
+            background: 
+                repeating-linear-gradient(
+                    90deg,
+                    var(--rem-layer-1) 0px,
+                    var(--rem-layer-1) 3px,
+                    transparent 3px,
+                    transparent 8px
+                ),
+                linear-gradient(180deg, rgba(61, 40, 23, 0.9) 0%, rgba(61, 40, 23, 0.6) 100%);
+            clip-path: polygon(
+                0% 0%,
+                100% 0%,
+                100% 85%,
+                95% 90%,
+                90% 88%,
+                85% 91%,
+                80% 89%,
+                75% 92%,
+                70% 90%,
+                65% 93%,
+                60% 91%,
+                55% 94%,
+                50% 92%,
+                45% 95%,
+                40% 93%,
+                35% 96%,
+                30% 94%,
+                25% 97%,
+                20% 95%,
+                15% 98%,
+                10% 96%,
+                5% 99%,
+                0% 97%
+            );
+        }
+
+        .layer-rem-2 {
+            height: 160px;
+            top: 280px;
+            background: 
+                repeating-linear-gradient(
+                    45deg,
+                    var(--rem-layer-2) 0px,
+                    var(--rem-layer-2) 2px,
+                    transparent 2px,
+                    transparent 12px
+                ),
+                linear-gradient(180deg, rgba(42, 61, 74, 0.8) 0%, rgba(42, 61, 74, 0.5) 100%);
+            clip-path: polygon(
+                0% 5%,
+                5% 2%,
+                10% 4%,
+                15% 1%,
+                20% 3%,
+                25% 0%,
+                30% 2%,
+                35% 1%,
+                40% 3%,
+                45% 0%,
+                50% 2%,
+                55% 1%,
+                60% 3%,
+                65% 0%,
+                70% 2%,
+                75% 1%,
+                80% 3%,
+                85% 0%,
+                90% 2%,
+                95% 1%,
+                100% 3%,
+                100% 88%,
+                95% 91%,
+                90% 89%,
+                85% 92%,
+                80% 90%,
+                75% 93%,
+                70% 91%,
+                65% 94%,
+                60% 92%,
+                55% 95%,
+                50% 93%,
+                45% 96%,
+                40% 94%,
+                35% 97%,
+                30% 95%,
+                25% 98%,
+                20% 96%,
+                15% 99%,
+                10% 97%,
+                5% 100%,
+                0% 98%
+            );
+        }
+
+        .layer-nightmare {
+            height: 140px;
+            top: 420px;
+            background: 
+                repeating-linear-gradient(
+                    -45deg,
+                    var(--nightmare-crust) 0px,
+                    var(--nightmare-crust) 4px,
+                    transparent 4px,
+                    transparent 10px
+                ),
+                radial-gradient(ellipse at 20% 50%, rgba(15, 6, 7, 0.9), transparent 40%),
+                radial-gradient(ellipse at 70% 30%, rgba(15, 6, 7, 0.8), transparent 50%),
+                linear-gradient(180deg, rgba(15, 6, 7, 0.95) 0%, rgba(15, 6, 7, 0.7) 100%);
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8));
+        }
+
+        .layer-crystal {
+            height: 200px;
+            top: 540px;
+            background: 
+                conic-gradient(from 45deg at 30% 30%, var(--crystal-deep), transparent, var(--crystal-deep)),
+                conic-gradient(from 225deg at 70% 70%, var(--crystal-deep), transparent, var(--crystal-deep)),
+                linear-gradient(180deg, rgba(10, 22, 40, 0.3) 0%, rgba(10, 22, 40, 0.9) 100%);
+            clip-path: polygon(
+                0% 10%,
+                8% 0%,
+                16% 12%,
+                24% 2%,
+                32% 14%,
+                40% 4%,
+                48% 16%,
+                56% 6%,
+                64% 18%,
+                72% 8%,
+                80% 20%,
+                88% 10%,
+                96% 22%,
+                100% 12%,
+                100% 100%,
+                0% 100%
+            );
+        }
+
+        .excavation-hole {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 30%, rgba(0, 0, 0, 0.8) 70%);
+            filter: blur(2px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .excavation-hole.active {
+            opacity: 1;
+        }
+
+        .memory-fragment {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            opacity: 0;
+            transform: scale(0.8) rotate(0deg);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .memory-fragment.discovered {
+            opacity: 1;
+            transform: scale(1) rotate(360deg);
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { filter: brightness(1) drop-shadow(0 0 10px var(--fragment-glow)); }
+            50% { filter: brightness(1.3) drop-shadow(0 0 20px var(--fragment-glow)); }
+        }
+
+        .fragment-type-emotion {
+            background: radial-gradient(circle, var(--fragment-glow), transparent);
+            border-radius: 50%;
+        }
+
+        .fragment-type-memory {
+            background: conic-gradient(var(--fragment-pulse), var(--fragment-glow), var(--fragment-pulse));
+            clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+        }
+
+        .fragment-type-thought {
+            background: linear-gradient(45deg, var(--fragment-glow), var(--fragment-pulse));
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+        }
+
+        .dream-dust {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--dust-particle);
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .dream-dust.floating {
+            animation: float-away 2s ease-out forwards;
+        }
+
+        @keyframes float-away {
+            0% { 
+                opacity: 0.8;
+                transform: translate(0, 0) scale(1);
+            }
+            100% { 
+                opacity: 0;
+                transform: translate(var(--drift-x), -100px) scale(0.5);
+            }
+        }
+
+        .tool-panel {
+            width: 280px;
+            background: rgba(26, 15, 10, 0.95);
+            border-left: 1px solid rgba(148, 163, 184, 0.1);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .tool-header {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .tool {
+            aspect-ratio: 1;
+            background: rgba(148, 163, 184, 0.05);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tool:hover {
+            background: rgba(148, 163, 184, 0.1);
+            border-color: rgba(148, 163, 184, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .tool.active {
+            background: rgba(148, 163, 184, 0.2);
+            border-color: var(--tool-metal);
+            box-shadow: 0 0 20px rgba(148, 163, 184, 0.2);
+        }
+
+        .tool-icon {
+            width: 32px;
+            height: 32px;
+            position: relative;
+        }
+
+        .brush-icon {
+            background: linear-gradient(180deg, var(--tool-metal) 0%, var(--tool-metal) 60%, #4b5563 60%, #4b5563 100%);
+            width: 6px;
+            height: 32px;
+            margin: 0 auto;
+            border-radius: 3px 3px 1px 1px;
+        }
+
+        .hammer-icon {
+            background: var(--tool-metal);
+            width: 24px;
+            height: 8px;
+            margin: 12px auto;
+            position: relative;
+            border-radius: 2px;
+        }
+
+        .hammer-icon::after {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 12px;
+            background: #4b5563;
+            border-radius: 0 0 2px 2px;
+        }
+
+        .scanner-icon {
+            border: 2px solid var(--tool-metal);
+            width: 24px;
+            height: 24px;
+            margin: 4px auto;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scanner-icon::after {
+            content: '';
+            position: absolute;
+            top: -100%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--scan-line);
+            animation: scan 2s infinite;
+        }
+
+        @keyframes scan {
+            to { top: 100%; }
+        }
+
+        .tool-name {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .depth-indicator {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .depth-meter {
+            height: 120px;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .depth-marker {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: var(--warning);
+            top: 20%;
+            animation: depth-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes depth-pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .depth-labels {
+            position: absolute;
+            right: 8px;
+            top: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 9px;
+            color: var(--text-dim);
+            padding: 8px 0;
+        }
+
+        .integrity-warning {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+            padding: 12px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--warning);
+            display: none;
+        }
+
+        .integrity-warning.active {
+            display: block;
+            animation: warning-flash 0.5s;
+        }
+
+        @keyframes warning-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .crack {
+            position: absolute;
+            width: 2px;
+            height: 0;
+            background: var(--warning);
+            transform-origin: top;
+            opacity: 0;
+            transition: all 0.5s;
+        }
+
+        .crack.spreading {
+            height: 100px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="excavation-site">
+        <div class="strata-viewer" id="strataViewer">
+            <div class="geological-layer layer-rem-1" data-layer="1">
+                <div class="memory-fragment fragment-type-emotion" style="left: 30%; top: 40%;"></div>
+                <div class="memory-fragment fragment-type-memory" style="left: 70%; top: 60%;"></div>
+            </div>
+            <div class="geological-layer layer-rem-2" data-layer="2">
+                <div class="memory-fragment fragment-type-thought" style="left: 20%; top: 30%;"></div>
+                <div class="memory-fragment fragment-type-emotion" style="left: 80%; top: 70%;"></div>
+                <div class="memory-fragment fragment-type-memory" style="left: 50%; top: 50%;"></div>
+            </div>
+            <div class="geological-layer layer-nightmare" data-layer="3">
+                <div class="memory-fragment fragment-type-thought" style="left: 40%; top: 40%;"></div>
+            </div>
+            <div class="geological-layer layer-crystal" data-layer="4">
+                <div class="memory-fragment fragment-type-memory" style="left: 25%; top: 20%;"></div>
+                <div class="memory-fragment fragment-type-emotion" style="left: 65%; top: 60%;"></div>
+                <div class="memory-fragment fragment-type-thought" style="left: 45%; top: 80%;"></div>
+            </div>
+        </div>
+        
+        <div class="tool-panel">
+            <div>
+                <div class="tool-header">Excavation Tools</div>
+                <div class="tool-grid">
+                    <div class="tool active" data-tool="brush">
+                        <div class="tool-icon brush-icon"></div>
+                        <div class="tool-name">Brush</div>
+                    </div>
+                    <div class="tool" data-tool="hammer">
+                        <div class="tool-icon hammer-icon"></div>
+                        <div class="tool-name">Sonic</div>
+                    </div>
+                    <div class="tool" data-tool="scanner">
+                        <div class="tool-icon scanner-icon"></div>
+                        <div class="tool-name">Scanner</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="depth-indicator">
+                <div class="tool-header">Depth Analysis</div>
+                <div class="depth-meter">
+                    <div class="depth-marker"></div>
+                    <div class="depth-labels">
+                        <span>REM 1</span>
+                        <span>REM 2</span>
+                        <span>NIGHTMARE</span>
+                        <span>CRYSTAL</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="integrity-warning" id="integrityWarning">
+                STRUCTURAL INTEGRITY COMPROMISED
+                <br>Excessive force detected. Risk of data collapse.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTool = 'brush';
+        let excavationDepth = 0;
+        let structuralIntegrity = 100;
+        
+        document.querySelectorAll('.tool').forEach(tool => {
+            tool.addEventListener('click', function() {
+                document.querySelector('.tool.active').classList.remove('active');
+                this.classList.add('active');
+                currentTool = this.dataset.tool;
+                document.body.style.cursor = currentTool === 'scanner' ? 'crosshair' : 'pointer';
+            });
+        });
+        
+        const strataViewer = document.getElementById('strataViewer');
+        let isExcavating = false;
+        
+        strataViewer.addEventListener('mousedown', () => isExcavating = true);
+        strataViewer.addEventListener('mouseup', () => isExcavating = false);
+        strataViewer.addEventListener('mouseleave', () => isExcavating = false);
+        
+        strataViewer.addEventListener('mousemove', (e) => {
+            if (!isExcavating) return;
+            
+            const rect = strataViewer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (currentTool === 'brush') {
+                excavateWithBrush(x, y);
+            } else if (currentTool === 'hammer') {
+                excavateWithHammer(x, y);
+            }
+        });
+        
+        strataViewer.addEventListener('click', (e) => {
+            if (currentTool === 'scanner') {
+                const rect = strataViewer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                scanArea(x, y);
+            }
+        });
+        
+        function excavateWithBrush(x, y) {
+            createDustParticles(x, y, 3);
+            
+            const hole = createExcavationHole(x, y, 40);
+            setTimeout(() => hole.remove(), 1000);
+            
+            checkForFragments(x, y, 40);
+            
+            excavationDepth += 0.1;
+            updateDepthMarker();
+        }
+        
+        function excavateWithHammer(x, y) {
+            createDustParticles(x, y, 10);
+            
+            const hole = createExcavationHole(x, y, 80);
+            setTimeout(() => hole.remove(), 1000);
+            
+            checkForFragments(x, y, 80);
+            
+            excavationDepth += 0.5;
+            structuralIntegrity -= 2;
+            updateDepthMarker();
+            
+            if (structuralIntegrity < 80) {
+                document.getElementById('integrityWarning').classList.add('active');
+                createCrack(x, y);
+            }
+            
+            if (Math.random() < 0.1) {
+                shakeLayer(y);
+            }
+        }
+        
+        function scanArea(x, y) {
+            const scanRadius = 100;
+            const fragments = document.querySelectorAll('.memory-fragment:not(.discovered)');
+            
+            fragments.forEach(fragment => {
+                const rect = fragment.getBoundingClientRect();
+                const fragX = rect.left + rect.width / 2 - strataViewer.getBoundingClientRect().left;
+                const fragY = rect.top + rect.height / 2 - strataViewer.getBoundingClientRect().top;
+                
+                const distance = Math.sqrt(Math.pow(x - fragX, 2) + Math.pow(y - fragY, 2));
+                
+                if (distance < scanRadius) {
+                    fragment.style.animation = 'pulse-glow 0.5s';
+                    setTimeout(() => fragment.style.animation = '', 500);
+                }
+            });
+        }
+        
+        function createExcavationHole(x, y, size) {
+            const hole = document.createElement('div');
+            hole.className = 'excavation-hole active';
+            hole.style.left = (x - size/2) + 'px';
+            hole.style.top = (y - size/2) + 'px';
+            hole.style.width = size + 'px';
+            hole.style.height = size + 'px';
+            strataViewer.appendChild(hole);
+            return hole;
+        }
+        
+        function createDustParticles(x, y, count) {
+            for (let i = 0; i < count; i++) {
+                const dust = document.createElement('div');
+                dust.className = 'dream-dust floating';
+                dust.style.left = (x + (Math.random() - 0.5) * 20) + 'px';
+                dust.style.top = (y + (Math.random() - 0.5) * 20) + 'px';
+                dust.style.setProperty('--drift-x', (Math.random() - 0.5) * 100 + 'px');
+                strataViewer.appendChild(dust);
+                setTimeout(() => dust.remove(), 2000);
+            }
+        }
+        
+        function checkForFragments(x, y, radius) {
+            const fragments = document.querySelectorAll('.memory-fragment:not(.discovered)');
+            
+            fragments.forEach(fragment => {
+                const rect = fragment.getBoundingClientRect();
+                const fragX = rect.left + rect.width / 2 - strataViewer.getBoundingClientRect().left;
+                const fragY = rect.top + rect.height / 2 - strataViewer.getBoundingClientRect().top;
+                
+                const distance = Math.sqrt(Math.pow(x - fragX, 2) + Math.pow(y - fragY, 2));
+                
+                if (distance < radius) {
+                    fragment.classList.add('discovered');
+                }
+            });
+        }
+        
+        function updateDepthMarker() {
+            const marker = document.querySelector('.depth-marker');
+            const depth = Math.min(excavationDepth * 2, 80);
+            marker.style.top = (20 + depth) + '%';
+        }
+        
+        function shakeLayer(y) {
+            const layers = document.querySelectorAll('.geological-layer');
+            layers.forEach(layer => {
+                const rect = layer.getBoundingClientRect();
+                if (y >= rect.top && y <= rect.bottom) {
+                    layer.style.transform = 'translateX(5px)';
+                    setTimeout(() => {
+                        layer.style.transform = 'translateX(-5px)';
+                        setTimeout(() => {
+                            layer.style.transform = 'translateX(0)';
+                        }, 100);
+                    }, 100);
+                }
+            });
+        }
+        
+        function createCrack(x, y) {
+            const crack = document.createElement('div');
+            crack.className = 'crack';
+            crack.style.left = x + 'px';
+            crack.style.top = y + 'px';
+            crack.style.transform = `rotate(${Math.random() * 60 - 30}deg)`;
+            strataViewer.appendChild(crack);
+            
+            setTimeout(() => {
+                crack.classList.add('spreading');
+            }, 100);
+        }
+    </script>
+</body>
+</html>

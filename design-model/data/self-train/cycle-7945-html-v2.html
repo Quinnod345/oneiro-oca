@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Transplant Clinic</title>
+    <style>
+        :root {
+            --bg-primary: #0a0408;
+            --bg-secondary: #1a0f17;
+            --accent-primary: #8a4f7d;
+            --accent-success: #87ffa9;
+            --accent-warning: #ffa987;
+            --text-primary: #e8e8e8;
+            --text-secondary: #8a8a8a;
+            --border-color: #2d1626;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .clinic-interface {
+            width: 100%;
+            max-width: 1440px;
+            height: 100vh;
+            max-height: 900px;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 80px 1fr 100px;
+            gap: 1px;
+            background: var(--border-color);
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+        }
+
+        .clinic-title {
+            font-size: 16px;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+        }
+
+        .patient-status {
+            display: flex;
+            gap: 30px;
+            font-size: 13px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-success);
+        }
+
+        .donor-panel, .recipient-panel {
+            background: var(--bg-secondary);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .memory-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .memory-item {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            border: 1px solid transparent;
+        }
+
+        .memory-item:hover {
+            border-color: var(--accent-primary);
+            transform: translateX(5px);
+        }
+
+        .memory-item.selected {
+            border-color: var(--accent-warning);
+            background: rgba(138, 79, 125, 0.1);
+        }
+
+        .memory-title {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .memory-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 15px;
+        }
+
+        .surgical-workspace {
+            background: var(--bg-primary);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .procedure-diagram {
+            width: 400px;
+            height: 400px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .transfer-visualization {
+            position: absolute;
+            width: 300px;
+            height: 2px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                var(--accent-primary) 50%, 
+                transparent 100%);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .transfer-visualization.active {
+            opacity: 1;
+            animation: transfer-flow 2s linear infinite;
+        }
+
+        @keyframes transfer-flow {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .extraction-node, .implantation-node {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            background: var(--bg-secondary);
+            transition: var(--transition);
+        }
+
+        .extraction-node {
+            left: 0;
+        }
+
+        .implantation-node {
+            right: 0;
+        }
+
+        .extraction-node.active, .implantation-node.active {
+            border-color: var(--accent-warning);
+            box-shadow: 0 0 20px rgba(255, 169, 135, 0.3);
+        }
+
+        .node-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+
+        .control-panel {
+            grid-column: 1 / -1;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            padding: 0 40px;
+        }
+
+        .control-button {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px 30px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: var(--transition);
+            border-radius: 4px;
+        }
+
+        .control-button:hover:not(:disabled) {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .control-button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .control-button.primary {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .control-button.primary:hover:not(:disabled) {
+            background: var(--accent-warning);
+            border-color: var(--accent-warning);
+        }
+
+        .compatibility-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .compatibility-value {
+            font-weight: 500;
+            color: var(--accent-success);
+        }
+
+        .progress-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 4, 8, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .progress-overlay.active {
+            display: flex;
+        }
+
+        .progress-content {
+            text-align: center;
+        }
+
+        .progress-spinner {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-warning);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="clinic-interface">
+        <header class="header">
+            <h1 class="clinic-title">Memory Transplant Interface v2.3</h1>
+            <div class="patient-status">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Donor: Stable</span>
+                </div>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Recipient: Ready</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="donor-panel">
+            <h2 class="panel-header">Donor Memory Bank</h2>
+            <div class="memory-list">
+                <div class="memory-item" onclick="selectMemory(this, 'donor')">
+                    <div class="memory-title">First Day at School</div>
+                    <div class="memory-meta">
+                        <span>Age: 6</span>
+                        <span>Intensity: High</span>
+                        <span>Type: Milestone</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'donor')">
+                    <div class="memory-title">Summer at Grandmother's</div>
+                    <div class="memory-meta">
+                        <span>Age: 12</span>
+                        <span>Intensity: Medium</span>
+                        <span>Type: Nostalgic</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'donor')">
+                    <div class="memory-title">Learning to Drive</div>
+                    <div class="memory-meta">
+                        <span>Age: 16</span>
+                        <span>Intensity: Medium</span>
+                        <span>Type: Skill</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'donor')">
+                    <div class="memory-title">College Graduation</div>
+                    <div class="memory-meta">
+                        <span>Age: 22</span>
+                        <span>Intensity: High</span>
+                        <span>Type: Achievement</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="surgical-workspace">
+            <div class="procedure-diagram">
+                <div class="extraction-node">
+                    <span class="node-label">Extract</span>
+                </div>
+                <div class="transfer-visualization"></div>
+                <div class="implantation-node">
+                    <span class="node-label">Implant</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="recipient-panel">
+            <h2 class="panel-header">Recipient Memory Slots</h2>
+            <div class="memory-list">
+                <div class="memory-item" onclick="selectMemory(this, 'recipient')">
+                    <div class="memory-title">[Empty Slot A]</div>
+                    <div class="memory-meta">
+                        <span>Capacity: 100%</span>
+                        <span>Compatible: Yes</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'recipient')">
+                    <div class="memory-title">[Empty Slot B]</div>
+                    <div class="memory-meta">
+                        <span>Capacity: 100%</span>
+                        <span>Compatible: Yes</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'recipient')">
+                    <div class="memory-title">[Empty Slot C]</div>
+                    <div class="memory-meta">
+                        <span>Capacity: 100%</span>
+                        <span>Compatible: Yes</span>
+                    </div>
+                </div>
+                <div class="memory-item" onclick="selectMemory(this, 'recipient')">
+                    <div class="memory-title">[Empty Slot D]</div>
+                    <div class="memory-meta">
+                        <span>Capacity: 100%</span>
+                        <span>Compatible: Yes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button class="control-button" onclick="analyzeCompatibility()">Analyze Compatibility</button>
+            <div class="compatibility-indicator">
+                <span>Compatibility:</span>
+                <span class="compatibility-value">--</span>
+            </div>
+            <button class="control-button primary" onclick="initiateTransfer()" disabled>Initiate Transfer</button>
+        </div>
+    </div>
+
+    <div class="progress-overlay" id="progressOverlay">
+        <div class="progress-content">
+            <div class="progress-spinner"></div>
+            <div class="progress-text">Transferring memory...</div>
+        </div>
+    </div>
+
+    <script>
+        let selectedDonor = null;
+        let selectedRecipient = null;
+
+        function selectMemory(element, type) {
+            const siblings = element.parentElement.getElementsByClassName('memory-item');
+            for (let sibling of siblings) {
+                sibling.classList.remove('selected');
+            }
+            element.classList.add('selected');
+            
+            if (type === 'donor') {
+                selectedDonor = element;
+                document.querySelector('.extraction-node').classList.add('active');
+            } else {
+                selectedRecipient = element;
+                document.querySelector('.implantation-node').classList.add('active');
+            }
+            
+            checkTransferReady();
+        }
+
+        function checkTransferReady() {
+            const transferButton = document.querySelector('.control-button.primary');
+            if (selectedDonor && selectedRecipient) {
+                transferButton.disabled = false;
+            }
+        }
+
+        function analyzeCompatibility() {
+            if (selectedDonor && selectedRecipient) {
+                const compatValue = Math.floor(Math.random() * 20) + 80;
+                document.querySelector('.compatibility-value').textContent = compatValue + '%';
+                document.querySelector('.compatibility-value').style.color = 
+                    compatValue >= 90 ? 'var(--accent-success)' : 
+                    compatValue >= 70 ? 'var(--accent-warning)' : 
+                    'var(--accent-warning)';
+            }
+        }
+
+        function initiateTransfer() {
+            if (!selectedDonor || !selectedRecipient) return;
+            
+            document.getElementById('progressOverlay').classList.add('active');
+            document.querySelector('.transfer-visualization').classList.add('active');
+            
+            setTimeout(() => {
+                document.getElementById('progressOverlay').classList.remove('active');
+                document.querySelector('.transfer-visualization').classList.remove('active');
+                
+                const recipientTitle = selectedRecipient.querySelector('.memory-title');
+                const donorTitle = selectedDonor.querySelector('.memory-title').textContent;
+                recipientTitle.textContent = donorTitle + ' [Transferred]';
+                
+                selectedDonor.style.opacity = '0.3';
+                selectedDonor.onclick = null;
+                
+                selectedDonor = null;
+                selectedRecipient = null;
+                document.querySelector('.extraction-node').classList.remove('active');
+                document.querySelector('.implantation-node').classList.remove('active');
+                document.querySelector('.control-button.primary').disabled = true;
+                document.querySelector('.compatibility-value').textContent = '--';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

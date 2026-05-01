@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Directory</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 24px;
+    color: #0f1117;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.06),
+      0 4px 6px -2px rgba(0,0,0,0.05),
+      0 16px 32px -8px rgba(0,0,0,0.10);
+    width: 100%;
+    max-width: 920px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 28px 32px 24px;
+    border-bottom: 1px solid #f1f2f4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .header-left h1 {
+    font-size: 18px;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    color: #0f1117;
+    line-height: 1.2;
+  }
+
+  .header-left p {
+    font-size: 13px;
+    color: #8b909a;
+    margin-top: 3px;
+    font-weight: 400;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f7f8fa;
+    border: 1px solid #e8eaed;
+    border-radius: 9px;
+    padding: 7px 12px;
+    font-size: 13.5px;
+    color: #8b909a;
+    cursor: text;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .search-box:hover { border-color: #c9cdd6; }
+
+  .search-box svg { flex-shrink: 0; opacity: 0.55; }
+
+  .btn-primary {
+    background: #3b5bff;
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    padding: 8px 16px;
+    font-size: 13.5px;
+    font-weight: 550;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.01em;
+    transition: background 0.15s, transform 0.1s;
+  }
+
+  .btn-primary:hover { background: #2d4aee; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #8b909a;
+    border-bottom: 1px solid #f1f2f4;
+    background: #fafbfc;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  thead th:first-child { padding-left: 32px; }
+  thead th:last-child { padding-right: 32px; }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 5px;
+    margin: -3px -6px;
+    transition: background 0.12s, color 0.12s;
+  }
+
+  .th-inner:hover { background: #eef0f3; color: #3b5bff; }
+  .th-inner.active { color: #3b5bff; }
+
+  .sort-icon { opacity: 0.4; transition: opacity 0.12s; flex-shrink: 0; }
+  .th-inner:hover .sort-icon,
+  .th-inner.active .sort-icon { opacity: 1; }
+
+  tbody tr {
+    border-bottom: 1px solid #f5f6f8;
+    transition: background 0.12s;
+    cursor: default;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody tr:hover { background: #f7f9ff; }
+
+  tbody td {
+    padding: 14px 16px;
+    vertical-align: middle;
+  }
+
+  tbody td:first-child { padding-left: 32px; }
+  tbody td:last-child { padding-right: 32px; }
+
+  .person-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .avatar-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .avatar-status {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+  }
+
+  .person-name {
+    font-size: 14px;
+    font-weight: 560;
+    color: #0f1117;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  .person-email {
+    font-size: 12.5px;
+    color: #9da3ae;
+    margin-top: 1px;
+    font-weight: 400;
+  }
+
+  .role-cell {
+    font-size: 13.5px;
+    color: #4a4f5c;
+    font-weight: 430;
+  }
+
+  .dept-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 540;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0;
+  }
+
+  .dept-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dept-eng   { background: #eff4ff; color: #3b5bff; }
+  .dept-eng   .dept-dot { background: #3b5bff; }
+  .dept-design{ background: #f3f0ff; color: #7c3aed; }
+  .dept-design .dept-dot { background: #7c3aed; }
+  .dept-product{ background: #fff0f6; color: #c2185b; }
+  .dept-product .dept-dot { background: #e91e8c; }
+  .dept-data  { background: #e6fbf7; color: #0d9488; }
+  .dept-data  .dept-dot { background: #0d9488; }
+  .dept-growth{ background: #fff7ed; color: #c2410c; }
+  .dept-growth .dept-dot { background: #ea6c18; }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 540;
+    padding: 5px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-active    { background: #ecfdf5; color: #059669; }
+  .status-active    .status-dot { background: #10b981; box-shadow: 0 0 0 2.5px #d1fae5; }
+  .status-away      { background: #fffbeb; color: #b45309; }
+  .status-away      .status-dot { background: #f59e0b; box-shadow: 0 0 0 2.5px #fef3c7; }
+  .status-offline   { background: #f9fafb; color: #9ca3af; }
+  .status-offline   .status-dot { background: #d1d5db; }
+  .status-vacation  { background: #eff6ff; color: #2563eb; }
+  .status-vacation  .status-dot { background: #60a5fa; box-shadow: 0 0 0 2.5px #dbeafe; }
+
+  .joined-cell {
+    font-size: 13.5px;
+    color: #6b7280;
+    font-weight: 430;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .score-bar-track {
+    flex: 1;
+    height: 5px;
+    background: #f0f2f5;
+    border-radius: 99px;
+    overflow: hidden;
+    min-width: 56px;
+    max-width: 80px;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.3s ease;
+  }
+
+  .score-val {
+    font-size: 13px;
+    font-weight: 580;
+    color: #374151;
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .action-btn {
+    background: none;
+    border: 1px solid #e8eaed;
+    border-radius: 7px;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: #9da3ae;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+
+  .action-btn:hover {
+    background: #f0f4ff;
+    border-color: #c0caff;
+    color: #3b5bff;
+  }
+
+  .actions-cell { display: flex; gap: 6px; align-items: center; }
+
+  .card-footer {
+    padding: 14px 32px;
+    border-top: 1px solid #f1f2f4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafbfc;
+  }
+
+  .footer-info {
+    font-size: 13px;
+    color: #9da3ae;
+    font-weight: 400;
+  }
+
+  .pagination {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .page-btn {
+    background: none;
+    border: 1px solid #e8eaed;
+    border-radius: 7px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+
+  .page-btn:hover { background: #f0f4ff; border-color: #c0caff; color: #3b5bff; }
+  .page-btn.active { background: #3b5bff; border-color: #3b5bff; color: #fff; }
+
+  @media (max-width: 640px) {
+    .card-header { flex-direction: column; align-items: flex-start; }
+    .hide-mobile { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="header-left">
+      <h1>Team Directory</h1>
+      <p>24 members across 5 departments</p>
+    </div>
+    <div class="header-actions">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="6.5" cy="6.5" r="5" stroke="#8b909a" stroke-width="1.5"/>
+          <path d="M10.5 10.5L14 14" stroke="#8b909a" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Search members…
+      </div>
+      <button class="btn-primary">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2v12M2 8h12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Add Member
+      </button>
+    </div>
+  </div>
+
+  <table id="data-table">
+    <thead>
+      <tr>
+        <th><span class="th-inner active" onclick="sortTable(0)">
+          Name
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th class="hide-mobile"><span class="th-inner" onclick="sortTable(1)">
+          Role
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th><span class="th-inner" onclick="sortTable(2)">
+          Department
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th><span class="th-inner" onclick="sortTable(3)">
+          Status
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th class="hide-mobile"><span class="th-inner" onclick="sortTable(4)">
+          Joined
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th><span class="th-inner" onclick="sortTable(5)">
+          Score
+          <svg class="sort-icon" width="10" height="10" viewBox="0 0 10 14" fill="none">
+            <path d="M5 1v12M1 9l4 4 4-4M1 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+    </tbody>
+  </table>
+
+  <div class="card-footer">
+    <span class="footer-info">Showing <strong>8</strong> of 24 members</span>
+    <div class="pagination">
+      <button class="page-btn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="page-btn active">1</button>
+      <button class="page-btn">2</button>
+      <button class="page-btn">3</button>
+      <button class="page-btn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const members = [
+  {
+    name: "Sophia Chen",
+    email: "s.chen@company.io",
+    initials: "SC",
+    color: "#7c3aed",
+    bg: "#f3f0ff",
+    role: "Lead Engineer",
+    dept: "Engineering",
+    deptClass: "dept-eng",
+    status: "Active",
+    statusClass: "status-active",
+    joined: "Jan 2022",
+    joinedSort: 202201,
+    score: 97
+  },
+  {
+    name: "Marcus Williams",
+    email: "m.williams@company.io",
+    initials: "MW",
+    color: "#0d9488",
+    bg: "#e6fbf7",
+    role: "Product Designer",
+    dept: "Design",
+    deptClass: "dept-design",
+    status: "Away",
+    statusClass: "status-away",
+    joined: "Mar 2021",
+    joinedSort: 202103,
+    score: 84
+  },
+  {
+    name: "Priya Kapoor",
+    email: "p.kapoor@company.io",
+    initials: "PK",
+    color: "#c2185b",
+    bg: "#fff0f6",
+    role: "Product Manager",
+    dept: "Product",
+    deptClass: "dept-product",
+    status: "Active",
+    statusClass: "status-active",
+    joined: "Aug 2023",
+    joinedSort: 202308,
+    score: 91
+  },
+  {
+    name: "Luca Romano",
+    email: "l.romano@company.io",
+    initials: "LR",
+    color: "#3b5bff",
+    bg: "#eff4ff",
+    role: "Data Scientist",
+    dept: "Data",
+    deptClass: "dept-data",
+    status: "Active",
+    statusClass: "status-active",
+    joined: "Nov 2020",
+    joinedSort: 202011,
+    score: 88
+  },
+  {
+    name: "Aisha Osei",
+    email: "a.osei@company.io",
+    initials: "AO",
+    color: "#ea6c18",
+    bg: "#fff7ed",
+    role: "Growth Lead",
+    dept: "Growth",
+    deptClass: "dept-growth",
+    status: "Vacation",
+    statusClass: "status-vacation",
+    joined: "Feb 2022",
+    joinedSort: 202202,
+    score: 79
+  },
+  {
+    name: "James Park",
+    email: "j.park@company.io",
+    initials: "JP",
+    color: "#7c3aed",
+    bg: "#f3f0ff",
+    role: "Senior Engineer",
+    dept: "Engineering",
+    deptClass: "dept-eng",
+    status: "Offline",
+    statusClass: "status-offline",
+    joined: "May 2019",
+    joinedSort: 201905,
+    score: 72
+  },
+  {
+    name: "Natalie Voss",
+    email: "n.voss@company.io",
+    initials: "NV",
+    color: "#059669",
+    bg: "#ecfdf5",
+    role: "UX Researcher",
+    dept: "Design",
+    deptClass: "dept-design",
+    status: "Active",
+    statusClass: "status-active",
+    joined: "Sep 2023",
+    joinedSort: 202309,
+    score: 95
+  },
+  {
+    name: "Daniel Kim",
+    email: "d.kim@company.io",
+    initials: "DK",
+    color: "#2563eb",
+    bg: "#eff6ff",
+    role: "Analytics Engineer",
+    dept: "Data",
+    deptClass: "dept-data",
+    status: "Away",
+    statusClass: "status-away",
+    joined: "Jul 2021",
+    joinedSort: 202107,
+    score: 83
+  }
+];
+
+let sortCol = 0;
+let sortAsc = true;
+
+function scoreColor(v) {
+  if (v >= 90) return '#10b981';
+  if (v >= 75) return '#3b5bff';
+  if (v >= 60) return '#f59e0b';
+  return '#ef4444';
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = data.map(m => `
+    <tr>
+      <td>
+        <div class="person-cell">
+          <div class="avatar" style="background:${m.bg};color:${m.color}">
+            ${m.initials}
+            <span class="avatar-status" style="background:${
+              m.status==='Active' ? '#10b981' :
+              m.status==='Away'   ? '#f59e0b' :
+              m.status==='Vacation' ? '#60a5fa' : '#d1d5db'
+            }"></span>
+          </div>
+          <div>
+            <div class="person-name">${m.name}</div>
+            <div class="person-email">${m.email}</div>
+          </div>
+        </div>
+      </td>
+      <td class="role-cell hide-mobile">${m.role}</td>
+      <td>
+        <span class="dept-badge ${m.deptClass}">
+          <span class="dept-dot"></span>${m.dept}
+        </span>
+      </td>
+      <td>
+        <span class="status-badge ${m.statusClass}">
+          <span class="status-dot"></span>${m.status}
+        </span>
+      </td>
+      <td class="joined-cell hide-mobile">${m.joined}</td>
+      <td>
+        <div class="score-cell">
+          <div class="score-bar-track">
+            <div class="score-bar-fill" style="width:${m.score}%;background:${scoreColor(m.score)}"></div>
+          </div>
+          <span class="score-val">${m.score}</span>
+        </div>
+      </td>
+      <td>
+        <div class="actions-cell">
+          <button class="action-btn" title="View profile">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M2.5 13.5C2.5 11.015 5.015 9 8 9s5.5 2.015 5.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="action-btn" title="Send message">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M13.5 2.5l-6 11-2-4.5L1 7l12.5-4.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="action-btn" title="More options">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="4" cy="8" r="1.2" fill="currentColor"/>
+              <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+              <circle cx="12" cy="8" r="1.2" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function sortTable(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = true; }
+
+  document.querySelectorAll('.th-inner').forEach((el, i) => {
+    el.classList.toggle('active', i === col);
+  });
+
+  const sorted = [...members].sort((a, b) => {
+    const vals = [
+      [a.name, b.name],
+      [a.role, b.role],
+      [a.dept, b.dept],
+      [a.status, b.status],
+      [a.joinedSort, b.joinedSort],
+      [a.score, b.score],
+    ];
+    const [va, vb] = vals[col];
+    const cmp = typeof va === 'number' ? va - vb : va.localeCompare(vb);
+    return sortAsc ? cmp : -cmp;
+  });
+
+  renderTable(sorted);
+}
+
+renderTable(members);
+</script>
+</body>
+</html>

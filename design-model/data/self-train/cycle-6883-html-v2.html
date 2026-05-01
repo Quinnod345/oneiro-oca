@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Recipe Adjuster</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --background: #f5f5f5;
+            --surface: #ffffff;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --border: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            background: var(--background);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px;
+            color: var(--text-primary);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 300;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .time-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .time-option {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 24px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 200px;
+        }
+
+        .time-option:hover {
+            border-color: var(--accent);
+            transform: translateX(4px);
+        }
+
+        .time-option.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+        }
+
+        .time-option.active .time-icon {
+            color: white;
+        }
+
+        .time-option.active .time-label {
+            color: white;
+        }
+
+        .time-icon {
+            font-size: 24px;
+            color: var(--text-secondary);
+            transition: color 0.2s ease;
+        }
+
+        .time-info {
+            flex: 1;
+        }
+
+        .time-label {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .time-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .time-option.active .time-description {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .plate-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .plate {
+            width: 400px;
+            height: 400px;
+            background: var(--surface);
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .food-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            width: 280px;
+            height: 280px;
+            place-items: center;
+        }
+
+        .food-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .food-icon {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .food-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .portion-info {
+            display: flex;
+            gap: 40px;
+            padding: 24px;
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .portion-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .portion-value {
+            font-size: 24px;
+            font-weight: 300;
+            color: var(--accent);
+        }
+
+        .portion-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Time-based adjustments */
+        [data-time="dawn"] .food-icon {
+            opacity: 0.7;
+            transform: scale(0.85);
+        }
+
+        [data-time="morning"] .food-icon {
+            opacity: 0.85;
+            transform: scale(0.95);
+        }
+
+        [data-time="noon"] .food-icon {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        [data-time="afternoon"] .food-icon {
+            opacity: 0.9;
+            transform: scale(1);
+        }
+
+        [data-time="evening"] .food-icon {
+            opacity: 0.8;
+            transform: scale(0.9);
+        }
+
+        [data-time="night"] .food-icon {
+            opacity: 0.6;
+            transform: scale(0.8);
+        }
+
+        /* Specific food emphasis by time */
+        [data-time="dawn"] .carbs .food-icon,
+        [data-time="morning"] .carbs .food-icon {
+            transform: scale(1.2);
+            opacity: 1;
+        }
+
+        [data-time="noon"] .protein .food-icon {
+            transform: scale(1.2);
+            opacity: 1;
+        }
+
+        [data-time="evening"] .vegetables .food-icon,
+        [data-time="night"] .vegetables .food-icon {
+            transform: scale(1.15);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body data-time="noon">
+    <div class="header">
+        <h1>Temporal Recipe Adjuster</h1>
+        <p class="subtitle">Optimize your meal portions based on circadian rhythm</p>
+    </div>
+
+    <div class="main-container">
+        <div class="time-selector">
+            <div class="time-option" onclick="setTime('dawn')">
+                <div class="time-icon">🌅</div>
+                <div class="time-info">
+                    <div class="time-label">Dawn</div>
+                    <div class="time-description">Light portions</div>
+                </div>
+            </div>
+            <div class="time-option" onclick="setTime('morning')">
+                <div class="time-icon">🌤️</div>
+                <div class="time-info">
+                    <div class="time-label">Morning</div>
+                    <div class="time-description">Energy focus</div>
+                </div>
+            </div>
+            <div class="time-option active" onclick="setTime('noon')">
+                <div class="time-icon">☀️</div>
+                <div class="time-info">
+                    <div class="time-label">Noon</div>
+                    <div class="time-description">Peak metabolism</div>
+                </div>
+            </div>
+            <div class="time-option" onclick="setTime('afternoon')">
+                <div class="time-icon">🌥️</div>
+                <div class="time-info">
+                    <div class="time-label">Afternoon</div>
+                    <div class="time-description">Sustained energy</div>
+                </div>
+            </div>
+            <div class="time-option" onclick="setTime('evening')">
+                <div class="time-icon">🌆</div>
+                <div class="time-info">
+                    <div class="time-label">Evening</div>
+                    <div class="time-description">Light & lean</div>
+                </div>
+            </div>
+            <div class="time-option" onclick="setTime('night')">
+                <div class="time-icon">🌙</div>
+                <div class="time-info">
+                    <div class="time-label">Night</div>
+                    <div class="time-description">Minimal intake</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="plate-section">
+            <div class="plate">
+                <div class="food-grid">
+                    <div class="food-item protein">
+                        <div class="food-icon">🥩</div>
+                        <div class="food-label">Protein</div>
+                    </div>
+                    <div class="food-item carbs">
+                        <div class="food-icon">🍞</div>
+                        <div class="food-label">Carbs</div>
+                    </div>
+                    <div class="food-item vegetables">
+                        <div class="food-icon">🥗</div>
+                        <div class="food-label">Vegetables</div>
+                    </div>
+                    <div class="food-item dairy">
+                        <div class="food-icon">🥛</div>
+                        <div class="food-label">Dairy</div>
+                    </div>
+                    <div class="food-item fruits">
+                        <div class="food-icon">🍎</div>
+                        <div class="food-label">Fruits</div>
+                    </div>
+                    <div class="food-item fats">
+                        <div class="food-icon">🥑</div>
+                        <div class="food-label">Healthy Fats</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="portion-info">
+                <div class="portion-item">
+                    <div class="portion-value" id="calories">2200</div>
+                    <div class="portion-label">Calories</div>
+                </div>
+                <div class="portion-item">
+                    <div class="portion-value" id="protein-g">88g</div>
+                    <div class="portion-label">Protein</div>
+                </div>
+                <div class="portion-item">
+                    <div class="portion-value" id="carbs-g">275g</div>
+                    <div class="portion-label">Carbs</div>
+                </div>
+                <div class="portion-item">
+                    <div class="portion-value" id="fats-g">73g</div>
+                    <div class="portion-label">Fats</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const portions = {
+            dawn: { calories: 1600, protein: 64, carbs: 200, fats: 53 },
+            morning: { calories: 1900, protein: 76, carbs: 238, fats: 63 },
+            noon: { calories: 2200, protein: 88, carbs: 275, fats: 73 },
+            afternoon: { calories: 2000, protein: 80, carbs: 250, fats: 67 },
+            evening: { calories: 1800, protein: 72, carbs: 225, fats: 60 },
+            night: { calories: 1400, protein: 56, carbs: 175, fats: 47 }
+        };
+
+        function setTime(time) {
+            document.body.setAttribute('data-time', time);
+            
+            document.querySelectorAll('.time-option').forEach(option => {
+                option.classList.remove('active');
+            });
+            
+            event.currentTarget.classList.add('active');
+            
+            const data = portions[time];
+            document.getElementById('calories').textContent = data.calories;
+            document.getElementById('protein-g').textContent = data.protein + 'g';
+            document.getElementById('carbs-g').textContent = data.carbs + 'g';
+            document.getElementById('fats-g').textContent = data.fats + 'g';
+        }
+    </script>
+</body>
+</html>

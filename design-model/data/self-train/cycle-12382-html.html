@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Decay Calculator</title>
+    <style>
+        :root {
+            --depth-1: #001a26;
+            --depth-2: #002633;
+            --depth-3: #003340;
+            --coral-vibrant: #00ffcc;
+            --coral-pulse: #ff0099;
+            --coral-glow: #7b68ee;
+            --bleach-1: #e6f2ff;
+            --bleach-2: #f0f8ff;
+            --bleach-ghost: #fafafa;
+            --sand: #1a0f0a;
+            --water-particle: rgba(0, 255, 204, 0.03);
+            --text-dim: #4d6673;
+            --text-bright: #a6b8c1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--depth-1);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ocean-depth {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 30% 60%, var(--depth-2) 0%, var(--depth-1) 70%);
+        }
+
+        .water-particles {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 60px;
+            background: linear-gradient(to bottom, transparent, var(--water-particle), transparent);
+            animation: drift 20s infinite linear;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translateY(-100px);
+            }
+            to {
+                transform: translateY(1000px);
+            }
+        }
+
+        .reef-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70%;
+            perspective: 800px;
+        }
+
+        .coral-cluster {
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: all 3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .coral {
+            position: absolute;
+            border-radius: 80% 20% 60% 40%;
+            filter: blur(0.5px);
+            transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .coral-brain {
+            width: 180px;
+            height: 140px;
+            background: radial-gradient(circle at 30% 30%, var(--coral-vibrant), transparent 70%);
+            box-shadow: 0 0 40px var(--coral-vibrant), inset 0 0 30px rgba(0, 255, 204, 0.3);
+            animation: pulse-brain 4s infinite ease-in-out;
+        }
+
+        .coral-staghorn {
+            width: 120px;
+            height: 200px;
+            background: linear-gradient(135deg, var(--coral-pulse), transparent 60%);
+            box-shadow: 0 0 35px var(--coral-pulse), inset 0 0 25px rgba(255, 0, 153, 0.3);
+            transform: rotate(-15deg);
+            animation: pulse-staghorn 5s infinite ease-in-out;
+        }
+
+        .coral-table {
+            width: 220px;
+            height: 80px;
+            background: radial-gradient(ellipse at center, var(--coral-glow), transparent 65%);
+            box-shadow: 0 0 45px var(--coral-glow), inset 0 0 20px rgba(123, 104, 238, 0.3);
+            animation: pulse-table 6s infinite ease-in-out;
+        }
+
+        @keyframes pulse-brain {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        @keyframes pulse-staghorn {
+            0%, 100% { transform: rotate(-15deg) scale(1); opacity: 0.85; }
+            50% { transform: rotate(-15deg) scale(1.08); opacity: 1; }
+        }
+
+        @keyframes pulse-table {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 0.95; }
+        }
+
+        .coral.bleached {
+            animation: none;
+        }
+
+        .coral-brain.bleached {
+            background: radial-gradient(circle at 30% 30%, var(--bleach-2), transparent 70%);
+            box-shadow: 0 0 10px var(--bleach-ghost);
+        }
+
+        .coral-staghorn.bleached {
+            background: linear-gradient(135deg, var(--bleach-1), transparent 60%);
+            box-shadow: 0 0 8px var(--bleach-ghost);
+        }
+
+        .coral-table.bleached {
+            background: radial-gradient(ellipse at center, var(--bleach-2), transparent 65%);
+            box-shadow: 0 0 12px var(--bleach-ghost);
+        }
+
+        .sleep-interface {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            width: 380px;
+        }
+
+        .night-counter {
+            font-size: 14px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .dream-quality {
+            font-size: 48px;
+            font-weight: 200;
+            color: var(--text-bright);
+            margin-bottom: 30px;
+            transition: color 1s ease;
+        }
+
+        .dream-quality.critical {
+            color: var(--bleach-ghost);
+        }
+
+        .disruption-log {
+            margin-bottom: 40px;
+        }
+
+        .disruption-entry {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            opacity: 0;
+            transform: translateX(-20px);
+            animation: slideIn 0.5s forwards;
+        }
+
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .disruption-marker {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .marker-active {
+            background: var(--coral-vibrant);
+            box-shadow: 0 0 12px var(--coral-vibrant);
+        }
+
+        .marker-fading {
+            background: var(--text-dim);
+            box-shadow: 0 0 4px var(--text-dim);
+        }
+
+        .disruption-time {
+            font-size: 13px;
+            color: var(--text-dim);
+            min-width: 80px;
+        }
+
+        .disruption-type {
+            font-size: 14px;
+            color: var(--text-bright);
+            margin-left: 12px;
+        }
+
+        .input-section {
+            padding: 24px;
+            background: rgba(0, 26, 38, 0.6);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(166, 184, 193, 0.1);
+        }
+
+        .add-disruption {
+            width: 100%;
+            padding: 12px 16px;
+            background: transparent;
+            border: 1px solid var(--text-dim);
+            border-radius: 8px;
+            color: var(--text-bright);
+            font-size: 14px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .add-disruption:hover {
+            border-color: var(--coral-vibrant);
+            box-shadow: 0 0 12px rgba(0, 255, 204, 0.2);
+        }
+
+        .recovery-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 60px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .recovery-pulse {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--coral-glow);
+            animation: recovery-beat 2s infinite ease-in-out;
+        }
+
+        @keyframes recovery-beat {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.5); opacity: 1; }
+        }
+
+        .recovery-text {
+            font-size: 13px;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+
+        .depth-gradient {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: linear-gradient(to top, var(--sand), transparent);
+            pointer-events: none;
+        }
+
+        .coral-cluster-1 {
+            bottom: 120px;
+            left: 500px;
+        }
+
+        .coral-cluster-2 {
+            bottom: 80px;
+            right: 300px;
+        }
+
+        .coral-cluster-3 {
+            bottom: 160px;
+            left: 750px;
+        }
+
+        .time-display {
+            position: absolute;
+            top: 40px;
+            right: 60px;
+            text-align: right;
+        }
+
+        .current-time {
+            font-size: 64px;
+            font-weight: 100;
+            color: var(--text-bright);
+            letter-spacing: -2px;
+        }
+
+        .sleep-debt {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="ocean-depth"></div>
+    
+    <div class="water-particles">
+        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 25%; animation-delay: 3s;"></div>
+        <div class="particle" style="left: 40%; animation-delay: 1s;"></div>
+        <div class="particle" style="left: 55%; animation-delay: 4s;"></div>
+        <div class="particle" style="left: 70%; animation-delay: 2s;"></div>
+        <div class="particle" style="left: 85%; animation-delay: 5s;"></div>
+        <div class="particle" style="left: 15%; animation-delay: 6s;"></div>
+        <div class="particle" style="left: 95%; animation-delay: 7s;"></div>
+    </div>
+
+    <div class="reef-container">
+        <div class="coral-cluster coral-cluster-1">
+            <div class="coral coral-brain" id="coral1"></div>
+        </div>
+        <div class="coral-cluster coral-cluster-2">
+            <div class="coral coral-staghorn" id="coral2"></div>
+        </div>
+        <div class="coral-cluster coral-cluster-3">
+            <div class="coral coral-table" id="coral3"></div>
+        </div>
+    </div>
+
+    <div class="depth-gradient"></div>
+
+    <div class="sleep-interface">
+        <div class="night-counter">NIGHT 3</div>
+        <div class="dream-quality" id="dreamQuality">72% intact</div>
+        
+        <div class="disruption-log" id="disruptionLog">
+            <div class="disruption-entry" style="animation-delay: 0.1s;">
+                <div class="disruption-marker marker-active"></div>
+                <span class="disruption-time">02:14 AM</span>
+                <span class="disruption-type">Racing thoughts</span>
+            </div>
+            <div class="disruption-entry" style="animation-delay: 0.2s;">
+                <div class="disruption-marker marker-fading"></div>
+                <span class="disruption-time">03:47 AM</span>
+                <span class="disruption-type">Physical discomfort</span>
+            </div>
+        </div>
+
+        <div class="input-section">
+            <button class="add-disruption" onclick="addDisruption()">+ Log sleep disruption</button>
+        </div>
+    </div>
+
+    <div class="recovery-indicator">
+        <div class="recovery-pulse"></div>
+        <span class="recovery-text">RECOVERY ACTIVE</span>
+    </div>
+
+    <div class="time-display">
+        <div class="current-time" id="currentTime">04:23</div>
+        <div class="sleep-debt">18.5 hours debt</div>
+    </div>
+
+    <script>
+        let disruptionCount = 2;
+        let dreamQuality = 72;
+
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('currentTime').textContent = `${hours}:${minutes}`;
+        }
+
+        function addDisruption() {
+            disruptionCount++;
+            dreamQuality = Math.max(0, dreamQuality - 15);
+            
+            const log = document.getElementById('disruptionLog');
+            const entry = document.createElement('div');
+            entry.className = 'disruption-entry';
+            entry.style.animationDelay = '0s';
+            
+            const now = new Date();
+            const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+            
+            entry.innerHTML = `
+                <div class="disruption-marker marker-active"></div>
+                <span class="disruption-time">${time}</span>
+                <span class="disruption-type">Sleep interruption</span>
+            `;
+            
+            log.appendChild(entry);
+            
+            document.getElementById('dreamQuality').textContent = `${dreamQuality}% intact`;
+            
+            if (dreamQuality < 40) {
+                document.getElementById('dreamQuality').classList.add('critical');
+                document.getElementById('coral1').classList.add('bleached');
+            }
+            if (dreamQuality < 20) {
+                document.getElementById('coral2').classList.add('bleached');
+            }
+            if (dreamQuality === 0) {
+                document.getElementById('coral3').classList.add('bleached');
+            }
+            
+            // Fade older markers
+            const markers = log.querySelectorAll('.disruption-marker');
+            markers.forEach((marker, index) => {
+                if (index < markers.length - 3) {
+                    marker.classList.remove('marker-active');
+                    marker.classList.add('marker-fading');
+                }
+            });
+        }
+
+        setInterval(updateTime, 1000);
+        updateTime();
+    </script>
+</body>
+</html>

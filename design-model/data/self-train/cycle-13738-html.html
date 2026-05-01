@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANXIETY DEFUSAL UNIT X-99</title>
+    <style>
+        :root {
+            --military-black: #0a0a0a;
+            --steel-dark: #1a1f21;
+            --steel-mid: #2c3539;
+            --warning-red: #ff2e2e;
+            --safe-green: #00ff41;
+            --caution-yellow: #ffdd00;
+            --electric-blue: #00d4ff;
+            --wire-red: #d41919;
+            --wire-blue: #1976d2;
+            --wire-yellow: #ffc107;
+            --wire-green: #4caf50;
+            --text-primary: #e8e8e8;
+            --text-dim: #7a8288;
+            --spark-white: #ffffff;
+            --bloom-pink: #ff6b9d;
+            --bloom-purple: #c44569;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: var(--military-black);
+            width: 1440px;
+            height: 900px;
+            overflow: hidden;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .scan-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 255, 65, 0.03) 2px,
+                rgba(0, 255, 65, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1000;
+            animation: scan 8s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+
+        .main-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 600px;
+            background: linear-gradient(135deg, var(--steel-dark) 0%, var(--steel-mid) 100%);
+            border: 3px solid var(--text-dim);
+            box-shadow: 
+                0 0 50px rgba(0, 212, 255, 0.2),
+                inset 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .warning-strip {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background: repeating-linear-gradient(
+                -45deg,
+                var(--warning-red),
+                var(--warning-red) 10px,
+                var(--caution-yellow) 10px,
+                var(--caution-yellow) 20px
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--military-black);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .bomb-casing {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle at 30% 30%, #3a4449 0%, #1a1f21 100%);
+            border-radius: 50%;
+            box-shadow: 
+                0 20px 50px rgba(0, 0, 0, 0.8),
+                inset -20px -20px 30px rgba(0, 0, 0, 0.5),
+                inset 10px 10px 20px rgba(255, 255, 255, 0.1);
+            animation: breathe 4s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.02); }
+        }
+
+        .proximity-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 450px;
+            height: 450px;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 40%, rgba(255, 46, 46, 0) 70%, rgba(255, 46, 46, 0.3) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .bomb-casing:hover ~ .proximity-glow {
+            opacity: 1;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .timer-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 48px;
+            font-weight: bold;
+            color: var(--warning-red);
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 20px var(--warning-red);
+            letter-spacing: 5px;
+        }
+
+        .wire-panel {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 120px;
+            background: var(--military-black);
+            border: 2px solid var(--text-dim);
+            padding: 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .wire {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .wire:hover {
+            transform: scale(1.1);
+        }
+
+        .wire-body {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 8px;
+            border-radius: 4px;
+            box-shadow: 
+                0 2px 5px rgba(0, 0, 0, 0.5),
+                inset 0 1px 2px rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .wire.red .wire-body { background: linear-gradient(90deg, #8b0000 0%, var(--wire-red) 50%, #ff6b6b 100%); }
+        .wire.blue .wire-body { background: linear-gradient(90deg, #0d47a1 0%, var(--wire-blue) 50%, #64b5f6 100%); }
+        .wire.yellow .wire-body { background: linear-gradient(90deg, #f57c00 0%, var(--wire-yellow) 50%, #ffd54f 100%); }
+        .wire.green .wire-body { background: linear-gradient(90deg, #1b5e20 0%, var(--wire-green) 50%, #81c784 100%); }
+
+        .wire-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            white-space: nowrap;
+            letter-spacing: 1px;
+        }
+
+        .cut-effect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            pointer-events: none;
+            display: none;
+        }
+
+        .spark {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--spark-white);
+            border-radius: 50%;
+            box-shadow: 0 0 6px var(--spark-white);
+        }
+
+        .wire.cut .wire-body {
+            animation: wire-snap 0.3s ease forwards;
+        }
+
+        @keyframes wire-snap {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            50% { transform: translate(-50%, -50%) rotate(-5deg) scaleX(1.1); }
+            100% { 
+                transform: translate(-50%, -50%) rotate(0deg); 
+                opacity: 0.3;
+                filter: grayscale(100%);
+            }
+        }
+
+        .status-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--safe-green);
+            padding: 15px;
+            font-size: 12px;
+            color: var(--safe-green);
+            font-family: 'Courier New', monospace;
+        }
+
+        .status-line {
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .tech-readout {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 10px;
+            color: var(--text-dim);
+            text-align: right;
+            line-height: 1.4;
+            font-family: 'Courier New', monospace;
+        }
+
+        .explosion-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--warning-red);
+            border-radius: 50%;
+            pointer-events: none;
+            display: none;
+        }
+
+        .worry-text {
+            position: absolute;
+            color: var(--warning-red);
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .mechanical-flower {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 300px;
+            height: 300px;
+            display: none;
+        }
+
+        .petal {
+            position: absolute;
+            width: 80px;
+            height: 120px;
+            background: linear-gradient(135deg, var(--bloom-pink) 0%, var(--bloom-purple) 100%);
+            border-radius: 50% 50% 50% 0;
+            top: 50%;
+            left: 50%;
+            transform-origin: bottom left;
+            opacity: 0.8;
+            box-shadow: 0 0 20px rgba(255, 107, 157, 0.5);
+        }
+
+        .flower-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #ffd93d 0%, #f39c12 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(255, 217, 61, 0.6);
+        }
+
+        .defused .bomb-casing {
+            animation: dissolve 2s ease forwards;
+        }
+
+        @keyframes dissolve {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+
+        .defused .mechanical-flower {
+            display: block;
+            animation: bloom 3s ease forwards;
+        }
+
+        @keyframes bloom {
+            0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) scale(1) rotate(360deg); }
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .corner-bracket {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--safe-green);
+        }
+
+        .corner-bracket.tl {
+            top: 10px;
+            left: 10px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .corner-bracket.tr {
+            top: 10px;
+            right: 10px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner-bracket.bl {
+            bottom: 10px;
+            left: 10px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .corner-bracket.br {
+            bottom: 10px;
+            right: 10px;
+            border-left: none;
+            border-top: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="scan-lines"></div>
+    <div class="grid-overlay"></div>
+    
+    <div class="corner-bracket tl"></div>
+    <div class="corner-bracket tr"></div>
+    <div class="corner-bracket bl"></div>
+    <div class="corner-bracket br"></div>
+    
+    <div class="main-container">
+        <div class="warning-strip">DANGER - ACTIVE ANXIETY DEVICE</div>
+        
+        <div class="timer-display" id="timer">02:47</div>
+        
+        <div class="status-panel">
+            <div class="status-line">SYSTEM: ARMED</div>
+            <div class="status-line">THREAT LEVEL: CRITICAL</div>
+            <div class="status-line">WIRES REMAINING: 4</div>
+            <div class="status-line">SEQUENCE: UNKNOWN</div>
+            <div class="status-line">DEFUSAL PROTOCOL: ACTIVE</div>
+        </div>
+        
+        <div class="bomb-casing" id="bomb"></div>
+        <div class="proximity-glow"></div>
+        
+        <div class="mechanical-flower" id="flower">
+            <div class="petal" style="transform: rotate(0deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(45deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(90deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(135deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(180deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(225deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(270deg) translateY(-60px);"></div>
+            <div class="petal" style="transform: rotate(315deg) translateY(-60px);"></div>
+            <div class="flower-center"></div>
+        </div>
+        
+        <div class="wire-panel">
+            <div class="wire red" data-anxiety="work deadline">
+                <div class="wire-body"></div>
+                <div class="wire-label">Work Deadline</div>
+                <div class="cut-effect"></div>
+            </div>
+            <div class="wire blue" data-anxiety="social obligation">
+                <div class="wire-body"></div>
+                <div class="wire-label">Social Event</div>
+                <div class="cut-effect"></div>
+            </div>
+            <div class="wire yellow" data-anxiety="financial stress">
+                <div class="wire-body"></div>
+                <div class="wire-label">Money Worry</div>
+                <div class="cut-effect"></div>
+            </div>
+            <div class="wire green" data-anxiety="health concern">
+                <div class="wire-body"></div>
+                <div class="wire-label">Health Fear</div>
+                <div class="cut-effect"></div>
+            </div>
+        </div>
+        
+        <div class="tech-readout">
+            MODEL: ADU-X99<br>
+            FIRMWARE: v3.2.1<br>
+            PRESSURE: 847 kPa<br>
+            CORE TEMP: 98.6°F<br>
+            HEARTRATE: ELEVATED
+        </div>
+    </div>
+    
+    <script>
+        let timeRemaining = 167;
+        let wiresRemaining = 4;
+        let sequence = [];
+        let currentStep = 0;
+        let failed = false;
+        
+        const correctSequence = ['blue', 'yellow', 'red', 'green'];
+        
+        const timer = document.getElementById('timer');
+        const bomb = document.getElementById('bomb');
+        
+        function updateTimer() {
+            if (failed || wiresRemaining === 0) return;
+            
+            timeRemaining--;
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timeRemaining <= 30) {
+                timer.style.animation = 'blink 0.5s ease-in-out infinite';
+            }
+            
+            if (timeRemaining <= 0) {
+                explode();
+            }
+        }
+        
+        setInterval(updateTimer, 1000);
+        
+        document.querySelectorAll('.wire').forEach(wire => {
+            wire.addEventListener('click', function() {
+                if (failed || this.classList.contains('cut')) return;
+                
+                const color = Array.from(this.classList).find(c => ['red', 'blue', 'yellow', 'green'].includes(c));
+                
+                createSparks(this);
+                this.classList.add('cut');
+                
+                if (color !== correctSequence[currentStep]) {
+                    setTimeout(() => explode(), 300);
+                } else {
+                    currentStep++;
+                    wiresRemaining--;
+                    updateStatus();
+                    
+                    if (wiresRemaining === 0) {
+                        setTimeout(() => defuse(), 500);
+                    }
+                }
+            });
+        });
+        
+        function createSparks(wire) {
+            const effect = wire.querySelector('.cut-effect');
+            effect.style.display = 'block';
+            
+            for (let i = 0; i < 12; i++) {
+                const spark = document.createElement('div');
+                spark.className = 'spark';
+                const angle = (i / 12) * Math.PI * 2;
+                const velocity = 2 + Math.random() * 3;
+                spark.style.left = '50%';
+                spark.style.top = '50%';
+                effect.appendChild(spark);
+                
+                let distance = 0;
+                const animateSpark = () => {
+                    distance += velocity;
+                    spark.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+                    spark.style.opacity = 1 - (distance / 100);
+                    
+                    if (distance < 100) {
+                        requestAnimationFrame(animateSpark);
+                    } else {
+                        spark.remove();
+                    }
+                };
+                requestAnimationFrame(animateSpark);
+            }
+        }
+        
+        function explode() {
+            failed = true;
+            document.body.style.backgroundColor = 'var(--warning-red)';
+            
+            const anxieties = [
+                'DEADLINE MISSED', 'AWKWARD SILENCE', 'BANK OVERDRAFT', 
+                'FORGOT APPOINTMENT', 'EMAIL UNANSWERED', 'RENT DUE',
+                'PRESENTATION TOMORROW', 'THEY HATE YOU', 'NOT GOOD ENOUGH'
+            ];
+            
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const particle = document.createElement('div');
+                    particle.className = 'explosion-particle';
+                    particle.style.display = 'block';
+                    particle.style.left = '50%';
+                    particle.style.top = '50%';
+                    particle.style.backgroundColor = `hsl(${Math.random() * 60}, 100%, 50%)`;
+                    document.querySelector('.main-container').appendChild(particle);
+                    
+                    const angle = Math.random() * Math.PI * 2;
+                    const velocity = 5 + Math.random() * 10;
+                    let distance = 0;
+                    
+                    const animateParticle = () => {
+                        distance += velocity;
+                        particle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+                        
+                        if (distance < 400) {
+                            requestAnimationFrame(animateParticle);
+                        }
+                    };
+                    requestAnimationFrame(animateParticle);
+                }, i * 20);
+            }
+            
+            for (let i = 0; i < anxieties.length; i++) {
+                setTimeout(() => {
+                    const worry = document.createElement('div');
+                    worry.className = 'worry-text';
+                    worry.textContent = anxieties[i];
+                    worry.style.left = Math.random() * 80 + 10 + '%';
+                    worry.style.top = Math.random() * 80 + 10 + '%';
+                    worry.style.opacity = '1';
+                    worry.style.animation = 'float-up 3s ease-out forwards';
+                    document.querySelector('.main-container').appendChild(worry);
+                }, i * 200);
+            }
+            
+            setTimeout(() => {
+                timer.textContent = 'FAILED';
+                timer.style.fontSize = '72px';
+            }, 1000);
+        }
+        
+        function defuse() {
+            document.querySelector('.main-container').classList.add('defused');
+            timer.textContent = 'DEFUSED';
+            timer.style.color = 'var(--safe-green)';
+            timer.style.animation = 'none';
+            
+            document.querySelectorAll('.status-line').forEach((line, i) => {
+                setTimeout(() => {
+                    line.style.color = 'var(--bloom-pink)';
+                    line.textContent = ['ANXIETY: NEUTRALIZED', 'CALM: RESTORED', 'BREATHING: NORMAL', 'HEART: STEADY', 'PEACE: ACHIEVED'][i];
+                }, i * 200);
+            });
+        }
+        
+        function updateStatus() {
+            document.querySelector('.status-line:nth-child(3)').textContent = `WIRES REMAINING: ${wiresRemaining}`;
+        }
+        
+        document.body.addEventListener('mousemove', (e) => {
+            const rect = bomb.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const distance = Math.sqrt(Math.pow(e.clientX - centerX, 2) + Math.pow(e.clientY - centerY, 2));
+            
+            if (distance < 300) {
+                const intensity = 1 - (distance / 300);
+                bomb.style.filter = `brightness(${1 + intensity * 0.2})`;
+            } else {
+                bomb.style.filter = 'brightness(1)';
+            }
+        });
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes blink {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.3; }
+            }
+            
+            @keyframes float-up {
+                0% { 
+                    transform: translateY(0) scale(1); 
+                    opacity: 1;
+                }
+                100% { 
+                    transform: translateY(-100px) scale(1.5); 
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

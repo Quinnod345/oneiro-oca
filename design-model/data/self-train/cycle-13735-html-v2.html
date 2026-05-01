@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Timeline</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #1a1a1a;
+            --border: #e5e5e5;
+            --active: #0066ff;
+            --hover: #0052cc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .container {
+            display: grid;
+            gap: 32px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: none;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: #f5f5f5;
+        }
+
+        .tab.active {
+            background: var(--active);
+            color: white;
+            border-color: var(--active);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 32px;
+        }
+
+        .preview-area {
+            background: #f8f8f8;
+            border-radius: 8px;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gradient-preview {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b 0%, #ffd23f 50%, #4a9eff 100%);
+            transition: background 0.3s ease;
+        }
+
+        .timeline-container {
+            margin-top: 24px;
+            padding: 24px;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+
+        .timeline-label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #666;
+            margin-bottom: 16px;
+        }
+
+        .timeline {
+            position: relative;
+            height: 48px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 16px;
+            right: 16px;
+            height: 4px;
+            background: #e5e5e5;
+            transform: translateY(-50%);
+            border-radius: 2px;
+        }
+
+        .timeline-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 30%;
+            background: var(--active);
+            border-radius: 2px;
+            transition: width 0.2s ease;
+        }
+
+        .timeline-handle {
+            position: absolute;
+            top: 50%;
+            left: 30%;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border: 2px solid var(--active);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: grab;
+            transition: transform 0.1s ease;
+        }
+
+        .timeline-handle:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .timeline-handle:active {
+            cursor: grabbing;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            background: #fafafa;
+            padding: 24px;
+            border-radius: 8px;
+        }
+
+        .control-label {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+
+        .color-stops {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .color-stop {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+        }
+
+        .color-info {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .color-value {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 24px;
+        }
+
+        .button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .button:hover {
+            background: #f5f5f5;
+        }
+
+        .button.primary {
+            background: var(--active);
+            color: white;
+            border-color: var(--active);
+        }
+
+        .button.primary:hover {
+            background: var(--hover);
+            border-color: var(--hover);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Color Timeline</h1>
+            <div class="tabs">
+                <button class="tab active">Gradient</button>
+                <button class="tab">Palette</button>
+                <button class="tab">Export</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="main-panel">
+                <div class="preview-area">
+                    <div class="gradient-preview"></div>
+                </div>
+                
+                <div class="timeline-container">
+                    <div class="timeline-label">Timeline Position</div>
+                    <div class="timeline">
+                        <div class="timeline-track">
+                            <div class="timeline-progress"></div>
+                        </div>
+                        <div class="timeline-handle"></div>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="sidebar">
+                <div class="control-group">
+                    <div class="control-label">Color Stops</div>
+                    <div class="color-stops">
+                        <div class="color-stop">
+                            <div class="color-swatch" style="background: #ff6b6b"></div>
+                            <div class="color-info">
+                                <div>Start</div>
+                                <div class="color-value">#ff6b6b</div>
+                            </div>
+                        </div>
+                        <div class="color-stop">
+                            <div class="color-swatch" style="background: #ffd23f"></div>
+                            <div class="color-info">
+                                <div>Middle</div>
+                                <div class="color-value">#ffd23f</div>
+                            </div>
+                        </div>
+                        <div class="color-stop">
+                            <div class="color-swatch" style="background: #4a9eff"></div>
+                            <div class="color-info">
+                                <div>End</div>
+                                <div class="color-value">#4a9eff</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="button">Reset</button>
+                    <button class="button primary">Apply</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        const timeline = document.querySelector('.timeline');
+        const handle = document.querySelector('.timeline-handle');
+        const progress = document.querySelector('.timeline-progress');
+        let isDragging = false;
+
+        handle.addEventListener('mousedown', () => {
+            isDragging = true;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = timeline.getBoundingClientRect();
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const percent = (x / rect.width) * 100;
+            
+            handle.style.left = percent + '%';
+            progress.style.width = percent + '%';
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        timeline.addEventListener('click', (e) => {
+            if (e.target === handle) return;
+            
+            const rect = timeline.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percent = (x / rect.width) * 100;
+            
+            handle.style.left = percent + '%';
+            progress.style.width = percent + '%';
+        });
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

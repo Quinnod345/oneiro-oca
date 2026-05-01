@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#root { width: 100vw; min-height: 100vh; }
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function App() {
+  const [memories, setMemories] = React.useState([
+    { id: 1, name: "First day of school", weight: 85, intensity: 0.3, cost: 15, x: 150, y: 100, type: 'joy', connections: [3, 7] },
+    { id: 2, name: "Mother's lullaby", weight: 95, intensity: 0.15, cost: 35, x: 400, y: 150, type: 'comfort', connections: [4, 8] },
+    { id: 3, name: "Summer by the lake", weight: 70, intensity: 0.45, cost: 8, x: 650, y: 120, type: 'joy', connections: [1, 5] },
+    { id: 4, name: "Grandfather's stories", weight: 80, intensity: 0.25, cost: 20, x: 200, y: 300, type: 'wisdom', connections: [2, 6] },
+    { id: 5, name: "Best friend's laugh", weight: 75, intensity: 0.4, cost: 12, x: 500, y: 280, type: 'joy', connections: [3, 7] },
+    { id: 6, name: "First heartbreak", weight: 90, intensity: 0.2, cost: 30, x: 350, y: 400, type: 'melancholy', connections: [4, 8] },
+    { id: 7, name: "Childhood bedroom", weight: 65, intensity: 0.5, cost: 5, x: 600, y: 380, type: 'comfort', connections: [1, 5] },
+    { id: 8, name: "Family dinner table", weight: 88, intensity: 0.22, cost: 25, x: 250, y: 500, type: 'warmth', connections: [2, 6] }
+  ]);
+
+  const [heartMeter, setHeartMeter] = React.useState(100);
+  const [selectedMemory, setSelectedMemory] = React.useState(null);
+  const [hoveredMemory, setHoveredMemory] = React.useState(null);
+  const [particles, setParticles] = React.useState([]);
+  const [reclaimed, setReclaimed] = React.useState([]);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragPosition, setDragPosition] = React.useState({ x: 0, y: 0 });
+
+  const memoryColors = {
+    joy: { primary: '#FFD93D', secondary: '#FCF4A3', glow: '#FFF5B5' },
+    comfort: { primary: '#6BCF7F', secondary: '#95E1A8', glow: '#B5F1C5' },
+    wisdom: { primary: '#6B5B95', secondary: '#9B8BBE', glow: '#BBABD9' },
+    melancholy: { primary: '#547CC4', secondary: '#7FA3D8', glow: '#A5C4E7' },
+    warmth: { primary: '#FF6B6B', secondary: '#FF9A9A', glow: '#FFBABA' }
+  };
+
+  const handleMemoryClick = (memory) => {
+    if (reclaimed.includes(memory.id)) return;
+    setSelectedMemory(memory.id === selectedMemory ? null : memory.id);
+  };
+
+  const handleDragStart = (e) => {
+    if (heartMeter <= 0) return;
+    setIsDragging(true);
+    const rect = e.target.getBoundingClientRect();
+    setDragPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e, memory) => {
+    e.preventDefault();
+    if (isDragging && selectedMemory === memory.id && heartMeter >= memory.cost) {
+      setHeartMeter(prev => prev - memory.cost);
+      setReclaimed(prev => [...prev, memory.id]);
+      
+      setMemories(prev => prev.map(m => {
+        if (m.id === memory.id) return { ...m, intensity: 1 };
+        const connectedToReclaimed = m.connections.includes(memory.id);
+        return {
+          ...m,
+          intensity: connectedToReclaimed 
+            ? Math.min(m.intensity + 0.1, 0.8)
+            : Math.max(m.intensity - 0.05, 0.1),
+          cost: Math.min(50, m.cost + (connectedToReclaimed ? -2 : 3))
+        };
+      }));
+
+      const newParticles = Array(Math.ceil(memory.cost / 5)).fill(null).map((_, i) => ({
+        id: Date.now() + i,
+        x: e.clientX,
+        y: e.clientY
+      }));
+      setParticles(prev => [...prev, ...newParticles]);
+      
+      setTimeout(() => {
+        setParticles(prev => prev.filter(p => !newParticles.find(np => np.id === p.id)));
+      }, 1000);
+
+      setSelectedMemory(null);
+    }
+    setIsDragging(false);
+  };
+
+  const renderConnections = () => {
+    return memories.map(memory => 
+      memory.connections.map(connectedId => {
+        const connected = memories.find(m => m.id === connectedId);
+        if (!connected || memory.id > connectedId) return null;
+        
+        const isActive = hoveredMemory === memory.id || hoveredMemory === connectedId;
+        const bothReclaimed = reclaimed.includes(memory.id) && reclaimed.includes(connectedId);
+        
+        return React.createElement('line', {
+          key: `${memory.id}-${connectedId}`,
+          x1: memory.x,
+          y1: memory.y,
+          x2: connected.x,
+          y2: connected.y,
+          stroke: bothReclaimed ? '#FFD93D' : (isActive ? '#666' : '#333'),
+          strokeWidth: bothReclaimed ? 2 : (isActive ? 1.5 : 1),
+          opacity: bothReclaimed ? 0.6 : (isActive ? 0.4 : 0.2),
+          className: 'connection-line'
+        });
+      })
+    );
+  };
+
+  return React.createElement('div', {
+    style: {
+      width: '100vw',
+      height: '100vh',
+      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)',
+      overflow: 'hidden',
+      position: 'relative',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }
+  }, [
+    React.createElement('div', {
+      key: 'header',
+      style: {
+        position: 'absolute',
+        top: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        textAlign: 'center',
+        zIndex: 10
+      }
+    }, [
+      React.createElement('h1', {
+        style: {
+          color: '#fff',
+          fontSize: '24px',
+          margin: '0 0 10px 0',
+          opacity: 0.9,
+          letterSpacing: '2px'
+        }
+      }, 'MEMORY CONSTELLATION'),
+      React.createElement('p', {
+        style: {
+          color: '#888',
+          fontSize: '14px',
+          margin: 0
+        }
+      }, 'Trade fragments of your heart to reclaim what was lost')
+    ]),
+
+    React.createElement('svg', {
+      key: 'connections',
+      style: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none'
+      }
+    }, renderConnections()),
+
+    React.createElement('div', {
+      key: 'memory-field',
+      style: {
+        position: 'absolute',
+        top: '100px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '800px',
+        height: '600px'
+      }
+    }, memories.map(memory => {
+      const isSelected = selectedMemory === memory.id;
+      const isHovered = hoveredMemory === memory.id;
+      const isReclaimed = reclaimed.includes(memory.id);
+      const canAfford = heartMeter >= memory.cost;
+      const colors = memoryColors[memory.type];
+      
+      return React.createElement('div', {
+        key: memory.id,
+        className: 'memory-card',
+        style: {
+          position: 'absolute',
+          left: memory.x + 'px',
+          top: memory.y + 'px',
+          transform: 'translate(-50%, -50%)',
+          cursor: isReclaimed ? 'default' : 'pointer',
+          zIndex: isSelected ? 5 : (isHovered ? 3 : 1)
+        },
+        onClick: () => handleMemoryClick(memory),
+        onMouseEnter: () => setHoveredMemory(memory.id),
+        onMouseLeave: () => setHoveredMemory(null),
+        onDrop: (e) => handleDrop(e, memory),
+        onDragOver: (e) => e.preventDefault()
+      }, [
+        React.createElement('div', {
+          key: 'card',
+          style: {
+            width: '120px',
+            height: '150px',
+            background: isReclaimed
+              ? `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`
+              : `linear-gradient(135deg, rgba(40,40,50,${0.3 + memory.intensity * 0.5}), rgba(60,60,80,${0.2 + memory.intensity * 0.3}))`,
+            borderRadius: '10px',
+            border: `2px solid ${isReclaimed ? colors.glow : (isSelected && canAfford ? '#666' : 'rgba(100,100,120,0.3)')}`,
+            boxShadow: isReclaimed
+              ? `0 0 30px ${colors.glow}, inset 0 0 20px rgba(255,255,255,0.2)`
+              : `0 5px 20px rgba(0,0,0,${0.3 + memory.intensity * 0.4})`,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '15px',
+            animation: isSelected && canAfford && !isReclaimed ? 'pulse 2s infinite' : 'none',
+            transition: 'all 0.3s ease'
+          }
+        }, [
+          React.createElement('div', {
+            key: 'icon',
+            style: {
+              width: '50px',
+              height: '50px',
+              borderRadius: '50%',
+              background: isReclaimed
+                ? `radial-gradient(circle, ${colors.glow}, ${colors.primary})`
+                : `radial-gradient(circle, rgba(200,200,220,${memory.intensity}), rgba(150,150,180,${memory.intensity * 0.5}))`,
+              marginBottom: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              boxShadow: `inset 0 2px 4px rgba(0,0,0,0.2)`
+            }
+          }, isReclaimed ? '✨' : '◯'),
+          React.createElement('div', {
+            key: 'name',
+            style: {
+              color: isReclaimed ? '#fff' : `rgba(255,255,255,${0.5 + memory.intensity * 0.5})`,
+              fontSize: '12px',
+              textAlign: 'center',
+              lineHeight: '1.3',
+              fontWeight: isReclaimed ? '600' : '400'
+            }
+          }, memory.name),
+          !isReclaimed && React.createElement('div', {
+            key: 'cost',
+            style: {
+              marginTop: '8px',
+              fontSize: '11px',
+              color: canAfford ? '#ff6b6b' : '#666',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }
+          }, ['❤', memory.cost])
+        ]),
+        (isSelected && !isReclaimed && canAfford) && React.createElement('div', {
+          key: 'instruction',
+          style: {
+            position: 'absolute',
+            bottom: '-40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.9)',
+            padding: '6px 12px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            color: '#fff',
+            whiteSpace: 'nowrap',
+            animation: 'fadeIn 0.3s ease'
+          }
+        }, 'Drag heart fragments here')
+      ]);
+    })),
+
+    React.createElement('div', {
+      key: 'heart-meter',
+      style: {
+        position: 'absolute',
+        bottom: '40px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '300px',
+        textAlign: 'center'
+      }
+    }, [
+      React.createElement('div', {
+        key: 'meter-container',
+        style: {
+          background: 'rgba(0,0,0,0.6)',
+          borderRadius: '30px',
+          padding: '20px',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }
+      }, [
+        React.createElement('div', {
+          key: 'heart-visual',
+          draggable: heartMeter > 0,
+          onDragStart: handleDragStart,
+          onDragEnd: handleDragEnd,
+          style: {
+            width: '80px',
+            height: '80px',
+            margin: '0 auto 15px',
+            cursor: heartMeter > 0 ? 'grab' : 'not-allowed',
+            position: 'relative'
+          }
+        }, [
+          React.createElement('div', {
+            style: {
+              width: '100%',
+              height: '100%',
+              background: `radial-gradient(circle, rgba(255,107,107,${heartMeter / 100}), rgba(255,71,87,${heartMeter / 100 * 0.7}))`,
+              borderRadius: '50%',
+              boxShadow: `0 0 ${20 + heartMeter / 5}px rgba(255,107,107,${heartMeter / 100 * 0.6})`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '30px',
+              animation: heartMeter > 0 ? `pulse ${2 - heartMeter / 100}s infinite` : 'none',
+              transition: 'all 0.3s ease'
+            }
+          }, heartMeter > 0 ? '❤️' : '💔'),
+          isDragging && React.createElement('div', {
+            style: {
+              position: 'absolute',
+              top: '-10px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontSize: '12px',
+              color: '#ff6b6b',
+              fontWeight: 'bold'
+            }
+          }, `-${selectedMemory ? memories.find(m => m.id === selectedMemory)?.cost : '?'}`)
+        ]),
+        React.createElement('div', {
+          key: 'meter-bar',
+          style: {
+            width: '100%',
+            height: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginBottom: '10px'
+          }
+        }, React.createElement('div', {
+          style: {
+            width: heartMeter + '%',
+            height: '100%',
+            background: 'linear-gradient(90deg, #ff6b6b, #ff4757)',
+            transition: 'width 0.5s ease',
+            boxShadow: '0 0 10px rgba(255,107,107,0.5)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 3s linear infinite'
+          }
+        })),
+        React.createElement('div', {
+          key: 'meter-text',
+          style: {
+            color: heartMeter > 20 ? '#fff' : '#ff6b6b',
+            fontSize: '14px',
+            fontWeight: '600'
+          }
+        }, `${heartMeter} fragments remaining`)
+      ])
+    ]),
+
+    particles.map(particle => 
+      React.createElement('div', {
+        key: particle.id,
+        className: 'heart-particle',
+        style: {
+          left: particle.x + 'px',
+          top: particle.y + 'px'
+        }
+      })
+    ),
+
+    React.createElement('div', {
+      key: 'reclaimed-count',
+      style: {
+        position: 'absolute',
+        top: '80px',
+        right: '40px',
+        color: '#888',
+        fontSize: '14px'
+      }
+    }, `Reclaimed: ${reclaimed.length}/8`)
+  ]);
+}
+
+const container = document.getElementById('root');
+const root = ReactDOM.createRoot(container);
+// Try to find the main component — user should export default or define App
+if (typeof App !== 'undefined') {
+  root.render(React.createElement(App));
+} else {
+  root.render(React.createElement('div', {style: {padding: 20}}, 'No App component found'));
+}
+</script>
+</body>
+</html>

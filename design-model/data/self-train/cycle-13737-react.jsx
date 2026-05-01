@@ -1,0 +1,457 @@
+function App() {
+  const [ingredients, setIngredients] = React.useState([
+    { id: 1, name: 'Garlic', x: 0, y: -120, temporalState: 0, baseColor: '#f4e4c1' },
+    { id: 2, name: 'Sugar', x: 104, y: -60, temporalState: 0, baseColor: '#ffffff' },
+    { id: 3, name: 'Tomato', x: 104, y: 60, temporalState: 0, baseColor: '#ff6347' },
+    { id: 4, name: 'Cream', x: 0, y: 120, temporalState: 0, baseColor: '#fffdd0' },
+    { id: 5, name: 'Thyme', x: -104, y: 60, temporalState: 0, baseColor: '#4a5d23' },
+    { id: 6, name: 'Salt', x: -104, y: -60, temporalState: 0, baseColor: '#f8f8ff' }
+  ]);
+  
+  const [temporalRing, setTemporalRing] = React.useState(0);
+  const [innerRing, setInnerRing] = React.useState(0);
+  const [outerRing, setOuterRing] = React.useState(0);
+  const [discoveredRecipe, setDiscoveredRecipe] = React.useState(null);
+  const [particles, setParticles] = React.useState([]);
+  
+  const temporalStates = {
+    garlic: ['Raw', 'Crushed', 'Sautéed', 'Caramelized', 'Charred'],
+    sugar: ['Crystalline', 'Dissolved', 'Syrup', 'Caramel', 'Carbon'],
+    tomato: ['Fresh', 'Bruised', 'Roasted', 'Sundried', 'Paste'],
+    cream: ['Fresh', 'Whipped', 'Cultured', 'Butter', 'Ghee'],
+    thyme: ['Fresh', 'Wilted', 'Dried', 'Infused', 'Ash'],
+    salt: ['Crystal', 'Dissolved', 'Cured', 'Flaked', 'Blackened']
+  };
+  
+  const recipes = [
+    { 
+      name: 'Temporal Umami Essence', 
+      alignment: { garlic: 3, sugar: 3, tomato: 2, cream: 2, thyme: 2, salt: 1 },
+      description: 'The caramelized convergence creates an otherworldly savory depth'
+    },
+    { 
+      name: 'Crystalline Garden Suspension', 
+      alignment: { garlic: 1, sugar: 0, tomato: 0, cream: 0, thyme: 0, salt: 0 },
+      description: 'Pure temporal stasis preserves the essence of beginning'
+    },
+    { 
+      name: 'Burnt Memory Tincture', 
+      alignment: { garlic: 4, sugar: 4, tomato: 3, cream: 3, thyme: 4, salt: 4 },
+      description: 'The edge of destruction reveals hidden bitter complexities'
+    }
+  ];
+  
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setParticles(prev => {
+        const newParticles = [...prev];
+        
+        // Add new particles for connections
+        ingredients.forEach((ing, i) => {
+          if (ing.temporalState > 1 && Math.random() > 0.7) {
+            const nextIng = ingredients[(i + 1) % ingredients.length];
+            if (Math.abs(ing.temporalState - nextIng.temporalState) < 2) {
+              newParticles.push({
+                id: Date.now() + Math.random(),
+                x1: ing.x,
+                y1: ing.y,
+                x2: nextIng.x,
+                y2: nextIng.y,
+                progress: 0,
+                color: ing.baseColor
+              });
+            }
+          }
+        });
+        
+        // Update particle positions and remove completed ones
+        return newParticles.filter(p => {
+          p.progress += 0.02;
+          return p.progress < 1;
+        });
+      });
+    }, 50);
+    
+    return () => clearInterval(interval);
+  }, [ingredients]);
+  
+  React.useEffect(() => {
+    const newIngredients = ingredients.map((ing, i) => {
+      const angle = (i * 60 - 90) * Math.PI / 180;
+      const ringEffect = (temporalRing + (i % 2 === 0 ? innerRing : outerRing)) / 360;
+      const newState = Math.floor(ringEffect * 5) % 5;
+      
+      return {
+        ...ing,
+        temporalState: newState
+      };
+    });
+    
+    setIngredients(newIngredients);
+    
+    // Check for recipe discovery
+    const currentAlignment = {};
+    newIngredients.forEach(ing => {
+      currentAlignment[ing.name.toLowerCase()] = ing.temporalState;
+    });
+    
+    const discovered = recipes.find(recipe => {
+      return Object.entries(recipe.alignment).every(([key, value]) => 
+        currentAlignment[key] === value
+      );
+    });
+    
+    if (discovered && discovered.name !== discoveredRecipe?.name) {
+      setDiscoveredRecipe(discovered);
+    } else if (!discovered && discoveredRecipe) {
+      setDiscoveredRecipe(null);
+    }
+  }, [temporalRing, innerRing, outerRing]);
+  
+  const handleRingDrag = (e, ringType) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    const handleMove = (event) => {
+      const x = event.clientX - rect.left - centerX;
+      const y = event.clientY - rect.top - centerY;
+      const angle = Math.atan2(y, x) * 180 / Math.PI + 90;
+      const normalizedAngle = (angle + 360) % 360;
+      
+      if (ringType === 'main') setTemporalRing(normalizedAngle);
+      else if (ringType === 'inner') setInnerRing(normalizedAngle);
+      else setOuterRing(normalizedAngle);
+    };
+    
+    const handleEnd = () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+    };
+    
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+  };
+  
+  const getTemporalColor = (baseColor, state) => {
+    const colors = {
+      '#f4e4c1': ['#f4e4c1', '#e8d5a6', '#d4a574', '#8b5a2b', '#3c2414'],
+      '#ffffff': ['#ffffff', '#f8f8e8', '#d4a574', '#8b4513', '#1c1c1c'],
+      '#ff6347': ['#ff6347', '#dc143c', '#8b0000', '#4b0000', '#1a0000'],
+      '#fffdd0': ['#fffdd0', '#fff8dc', '#f5deb3', '#daa520', '#8b6914'],
+      '#4a5d23': ['#4a5d23', '#3d4f1d', '#2d3a15', '#1e250e', '#0f1207'],
+      '#f8f8ff': ['#f8f8ff', '#e8e8f0', '#c8c8d0', '#888890', '#484850']
+    };
+    
+    return colors[baseColor]?.[state] || baseColor;
+  };
+  
+  return React.createElement('div', {
+    style: {
+      width: '100vw',
+      height: '100vh',
+      backgroundColor: '#0a0a0f',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: '"Instrument Serif", Georgia, serif',
+      color: '#f0e6d2',
+      overflow: 'hidden',
+      position: 'relative'
+    }
+  }, [
+    // Background subtle grid
+    React.createElement('div', {
+      key: 'grid',
+      style: {
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `
+          radial-gradient(circle at center, transparent 40%, #0a0a0f 70%),
+          repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            #1a1a1f08 60px,
+            #1a1a1f08 61px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 60px,
+            #1a1a1f08 60px,
+            #1a1a1f08 61px
+          )
+        `,
+        pointerEvents: 'none'
+      }
+    }),
+    
+    // Main chamber container
+    React.createElement('div', {
+      key: 'chamber',
+      style: {
+        position: 'relative',
+        width: '600px',
+        height: '600px'
+      }
+    }, [
+      // Outer decorative ring
+      React.createElement('div', {
+        key: 'outer-ring',
+        style: {
+          position: 'absolute',
+          inset: '-60px',
+          border: '1px solid #2a2a3f',
+          borderRadius: '50%',
+          transform: `rotate(${outerRing}deg)`,
+          transition: 'transform 0.1s linear',
+          cursor: 'grab'
+        },
+        onMouseDown: (e) => handleRingDrag(e, 'outer')
+      }, Array.from({length: 12}).map((_, i) => 
+        React.createElement('div', {
+          key: i,
+          style: {
+            position: 'absolute',
+            width: '4px',
+            height: '20px',
+            backgroundColor: '#3a3a4f',
+            left: '50%',
+            top: '0',
+            transform: `translateX(-50%) rotate(${i * 30}deg)`,
+            transformOrigin: 'center 360px'
+          }
+        })
+      )),
+      
+      // Inner decorative ring
+      React.createElement('div', {
+        key: 'inner-ring',
+        style: {
+          position: 'absolute',
+          inset: '40px',
+          border: '1px solid #2a2a3f',
+          borderRadius: '50%',
+          transform: `rotate(${innerRing}deg)`,
+          transition: 'transform 0.1s linear',
+          cursor: 'grab'
+        },
+        onMouseDown: (e) => handleRingDrag(e, 'inner')
+      }, Array.from({length: 8}).map((_, i) => 
+        React.createElement('div', {
+          key: i,
+          style: {
+            position: 'absolute',
+            width: '2px',
+            height: '15px',
+            backgroundColor: '#4a4a5f',
+            left: '50%',
+            top: '0',
+            transform: `translateX(-50%) rotate(${i * 45}deg)`,
+            transformOrigin: 'center 260px'
+          }
+        })
+      )),
+      
+      // Main temporal ring
+      React.createElement('div', {
+        key: 'temporal-ring',
+        style: {
+          position: 'absolute',
+          inset: 0,
+          border: '3px solid #3a3a4f',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle at center, #0f0f14 30%, transparent 70%)',
+          transform: `rotate(${temporalRing}deg)`,
+          transition: 'transform 0.1s linear',
+          cursor: 'grab'
+        },
+        onMouseDown: (e) => handleRingDrag(e, 'main')
+      }, [
+        // Ring markers
+        React.createElement('div', {
+          key: 'marker',
+          style: {
+            position: 'absolute',
+            width: '20px',
+            height: '4px',
+            backgroundColor: '#f0e6d2',
+            left: '50%',
+            top: '-2px',
+            transform: 'translateX(-50%)',
+            boxShadow: '0 0 10px #f0e6d2'
+          }
+        })
+      ]),
+      
+      // Central vessel
+      React.createElement('div', {
+        key: 'vessel',
+        style: {
+          position: 'absolute',
+          inset: '150px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle at center, #1a1a2f, #0f0f1a)',
+          boxShadow: 'inset 0 0 50px rgba(138, 43, 226, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }
+      }),
+      
+      // Particle connections
+      React.createElement('svg', {
+        key: 'particles',
+        style: {
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none'
+        },
+        viewBox: '-300 -300 600 600'
+      }, particles.map(p => {
+        const x = p.x1 + (p.x2 - p.x1) * p.progress;
+        const y = p.y1 + (p.y2 - p.y1) * p.progress;
+        const opacity = 1 - Math.abs(p.progress - 0.5) * 2;
+        
+        return React.createElement('circle', {
+          key: p.id,
+          cx: x,
+          cy: y,
+          r: 2,
+          fill: p.color,
+          opacity: opacity * 0.6
+        });
+      })),
+      
+      // Ingredients
+      ...ingredients.map((ing, i) => {
+        const angle = (i * 60 - 90) * Math.PI / 180;
+        const stateKey = ing.name.toLowerCase();
+        const currentState = temporalStates[stateKey][ing.temporalState];
+        const color = getTemporalColor(ing.baseColor, ing.temporalState);
+        
+        return React.createElement('div', {
+          key: ing.id,
+          style: {
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: `translate(-50%, -50%) translate(${ing.x}px, ${ing.y}px)`,
+            width: '80px',
+            height: '80px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'default'
+          }
+        }, [
+          React.createElement('div', {
+            key: 'crystal',
+            style: {
+              width: '60px',
+              height: '60px',
+              background: `linear-gradient(135deg, ${color}ee, ${color}aa)`,
+              clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+              boxShadow: `0 0 30px ${color}66`,
+              marginBottom: '8px',
+              transition: 'all 0.3s ease'
+            }
+          }),
+          React.createElement('div', {
+            key: 'name',
+            style: {
+              fontSize: '11px',
+              letterSpacing: '0.5px',
+              opacity: 0.8,
+              textTransform: 'uppercase'
+            }
+          }, ing.name),
+          React.createElement('div', {
+            key: 'state',
+            style: {
+              fontSize: '9px',
+              opacity: 0.6,
+              fontStyle: 'italic'
+            }
+          }, currentState)
+        ]);
+      }),
+      
+      // Recipe discovery notification
+      discoveredRecipe && React.createElement('div', {
+        key: 'recipe',
+        style: {
+          position: 'absolute',
+          bottom: '-120px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '20px 40px',
+          background: 'linear-gradient(135deg, #1a1a2f, #2a2a3f)',
+          border: '1px solid #4a4a5f',
+          borderRadius: '8px',
+          textAlign: 'center',
+          boxShadow: '0 10px 40px rgba(138, 43, 226, 0.3)'
+        }
+      }, [
+        React.createElement('div', {
+          key: 'recipe-name',
+          style: {
+            fontSize: '24px',
+            marginBottom: '8px',
+            color: '#f0e6d2',
+            letterSpacing: '1px'
+          }
+        }, discoveredRecipe.name),
+        React.createElement('div', {
+          key: 'recipe-desc',
+          style: {
+            fontSize: '14px',
+            opacity: 0.8,
+            fontStyle: 'italic',
+            maxWidth: '300px'
+          }
+        }, discoveredRecipe.description)
+      ])
+    ]),
+    
+    // Instructions
+    React.createElement('div', {
+      key: 'instructions',
+      style: {
+        position: 'absolute',
+        top: '40px',
+        left: '40px',
+        maxWidth: '300px'
+      }
+    }, [
+      React.createElement('h1', {
+        key: 'title',
+        style: {
+          fontSize: '28px',
+          marginBottom: '20px',
+          fontWeight: 'normal',
+          letterSpacing: '1px'
+        }
+      }, 'Temporal Recipe Chamber'),
+      React.createElement('p', {
+        key: 'desc',
+        style: {
+          fontSize: '14px',
+          lineHeight: '1.8',
+          opacity: 0.8,
+          marginBottom: '16px'
+        }
+      }, 'Drag the concentric rings to manipulate time itself. Watch as ingredients transform through their temporal states.'),
+      React.createElement('p', {
+        key: 'hint',
+        style: {
+          fontSize: '12px',
+          opacity: 0.6,
+          fontStyle: 'italic'
+        }
+      }, 'Find the perfect alignment where all elements reach their destined state...')
+    ])
+  ]);
+}

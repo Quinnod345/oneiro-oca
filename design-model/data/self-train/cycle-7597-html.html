@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream Architect - Gravity Composer</title>
+    <style>
+        :root {
+            --blueprint-bg: #001426;
+            --blueprint-grid: #003354;
+            --blueprint-line: #0582ca;
+            --blueprint-accent: #00f5ff;
+            --portal-glow: #ff006e;
+            --gravity-field: #8338ec;
+            --furniture-stroke: #6fffe9;
+            --text-primary: #e0fbfc;
+            --text-secondary: #5eb3d6;
+            --control-bg: #001a2e;
+            --transition-curve: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--blueprint-bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 39px, var(--blueprint-grid) 40px),
+                repeating-linear-gradient(90deg, transparent, transparent 39px, var(--blueprint-grid) 40px);
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .workspace {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .blueprint-canvas {
+            width: 900px;
+            height: 700px;
+            position: relative;
+            transform: scale(0.95);
+        }
+
+        .room-container {
+            position: absolute;
+            transition: all 0.6s var(--transition-curve);
+        }
+
+        .room {
+            width: 280px;
+            height: 280px;
+            position: relative;
+            border: 2px solid var(--blueprint-line);
+            background: rgba(0, 20, 38, 0.4);
+            overflow: hidden;
+            cursor: move;
+            transition: transform 0.4s var(--transition-curve);
+        }
+
+        .room::before {
+            content: '';
+            position: absolute;
+            inset: -20px;
+            background: radial-gradient(circle at var(--gravity-x, 50%) var(--gravity-y, 100%), 
+                var(--gravity-field) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .room:hover::before {
+            opacity: 0.3;
+        }
+
+        .room-label {
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .furniture {
+            position: absolute;
+            transition: all 0.8s var(--transition-curve);
+            transform-origin: center center;
+        }
+
+        .chair {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--furniture-stroke);
+            border-radius: 4px;
+            background: rgba(111, 255, 233, 0.1);
+        }
+
+        .chair::after {
+            content: '';
+            position: absolute;
+            width: 36px;
+            height: 2px;
+            background: var(--furniture-stroke);
+            top: 20px;
+            left: 0;
+        }
+
+        .table {
+            width: 60px;
+            height: 40px;
+            border: 2px solid var(--furniture-stroke);
+            background: rgba(111, 255, 233, 0.05);
+        }
+
+        .bed {
+            width: 80px;
+            height: 120px;
+            border: 2px solid var(--furniture-stroke);
+            background: rgba(111, 255, 233, 0.05);
+            border-radius: 8px 8px 4px 4px;
+        }
+
+        .sink {
+            width: 50px;
+            height: 40px;
+            border: 2px solid var(--furniture-stroke);
+            border-radius: 8px;
+            background: rgba(111, 255, 233, 0.1);
+        }
+
+        .particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--blueprint-accent);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float-particle 4s infinite ease-in-out;
+        }
+
+        @keyframes float-particle {
+            0%, 100% { 
+                transform: translate(0, 0) scale(1); 
+                opacity: 0.6;
+            }
+            50% { 
+                transform: translate(var(--drift-x), var(--drift-y)) scale(1.5); 
+                opacity: 1;
+            }
+        }
+
+        .portal {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid var(--portal-glow);
+            background: radial-gradient(circle, rgba(255, 0, 110, 0.2), transparent);
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .portal::before {
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--portal-glow), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+            animation: portal-pulse 2s infinite;
+        }
+
+        .portal:hover::before {
+            opacity: 0.5;
+        }
+
+        @keyframes portal-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.2); opacity: 0; }
+        }
+
+        .connector {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, var(--portal-glow), transparent, var(--portal-glow));
+            transform-origin: left center;
+            opacity: 0.6;
+        }
+
+        .controls {
+            position: absolute;
+            right: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 320px;
+            background: var(--control-bg);
+            border: 1px solid var(--blueprint-line);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-label {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .gravity-control {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(0, 88, 170, 0.1);
+            border: 1px solid var(--blueprint-line);
+            border-radius: 4px;
+        }
+
+        .gravity-dial {
+            width: 80px;
+            height: 80px;
+            position: relative;
+            border: 2px solid var(--blueprint-line);
+            border-radius: 50%;
+            background: radial-gradient(circle at var(--vector-x, 50%) var(--vector-y, 50%), 
+                var(--gravity-field), transparent);
+            cursor: grab;
+        }
+
+        .gravity-dial:active {
+            cursor: grabbing;
+        }
+
+        .gravity-vector {
+            position: absolute;
+            width: 2px;
+            height: 30px;
+            background: var(--blueprint-accent);
+            left: 50%;
+            top: 50%;
+            transform-origin: center bottom;
+            transform: translate(-50%, -100%) rotate(var(--vector-angle, 180deg));
+            transition: transform 0.2s;
+        }
+
+        .gravity-vector::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 8px solid var(--blueprint-accent);
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .room-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .room-button {
+            padding: 12px 16px;
+            background: rgba(0, 88, 170, 0.1);
+            border: 1px solid var(--blueprint-line);
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .room-button:hover {
+            background: rgba(0, 88, 170, 0.2);
+            border-color: var(--blueprint-accent);
+        }
+
+        .room-button.active {
+            background: rgba(0, 245, 255, 0.1);
+            border-color: var(--blueprint-accent);
+            color: var(--blueprint-accent);
+        }
+
+        .physics-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            padding: 15px;
+            background: rgba(0, 88, 170, 0.05);
+            border: 1px solid rgba(5, 130, 202, 0.3);
+            border-radius: 4px;
+        }
+
+        #bedroom {
+            top: 50px;
+            left: 100px;
+        }
+
+        #kitchen {
+            top: 50px;
+            right: 100px;
+        }
+
+        #hallway {
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .water-flow {
+            position: absolute;
+            width: 100px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--blueprint-accent), transparent);
+            opacity: 0.6;
+            animation: water-flow 2s infinite linear;
+        }
+
+        @keyframes water-flow {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+        }
+
+        .staircase {
+            position: absolute;
+            width: 60px;
+            height: 100px;
+            border: 2px solid var(--furniture-stroke);
+            background: repeating-linear-gradient(
+                var(--stair-angle, 45deg),
+                transparent,
+                transparent 10px,
+                var(--furniture-stroke) 10px,
+                var(--furniture-stroke) 12px
+            );
+            transform: rotate(var(--stair-rotation, 0deg));
+            transition: transform 0.8s var(--transition-curve);
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace">
+        <div class="blueprint-canvas">
+            <div class="room-container" id="bedroom">
+                <div class="room" data-room="bedroom" style="--gravity-x: 50%; --gravity-y: 100%;">
+                    <span class="room-label">Bedroom</span>
+                    <div class="furniture bed" style="left: 100px; top: 80px;"></div>
+                    <div class="furniture chair" style="left: 40px; top: 120px;"></div>
+                    <div class="furniture table" style="left: 180px; top: 140px;"></div>
+                    <div class="particles"></div>
+                </div>
+                <div class="portal" style="right: -30px; top: 50%;"></div>
+            </div>
+
+            <div class="room-container" id="kitchen">
+                <div class="room" data-room="kitchen" style="--gravity-x: 100%; --gravity-y: 50%;">
+                    <span class="room-label">Kitchen</span>
+                    <div class="furniture sink" style="left: 60px; top: 40px;"></div>
+                    <div class="furniture table" style="left: 140px; top: 100px;"></div>
+                    <div class="furniture chair" style="left: 180px; top: 140px;"></div>
+                    <div class="water-flow" style="left: 85px; top: 60px;"></div>
+                    <div class="particles"></div>
+                </div>
+                <div class="portal" style="left: -30px; bottom: 50px;"></div>
+            </div>
+
+            <div class="room-container" id="hallway">
+                <div class="room" data-room="hallway" style="--gravity-x: 50%; --gravity-y: 0%;">
+                    <span class="room-label">Hallway</span>
+                    <div class="staircase" style="left: 110px; top: 90px; --stair-angle: 45deg;"></div>
+                    <div class="particles"></div>
+                </div>
+                <div class="portal" style="top: -30px; left: 30%;"></div>
+                <div class="portal" style="top: -30px; right: 30%;"></div>
+            </div>
+
+            <svg class="connector" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+                <path d="M 0 0" stroke="var(--portal-glow)" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="5,5">
+                    <animate attributeName="stroke-dashoffset" from="0" to="10" dur="1s" repeatCount="indefinite"/>
+                </path>
+            </svg>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <div class="control-label">Select Room</div>
+            <div class="room-selector">
+                <button class="room-button active" data-target="bedroom">Bedroom</button>
+                <button class="room-button" data-target="kitchen">Kitchen</button>
+                <button class="room-button" data-target="hallway">Hallway</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">Gravity Vector</div>
+            <div class="gravity-control">
+                <div class="gravity-dial" style="--vector-x: 50%; --vector-y: 100%; --vector-angle: 180deg;">
+                    <div class="gravity-vector"></div>
+                </div>
+                <div class="physics-info">
+                    Drag to rotate gravity vector<br>
+                    Current: <span id="gravity-display">↓ Down (0°)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">Physics Status</div>
+            <div class="physics-info">
+                Each room maintains independent gravity fields. Objects orient according to local physics. Portal transitions interpolate between connected spaces.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeRoom = 'bedroom';
+        let gravityVectors = {
+            bedroom: { x: 50, y: 100, angle: 180 },
+            kitchen: { x: 100, y: 50, angle: 270 },
+            hallway: { x: 50, y: 0, angle: 0 }
+        };
+
+        // Generate particles for each room
+        document.querySelectorAll('.particles').forEach(container => {
+            for (let i = 0; i < 15; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.setProperty('--drift-x', (Math.random() - 0.5) * 40 + 'px');
+                particle.style.setProperty('--drift-y', (Math.random() - 0.5) * 40 + 'px');
+                particle.style.animationDelay = Math.random() * 4 + 's';
+                container.appendChild(particle);
+            }
+        });
+
+        // Room selection
+        document.querySelectorAll('.room-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.room-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                activeRoom = button.dataset.target;
+                updateGravityDial();
+            });
+        });
+
+        // Gravity dial interaction
+        const gravityDial = document.querySelector('.gravity-dial');
+        let isDragging = false;
+
+        gravityDial.addEventListener('mousedown', () => isDragging = true);
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const rect = gravityDial.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            const degrees = (angle * 180 / Math.PI + 90 + 360) % 360;
+            
+            gravityVectors[activeRoom].angle = degrees;
+            gravityVectors[activeRoom].x = 50 + Math.sin(angle) * 30;
+            gravityVectors[activeRoom].y = 50 - Math.cos(angle) * 30;
+            
+            updateGravityDial();
+            updateRoomPhysics();
+        });
+
+        function updateGravityDial() {
+            const vector = gravityVectors[activeRoom];
+            gravityDial.style.setProperty('--vector-x', vector.x + '%');
+            gravityDial.style.setProperty('--vector-y', vector.y + '%');
+            gravityDial.style.setProperty('--vector-angle', vector.angle + 'deg');
+            
+            const directions = ['↓ Down', '→ Right', '↑ Up', '← Left'];
+            const dirIndex = Math.round(vector.angle / 90) % 4;
+            document.getElementById('gravity-display').textContent = `${directions[dirIndex]} (${Math.round(vector.angle)}°)`;
+        }
+
+        function updateRoomPhysics() {
+            const room = document.querySelector(`[data-room="${activeRoom}"]`);
+            const vector = gravityVectors[activeRoom];
+            
+            room.style.setProperty('--gravity-x', vector.x + '%');
+            room.style.setProperty('--gravity-y', vector.y + '%');
+            
+            // Update furniture orientation
+            const furniture = room.querySelectorAll('.furniture');
+            furniture.forEach(item => {
+                const baseRotation = vector.angle - 180;
+                item.style.transform = `rotate(${baseRotation}deg)`;
+                
+                // Simulate floating based on gravity direction
+                const floatX = Math.sin(vector.angle * Math.PI / 180) * 20;
+                const floatY = -Math.cos(vector.angle * Math.PI / 180) * 20;
+                item.style.translate = `${floatX}px ${floatY}px`;
+            });
+            
+            // Update particle flow
+            const particles = room.querySelectorAll('.particle');
+            particles.forEach(particle => {
+                const driftAngle = vector.angle * Math.PI / 180;
+                particle.style.setProperty('--drift-x', Math.sin(driftAngle) * 30 + 'px');
+                particle.style.setProperty('--drift-y', -Math.cos(driftAngle) * 30 + 'px');
+            });
+            
+            // Update water flow direction
+            const waterFlow = room.querySelector('.water-flow');
+            if (waterFlow) {
+                waterFlow.style.transform = `rotate(${vector.angle - 90}deg)`;
+            }
+            
+            // Update staircase orientation
+            const staircase = room.querySelector('.staircase');
+            if (staircase) {
+                staircase.style.setProperty('--stair-rotation', (vector.angle - 180) + 'deg');
+                staircase.style.setProperty('--stair-angle', (45 + vector.angle) + 'deg');
+            }
+        }
+
+        // Initialize
+        updateGravityDial();
+        Object.keys(gravityVectors).forEach(roomName => {
+            activeRoom = roomName;
+            updateRoomPhysics();
+        });
+        activeRoom = 'bedroom';
+
+        // Portal hover effects
+        document.querySelectorAll('.portal').forEach(portal => {
+            portal.addEventListener('mouseenter', () => {
+                portal.style.transform = 'scale(1.1)';
+            });
+            portal.addEventListener('mouseleave', () => {
+                portal.style.transform = 'scale(1)';
+            });
+        });
+
+        // Draw connectors
+        function updateConnectors() {
+            const svg = document.querySelector('svg.connector');
+            const portals = document.querySelectorAll('.portal');
+            let pathData = '';
+            
+            if (portals.length >= 2) {
+                const p1 = portals[0].getBoundingClientRect();
+                const p2 = portals[1].getBoundingClientRect();
+                const svgRect = svg.getBoundingClientRect();
+                
+                const x1 = p1.left + p1.width/2 - svgRect.left;
+                const y1 = p1.top + p1.height/2 - svgRect.top;
+                const x2 = p2.left + p2.width/2 - svgRect.left;
+                const y2 = p2.top + p2.height/2 - svgRect.top;
+                
+                pathData = `M ${x1} ${y1} Q ${(x1+x2)/2} ${y1} ${x2} ${y2}`;
+            }
+            
+            svg.querySelector('path').setAttribute('d', pathData);
+        }
+
+        updateConnectors();
+        window.addEventListener('resize', updateConnectors);
+    </script>
+</body>
+</html>

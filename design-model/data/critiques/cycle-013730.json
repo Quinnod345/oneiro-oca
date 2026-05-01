@@ -1,0 +1,36 @@
+{
+  "cycle": 13730,
+  "captured_at": "2026-04-15T19:19:26Z",
+  "language": "swiftui",
+  "brief": "Design an interface for a \"Temporal Recipe Transmuter\" where users manipulate the aging process of ingredients through a circular time dial that rotates around a central dish, with each ingredient existing as a draggable token that visually transforms\u2014cheese molding and crystallizing, wine deepening in color, bread staling and crumbling, herbs wilting\u2014as users scrub through time, revealing how dishes would taste if prepared with ingredients at different stages of decay and fermentation, with the",
+  "scores": {
+    "typography_quality": 0.3,
+    "color_harmony": 0.4,
+    "spatial_composition": 0.2,
+    "motion_elegance": 0.3,
+    "emotional_resonance": 0.2,
+    "craft_visibility": 0.5,
+    "minimalism_coherence": 0.1,
+    "native_integration": 0.3,
+    "visceral_score": 0.2,
+    "behavioral_score": 0.3,
+    "reflective_score": 0.2,
+    "overall_aesthetic": 0.2,
+    "innovation_score": 0.4,
+    "system_creativity": 0.3,
+    "design_distinctiveness": 0.3,
+    "problem_level": 0.6
+  },
+  "overall": 0.2,
+  "innovation": 0.4,
+  "critique": "This cooking-time interface attempts ambitious metaphorical design but fails through visual chaos, with harsh color transitions, cluttered overlapping elements, and an unclear central metaphor that confuses rather than delights. The execution feels unfinished with truncated code, poor contrast ratios, and interactions that lack clear feedback or purpose.",
+  "fixes": [
+    "Simplify to 2-3 muted colors with proper contrast ratios and remove the jarring day/night gradient for subtle, coherent environmental shifts",
+    "Establish clear visual hierarchy by reducing element count, using consistent spacing, and creating distinct zones for ingredients vs time control",
+    "Replace abstract 'flavor notes' with clear visual feedback showing ingredient freshness states and time relationships through elegant transitions"
+  ],
+  "compiled": false,
+  "code_path": "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/data/self-train/cycle-13730-swiftui.swift",
+  "png_path": null,
+  "code_snippet": "struct ContentView: View {\n    @State private var ingredients: [IngredientToken] = [\n        IngredientToken(name: \"Cheese\", baseColor: .yellow, position: CGPoint(x: 200, y: 200)),\n        IngredientToken(name: \"Wine\", baseColor: .red, position: CGPoint(x: 1240, y: 200)),\n        IngredientToken(name: \"Bread\", baseColor: .brown, position: CGPoint(x: 200, y: 700)),\n        IngredientToken(name: \"Herbs\", baseColor: .green, position: CGPoint(x: 1240, y: 700))\n    ]\n    \n    @State private var timeRotation: Double = 0\n    @State private var isDraggingDial: Bool = false\n    @State private var activeIngredients: Set<UUID> = []\n    @State private var flavorNotes: [FlavorNote] = []\n    @State private var backgroundPhase: Double = 0.5\n    \n    let centerPoint = CGPoint(x: 720, y: 450)\n    let dialRadius: CGFloat = 280\n    \n    var backgroundGradient: LinearGradient {\n        let dayColor = Color(red: 0.95, green: 0.92, blue: 0.88)\n        let nightColor = Color(red: 0.08, green: 0.07, blue: 0.12)\n        let phase = (sin(backgroundPhase * .pi * 2) + 1) / 2\n        \n        return LinearGradient(\n            colors: [\n                dayColor.opacity(1 - phase * 0.7),\n                nightColor.opacity(phase)\n            ],\n            startPoint: .topLeading,\n            endPoint: .bottomTrailing\n        )\n    }\n    \n    var body: some View {\n        ZStack {\n            backgroundGradient\n                .ignoresSafeArea()\n                .animation(.easeInOut(duration: 0.8), value: backgroundPhase)\n            \n            // Subtle texture overlay\n            ForEach(0..<30) { i in\n                Circle()\n                    .fill(Color.white.opacity(0.02))\n                    .frame(width: CGFloat(i * 40 + 100))\n                    .position(\n                        x: centerPoint.x + cos(Double(i) * 0.5) * 100,\n                        y: centerPoint.y + sin(Double(i) * 0.5) * 100\n                    )\n                    .blur(radius: 20)\n            }\n            \n            // Central dish\n            Circle()\n                .fill(Color(red: 0.15, green: 0.14, blue: 0.13))\n                .frame(width: 320, height: 320)\n                .position(centerPoint)\n                .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)\n            \n            Circle()\n                .fill(Color(red: 0.92, green: 0.91, blue: 0.89))\n                .frame(width: 280, height: 280)\n                .position(centerPoint)\n            \n            // Time dial\n            ZStack {\n                Circle()\n                    .stroke(Color.white.opacity(0.1), lineWidth: 60)\n                    .frame(width: dialRadius * 2, height: dialRadius * 2)\n                    .position(centerPoint)\n                \n                ForEach(0..<24) { hour in\n                    let angle = (Double(hour) / 24.0) * 360 - 90 + timeRotation\n                    let radians = angle * .pi / 180\n                    \n                    Rectangle()\n                        ."
+}

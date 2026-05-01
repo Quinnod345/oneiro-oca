@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architectural Consciousness Interface</title>
+    <style>
+        :root {
+            --flesh: #fae8e0;
+            --vein: #d4a5a5;
+            --breath: #f7f3f0;
+            --nerve: #9a8c98;
+            --shadow: #4a4e69;
+            --pulse: #ff6b6b;
+            --calm: #a8dadc;
+            --stone: #22223b;
+            --whisper: rgba(168, 218, 220, 0.15);
+            --crack: rgba(255, 107, 107, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui;
+            background: var(--stone);
+            color: var(--breath);
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        .building-consciousness {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 1fr 2fr 1fr;
+            gap: 2px;
+        }
+
+        .architectural-vessel {
+            position: relative;
+            background: var(--shadow);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .vessel-mood {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, var(--calm) 0%, transparent 100%);
+            transition: height 0.8s ease-out;
+            pointer-events: none;
+        }
+
+        .vessel-mood::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10%;
+            right: -10%;
+            height: 20px;
+            background: inherit;
+            filter: blur(15px);
+            animation: liquidSway 4s ease-in-out infinite;
+        }
+
+        @keyframes liquidSway {
+            0%, 100% { transform: translateY(0) scaleY(1); }
+            50% { transform: translateY(-5px) scaleY(1.1); }
+        }
+
+        .gothic-arch {
+            position: absolute;
+            width: 120px;
+            height: 180px;
+            background: var(--stone);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            clip-path: path('M 0 180 L 0 60 Q 0 0 60 0 Q 120 0 120 60 L 120 180 Z');
+            transition: all 0.4s ease;
+        }
+
+        .room-anxious .gothic-arch {
+            clip-path: path('M 10 180 L 10 60 Q 10 0 60 0 Q 110 0 110 60 L 110 180 Z');
+        }
+
+        .room-content .gothic-arch {
+            clip-path: path('M -10 180 L -10 60 Q -10 0 60 0 Q 130 0 130 60 L 130 180 Z');
+        }
+
+        .breathing-wall {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), var(--whisper) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .architectural-vessel:hover .breathing-wall {
+            opacity: 1;
+        }
+
+        .surface-cracks {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(45deg, transparent 40%, var(--crack) 50%, transparent 60%),
+                linear-gradient(-45deg, transparent 40%, var(--crack) 50%, transparent 60%);
+            background-size: 0% 0%;
+            background-position: center;
+            transition: background-size 0.5s ease;
+            pointer-events: none;
+        }
+
+        .room-anxious .surface-cracks {
+            background-size: 100% 100%;
+        }
+
+        .acoustic-node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: var(--nerve);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .acoustic-node:hover {
+            transform: scale(1.1);
+            background: var(--calm);
+        }
+
+        .acoustic-node::after {
+            content: '';
+            position: absolute;
+            inset: -10px;
+            border: 2px solid var(--whisper);
+            border-radius: 50%;
+            animation: soundWave 2s ease-out infinite;
+        }
+
+        @keyframes soundWave {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .window-eye {
+            position: absolute;
+            width: 60px;
+            height: 30px;
+            background: var(--breath);
+            border-radius: 50%;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .window-eye::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: var(--shadow);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+        }
+
+        .room-content .window-eye {
+            height: 40px;
+        }
+
+        .room-anxious .window-eye {
+            height: 5px;
+        }
+
+        .doorway {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 0;
+            background: var(--stone);
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .room-content .doorway {
+            height: 120px;
+        }
+
+        .doorway::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+            background: linear-gradient(to bottom, transparent 0%, var(--whisper) 100%);
+        }
+
+        .mood-transfer {
+            position: fixed;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle, var(--calm) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1000;
+            transition: opacity 0.2s ease;
+        }
+
+        .mood-transfer.active {
+            opacity: 0.8;
+        }
+
+        .room-label {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 14px;
+            color: var(--nerve);
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+        }
+
+        .emotion-meter {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 4px;
+            height: 60px;
+            background: var(--shadow);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .emotion-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--pulse);
+            transition: height 0.6s ease, background-color 0.6s ease;
+        }
+
+        .room-content .emotion-level {
+            background: var(--calm);
+        }
+
+        .central-chamber {
+            grid-column: 2;
+            grid-row: 2;
+            position: relative;
+        }
+
+        .chamber-heart {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, var(--whisper) 0%, transparent 50%);
+            border-radius: 50%;
+            animation: heartbeat 3s ease-in-out infinite;
+        }
+
+        @keyframes heartbeat {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
+        }
+
+        .whisper-input {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--shadow);
+            border: 1px solid var(--nerve);
+            padding: 12px 24px;
+            border-radius: 24px;
+            color: var(--breath);
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+        }
+
+        .whisper-input.active {
+            opacity: 1;
+        }
+
+        .touch-ripple {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, var(--calm) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0);
+            animation: rippleOut 0.8s ease-out;
+        }
+
+        @keyframes rippleOut {
+            0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+        }
+
+        .north-wing { grid-column: 2; grid-row: 1; }
+        .east-wing { grid-column: 3; grid-row: 2; }
+        .south-wing { grid-column: 2; grid-row: 3; }
+        .west-wing { grid-column: 1; grid-row: 2; }
+        .ne-corner { grid-column: 3; grid-row: 1; }
+        .se-corner { grid-column: 3; grid-row: 3; }
+        .sw-corner { grid-column: 1; grid-row: 3; }
+        .nw-corner { grid-column: 1; grid-row: 1; }
+
+        .consciousness-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 0%, var(--stone) 100%);
+            opacity: 0.3;
+            z-index: 1001;
+        }
+    </style>
+</head>
+<body>
+    <div class="building-consciousness">
+        <div class="architectural-vessel nw-corner" data-room="Library">
+            <div class="room-label">Library</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 30%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 30%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="acoustic-node" style="bottom: 20px; right: 20px;"></div>
+        </div>
+
+        <div class="architectural-vessel north-wing" data-room="Observatory">
+            <div class="room-label">Observatory</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 60%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 60%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="window-eye" style="top: 40px; left: 50%; transform: translateX(-50%);"></div>
+            <div class="doorway"></div>
+        </div>
+
+        <div class="architectural-vessel ne-corner" data-room="Studio">
+            <div class="room-label">Studio</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 45%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 45%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="acoustic-node" style="bottom: 20px; left: 20px;"></div>
+        </div>
+
+        <div class="architectural-vessel west-wing room-anxious" data-room="Vault">
+            <div class="room-label">Vault</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 80%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 80%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="gothic-arch"></div>
+            <div class="window-eye" style="top: 60px; right: 40px;"></div>
+        </div>
+
+        <div class="architectural-vessel central-chamber room-content" data-room="Heart">
+            <div class="room-label">Heart Chamber</div>
+            <div class="chamber-heart"></div>
+            <div class="vessel-mood" style="height: 50%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="doorway" style="width: 120px;"></div>
+            <div class="window-eye" style="top: 80px; left: 60px;"></div>
+            <div class="window-eye" style="top: 80px; right: 60px;"></div>
+        </div>
+
+        <div class="architectural-vessel east-wing" data-room="Gallery">
+            <div class="room-label">Gallery</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 40%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 40%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="gothic-arch"></div>
+            <div class="doorway"></div>
+        </div>
+
+        <div class="architectural-vessel sw-corner" data-room="Archives">
+            <div class="room-label">Archives</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 55%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 55%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="acoustic-node" style="top: 30px; right: 30px;"></div>
+        </div>
+
+        <div class="architectural-vessel south-wing room-content" data-room="Atrium">
+            <div class="room-label">Atrium</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 25%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 25%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="window-eye" style="bottom: 40px; left: 50%; transform: translateX(-50%);"></div>
+            <div class="doorway"></div>
+        </div>
+
+        <div class="architectural-vessel se-corner room-anxious" data-room="Tower">
+            <div class="room-label">Tower</div>
+            <div class="emotion-meter">
+                <div class="emotion-level" style="height: 90%;"></div>
+            </div>
+            <div class="vessel-mood" style="height: 90%;"></div>
+            <div class="breathing-wall"></div>
+            <div class="surface-cracks"></div>
+            <div class="acoustic-node" style="top: 40px; left: 40px;"></div>
+        </div>
+    </div>
+
+    <div class="mood-transfer"></div>
+    <input type="text" class="whisper-input" placeholder="Whisper to the building..." />
+    <div class="consciousness-overlay"></div>
+
+    <script>
+        let dragging = false;
+        let sourceRoom = null;
+        let transferElement = document.querySelector('.mood-transfer');
+        let whisperInput = document.querySelector('.whisper-input');
+        let selectedNode = null;
+
+        document.querySelectorAll('.architectural-vessel').forEach(room => {
+            room.addEventListener('mousedown', startDrag);
+            room.addEventListener('mouseenter', checkDrop);
+            room.addEventListener('mousemove', updateBreathing);
+            room.addEventListener('click', strokeSurface);
+        });
+
+        document.addEventListener('mousemove', dragMood);
+        document.addEventListener('mouseup', endDrag);
+
+        document.querySelectorAll('.acoustic-node').forEach(node => {
+            node.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedNode = e.target.closest('.architectural-vessel');
+                whisperInput.classList.add('active');
+                whisperInput.focus();
+            });
+        });
+
+        whisperInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && selectedNode) {
+                soothRoom(selectedNode);
+                whisperInput.value = '';
+                whisperInput.classList.remove('active');
+                selectedNode = null;
+            }
+        });
+
+        function startDrag(e) {
+            if (e.target.classList.contains('acoustic-node')) return;
+            dragging = true;
+            sourceRoom = e.currentTarget;
+            transferElement.classList.add('active');
+        }
+
+        function dragMood(e) {
+            if (dragging) {
+                transferElement.style.left = e.clientX + 'px';
+                transferElement.style.top = e.clientY + 'px';
+            }
+        }
+
+        function checkDrop(e) {
+            if (dragging && e.currentTarget !== sourceRoom) {
+                transferMood(sourceRoom, e.currentTarget);
+            }
+        }
+
+        function endDrag() {
+            dragging = false;
+            sourceRoom = null;
+            transferElement.classList.remove('active');
+        }
+
+        function transferMood(from, to) {
+            let fromMood = from.querySelector('.vessel-mood');
+            let toMood = to.querySelector('.vessel-mood');
+            let fromLevel = from.querySelector('.emotion-level');
+            let toLevel = to.querySelector('.emotion-level');
+            
+            let fromHeight = parseInt(fromMood.style.height);
+            let toHeight = parseInt(toMood.style.height);
+            
+            let transfer = Math.min(20, fromHeight);
+            
+            fromMood.style.height = (fromHeight - transfer) + '%';
+            toMood.style.height = (toHeight + transfer) + '%';
+            fromLevel.style.height = (fromHeight - transfer) + '%';
+            toLevel.style.height = (toHeight + transfer) + '%';
+            
+            updateRoomState(from);
+            updateRoomState(to);
+        }
+
+        function updateRoomState(room) {
+            let level = parseInt(room.querySelector('.vessel-mood').style.height);
+            
+            room.classList.remove('room-anxious', 'room-content');
+            
+            if (level > 70) {
+                room.classList.add('room-anxious');
+            } else if (level < 40) {
+                room.classList.add('room-content');
+            }
+        }
+
+        function updateBreathing(e) {
+            let wall = e.currentTarget.querySelector('.breathing-wall');
+            let rect = e.currentTarget.getBoundingClientRect();
+            let x = ((e.clientX - rect.left) / rect.width) * 100;
+            let y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            wall.style.setProperty('--x', x + '%');
+            wall.style.setProperty('--y', y + '%');
+        }
+
+        function strokeSurface(e) {
+            if (e.target.classList.contains('acoustic-node')) return;
+            
+            let room = e.currentTarget;
+            if (room.classList.contains('room-anxious')) {
+                let ripple = document.createElement('div');
+                ripple.className = 'touch-ripple';
+                ripple.style.left = e.clientX - room.getBoundingClientRect().left + 'px';
+                ripple.style.top = e.clientY - room.getBoundingClientRect().top + 'px';
+                room.appendChild(ripple);
+                
+                setTimeout(() => ripple.remove(), 800);
+                
+                let mood = room.querySelector('.vessel-mood');
+                let level = room.querySelector('.emotion-level');
+                let currentHeight = parseInt(mood.style.height);
+                let newHeight = Math.max(30, currentHeight - 10);
+                
+                mood.style.height = newHeight + '%';
+                level.style.height = newHeight + '%';
+                updateRoomState(room);
+            }
+        }
+
+        function soothRoom(room) {
+            let mood = room.querySelector('.vessel-mood');
+            let level = room.querySelector('.emotion-level');
+            
+            mood.style.height = '35%';
+            level.style.height = '35%';
+            room.classList.remove('room-anxious');
+            room.classList.add('room-content');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Decay Simulator</title>
+    <style>
+        :root {
+            --bg-dark: #0a0608;
+            --photo-border: #1f1e1b;
+            --dust-gold: #d4af37;
+            --memory-blue: #4a7c8c;
+            --fade-pink: #e8b4b8;
+            --word-emerald: #2d5948;
+            --erosion-speed: 0.4s;
+            --cursor-trail: #f5e6d3;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            background: var(--bg-dark);
+            overflow: hidden;
+            height: 100vh;
+            font-family: Georgia, serif;
+            position: relative;
+        }
+
+        .custom-cursor {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            pointer-events: none;
+            z-index: 9999;
+            transition: none;
+            transform: translate(-50%, -50%);
+        }
+
+        .erosion-brush {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(245, 230, 211, 0.3) 0%, transparent 70%);
+            filter: blur(8px);
+            transform: scale(1);
+            transition: transform 0.1s ease-out;
+        }
+
+        .erosion-brush.active {
+            transform: scale(1.8);
+            background: radial-gradient(circle, rgba(245, 230, 211, 0.6) 0%, transparent 60%);
+        }
+
+        .memory-canvas {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 520px;
+        }
+
+        .photograph {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/jpeg;base64,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');
+            background-size: cover;
+            background-position: center;
+            filter: sepia(0.2);
+            transition: filter 0.3s ease;
+        }
+
+        .erosion-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            mask-image: radial-gradient(circle, transparent 0%, black 100%);
+            mask-size: 0% 0%;
+            mask-position: center;
+            mask-repeat: no-repeat;
+            transition: mask-size var(--erosion-speed) ease-out;
+        }
+
+        .color-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            background: linear-gradient(45deg, var(--memory-blue) 0%, var(--fade-pink) 50%, var(--dust-gold) 100%);
+            filter: blur(40px);
+            transform: scale(1.2);
+            transition: opacity 1s ease;
+        }
+
+        .color-field.active {
+            opacity: 0.8;
+        }
+
+        .word-cloud {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .memory-word {
+            position: absolute;
+            color: var(--cursor-trail);
+            font-size: 1.2rem;
+            font-weight: 300;
+            font-style: italic;
+            opacity: 0;
+            transform: scale(0.8) rotate(-5deg);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            letter-spacing: 0.05em;
+        }
+
+        .memory-word.visible {
+            opacity: 0.9;
+            transform: scale(1) rotate(0deg);
+        }
+
+        .memory-word.fading {
+            opacity: 0;
+            transform: scale(1.2) rotate(5deg) translateY(-20px);
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--cursor-trail);
+            font-size: 1.1rem;
+            opacity: 0.6;
+            letter-spacing: 0.1em;
+            text-align: center;
+        }
+
+        .decay-indicator {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            width: 200px;
+            height: 4px;
+            background: var(--photo-border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .decay-progress {
+            height: 100%;
+            background: var(--dust-gold);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--dust-gold);
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--cursor-trail);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.6;
+            animation: particle-float 2s ease-out forwards;
+        }
+
+        @keyframes particle-float {
+            to {
+                transform: translateY(-60px) translateX(30px);
+                opacity: 0;
+            }
+        }
+
+        .memory-title {
+            position: fixed;
+            top: 40px;
+            left: 40px;
+            color: var(--cursor-trail);
+            font-size: 1.8rem;
+            font-weight: 300;
+            letter-spacing: 0.2em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="custom-cursor">
+        <div class="erosion-brush"></div>
+    </div>
+
+    <div class="memory-title">Memory #47</div>
+
+    <div class="decay-indicator">
+        <div class="decay-progress"></div>
+    </div>
+
+    <div class="memory-canvas">
+        <div class="photograph"></div>
+        <div class="erosion-layer"></div>
+        <div class="color-field"></div>
+        <div class="word-cloud">
+            <span class="memory-word" style="left: 10%; top: 20%;">warmth</span>
+            <span class="memory-word" style="left: 70%; top: 15%;">laughter</span>
+            <span class="memory-word" style="left: 25%; top: 60%;">sunlight</span>
+            <span class="memory-word" style="left: 80%; top: 45%;">distant</span>
+            <span class="memory-word" style="left: 15%; top: 80%;">fading</span>
+            <span class="memory-word" style="left: 60%; top: 70%;">golden</span>
+            <span class="memory-word" style="left: 45%; top: 30%;">embrace</span>
+            <span class="memory-word" style="left: 35%; top: 85%;">echo</span>
+            <span class="memory-word" style="left: 90%; top: 25%;">tender</span>
+            <span class="memory-word" style="left: 5%; top: 50%;">yearning</span>
+            <span class="memory-word" style="left: 50%; top: 55%;">whisper</span>
+            <span class="memory-word" style="left: 75%; top: 90%;">fragment</span>
+        </div>
+    </div>
+
+    <div class="instructions">
+        scrub the photograph to release its memories
+    </div>
+
+    <script>
+        const cursor = document.querySelector('.custom-cursor');
+        const brush = document.querySelector('.erosion-brush');
+        const photograph = document.querySelector('.photograph');
+        const erosionLayer = document.querySelector('.erosion-layer');
+        const colorField = document.querySelector('.color-field');
+        const words = document.querySelectorAll('.memory-word');
+        const decayProgress = document.querySelector('.decay-progress');
+        const canvas = document.querySelector('.memory-canvas');
+        
+        let isEroding = false;
+        let erosionAmount = 0;
+        let lastX = 0;
+        let lastY = 0;
+        let velocity = 0;
+        let erosionMap = [];
+        
+        // Initialize erosion map
+        for (let i = 0; i < 100; i++) {
+            erosionMap.push({ x: 0, y: 0, size: 0 });
+        }
+        
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+            
+            // Calculate velocity
+            const deltaX = e.clientX - lastX;
+            const deltaY = e.clientY - lastY;
+            velocity = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            lastX = e.clientX;
+            lastY = e.clientY;
+            
+            if (isEroding && isOverCanvas(e)) {
+                erode(e);
+            }
+        });
+        
+        document.addEventListener('mousedown', (e) => {
+            if (isOverCanvas(e)) {
+                isEroding = true;
+                brush.classList.add('active');
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isEroding = false;
+            brush.classList.remove('active');
+        });
+        
+        function isOverCanvas(e) {
+            const rect = canvas.getBoundingClientRect();
+            return e.clientX >= rect.left && e.clientX <= rect.right &&
+                   e.clientY >= rect.top && e.clientY <= rect.bottom;
+        }
+        
+        function erode(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // Speed-based erosion
+            const erosionSpeed = Math.min(velocity * 0.5, 20);
+            erosionAmount = Math.min(erosionAmount + erosionSpeed * 0.01, 100);
+            
+            // Update erosion visual
+            const maskSize = Math.min(erosionAmount * 10, 150);
+            erosionLayer.style.maskSize = `${maskSize}% ${maskSize}%`;
+            erosionLayer.style.maskPosition = `${x}% ${y}%`;
+            erosionLayer.style.background = 'rgba(10, 6, 8, 0.9)';
+            
+            // Update decay progress
+            decayProgress.style.width = erosionAmount + '%';
+            
+            // Activate color field based on erosion
+            if (erosionAmount > 30) {
+                colorField.classList.add('active');
+                photograph.style.filter = `sepia(0.2) blur(${(erosionAmount - 30) * 0.1}px)`;
+            }
+            
+            // Reveal words based on erosion
+            words.forEach((word, index) => {
+                const threshold = 20 + (index * 5);
+                if (erosionAmount > threshold && !word.classList.contains('visible')) {
+                    setTimeout(() => {
+                        word.classList.add('visible');
+                        setTimeout(() => {
+                            word.classList.add('fading');
+                        }, 2000 + Math.random() * 3000);
+                    }, index * 200);
+                }
+            });
+            
+            // Create particles
+            if (Math.random() < velocity * 0.02) {
+                createParticle(e.clientX, e.clientY);
+            }
+        }
+        
+        function createParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            particle.style.transform = `translateX(${(Math.random() - 0.5) * 40}px)`;
+            document.body.appendChild(particle);
+            
+            setTimeout(() => particle.remove(), 2000);
+        }
+    </script>
+</body>
+</html>

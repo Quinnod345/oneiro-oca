@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporal Fragrance Composer</title>
+    <style>
+        :root {
+            --void: #0a0608;
+            --timeline-core: #1a1618;
+            --shard-base: #2a2825;
+            --accent-primary: #ff6b9d;
+            --accent-secondary: #4ecdc4;
+            --temporal-gold: #f7b731;
+            --text-primary: #f4f1ed;
+            --text-secondary: #a8a29e;
+            --text-muted: #78716c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--void);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 2rem;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 0.2em;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+        }
+
+        .composer-canvas {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .timeline-container {
+            width: 100%;
+            max-width: 1200px;
+            height: 400px;
+            position: relative;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--timeline-core);
+            transform: translateY(-50%);
+        }
+
+        .timeline-progress {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            height: 2px;
+            background: var(--accent-primary);
+            transform: translateY(-50%);
+            width: 0%;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .era-sections {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .era {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .era:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .era-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--shard-base);
+            border: 2px solid var(--timeline-core);
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .era.active .era-dot {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 20px rgba(255, 107, 157, 0.5);
+        }
+
+        .era-info {
+            position: absolute;
+            bottom: 60%;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .era-name {
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+            transition: color 0.3s ease;
+        }
+
+        .era.active .era-name {
+            color: var(--text-primary);
+        }
+
+        .era-period {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        .fragrance-slot {
+            position: absolute;
+            top: 60%;
+            width: 80px;
+            height: 100px;
+            border: 2px dashed var(--timeline-core);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .fragrance-slot.filled {
+            border-style: solid;
+            border-color: var(--accent-secondary);
+            background: rgba(78, 205, 196, 0.05);
+        }
+
+        .fragrance-note {
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(135deg, 
+                rgba(78, 205, 196, 0.2) 0%,
+                rgba(78, 205, 196, 0.1) 100%);
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            transition: all 0.3s ease;
+        }
+
+        .fragrance-note:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .note-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .composition-panel {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--timeline-core);
+            border: 1px solid var(--shard-base);
+            border-radius: 8px;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .composition-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .composition-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .composition-value {
+            font-size: 1.125rem;
+            color: var(--text-primary);
+        }
+
+        .compose-button {
+            background: var(--accent-primary);
+            color: var(--void);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .compose-button:hover {
+            background: var(--temporal-gold);
+            transform: translateY(-1px);
+        }
+
+        .compose-button:disabled {
+            background: var(--shard-base);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .note-palette {
+            position: absolute;
+            top: 50%;
+            right: 2rem;
+            transform: translateY(-50%);
+            background: var(--timeline-core);
+            border: 1px solid var(--shard-base);
+            border-radius: 8px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 10;
+        }
+
+        .palette-title {
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .note-item {
+            width: 80px;
+            height: 60px;
+            background: var(--shard-base);
+            border: 1px solid var(--timeline-core);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            transition: all 0.3s ease;
+            font-size: 0.75rem;
+            text-align: center;
+            padding: 0.5rem;
+        }
+
+        .note-item:hover {
+            border-color: var(--accent-secondary);
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .guide-text {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            max-width: 300px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>TEMPORAL FRAGRANCE COMPOSER</h1>
+        <p class="subtitle">Compose scents across geological time</p>
+    </header>
+
+    <div class="guide-text">
+        Drag fragrance notes from the palette to each era's slot to create a temporal scent composition.
+    </div>
+
+    <main class="composer-canvas">
+        <div class="timeline-container">
+            <div class="timeline-track"></div>
+            <div class="timeline-progress"></div>
+            
+            <div class="era-sections">
+                <div class="era" data-era="devonian">
+                    <div class="era-dot"></div>
+                    <div class="era-info">
+                        <div class="era-name">Devonian</div>
+                        <div class="era-period">419-359 mya</div>
+                    </div>
+                    <div class="fragrance-slot" data-slot="devonian"></div>
+                </div>
+                
+                <div class="era" data-era="permian">
+                    <div class="era-dot"></div>
+                    <div class="era-info">
+                        <div class="era-name">Permian</div>
+                        <div class="era-period">299-252 mya</div>
+                    </div>
+                    <div class="fragrance-slot" data-slot="permian"></div>
+                </div>
+                
+                <div class="era" data-era="jurassic">
+                    <div class="era-dot"></div>
+                    <div class="era-info">
+                        <div class="era-name">Jurassic</div>
+                        <div class="era-period">201-145 mya</div>
+                    </div>
+                    <div class="fragrance-slot" data-slot="jurassic"></div>
+                </div>
+                
+                <div class="era" data-era="cretaceous">
+                    <div class="era-dot"></div>
+                    <div class="era-info">
+                        <div class="era-name">Cretaceous</div>
+                        <div class="era-period">145-66 mya</div>
+                    </div>
+                    <div class="fragrance-slot" data-slot="cretaceous"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="note-palette">
+            <h3 class="palette-title">Fragrance Notes</h3>
+            <div class="note-item" draggable="true" data-note="fern">Ancient Fern</div>
+            <div class="note-item" draggable="true" data-note="resin">Amber Resin</div>
+            <div class="note-item" draggable="true" data-note="moss">Prehistoric Moss</div>
+            <div class="note-item" draggable="true" data-note="mineral">Volcanic Mineral</div>
+            <div class="note-item" draggable="true" data-note="flower">First Flowers</div>
+        </div>
+    </main>
+
+    <div class="composition-panel">
+        <div class="composition-info">
+            <div class="composition-label">Temporal Blend</div>
+            <div class="composition-value" id="blend-name">Incomplete</div>
+        </div>
+        <div class="composition-info">
+            <div class="composition-label">Eras Composed</div>
+            <div class="composition-value"><span id="era-count">0</span> / 4</div>
+        </div>
+        <button class="compose-button" id="compose-btn" disabled>Compose Fragrance</button>
+    </div>
+
+    <script>
+        let filledSlots = new Set();
+        let draggedNote = null;
+
+        // Progress animation
+        function updateProgress() {
+            const progress = (filledSlots.size / 4) * 100;
+            document.querySelector('.timeline-progress').style.width = progress + '%';
+            document.getElementById('era-count').textContent = filledSlots.size;
+            
+            const composeBtn = document.getElementById('compose-btn');
+            const blendName = document.getElementById('blend-name');
+            
+            if (filledSlots.size === 4) {
+                composeBtn.disabled = false;
+                blendName.textContent = 'Ready';
+            } else {
+                composeBtn.disabled = true;
+                blendName.textContent = 'Incomplete';
+            }
+        }
+
+        // Drag and drop functionality
+        document.querySelectorAll('.note-item').forEach(note => {
+            note.addEventListener('dragstart', (e) => {
+                draggedNote = e.target.dataset.note;
+                e.target.style.opacity = '0.5';
+            });
+            
+            note.addEventListener('dragend', (e) => {
+                e.target.style.opacity = '1';
+            });
+        });
+
+        document.querySelectorAll('.fragrance-slot').forEach(slot => {
+            slot.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                slot.style.borderColor = 'var(--accent-secondary)';
+            });
+            
+            slot.addEventListener('dragleave', (e) => {
+                if (!slot.classList.contains('filled')) {
+                    slot.style.borderColor = 'var(--timeline-core)';
+                }
+            });
+            
+            slot.addEventListener('drop', (e) => {
+                e.preventDefault();
+                
+                if (draggedNote) {
+                    const existingNote = slot.querySelector('.fragrance-note');
+                    if (existingNote) {
+                        existingNote.remove();
+                    }
+                    
+                    const noteElement = document.createElement('div');
+                    noteElement.className = 'fragrance-note';
+                    noteElement.innerHTML = `<div class="note-label">${draggedNote}</div>`;
+                    noteElement.draggable = true;
+                    
+                    slot.appendChild(noteElement);
+                    slot.classList.add('filled');
+                    
+                    const era = slot.dataset.slot;
+                    filledSlots.add(era);
+                    document.querySelector(`[data-era="${era}"]`).classList.add('active');
+                    
+                    updateProgress();
+                    
+                    // Allow removing notes
+                    noteElement.addEventListener('dragstart', (e) => {
+                        e.stopPropagation();
+                        setTimeout(() => {
+                            noteElement.remove();
+                            slot.classList.remove('filled');
+                            slot.style.borderColor = 'var(--timeline-core)';
+                            filledSlots.delete(era);
+                            document.querySelector(`[data-era="${era}"]`).classList.remove('active');
+                            updateProgress();
+                        }, 0);
+                    });
+                }
+                
+                draggedNote = null;
+            });
+        });
+
+        // Compose button
+        document.getElementById('compose-btn').addEventListener('click', () => {
+            document.getElementById('blend-name').textContent = 'Temporal Essence Created';
+            document.querySelectorAll('.era').forEach(era => {
+                era.style.animation = 'pulse 0.6s ease';
+            });
+        });
+
+        // Era click interaction
+        document.querySelectorAll('.era').forEach(era => {
+            era.addEventListener('click', () => {
+                const eraName = era.dataset.era;
+                const slot = document.querySelector(`[data-slot="${eraName}"]`);
+                if (slot.classList.contains('filled')) {
+                    era.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
