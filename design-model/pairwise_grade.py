@@ -41,6 +41,7 @@ Output
 
 import argparse
 import base64
+import io
 import json
 import re
 import shutil
@@ -50,6 +51,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 # Reuse self_train's anthropic client setup so we don't duplicate env loading
 ROOT = Path(__file__).parent
@@ -182,8 +184,45 @@ def select_pairs(samples, max_pairs, overall_max_margin, per_category_cap, seed=
 # ═══════════════════════════════════════════════════
 
 
-def encode_image(path: str) -> str:
-    return base64.b64encode(Path(path).read_bytes()).decode("ascii")
+# Anthropic vision API constraints:
+#   - max 5 MB per image
+#   - server-side downsamples to <=1568px on the long edge anyway
+# We cap before sending so big screenshots (especially full-page web grabs
+# from the awards category) don't trip the 400-error path we saw at
+# pairs 40 and 50 of the first batch.
+MAX_LONG_EDGE = 1568
+JPEG_QUALITY_HIGH = 90
+JPEG_QUALITY_FALLBACK = 75
+MAX_BYTES = 4 * 1024 * 1024  # 4 MB target with 1 MB headroom under the API limit
+
+
+def encode_image(path: str) -> tuple[str, str]:
+    """Return (base64_data, media_type), resizing + recompressing as needed
+    to stay under Anthropic's 5 MB image limit.  Always emits JPEG — quality
+    loss at 90% is imperceptible to Opus and the size savings vs PNG are
+    significant for screenshot-style images."""
+    img = Image.open(path).convert("RGB")
+
+    # Downsize if the long edge exceeds Anthropic's effective limit
+    long_edge = max(img.size)
+    if long_edge > MAX_LONG_EDGE:
+        scale = MAX_LONG_EDGE / long_edge
+        img = img.resize(
+            (max(1, int(img.size[0] * scale)), max(1, int(img.size[1] * scale))),
+            Image.LANCZOS,
+        )
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=JPEG_QUALITY_HIGH, optimize=True)
+    data = buf.getvalue()
+
+    # Belt-and-suspenders: drop quality if still too big
+    if len(data) > MAX_BYTES:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=JPEG_QUALITY_FALLBACK, optimize=True)
+        data = buf.getvalue()
+
+    return base64.b64encode(data).decode("ascii"), "image/jpeg"
 
 
 PROMPT = f"""You are a world-class product designer judging a pairwise design
@@ -216,11 +255,8 @@ Respond with ONLY this JSON shape (no prose, no fences):
 def grade_pair(image_a: str, image_b: str, model: str = DEFAULT_MODEL):
     """Single Opus call comparing two screenshots.  Returns parsed dict
     or None on parse failure."""
-    a_b64 = encode_image(image_a)
-    b_b64 = encode_image(image_b)
-
-    media_type_a = "image/png" if image_a.endswith(".png") else "image/jpeg"
-    media_type_b = "image/png" if image_b.endswith(".png") else "image/jpeg"
+    a_b64, media_a = encode_image(image_a)
+    b_b64, media_b = encode_image(image_b)
 
     msg = client.messages.create(
         model=model,
@@ -229,10 +265,10 @@ def grade_pair(image_a: str, image_b: str, model: str = DEFAULT_MODEL):
             "role": "user",
             "content": [
                 {"type": "image", "source": {
-                    "type": "base64", "media_type": media_type_a, "data": a_b64
+                    "type": "base64", "media_type": media_a, "data": a_b64
                 }},
                 {"type": "image", "source": {
-                    "type": "base64", "media_type": media_type_b, "data": b_b64
+                    "type": "base64", "media_type": media_b, "data": b_b64
                 }},
                 {"type": "text", "text": PROMPT},
             ],
