@@ -279,24 +279,25 @@ def retrain():
         except Exception as e:
             print(f"[retrain] embed error (non-fatal): {str(e)[:120]}")
 
-    # ── 2. Extract visual features from recent manifest additions ──
+    # ── 2. Extract visual features (pooled + pre-pool for Phase 7 backbone) ──
     print("[retrain] extracting features...")
-    subprocess.run(["python3", "extract_features.py"], cwd=mlx_dir, capture_output=True)
+    subprocess.run(["python3", "extract_features.py", "--include-pre"],
+                   cwd=mlx_dir, capture_output=True)
 
-    # ── 3. Train the Phase 6 design head (adapter + uncertainty + preference,
-    #       warm-started from v5).  The Phase 5 critique aux head still
-    #       auto-disables if too few cycle-id matches exist. ──
-    print("[retrain] training v6...")
+    # ── 3. Train the Phase 7 design head (backbone features[18] fine-tune,
+    #       2000 synthesized preference pairs, warm-started from v6).
+    #       Phase 5 critique aux head still auto-disables if too few
+    #       cycle-id matches exist. ──
+    print("[retrain] training v7...")
     result = subprocess.run(
-        ["python3", "train_v6.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
+        ["python3", "train_v7.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
         cwd=mlx_dir, capture_output=True, text=True,
     )
-    # Surface phase status + best val loss
     for line in (result.stdout or "").split("\n"):
-        if any(k in line for k in ("phases:", "best val loss", "matched:", "preference pairs")):
+        if any(k in line for k in ("phases:", "best val loss", "matched:", "pairs:")):
             print(f"[retrain] {line.strip()}")
     if result.returncode != 0 and result.stderr:
-        print(f"[retrain] train_v6 stderr: {result.stderr[:300]}")
+        print(f"[retrain] train_v7 stderr: {result.stderr[:300]}")
 
 
 CRITIQUES_DIR = DATA_DIR / "critiques"
