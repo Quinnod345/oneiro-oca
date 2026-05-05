@@ -55,7 +55,7 @@ MANIFEST_PATH = DATA_DIR / "manifest.json"
 CRITIQUES_DIR = DATA_DIR / "critiques"
 CRITIQUES_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_MODEL = "claude-opus-4-20250514"
+DEFAULT_MODEL = "claude-opus-4-7"
 
 # Match the resize/encode logic from pairwise_grade.py — Anthropic vision
 # rejects >5MB encoded images; pre-shrinking + JPEG keeps us safely under.

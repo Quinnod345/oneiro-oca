@@ -74,7 +74,7 @@ def sonnet(prompt: str) -> str:
 
 def opus(prompt: str) -> str:
     msg = client.messages.create(
-        model="claude-opus-4-20250514",
+        model="claude-opus-4-7",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )

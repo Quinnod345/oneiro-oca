@@ -94,7 +94,7 @@ SCORE_NAMES = [
 def call_opus(prompt: str, max_tokens: int = 16000) -> str:
     # Use streaming for long generations (>10min non-streaming limit)
     with client.messages.stream(
-        model="claude-opus-4-20250514",
+        model="claude-opus-4-7",
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
