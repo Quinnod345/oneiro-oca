@@ -66,7 +66,7 @@ COMPARISONS_PATH = DATA_DIR / "comparisons.json"
 DEFAULT_MAX_PAIRS = 50
 DEFAULT_OVERALL_MAX_MARGIN = 0.10
 DEFAULT_PER_CATEGORY_CAP = 8
-DEFAULT_MODEL = "claude-opus-4-20250514"
+DEFAULT_MODEL = "claude-opus-4-7"
 
 SCORE_NAMES = [
     "typography_quality", "color_harmony", "spatial_composition",

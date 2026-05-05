@@ -71,7 +71,7 @@ MANIFEST_PATH = DATA_DIR / "manifest.json"
 DISTILL_DIR = DATA_DIR / "distill"
 DISTILL_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_MODEL = "claude-opus-4-20250514"
+DEFAULT_MODEL = "claude-opus-4-7"
 MAX_LONG_EDGE = 1568
 JPEG_QUALITY = 90
 JPEG_QUALITY_FALLBACK = 75
