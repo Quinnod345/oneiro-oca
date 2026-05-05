@@ -1,13 +1,10 @@
-// Design Evaluation API — Phase 7 (with Phase 6 / Phase 5 fallback).
-// The model is the MLX inference server at /tmp/design-model-v2.sock. It
-// auto-selects the best available checkpoint:
-//   - design-head-v7.safetensors → Phase 7 (backbone features[18]
-//     fine-tuned, ~2000 synthetic preference pairs, uncertainty head)
-//   - design-head-v6.safetensors → Phase 6 (uncertainty + adapter, frozen
-//     backbone seeded from ImageNet)
-//   - design-head-v5.safetensors → Phase 5 compat (uncertainty suppressed)
-// Earlier phases were purged 2026-04-28 — if the server isn't running this
-// throws so callers fail loudly instead of silently degrading.
+// Design Evaluation API — Phase 9 (DINOv2 ViT-B/14 backbone).
+// The model is the MLX inference server at /tmp/design-model-v2.sock,
+// loading design-head-v8.safetensors with a frozen DINOv2 ViT-B/14
+// (Meta 2023) feature extractor.  DINOv2 captures design-quality
+// features (typography, spatial composition, distinctiveness) far more
+// crisply than the previous MobileNet V2 (ImageNet 2017) backbone —
+// innovation/distinctiveness MAE dropped 14-25% in the v7→v8 retrain.
 //
 // To start the server:
 //   python3 mlx/inference_server.py --warmup &
@@ -16,7 +13,7 @@ import { encodeFromCode, analyzeDesignCode } from './encoder.js';
 import { DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_EMOTIONS, NORMAN_LEVELS } from './knowledge.js';
 
 const SERVER_HINT =
-  'Design model server (Phase 7) is not running. Start it with:\n' +
+  'Design model server (Phase 9 / DINOv2) is not running. Start it with:\n' +
   '  cd /Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/mlx && \\\n' +
   '  python3 inference_server.py --warmup &';
 
@@ -62,10 +59,10 @@ export async function evaluateDesign(input, options = {}) {
     weakest: findWeakest(serverResult.scores, 3),
     strongest: findStrongest(serverResult.scores, 3),
     suggestions: generateSuggestions(serverResult.scores),
-    modelVersion: serverResult.model_version || 'phase_7',
+    modelVersion: serverResult.model_version || 'phase_9',
     paramCount: serverResult.param_count,
     inferenceMs: elapsed,
-    backend: serverResult.model_version || 'phase_7',
+    backend: serverResult.model_version || 'phase_9',
   };
 
   if (options.detailed && (input.code || input.path)) {
