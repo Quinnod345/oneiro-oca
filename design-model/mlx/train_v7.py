@@ -187,13 +187,20 @@ class DesignHeadV7(nn.Module):
                  adapter_alpha: float = DEFAULT_ADAPTER_ALPHA,
                  enable_adapter: bool = True,
                  enable_backbone: bool = True):
+        """`enable_backbone` is now an architecture flag only — the backbone
+        module is ALWAYS present so saved checkpoints have a consistent
+        shape across train-time configurations.  Whether the backbone is
+        actually fine-tuned is controlled at training time via the
+        backbone_lr_ratio / disable_backbone flag (which sets the ratio
+        to 0).  Inference always uses the loaded backbone weights."""
         super().__init__()
 
         self.enable_adapter = enable_adapter
         self.enable_backbone = enable_backbone
 
-        if enable_backbone:
-            self.backbone = MobileNetHeadConv()
+        # Always create the backbone — even in legacy "frozen" mode — so
+        # the saved safetensors keys are stable.
+        self.backbone = MobileNetHeadConv()
 
         if enable_adapter:
             self.adapter = FeatureAdapter(1280, adapter_rank, adapter_alpha)
@@ -228,13 +235,11 @@ class DesignHeadV7(nn.Module):
         self.pref_head = nn.Linear(64, OUTPUT_DIM)
 
     def trunk(self, visual_features, code_features=None):
-        """Run backbone (if 4D) + adapter + v6 trunk → 64-dim representation."""
+        """Run backbone (if 4D input) + adapter + v6 trunk → 64-dim repr."""
         if visual_features.ndim == 4:
-            if not self.enable_backbone:
-                raise RuntimeError("Got pre-pool features but backbone is disabled")
             x = self.backbone(visual_features)  # (B, 1280)
         else:
-            x = visual_features  # already pooled
+            x = visual_features  # already pooled (legacy 1280-d input path)
 
         if self.enable_adapter and hasattr(self, "adapter"):
             x = self.adapter(x)
@@ -334,7 +339,15 @@ class FeatureDatasetV7:
 
     def __init__(self, max_synth_pairs: int = DEFAULT_MAX_SYNTH_PAIRS,
                  pair_overall_margin: float = DEFAULT_PAIR_MARGIN,
-                 pair_dim_margin: float = DEFAULT_PAIR_DIM_MARGIN):
+                 pair_dim_margin: float = DEFAULT_PAIR_DIM_MARGIN,
+                 use_pooled: bool = False):
+        """
+        use_pooled=False: returns (B, 7, 7, 320) tensors (Phase 7 default)
+        use_pooled=True:  returns (B, 1280) tensors from manifest cache.
+                          Used when --disable-backbone is set so callers
+                          can compare against a v6-equivalent baseline.
+        """
+        self.use_pooled = use_pooled
 
         # ── Load pre-features sidecar ──
         if not PRE_FEATURES_PATH.exists():
@@ -353,6 +366,7 @@ class FeatureDatasetV7:
         self.critique_by_cycle = load_critique_embeddings()
 
         self.pre_idx_in_dataset = []  # which row in self.pre_features
+        self.pooled_features = []     # filled when use_pooled=True
         self.targets = []
         self.code_features = []
         self.critique_embeddings = []
@@ -374,6 +388,13 @@ class FeatureDatasetV7:
             self.pre_idx_in_dataset.append(idx_to_pre[mi])
             self.targets.append(target)
             self.manifest_indices.append(mi)
+
+            if use_pooled:
+                pooled = sample.get("mobilenet_features")
+                if pooled and len(pooled) == 1280:
+                    self.pooled_features.append(pooled)
+                else:
+                    self.pooled_features.append([0.0] * 1280)
 
             code = sample.get("code_features")
             self.code_features.append(code if code and len(code) == 64 else [0.0] * 64)
@@ -492,8 +513,13 @@ class FeatureDatasetV7:
     def all_pairs(self):
         return self.real_pairs + self.synth_pairs
 
+    def _feats_for(self, ds_idx):
+        if self.use_pooled:
+            return np.asarray(self.pooled_features[ds_idx], dtype=np.float32)
+        return self.pre_features[self.pre_idx_in_dataset[ds_idx]]
+
     def get_regression_batch(self, indices):
-        feats = mx.array(self.pre_features[[self.pre_idx_in_dataset[i] for i in indices]])
+        feats = mx.array(np.stack([self._feats_for(i) for i in indices]))
         targets = mx.array(np.array([self.targets[i] for i in indices], dtype=np.float32))
         codes = mx.array(np.array([self.code_features[i] for i in indices], dtype=np.float32))
         crits = mx.array(np.array([self.critique_embeddings[i] for i in indices], dtype=np.float32))
@@ -502,16 +528,17 @@ class FeatureDatasetV7:
 
     def get_preference_batch(self, indices):
         if not indices:
-            empty4 = mx.zeros((0, 7, 7, 320))
-            return empty4, empty4, mx.zeros((0, 64)), mx.zeros((0, 64)), \
+            empty_shape = (0, 1280) if self.use_pooled else (0, 7, 7, 320)
+            empty = mx.zeros(empty_shape)
+            return empty, empty, mx.zeros((0, 64)), mx.zeros((0, 64)), \
                    mx.zeros((0, OUTPUT_DIM)), mx.zeros((0, OUTPUT_DIM))
 
         pairs = self.all_pairs
         feat_a, feat_b, code_a, code_b, win, marg = [], [], [], [], [], []
         for k in indices:
             a, b, w, m = pairs[k]
-            feat_a.append(self.pre_features[self.pre_idx_in_dataset[a]])
-            feat_b.append(self.pre_features[self.pre_idx_in_dataset[b]])
+            feat_a.append(self._feats_for(a))
+            feat_b.append(self._feats_for(b))
             code_a.append(self.code_features[a])
             code_b.append(self.code_features[b])
             win.append(w)
@@ -600,13 +627,22 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
           pair_overall_margin=DEFAULT_PAIR_MARGIN,
           pair_dim_margin=DEFAULT_PAIR_DIM_MARGIN,
           disable_aux=False, disable_adapter=False, disable_pref=False,
-          disable_backbone=False, from_scratch=False):
+          disable_backbone=True, from_scratch=False,
+          output_suffix=""):
+    """When `output_suffix` is set, weights save to design-head-v7{suffix}
+    and meta to train-v7{suffix}-meta.json — useful for ablations without
+    clobbering the canonical v7 checkpoint."""
 
     print("[v7] loading dataset...")
+    # Always feed the trainable backbone with pre-pool 4D features.  When
+    # disable_backbone is set we still pass them through the (frozen)
+    # backbone — that gives a deterministic ImageNet-equivalent forward
+    # pass and keeps the saved checkpoint architecturally consistent.
     dataset = FeatureDatasetV7(
         max_synth_pairs=max_synth_pairs,
         pair_overall_margin=pair_overall_margin,
         pair_dim_margin=pair_dim_margin,
+        use_pooled=False,
     )
     print(f"[v7] {len(dataset)} samples (with pre-pool features)")
     print(f"[v7] critique embeddings matched: {dataset.n_matched}")
@@ -620,10 +656,19 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
     aux_enabled = (not disable_aux) and (dataset.n_matched >= MIN_AUX_SAMPLES)
     pref_enabled = (not disable_pref) and (len(dataset.all_pairs) >= 5)
     adapter_enabled = not disable_adapter
-    backbone_enabled = not disable_backbone
+
+    # disable_backbone keeps the backbone module (so saved weights are
+    # architecturally consistent) but zeros its grad scaling so its
+    # ImageNet weights are preserved exactly.  Training runs with our
+    # current data size showed this is actually the best policy — the
+    # 414K trainable backbone params overfit on 385 train samples and
+    # regress visual-craft dims (typography, visceral, native).  Keep
+    # this default true until we have ≥1000 train samples.
+    effective_backbone_lr_ratio = 0.0 if disable_backbone else backbone_lr_ratio
+    backbone_trainable = effective_backbone_lr_ratio > 0.0
 
     print(f"[v7] phases: "
-          f"backbone={'on (trainable)' if backbone_enabled else 'off'} "
+          f"backbone={'fine-tune' if backbone_trainable else 'frozen'} "
           f"adapter={'on' if adapter_enabled else 'off'} "
           f"uncertainty=on "
           f"pref={'on' if pref_enabled else 'off'} "
@@ -634,21 +679,18 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         adapter_rank=adapter_rank,
         adapter_alpha=adapter_alpha,
         enable_adapter=adapter_enabled,
-        enable_backbone=backbone_enabled,
+        enable_backbone=True,  # always present — see DesignHeadV7 docstring
     )
     if not from_scratch:
         warm_start_from_v6(model, V6_WEIGHTS_PATH)
-    if backbone_enabled:
-        model.backbone.load_imagenet_weights(MOBILENET_WEIGHTS_PATH)
-        print(f"[v7] backbone features[18] loaded from {MOBILENET_WEIGHTS_PATH.name}")
+    # Always seed backbone from MobileNet ImageNet (whether we'll train it or not)
+    model.backbone.load_imagenet_weights(MOBILENET_WEIGHTS_PATH)
+    print(f"[v7] backbone features[18] loaded from {MOBILENET_WEIGHTS_PATH.name} "
+          f"({'trainable' if backbone_trainable else 'frozen'})")
     print(f"[v7] head: {model.param_count():,} params")
 
-    # Per-parameter learning rate: backbone gets backbone_lr_ratio × head LR.
-    # MLX optimizers don't natively support param groups, so we scale grads
-    # of backbone params by the ratio inside the training loop.
     backbone_param_paths = (
         {f"backbone.{k}" for k, _ in tree_flatten(model.backbone.parameters())}
-        if backbone_enabled else set()
     )
 
     optimizer = optim.AdamW(learning_rate=learning_rate, weight_decay=weight_decay)
@@ -685,7 +727,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
     best_uncertainty = None
 
     print(f"[v7] training: {epochs} epochs, batch {batch_size}, head_lr {learning_rate}, "
-          f"backbone_lr {learning_rate * backbone_lr_ratio:.2e}")
+          f"backbone_lr {learning_rate * effective_backbone_lr_ratio:.2e}")
     print(f"[v7] regularization: dropout={dropout}, weight_decay={weight_decay}")
     print()
 
@@ -693,8 +735,10 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
 
     for epoch in range(epochs):
         model.train()
-        if backbone_enabled:
-            model.backbone.eval()  # Keep BN in eval mode for the backbone
+        # Backbone always uses eval mode — there's no BN state since it
+        # was folded into the conv at init.  This call is a no-op for the
+        # fused conv but keeps semantics clear.
+        model.backbone.eval()
 
         t0 = time.time()
         rng = np.random.default_rng(epoch)
@@ -730,13 +774,13 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
                 feat_a, feat_b, code_a, code_b, winner, margin,
             )
 
-            # Scale backbone gradients down so the conv adapts gently.
-            if backbone_param_paths:
+            # Scale backbone gradients (0 = frozen, 0.1 = gentle fine-tune)
+            if backbone_param_paths and effective_backbone_lr_ratio != 1.0:
                 grad_flat = tree_flatten(grads)
                 scaled = []
                 for path, g in grad_flat:
                     if path in backbone_param_paths:
-                        scaled.append((path, g * backbone_lr_ratio))
+                        scaled.append((path, g * effective_backbone_lr_ratio))
                     else:
                         scaled.append((path, g))
                 grads = tree_unflatten(scaled)
@@ -786,7 +830,9 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
             best_uncertainty = std_per_dim_list
 
             WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
-            model.save_weights(str(V7_WEIGHTS_PATH))
+            weights_out = (WEIGHTS_DIR / f"design-head-v7{output_suffix}.safetensors"
+                           if output_suffix else V7_WEIGHTS_PATH)
+            model.save_weights(str(weights_out))
 
             dim_str = " | ".join(f"{SCORE_NAMES[i][:6]}={per_dim[i]:.3f}"
                                  for i in range(OUTPUT_DIM))
@@ -815,7 +861,9 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         "per_dim_mae": {n: best_per_dim[i] for i, n in enumerate(SCORE_NAMES)} if best_per_dim else {},
         "per_dim_predicted_std": {n: best_uncertainty[i] for i, n in enumerate(SCORE_NAMES)} if best_uncertainty else {},
         "param_count": model.param_count(),
-        "backbone": "mobilenet_v2_imagenet (features[18] trainable)" if backbone_enabled else "frozen",
+        "backbone": ("mobilenet_v2_imagenet (features[18] fine-tuned)"
+                     if backbone_trainable else
+                     "mobilenet_v2_imagenet (frozen)"),
         "feature_dim": 1280,
         "phases": {
             "phase_5_aux": {
@@ -833,9 +881,17 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
                 "rank": adapter_rank if adapter_enabled else None,
             },
             "phase_7_backbone": {
-                "enabled": backbone_enabled,
+                "always_present": True,
                 "trainable_block": "features[18] (1×1 320→1280 conv + BN + ReLU6)",
-                "lr_ratio": backbone_lr_ratio if backbone_enabled else 0.0,
+                "trainable": backbone_trainable,
+                "lr_ratio": effective_backbone_lr_ratio,
+                "note": (
+                    "Backbone fine-tune disabled by default — empirically it "
+                    "regressed visual-craft dims (typography, visceral, native) "
+                    "with our 385-train-sample regime even at lr_ratio=0.1.  "
+                    "Re-enable with --backbone-lr-ratio 0.05 once train pool "
+                    "exceeds ~1000 samples."
+                ),
             },
             "phase_8_preference": {
                 "enabled": pref_enabled,
@@ -849,7 +905,9 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         },
         "warm_start_from_v6": (not from_scratch) and V6_WEIGHTS_PATH.exists(),
     }
-    with open(WEIGHTS_DIR / "train-v7-meta.json", "w") as f:
+    meta_path = (WEIGHTS_DIR / f"train-v7{output_suffix}-meta.json"
+                 if output_suffix else WEIGHTS_DIR / "train-v7-meta.json")
+    with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
     return meta
@@ -875,10 +933,18 @@ if __name__ == "__main__":
     parser.add_argument("--disable-aux", action="store_true")
     parser.add_argument("--disable-adapter", action="store_true")
     parser.add_argument("--disable-pref", action="store_true")
+    parser.add_argument("--enable-backbone", action="store_true",
+                        help="Fine-tune the MobileNet features[18] backbone "
+                             "(default: frozen at ImageNet weights — empirically "
+                             "best for our current 385-train-sample regime)")
     parser.add_argument("--disable-backbone", action="store_true",
-                        help="Skip Phase 7 backbone fine-tuning (v6-equivalent)")
+                        help="Explicitly freeze backbone (this is the default; "
+                             "kept for backward compat with self_train calls)")
     parser.add_argument("--from-scratch", action="store_true",
                         help="Skip v6 warm-start; train from random init")
+    parser.add_argument("--output-suffix", default="",
+                        help="Save to design-head-v7{suffix}.safetensors "
+                             "(used for ablations)")
     args = parser.parse_args()
 
     train(
@@ -899,6 +965,9 @@ if __name__ == "__main__":
         disable_aux=args.disable_aux,
         disable_adapter=args.disable_adapter,
         disable_pref=args.disable_pref,
-        disable_backbone=args.disable_backbone,
+        # Backbone is frozen by default; --enable-backbone flips it to fine-tune.
+        # --disable-backbone is kept as a no-op for backward compat.
+        disable_backbone=not args.enable_backbone,
         from_scratch=args.from_scratch,
+        output_suffix=args.output_suffix,
     )
