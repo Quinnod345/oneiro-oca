@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-Design Model Inference Server — Phase 5/6/7.
+Design Model Inference Server — Phase 9 (DINOv2).
 
 Provides real-time design evaluation via Unix socket or HTTP.
 Any process (Node.js, Python, CLI) can query design scores.
 
-Architecture (auto-selected based on which weights file is present):
-  v7  PyTorch features[0..17] → MLX features[18] (fine-tuned) →
-      adapter → trunk → 4 heads (scores, uncertainty, pref, aux)
-  v6  PyTorch features[0..18] (frozen) → MLX trunk → 4 heads
-      (uncertainty meaningful, no backbone adaptation)
-  v5  same as v6 but no uncertainty/adapter/pref (loaded with
-      strict=False, those new params stay at random init)
+Architecture
+  v8  DINOv2 ViT-B/14 (PyTorch, frozen) → 768-d CLS token → MLX
+      adapter → trunk → 4 heads (scores, uncertainty, pref, aux).
+      DINOv2 features capture design quality far more crisply than
+      ImageNet's MobileNet — innovation/distinctiveness MAE dropped
+      14-25% vs v7 in the deployment retrain.
+
+Older v5/v6/v7 weight files require the 1280-d MobileNet feature
+input; this server no longer loads them.  To revive that path:
+revert mlx/inference_server.py to the pre-v8 commit.
 
 Actions:
-  evaluate       — screenshot → features → 16 design scores
-                   (with per-dim uncertainty when running v6/v7)
-  extract_features — screenshot → 1280-dim MobileNet features
+  evaluate       — screenshot → DINOv2 features → 16 design scores
+                   (with per-dim uncertainty)
+  extract_features — screenshot → 768-d DINOv2 CLS features
   status         — model info, uptime, request count, phase
   reload         — hot-reload DesignHead weights without restart
 
@@ -42,73 +45,57 @@ from mlx.utils import tree_flatten
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent))
-# v7 weights take precedence (Phase 7 backbone fine-tuned), then v6, then v5.
-# DesignHeadV7 is a strict superset of v6 (which is a superset of v5), so
-# the same class can load any of the three with strict=False.  Older
-# phases were purged 2026-04-28.
-from train_v7 import DesignHeadV7, MOBILENET_WEIGHTS_PATH, SCORE_NAMES, OUTPUT_DIM
+from train_v8 import DesignHeadV8, SCORE_NAMES, OUTPUT_DIM, VISUAL_DIM
 
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
-V7_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v7.safetensors"
-V6_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v6.safetensors"
-V5_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v5.safetensors"
+V8_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v8.safetensors"
 SOCKET_PATH = "/tmp/design-model-v2.sock"
 PID_PATH = "/tmp/design-model-v2.pid"
+
+DINOV2_MODEL_ID = "facebook/dinov2-base"
 
 # ═══════════════════════════════════════════════════
 # MOBILENET V2 FEATURE EXTRACTOR (PyTorch)
 # ═══════════════════════════════════════════════════
 
 
-class MobileNetExtractor:
-    """Persistent MobileNet V2 feature extractor using PyTorch.
+class Dinov2Extractor:
+    """Persistent DINOv2 ViT-B/14 feature extractor using PyTorch.
 
-    Returns BOTH the 1280-dim pooled vector (legacy callers / v5/v6) and
-    the (7, 7, 320) pre-pool tensor (v7's trainable features[18] consumes
-    this).  Both are cheap once the image has gone through features[0..17].
+    Returns the 768-dim CLS token from the last hidden state — DINOv2's
+    global summary representation.  86M params, ~340MB weights, ~40ms
+    per forward pass on M4 Max after warmup.
     """
 
-    def __init__(self):
+    def __init__(self, model_id: str = DINOV2_MODEL_ID):
         import torch
-        import torchvision.models as models
-        import torchvision.transforms as T
-
+        from transformers import AutoModel, AutoImageProcessor
         self.torch = torch
-        model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
-        model.eval()
+        self.model_id = model_id
 
-        # Split: pre[0..17] produces (1, 320, 7, 7); pooled[0..18]+pool produces (1, 1280)
-        self.pre_extractor = torch.nn.Sequential(*list(model.features)[:18])
-        self.pooled_extractor = torch.nn.Sequential(
-            model.features,
-            torch.nn.AdaptiveAvgPool2d((1, 1)),
-            torch.nn.Flatten(),
-        )
+        # Use MPS (Apple Silicon GPU) when available — ~30x faster than CPU
+        # for ViT forward passes.  Falls back to CPU if MPS isn't built in.
+        if torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
 
-        self.transform = T.Compose([
-            T.Resize((224, 224)),
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        print(f"[server] loading {model_id} on {self.device}...")
+        self.model = AutoModel.from_pretrained(model_id).to(self.device)
+        self.model.eval()
+        self.processor = AutoImageProcessor.from_pretrained(model_id)
+        self.feature_dim = self.model.config.hidden_size
 
     def extract(self, image_path: str) -> np.ndarray:
-        """Extract 1280-dim pooled features (legacy API)."""
+        """Extract 768-dim CLS-token features."""
         from PIL import Image
         img = Image.open(image_path).convert("RGB")
-        tensor = self.transform(img).unsqueeze(0)
+        inputs = self.processor(images=img, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with self.torch.no_grad():
-            features = self.pooled_extractor(tensor)
-        return features[0].numpy()
-
-    def extract_pre(self, image_path: str) -> np.ndarray:
-        """Extract pre-pool (7, 7, 320) features for v7's trainable backbone."""
-        from PIL import Image
-        img = Image.open(image_path).convert("RGB")
-        tensor = self.transform(img).unsqueeze(0)
-        with self.torch.no_grad():
-            pre = self.pre_extractor(tensor)  # (1, 320, 7, 7)
-        # → NHWC for MLX
-        return pre[0].permute(1, 2, 0).numpy().astype(np.float32)
+            out = self.model(**inputs)
+        # Last hidden state: (1, 257, 768) — index 0 = CLS, indices 1-256 = patches
+        return out.last_hidden_state[0, 0, :].cpu().numpy().astype(np.float32)
 
 
 # ═══════════════════════════════════════════════════
@@ -117,46 +104,19 @@ class MobileNetExtractor:
 
 
 def load_design_model():
-    """Load the latest design head — prefer v7, fall back to v6, then v5.
-
-    The v7 architecture is a strict superset of v6 (it adds a trainable
-    backbone), which is a superset of v5.  DesignHeadV7 with strict=False
-    can load any of the three checkpoints — missing params stay at random
-    init, including the backbone for v6/v5 (which will then need to be
-    re-initialized from MobileNet's ImageNet weights).
-    """
-    model = DesignHeadV7(dropout=0.0)
-
-    if V7_WEIGHTS_PATH.exists():
-        model.load_weights(str(V7_WEIGHTS_PATH))
-        weights_path = V7_WEIGHTS_PATH
-        phase = "phase_7"
-    elif V6_WEIGHTS_PATH.exists():
-        # v6 has no trainable backbone — load it as a v6-compat run.  We
-        # need to ALSO seed the backbone from ImageNet weights, otherwise
-        # the freshly-init v7 backbone is random and will give garbage
-        # predictions for any pre-pool feature path.
-        model.load_weights(str(V6_WEIGHTS_PATH), strict=False)
-        if MOBILENET_WEIGHTS_PATH.exists():
-            model.backbone.load_imagenet_weights(MOBILENET_WEIGHTS_PATH)
-        weights_path = V6_WEIGHTS_PATH
-        phase = "phase_6_compat"
-    elif V5_WEIGHTS_PATH.exists():
-        model.load_weights(str(V5_WEIGHTS_PATH), strict=False)
-        if MOBILENET_WEIGHTS_PATH.exists():
-            model.backbone.load_imagenet_weights(MOBILENET_WEIGHTS_PATH)
-        weights_path = V5_WEIGHTS_PATH
-        phase = "phase_5_compat"
-    else:
+    """Load the v8 design head."""
+    if not V8_WEIGHTS_PATH.exists():
         raise FileNotFoundError(
-            f"No weights at {V7_WEIGHTS_PATH}, {V6_WEIGHTS_PATH}, or "
-            f"{V5_WEIGHTS_PATH}.  Train via `python mlx/train_v7.py` first."
+            f"No v8 weights at {V8_WEIGHTS_PATH}.  Run "
+            f"`python mlx/extract_dinov2.py && python mlx/train_v8.py "
+            f"--epochs 500 --patience 80 --seeds 3` to produce them."
         )
-
+    model = DesignHeadV8(dropout=0.0)
+    model.load_weights(str(V8_WEIGHTS_PATH))
     total = sum(p.size for _, p in tree_flatten(model.parameters()))
-    print(f"[server] loaded {phase}: {weights_path.name} ({total:,} params)")
+    print(f"[server] loaded phase_9: {V8_WEIGHTS_PATH.name} ({total:,} params)")
     model.eval()
-    return model, phase
+    return model, "phase_9"
 
 
 # ═══════════════════════════════════════════════════
@@ -170,46 +130,36 @@ class InferenceServer:
         self.request_count = 0
         self.total_inference_ms = 0
 
-        print("[server] loading MobileNet V2 feature extractor...")
-        self.extractor = MobileNetExtractor()
+        self.extractor = Dinov2Extractor()
         print("[server] loading design model...")
         self.model, self.phase = load_design_model()
 
         if warmup:
-            print("[server] warming up MLX JIT...")
-            # Warm both code paths: pre-pool (v7 backbone) and pooled (legacy)
-            dummy_pre = mx.random.uniform(shape=(1, 7, 7, 320))
-            dummy_pooled = mx.random.uniform(shape=(1, 1280))
+            print("[server] warming up MLX JIT + DINOv2...")
+            dummy = mx.random.uniform(shape=(1, VISUAL_DIM))
             dummy_code = mx.zeros((1, 64))
-            _ = self.model(dummy_pre, dummy_code, return_uncertainty=True)
+            _ = self.model(dummy, dummy_code, return_uncertainty=True)
             mx.eval(_)
-            _ = self.model(dummy_pooled, dummy_code, return_uncertainty=True)
-            mx.eval(_)
+            # Also warm DINOv2 on its actual device (MPS on M4 Max)
+            import torch
+            dummy_img = torch.zeros(1, 3, 224, 224).to(self.extractor.device)
+            with torch.no_grad():
+                _ = self.extractor.model(pixel_values=dummy_img)
             print("[server] warmup complete")
 
     def evaluate(self, request: dict) -> dict:
-        """Run full evaluation: image → features → scores.
-
-        Phase routing:
-          - phase_7 / phase_6_compat / phase_5_compat: feed the trainable
-            MLX backbone with PRE-POOL (7, 7, 320) features so the
-            fine-tuned features[18] runs.  The PyTorch extractor's
-            extract_pre() does the cheap features[0..17] forward pass.
-          - precomputed_features (1280-d) bypass the trainable backbone
-            and use the legacy pooled-input path on the head's trunk.
-            This preserves backward compat for callers with cached features.
-        """
+        """Run full evaluation: image → DINOv2 features → scores."""
         t0 = time.time()
         inp = request.get("input", {})
 
         if "precomputed_features" in inp:
             vis_features = np.array(inp["precomputed_features"], dtype=np.float32)
-            vis_mx = mx.array(vis_features[None, :])  # (1, 1280) — legacy path
         elif "screenshot" in inp:
-            pre = self.extractor.extract_pre(inp["screenshot"])  # (7, 7, 320)
-            vis_mx = mx.array(pre[None, :, :, :])  # (1, 7, 7, 320)
+            vis_features = self.extractor.extract(inp["screenshot"])
         else:
             return {"error": "provide 'screenshot' path or 'precomputed_features'"}
+
+        vis_mx = mx.array(vis_features[None, :])
 
         if "code_features" in inp and inp["code_features"]:
             code_features = np.array(inp["code_features"], dtype=np.float32)
@@ -231,12 +181,7 @@ class InferenceServer:
 
         score_dict = {SCORE_NAMES[i]: round(scores[i], 4) for i in range(OUTPUT_DIM)}
         overall_idx = SCORE_NAMES.index("overall_aesthetic")
-
-        # Uncertainty is meaningful for v6+ and v7.  Phase_5_compat has
-        # random log_var weights so we suppress it.
-        uncertainty = None
-        if self.phase in ("phase_6_compat", "phase_7"):
-            uncertainty = {SCORE_NAMES[i]: round(stds[i], 4) for i in range(OUTPUT_DIM)}
+        uncertainty = {SCORE_NAMES[i]: round(stds[i], 4) for i in range(OUTPUT_DIM)}
 
         return {
             "scores": score_dict,
@@ -272,11 +217,7 @@ class InferenceServer:
     def status(self) -> dict:
         uptime = time.time() - self.start_time
         avg_ms = self.total_inference_ms / max(self.request_count, 1)
-        weights_path = (
-            V7_WEIGHTS_PATH if V7_WEIGHTS_PATH.exists()
-            else V6_WEIGHTS_PATH if V6_WEIGHTS_PATH.exists()
-            else V5_WEIGHTS_PATH
-        )
+        weights_path = V8_WEIGHTS_PATH
         return {
             "status": "running",
             "phase": self.phase,

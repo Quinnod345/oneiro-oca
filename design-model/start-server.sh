@@ -1,6 +1,7 @@
 #!/bin/bash
-# Start the Design Model Phase 7 inference server (auto-falls back to
-# Phase 6 / 5 if v7 weights are missing).
+# Start the Design Model Phase 9 inference server (DINOv2 ViT-B/14 backbone,
+# v8 weights). Older v5/v6/v7 weights are no longer loaded — they require
+# the previous MobileNet feature input that was removed in this phase.
 # Usage: ./start-server.sh [--warmup] [--port 8234]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,10 +22,10 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # Check dependencies
-python3 -c "import mlx, torch, torchvision, PIL" 2>/dev/null
+python3 -c "import mlx, torch, torchvision, PIL, transformers" 2>/dev/null
 if [ $? -ne 0 ]; then
   echo "[start-server] ERROR: missing dependencies. Install with:"
-  echo "  pip3 install --break-system-packages mlx torch torchvision pillow"
+  echo "  pip3 install --break-system-packages mlx torch torchvision pillow transformers"
   exit 1
 fi
 

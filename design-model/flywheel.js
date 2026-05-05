@@ -356,17 +356,16 @@ export async function runCycles(count, llmCall, options = {}) {
 async function triggerRetrain() {
   const mlxDir = join(__dirname, 'mlx');
 
-  // 1. Extract features for new samples (both pooled and pre-pool — v7 needs both)
-  console.log(`  [retrain] extracting features...`);
-  execSync(`python3 ${join(mlxDir, 'extract_features.py')} --include-pre`, {
-    encoding: 'utf-8', timeout: 180000, cwd: mlxDir,
+  // 1. Extract DINOv2 ViT-B/14 features for any new samples
+  console.log(`  [retrain] extracting DINOv2 features...`);
+  execSync(`python3 ${join(mlxDir, 'extract_dinov2.py')}`, {
+    encoding: 'utf-8', timeout: 300000, cwd: mlxDir,
   });
 
-  // 2. Retrain the head (Phase 7 — backbone fine-tune + 2000 synthetic pairs,
-  //                      warm-started from v6)
-  console.log(`  [retrain] training Phase 7 head...`);
+  // 2. Retrain the v8 head (Phase 9 — DINOv2 trunk + Phase 5/6/8 heads)
+  console.log(`  [retrain] training Phase 9 head...`);
   const trainResult = execSync(
-    `python3 ${join(mlxDir, 'train_v7.py')} --epochs 300 --batch 16 --patience 40`,
+    `python3 ${join(mlxDir, 'train_v8.py')} --epochs 300 --batch 16 --patience 40`,
     { encoding: 'utf-8', timeout: 600000, cwd: mlxDir }
   );
   console.log(`  [retrain] ${trainResult.split('\n').filter(l => l.includes('best val')).pop()}`);
