@@ -302,23 +302,27 @@ def retrain():
         except Exception as e:
             print(f"[retrain] embed error (non-fatal): {str(e)[:120]}")
 
-    # ── 2. Extract DINOv2 ViT-B/14 features ──
+    # ── 2. Extract DINOv2 vision features + MiniLM text-intent features ──
     print("[retrain] extracting DINOv2 features...")
     subprocess.run(["python3", "extract_dinov2.py"],
                    cwd=mlx_dir, capture_output=True)
+    print("[retrain] extracting MiniLM text features...")
+    subprocess.run(["python3", "extract_text.py"],
+                   cwd=mlx_dir, capture_output=True)
 
-    # ── 3. Train the Phase 9 v8 design head (DINOv2 trunk + Phase 5
-    #       critique aux + Phase 6 uncertainty + Phase 8 preference). ──
-    print("[retrain] training v8...")
+    # ── 3. Train the Phase 10 v9 design head (DINOv2 vision + MiniLM text
+    #       intent + Phase 5 critique aux + Phase 6 uncertainty
+    #       + Phase 8 preference). ──
+    print("[retrain] training v9...")
     result = subprocess.run(
-        ["python3", "train_v8.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
+        ["python3", "train_v9.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
         cwd=mlx_dir, capture_output=True, text=True,
     )
     for line in (result.stdout or "").split("\n"):
         if any(k in line for k in ("phases:", "best val loss", "matched:", "pairs:")):
             print(f"[retrain] {line.strip()}")
     if result.returncode != 0 and result.stderr:
-        print(f"[retrain] train_v8 stderr: {result.stderr[:300]}")
+        print(f"[retrain] train_v9 stderr: {result.stderr[:300]}")
 
 
 CRITIQUES_DIR = DATA_DIR / "critiques"

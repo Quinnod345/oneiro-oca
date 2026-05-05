@@ -80,8 +80,9 @@ export function queryServer(request) {
 }
 
 /**
- * Evaluate a design via the Phase 2b server.
- * Accepts screenshot path, precomputed features, and/or code features.
+ * Evaluate a design via the design model server.
+ * Accepts screenshot path, precomputed features, code features, and an
+ * optional design-intent brief (encoded server-side via MiniLM in v9+).
  */
 export async function evaluate(input) {
   return queryServer({
@@ -90,6 +91,7 @@ export async function evaluate(input) {
       screenshot: input.screenshot || undefined,
       precomputed_features: input.precomputedFeatures || undefined,
       code_features: input.codeFeatures || undefined,
+      brief: input.brief || undefined,
     },
   });
 }

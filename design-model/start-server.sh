@@ -1,7 +1,7 @@
 #!/bin/bash
-# Start the Design Model Phase 9 inference server (DINOv2 ViT-B/14 backbone,
-# v8 weights). Older v5/v6/v7 weights are no longer loaded — they require
-# the previous MobileNet feature input that was removed in this phase.
+# Start the Design Model Phase 10 inference server (DINOv2 ViT-B/14 vision
+# + MiniLM-L6-v2 text-intent, v9 weights). Older v5/v6/v7/v8 weights are
+# no longer loaded — they don't include the v9 text stream.
 # Usage: ./start-server.sh [--warmup] [--port 8234]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

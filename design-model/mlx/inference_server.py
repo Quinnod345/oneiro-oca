@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 """
-Design Model Inference Server — Phase 9 (DINOv2).
+Design Model Inference Server — Phase 10 (DINOv2 + text intent).
 
 Provides real-time design evaluation via Unix socket or HTTP.
 Any process (Node.js, Python, CLI) can query design scores.
 
 Architecture
-  v8  DINOv2 ViT-B/14 (PyTorch, frozen) → 768-d CLS token → MLX
-      adapter → trunk → 4 heads (scores, uncertainty, pref, aux).
-      DINOv2 features capture design quality far more crisply than
-      ImageNet's MobileNet — innovation/distinctiveness MAE dropped
-      14-25% vs v7 in the deployment retrain.
+  v9  vision: DINOv2 ViT-B/14 frozen, 768-d CLS token (PyTorch + MPS)
+      text:   MiniLM-L6-v2 frozen, 384-d sentence embedding (PyTorch + MPS)
+      head:   MLX, ~2.4M params, 4 heads (scores, uncertainty, pref, aux)
+      Trained with 10% text dropout so the no-brief inference case is
+      learned — passing no `brief` falls back to a zero text embedding.
 
-Older v5/v6/v7 weight files require the 1280-d MobileNet feature
-input; this server no longer loads them.  To revive that path:
-revert mlx/inference_server.py to the pre-v8 commit.
+Older v5/v6/v7/v8 weight files are no longer loaded.  To revive an
+older phase, revert mlx/inference_server.py to that commit.
+
+Eval request shape:
+  { "action": "evaluate",
+    "input": {
+      "screenshot": "/path/to/img.png",
+      "brief": "A minimal task list for macOS, inspired by Things 3",  // optional
+      "code_features": [...]                                            // optional
+    }
+  }
 
 Actions:
-  evaluate       — screenshot → DINOv2 features → 16 design scores
-                   (with per-dim uncertainty)
+  evaluate       — screenshot (+optional brief, +optional code_features)
+                   → 16 design scores + per-dim uncertainty
   extract_features — screenshot → 768-d DINOv2 CLS features
   status         — model info, uptime, request count, phase
   reload         — hot-reload DesignHead weights without restart
@@ -26,7 +34,7 @@ Actions:
 Usage:
   python inference_server.py                     # Unix socket mode
   python inference_server.py --port 8234         # HTTP mode
-  python inference_server.py --warmup            # Pre-warm MLX JIT
+  python inference_server.py --warmup            # Pre-warm everything
 """
 
 import argparse
@@ -45,14 +53,15 @@ from mlx.utils import tree_flatten
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from train_v8 import DesignHeadV8, SCORE_NAMES, OUTPUT_DIM, VISUAL_DIM
+from train_v9 import DesignHeadV9, SCORE_NAMES, OUTPUT_DIM, VISUAL_DIM, TEXT_DIM
 
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
-V8_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v8.safetensors"
+V9_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v9.safetensors"
 SOCKET_PATH = "/tmp/design-model-v2.sock"
 PID_PATH = "/tmp/design-model-v2.pid"
 
 DINOV2_MODEL_ID = "facebook/dinov2-base"
+MINILM_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
 
 # ═══════════════════════════════════════════════════
 # MOBILENET V2 FEATURE EXTRACTOR (PyTorch)
@@ -98,25 +107,70 @@ class Dinov2Extractor:
         return out.last_hidden_state[0, 0, :].cpu().numpy().astype(np.float32)
 
 
+class MiniLMTextEncoder:
+    """Persistent MiniLM-L6 sentence-transformer for live text encoding.
+
+    Mirrors the offline pipeline in extract_text.py — same model, same
+    mean-pool + L2-normalize.  Returns a 384-d unit vector per brief.
+    """
+
+    def __init__(self, model_id: str = MINILM_MODEL_ID):
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+        self.torch = torch
+        self.model_id = model_id
+
+        if torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
+
+        print(f"[server] loading {model_id} on {self.device}...")
+        self.model = AutoModel.from_pretrained(model_id).to(self.device)
+        self.model.eval()
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.feature_dim = self.model.config.hidden_size
+
+    def encode(self, text: str) -> np.ndarray:
+        """Return a 384-d L2-normalized sentence embedding."""
+        if not text or not text.strip():
+            # Match the training-time text-dropout fallback (zero vector)
+            return np.zeros(self.feature_dim, dtype=np.float32)
+        encoded = self.tokenizer([text], padding=True, truncation=True,
+                                  max_length=128, return_tensors="pt")
+        encoded = {k: v.to(self.device) for k, v in encoded.items()}
+        with self.torch.no_grad():
+            out = self.model(**encoded)
+        # Mean pool with attention mask
+        mask = encoded["attention_mask"].unsqueeze(-1).float()
+        summed = (out.last_hidden_state * mask).sum(dim=1)
+        denom = mask.sum(dim=1).clamp(min=1e-9)
+        pooled = summed / denom
+        # L2 normalize
+        pooled = self.torch.nn.functional.normalize(pooled, p=2, dim=1)
+        return pooled[0].cpu().numpy().astype(np.float32)
+
+
 # ═══════════════════════════════════════════════════
 # DESIGN HEAD (MLX)
 # ═══════════════════════════════════════════════════
 
 
 def load_design_model():
-    """Load the v8 design head."""
-    if not V8_WEIGHTS_PATH.exists():
+    """Load the v9 design head (DINOv2 + text intent)."""
+    if not V9_WEIGHTS_PATH.exists():
         raise FileNotFoundError(
-            f"No v8 weights at {V8_WEIGHTS_PATH}.  Run "
-            f"`python mlx/extract_dinov2.py && python mlx/train_v8.py "
-            f"--epochs 500 --patience 80 --seeds 3` to produce them."
+            f"No v9 weights at {V9_WEIGHTS_PATH}.  Run "
+            f"`python mlx/extract_dinov2.py && python mlx/extract_text.py "
+            f"&& python mlx/train_v9.py --epochs 500 --patience 80 --seeds 3` "
+            f"to produce them."
         )
-    model = DesignHeadV8(dropout=0.0)
-    model.load_weights(str(V8_WEIGHTS_PATH))
+    model = DesignHeadV9(dropout=0.0)
+    model.load_weights(str(V9_WEIGHTS_PATH))
     total = sum(p.size for _, p in tree_flatten(model.parameters()))
-    print(f"[server] loaded phase_9: {V8_WEIGHTS_PATH.name} ({total:,} params)")
+    print(f"[server] loaded phase_10: {V9_WEIGHTS_PATH.name} ({total:,} params)")
     model.eval()
-    return model, "phase_9"
+    return model, "phase_10"
 
 
 # ═══════════════════════════════════════════════════
@@ -131,24 +185,34 @@ class InferenceServer:
         self.total_inference_ms = 0
 
         self.extractor = Dinov2Extractor()
+        self.text_encoder = MiniLMTextEncoder()
         print("[server] loading design model...")
         self.model, self.phase = load_design_model()
 
         if warmup:
-            print("[server] warming up MLX JIT + DINOv2...")
-            dummy = mx.random.uniform(shape=(1, VISUAL_DIM))
+            print("[server] warming up MLX JIT + vision + text encoders...")
+            dummy_v = mx.random.uniform(shape=(1, VISUAL_DIM))
+            dummy_t = mx.random.uniform(shape=(1, TEXT_DIM))
             dummy_code = mx.zeros((1, 64))
-            _ = self.model(dummy, dummy_code, return_uncertainty=True)
+            _ = self.model(dummy_v, dummy_t, dummy_code, return_uncertainty=True)
             mx.eval(_)
-            # Also warm DINOv2 on its actual device (MPS on M4 Max)
+            # Warm DINOv2
             import torch
             dummy_img = torch.zeros(1, 3, 224, 224).to(self.extractor.device)
             with torch.no_grad():
                 _ = self.extractor.model(pixel_values=dummy_img)
+            # Warm MiniLM
+            _ = self.text_encoder.encode("a generic design")
             print("[server] warmup complete")
 
     def evaluate(self, request: dict) -> dict:
-        """Run full evaluation: image → DINOv2 features → scores."""
+        """Run full evaluation: screenshot (+ optional brief, code_features)
+        → 16 design scores with per-dim uncertainty.
+
+        The brief is encoded live via MiniLM and passed through the v9
+        text stream.  When the caller omits `brief`, a zero text vector
+        is sent (matches training-time text-dropout behavior, so the
+        model handles this gracefully)."""
         t0 = time.time()
         inp = request.get("input", {})
 
@@ -161,13 +225,19 @@ class InferenceServer:
 
         vis_mx = mx.array(vis_features[None, :])
 
+        # Brief (intent) — optional.  Empty string → zero text vector.
+        brief = (inp.get("brief") or "").strip()
+        text_features = self.text_encoder.encode(brief)
+        text_mx = mx.array(text_features[None, :])
+
         if "code_features" in inp and inp["code_features"]:
             code_features = np.array(inp["code_features"], dtype=np.float32)
         else:
             code_features = np.zeros(64, dtype=np.float32)
         code_mx = mx.array(code_features[None, :])
 
-        scores_mx, log_var_mx = self.model(vis_mx, code_mx, return_uncertainty=True)
+        scores_mx, log_var_mx = self.model(vis_mx, text_mx, code_mx,
+                                            return_uncertainty=True)
         mx.eval(scores_mx, log_var_mx)
         scores = scores_mx[0].tolist()
         log_var = mx.clip(log_var_mx, -7.0, 4.0)
@@ -187,6 +257,7 @@ class InferenceServer:
             "scores": score_dict,
             "overall": round(scores[overall_idx], 4),
             "uncertainty": uncertainty,
+            "brief_used": brief or None,
             "norman": {
                 "visceral": round(scores[SCORE_NAMES.index("visceral_score")], 4),
                 "behavioral": round(scores[SCORE_NAMES.index("behavioral_score")], 4),
@@ -217,7 +288,7 @@ class InferenceServer:
     def status(self) -> dict:
         uptime = time.time() - self.start_time
         avg_ms = self.total_inference_ms / max(self.request_count, 1)
-        weights_path = V8_WEIGHTS_PATH
+        weights_path = V9_WEIGHTS_PATH
         return {
             "status": "running",
             "phase": self.phase,
