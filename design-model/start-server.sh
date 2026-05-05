@@ -1,6 +1,6 @@
 #!/bin/bash
-# Start the Design Model Phase 6 inference server (falls back to Phase 5
-# if v6 weights are missing).
+# Start the Design Model Phase 7 inference server (auto-falls back to
+# Phase 6 / 5 if v7 weights are missing).
 # Usage: ./start-server.sh [--warmup] [--port 8234]
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

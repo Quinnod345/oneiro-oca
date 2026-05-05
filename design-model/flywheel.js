@@ -356,17 +356,18 @@ export async function runCycles(count, llmCall, options = {}) {
 async function triggerRetrain() {
   const mlxDir = join(__dirname, 'mlx');
 
-  // 1. Extract features for new samples
+  // 1. Extract features for new samples (both pooled and pre-pool — v7 needs both)
   console.log(`  [retrain] extracting features...`);
-  execSync(`python3 ${join(mlxDir, 'extract_features.py')}`, {
-    encoding: 'utf-8', timeout: 120000, cwd: mlxDir,
+  execSync(`python3 ${join(mlxDir, 'extract_features.py')} --include-pre`, {
+    encoding: 'utf-8', timeout: 180000, cwd: mlxDir,
   });
 
-  // 2. Retrain the head (Phase 6 — adapter + uncertainty + preference, warm-started from v5)
-  console.log(`  [retrain] training Phase 6 head...`);
+  // 2. Retrain the head (Phase 7 — backbone fine-tune + 2000 synthetic pairs,
+  //                      warm-started from v6)
+  console.log(`  [retrain] training Phase 7 head...`);
   const trainResult = execSync(
-    `python3 ${join(mlxDir, 'train_v6.py')} --epochs 300 --batch 16 --patience 40`,
-    { encoding: 'utf-8', timeout: 300000, cwd: mlxDir }
+    `python3 ${join(mlxDir, 'train_v7.py')} --epochs 300 --batch 16 --patience 40`,
+    { encoding: 'utf-8', timeout: 600000, cwd: mlxDir }
   );
   console.log(`  [retrain] ${trainResult.split('\n').filter(l => l.includes('best val')).pop()}`);
 

@@ -46,8 +46,8 @@ A scalable neural network that evaluates design quality across 16 dimensions:
 | 4 | Self-training loop + comparative preference model | Unlimited | **IN PROGRESS** — flywheel built, preference training ready |
 | 5 | v5 trunk + critique-embedding aux head | 2.40M | **BUILT, dormant** — aux head auto-disabled (critique cycle ids 13723-13734 don't overlap manifest sample ids 13-6827) |
 | 6 | Heteroscedastic uncertainty head (Gaussian NLL on per-dim mean+log_var) | +16K | **DONE** — val 0.0252 → 0.0234 |
-| 7 | LoRA-style feature adapter on cached MobileNet features (rank 64, residual gated by learned alpha) | +165K | **DONE** — converged in 89 epochs vs v5's 224 |
-| 8 | Per-dim Bradley-Terry preference head, jointly trained on flywheel comparisons.json pairs | +1K | **DONE** — 23 pairs joined to features, weight 0.15 |
+| 7 | Real backbone fine-tune: MobileNet `features[18]` (1×1 320→1280 conv + BN folded) trainable in MLX at 0.1× head LR. PLUS rank-64 LoRA adapter on the pooled output (carried from v6-lite). | +414K | **DONE** — val 0.0234 → 0.0225 |
+| 8 | Per-dim Bradley-Terry preference head trained on **2023** pairs (23 real flywheel + 2000 synthesized from manifest score margins, leak-free w.r.t. the val split) | +1K | **DONE** — backbone + pair synthesis together drove long-tail dims (innovation 0.150→0.138, design_distinctiveness 0.142→0.129, behavioral 0.082→0.074) |
 
 ### 2. The Emotion Bridge (the heart)
 
