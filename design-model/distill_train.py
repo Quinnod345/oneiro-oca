@@ -13,25 +13,29 @@ Why
     3. Same-or-faster inference on M4 Max with MPS
 
 Default student
-  HuggingFaceTB/SmolVLM-Instruct (2.25B params)
-    - Smallest serious VLM, runs comfortably on M4 Max under MPS
+  Qwen/Qwen2.5-VL-7B-Instruct (~7B params)
+    - Strongest open VLM under 10B as of late 2025
+    - Excellent at reading dense text in UI screenshots — important
+      for design-quality judgments where typography + microcopy matter
     - Apache 2.0 licensed
-    - Supports image + text → text generation
-    - LoRA target_modules: q_proj, v_proj, o_proj of the attention layers
+    - ~14 GB bf16 weights, ~25-30 GB peak training memory at batch=1
+    - Inference: ~1.5s per evaluation on M4 Max + MPS
 
 Alternatives (swap with --model):
-    google/paligemma2-3b-pt-224
-    Qwen/Qwen2.5-VL-3B-Instruct
+    Qwen/Qwen2.5-VL-3B-Instruct      # ~6 GB, ~600ms inference, slightly weaker
+    HuggingFaceTB/SmolVLM-Instruct   # ~5 GB, fastest, but materially weaker
+    google/paligemma2-3b-pt-224      # MLX-VLM friendly
+    OpenGVLab/InternVL2_5-8B         # roughly tied with Qwen2.5-VL 7B
 
 Output
   weights/distill-{model_name}-lora/      ← LoRA adapter weights
     adapter_config.json
     adapter_model.safetensors
 
-Cost / time
-  Distill 500 teacher samples (from distill_collect.py: ~$40):
-    LoRA fine-tune 3-5 epochs on M4 Max ~6-12 hours.
-    No API spend during training; pure local compute.
+Cost / time (Qwen2.5-VL 7B, ~500 teacher samples)
+  Teacher data:    ~$40 in Opus 4.7 calls (one-time, see distill_collect.py)
+  LoRA fine-tune:  4 epochs ≈ 12-20 hours on M4 Max + MPS
+  No API spend during training; pure local compute.
 
 Usage
   # Smoke test with a handful of teacher samples
@@ -57,7 +61,7 @@ DATA_DIR = ROOT / "data"
 DISTILL_DIR = DATA_DIR / "distill"
 WEIGHTS_DIR = ROOT / "weights"
 
-DEFAULT_MODEL = "HuggingFaceTB/SmolVLM-Instruct"
+DEFAULT_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
 DEFAULT_LORA_R = 16
 DEFAULT_LORA_ALPHA = 32
 DEFAULT_LORA_DROPOUT = 0.05
@@ -169,17 +173,18 @@ def build_lora_model(model_id: str, lora_r: int, lora_alpha: int,
     print(f"[distill] loaded in {time.time()-t0:.1f}s · "
           f"{sum(p.numel() for p in model.parameters())/1e6:.0f}M params")
 
-    # LoRA on attention projections.  Module names vary slightly across VLMs;
-    # the "auto" target module strategy in PEFT expects matching names like
-    # q_proj/v_proj/o_proj which are standard in HuggingFace transformer
-    # implementations of SmolVLM, PaliGemma, and Qwen-VL.
+    # LoRA on the attention projections of every transformer block.  Qwen2.5-VL,
+    # PaliGemma 2, SmolVLM, and InternVL all use the same q_proj/k_proj/v_proj/o_proj
+    # naming, so this target list works across all four.  Including k_proj
+    # (vs the original 3-projection set) gives a small capability boost at
+    # negligible cost on M4 Max.
     lora_config = LoraConfig(
         r=lora_r,
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules=["q_proj", "v_proj", "o_proj"],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
     model = get_peft_model(model, lora_config)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
