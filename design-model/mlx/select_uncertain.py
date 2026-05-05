@@ -102,8 +102,14 @@ def main():
                         help=".npz files with key 'features' (1280-dim)")
     parser.add_argument("--manifest-indices", nargs="*", default=[],
                         help="Manifest sample indices to score (uses cached features)")
+    parser.add_argument("--all-manifest", action="store_true",
+                        help="Score every manifest sample with cached features "
+                             "(useful for full-pool re-grade prioritization)")
     parser.add_argument("--top-k", type=int, default=None,
                         help="Return only the K highest-uncertainty entries")
+    parser.add_argument("--source-filter", default=None,
+                        help="Only consider samples whose 'source' field matches "
+                             "this string (e.g. 'opus_self_train', 'flywheel')")
     parser.add_argument("--json", action="store_true",
                         help="JSON output (default)")
     args = parser.parse_args()
@@ -125,25 +131,33 @@ def main():
             items.append({"path": path, "error": str(e)})
 
     # Score manifest entries by index — useful for "regrade these stale samples"
-    if args.manifest_indices:
+    needs_manifest = args.manifest_indices or args.all_manifest
+    if needs_manifest:
         from train_v6 import MANIFEST_PATH
         manifest = json.loads(Path(MANIFEST_PATH).read_text())
-        for raw_i in args.manifest_indices:
+
+        if args.all_manifest:
+            indices = range(len(manifest["samples"]))
+        else:
+            indices = [int(i) for i in args.manifest_indices]
+
+        for i in indices:
             try:
-                i = int(raw_i)
                 sample = manifest["samples"][i]
+                if args.source_filter and sample.get("source") != args.source_filter:
+                    continue
                 feat = np.array(sample.get("mobilenet_features", []), dtype=np.float32)
                 if feat.size == 0:
-                    items.append({"manifest_index": i, "error": "no features"})
-                    continue
+                    continue  # silently skip — full-pool scans hit lots of these
                 code_arr = sample.get("code_features") or [0.0] * 64
                 code = np.array(code_arr, dtype=np.float32)
                 scored = score_features(model, feat, code)
                 scored["manifest_index"] = i
+                scored["source"] = sample.get("source")
                 scored["source_name"] = sample.get("metadata", {}).get("source_name")
                 items.append(scored)
             except Exception as e:
-                items.append({"manifest_index": raw_i, "error": str(e)})
+                items.append({"manifest_index": i, "error": str(e)})
 
     # Rank by uncertainty (descending), errors last
     def sort_key(it):
