@@ -46,8 +46,8 @@ A scalable neural network that evaluates design quality across 16 dimensions:
 | 4 | Self-training loop + comparative preference model | Unlimited | **IN PROGRESS** — flywheel built, preference training ready |
 | 5 | v5 trunk + critique-embedding aux head | 2.40M | **BUILT, dormant** — aux head auto-disabled (critique cycle ids 13723-13734 don't overlap manifest sample ids 13-6827) |
 | 6 | Heteroscedastic uncertainty head (Gaussian NLL on per-dim mean+log_var) | +16K | **DONE** — val 0.0252 → 0.0234 |
-| 7 | Real backbone fine-tune: MobileNet `features[18]` (1×1 320→1280 conv + BN folded) trainable in MLX at 0.1× head LR. PLUS rank-64 LoRA adapter on the pooled output (carried from v6-lite). | +414K | **DONE** — val 0.0234 → 0.0225 |
-| 8 | Per-dim Bradley-Terry preference head trained on **2023** pairs (23 real flywheel + 2000 synthesized from manifest score margins, leak-free w.r.t. the val split) | +1K | **DONE** — backbone + pair synthesis together drove long-tail dims (innovation 0.150→0.138, design_distinctiveness 0.142→0.129, behavioral 0.082→0.074) |
+| 7 | Real backbone fine-tune: MobileNet `features[18]` (BN-folded 1×1 conv 320→1280) trainable in MLX. Architecture is implemented and the module is always present in v7's saved checkpoint, but **fine-tuning is disabled by default** — ablation showed it overfits at our current 385-train-sample size and regresses visual-craft dims. Re-enable via `--enable-backbone` once train pool > ~1000 samples. | +414K (frozen) | **IMPLEMENTED, gated** |
+| 8 | Per-dim Bradley-Terry preference head trained on **2023** pairs (23 real flywheel + 2000 synthesized from manifest score margins, leak-free w.r.t. val split) | +1K | **DONE** — drove val 0.0234 → 0.0206 alone, the actual win behind Phases 7+8 |
 
 ### 2. The Emotion Bridge (the heart)
 
