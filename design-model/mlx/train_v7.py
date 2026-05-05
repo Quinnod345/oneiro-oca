@@ -66,7 +66,12 @@ OUTPUT_DIM = 16
 CRITIQUE_DIM = 3072
 MIN_AUX_SAMPLES = 20
 
-DEFAULT_AUX_WEIGHT = 0.1
+# aux_weight 0.1 was the v5 default but it overweights the 3072-dim
+# critique-embedding regression vs the 16-dim score regression — multi-
+# seed sweep showed it regressed val_loss by ~4%.  0.02 gives the aux
+# head a useful gradient without dragging the trunk away from the main
+# task; it produced our best-ever single-seed val_loss (0.0195).
+DEFAULT_AUX_WEIGHT = 0.02
 DEFAULT_PREF_WEIGHT = 0.2
 DEFAULT_NLL_WEIGHT = 1.0
 DEFAULT_BACKBONE_LR_RATIO = 0.1   # backbone trains at 10% of head LR
