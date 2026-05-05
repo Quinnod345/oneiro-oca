@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Directory</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0e14;
+    --surface: #13141f;
+    --surface-raised: #1a1b2e;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --accent: #7c6af7;
+    --accent-dim: rgba(124,106,247,0.15);
+    --accent-glow: rgba(124,106,247,0.35);
+    --text-primary: #e8eaf0;
+    --text-secondary: #6b7280;
+    --text-muted: #3d4155;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 24px;
+    color: var(--text-primary);
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 1040px;
+  }
+
+  /* ── Page header ── */
+  .page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 20px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+    line-height: 1.2;
+  }
+
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-weight: 400;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Stat pills ── */
+  .stat-strip {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .stat-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    transition: border-color 0.2s;
+  }
+
+  .stat-pill:hover { border-color: var(--border-hover); }
+
+  .stat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .stat-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .stat-dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .stat-dot.accent { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+
+  .stat-label {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    margin-left: auto;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 280px;
+  }
+
+  .search-wrap svg {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--surface-raised);
+    transition: all 0.15s ease;
+    outline: none;
+  }
+
+  .search-input::placeholder { color: var(--text-muted); }
+
+  .search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface-raised);
+    border-radius: 8px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .tab:hover { color: var(--text-primary); }
+  .tab.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 6px var(--accent-glow);
+  }
+
+  .toolbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
+
+  .btn-ghost:hover {
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 8px var(--accent-glow);
+  }
+
+  .btn-primary:hover {
+    background: #6b5ce7;
+    box-shadow: 0 2px 14px var(--accent-glow);
+    transform: translateY(-1px);
+  }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    background: rgba(255,255,255,0.02);
+  }
+
+  th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th:first-child { padding-left: 24px; }
+  th:last-child { padding-right: 24px; text-align: right; }
+
+  th.sortable {
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+
+  th.sortable:hover { color: var(--text-secondary); }
+
+  th.sort-asc, th.sort-desc { color: var(--accent); }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sort-icon {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-muted);
+    transition: color 0.12s;
+  }
+
+  .sort-icon span {
+    display: block;
+    width: 0; height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+  }
+
+  .sort-icon .up { border-bottom: 3.5px solid currentColor; }
+  .sort-icon .down { border-top: 3.5px solid currentColor; }
+
+  th.sort-asc .sort-icon .up { color: var(--accent); }
+  th.sort-asc .sort-icon .down { color: var(--text-muted); }
+  th.sort-desc .sort-icon .up { color: var(--text-muted); }
+  th.sort-desc .sort-icon .down { color: var(--accent); }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.12s ease;
+    cursor: pointer;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody tr:hover { background: rgba(124,106,247,0.04); }
+
+  td {
+    padding: 13px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+
+  td:first-child { padding-left: 24px; }
+  td:last-child { padding-right: 24px; text-align: right; }
+
+  /* ── Person cell ── */
+  .person-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .avatar-ring {
+    position: absolute;
+    inset: -2px;
+    border-radius: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  tbody tr:hover .avatar-ring { opacity: 1; }
+
+  .person-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 13.5px;
+    letter-spacing: -0.1px;
+    line-height: 1.3;
+  }
+
+  .person-handle {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* ── Role badge ── */
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+    border: 1px solid transparent;
+  }
+
+  .role-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+  }
+
+  /* ── Status indicator ── */
+  .status-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .status-dot.online { background: var(--green); }
+  .status-dot.online::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: rgba(34,197,94,0.25);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.busy { background: var(--amber); }
+  .status-dot.away { background: var(--text-muted); }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .status-label {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  /* ── Activity bar ── */
+  .activity-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .activity-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 18px;
+  }
+
+  .activity-bar {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--text-muted);
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  tbody tr:hover .activity-bar.filled { background: var(--accent); }
+
+  .activity-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ── Skill tags ── */
+  .skills {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  .skill-tag {
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    letter-spacing: 0.1px;
+  }
+
+  /* ── Row actions ── */
+  .row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  tbody tr:hover .row-actions { opacity: 1; }
+
+  .icon-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .icon-btn:hover {
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    border-color: var(--border-hover);
+  }
+
+  /* ── Empty / footer ── */
+  .table-footer {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-count {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .footer-count strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  /* Selected row */
+  tbody tr.selected {
+    background: var(--accent-dim);
+    border-color: transparent;
+  }
+
+  tbody tr.selected td { color: var(--text-primary); }
+
+  /* Scrollable on small screens */
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Team Directory</div>
+      <div class="page-subtitle">Oneiro Design · 8 members across 3 departments</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+        Export
+      </button>
+      <button class="btn btn-primary">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Add Member
+      </button>
+    </div>
+  </div>
+
+  <!-- Stat strip -->
+  <div class="stat-strip">
+    <div class="stat-pill">
+      <div class="stat-dot green"></div>
+      <div class="stat-label">Online now</div>
+      <div class="stat-value">5</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot amber"></div>
+      <div class="stat-label">In Meeting</div>
+      <div class="stat-value">2</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot accent"></div>
+      <div class="stat-label">Open PRs</div>
+      <div class="stat-value">14</div>
+    </div>
+    <div class="stat-pill">
+      <div class="stat-dot" style="background:#3b82f6;box-shadow:0 0 6px #3b82f6;"></div>
+      <div class="stat-label">Sprinting</div>
+      <div class="stat-value">7</div>
+    </div>
+  </div>
+
+  <!-- Card -->
+  <div class="card">
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input class="search-input" type="text" placeholder="Search members…" id="searchInput">
+      </div>
+
+      <div class="filter-tabs" id="filterTabs">
+        <button class="tab active" data-filter="all">All</button>
+        <button class="tab" data-filter="eng">Engineering</button>
+        <button class="tab" data-filter="design">Design</button>
+        <button class="tab" data-filter="product">Product</button>
+      </div>
+
+      <div class="toolbar-right">
+        <button class="btn btn-ghost" id="densityBtn" title="Toggle density">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table id="teamTable">
+        <thead>
+          <tr>
+            <th class="sortable sort-asc" data-col="name">
+              <span class="th-inner">Member<span class="sort-icon"><span class="up"></span><span class="down"></span></span></span>
+            </th>
+            <th data-col="role">Role</th>
+            <th class="sortable" data-col="status">
+              <span class="th-inner">Status<span class="sort-icon"><span class="up"></span><span class="down"></span></span></span>
+            </th>
+            <th>Skills</th>
+            <th class="sortable" data-col="activity">
+              <span class="th-inner">Activity<span class="sort-icon"><span class="up"></span><span class="down"></span></span></span>
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-footer">
+      <div class="footer-count" id="footerCount"><strong>8</strong> members</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;">← Prev</button>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;background:var(--surface-raised);color:var(--text-primary);">1</button>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:11.5px;">Next →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const MEMBERS = [
+  {
+    name: "Maya Okafor",      handle: "@mayao",     dept: "eng",
+    role: "Staff Engineer",   roleColor: ["#1e3a5f","#3b82f6","#3b82f6"],
+    status: "online",         statusLabel: "Available",
+    skills: ["Rust","Systems","API"],
+    activity: 9,              avatarBg: "#1a2744", avatarFg: "#3b82f6", initials: "MO"
+  },
+  {
+    name: "Ravi Shankar",     handle: "@ravis",     dept: "design",
+    role: "Lead Designer",    roleColor: ["#2d1b5e","#a78bfa","#a78bfa"],
+    status: "busy",           statusLabel: "In meeting",
+    skills: ["Figma","Motion","DS"],
+    activity: 6,              avatarBg: "#1e1542", avatarFg: "#a78bfa", initials: "RS"
+  },
+  {
+    name: "Priya Nair",       handle: "@priyan",    dept: "product",
+    role: "Product Manager",  roleColor: ["#1a3322","#22c55e","#22c55e"],
+    status: "online",         statusLabel: "Available",
+    skills: ["Roadmap","SQL","OKR"],
+    activity: 7,              avatarBg: "#122a1c", avatarFg: "#22c55e", initials: "PN"
+  },
+  {
+    name: "Daniel Torres",    handle: "@dtorres",   dept: "eng",
+    role: "Senior Engineer",  roleColor: ["#1e3a5f","#3b82f6","#3b82f6"],
+    status: "online",         statusLabel: "Available",
+    skills: ["React","TypeScript","Node"],
+    activity: 8,              avatarBg: "#1a2744", avatarFg: "#60a5fa", initials: "DT"
+  },
+  {
+    name: "Ling Wei",         handle: "@lingw",     dept: "design",
+    role: "UX Researcher",    roleColor: ["#2d1b5e","#a78bfa","#a78bfa"],
+    status: "away",           statusLabel: "Away",
+    skills: ["Research","Proto","Testing"],
+    activity: 4,              avatarBg: "#251445", avatarFg: "#c4b5fd", initials: "LW"
+  },
+  {
+    name: "Ama Owusu",        handle: "@amaow",     dept: "eng",
+    role: "ML Engineer",      roleColor: ["#1e3a5f","#3b82f6","#3b82f6"],
+    status: "online",         statusLabel: "Available",
+    skills: ["Python","PyTorch","CUDA"],
+    activity: 10,             avatarBg: "#0f2038", avatarFg: "#93c5fd", initials: "AO"
+  },
+  {
+    name: "Felix Brandt",     handle: "@felixb",    dept: "product",
+    role: "Product Designer",  roleColor: ["#1a3322","#22c55e","#22c55e"],
+    status: "busy",           statusLabel: "Presenting",
+    skills: ["Figma","Copy","Brand"],
+    activity: 5,              avatarBg: "#112218", avatarFg: "#4ade80", initials: "FB"
+  },
+  {
+    name: "Isla Kovac",       handle: "@islak",     dept: "product",
+    role: "Head of Product",  roleColor: ["#1a3322","#22c55e","#22c55e"],
+    status: "online",         statusLabel: "Available",
+    skills: ["Strategy","P&L","GTM"],
+    activity: 7,              avatarBg: "#0f1f11", avatarFg: "#86efac", initials: "IK"
+  }
+];
+
+let currentFilter = "all";
+let sortCol = "name";
+let sortAsc = true;
+let selectedRow = null;
+let compact = false;
+
+function buildBars(n) {
+  const max = 10;
+  const heights = [0.3,0.5,0.4,0.7,0.6,0.8,0.5,0.9,0.7,1.0];
+  return Array.from({length: 10}, (_, i) => {
+    const h = Math.round(heights[i % heights.length] * 18);
+    const filled = (i / 10) < (n / max);
+    return `<div class="activity-bar${filled ? ' filled' : ''}" style="height:${h}px"></div>`;
+  }).join('');
+}
+
+function render() {
+  let data = MEMBERS.filter(m =>
+    currentFilter === "all" || m.dept === currentFilter
+  );
+
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (q) data = data.filter(m =>
+    m.name.toLowerCase().includes(q) ||
+    m.role.toLowerCase().includes(q) ||
+    m.skills.some(s => s.toLowerCase().includes(q))
+  );
+
+  data.sort((a, b) => {
+    let va = a[sortCol] || a.name;
+    let vb = b[sortCol] || b.name;
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    return sortAsc ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
+  });
+
+  const pdg = compact ? '9px 16px' : '13px 16px';
+  const fpd = compact ? '9px 24px' : '13px 24px';
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = data.map((m, i) => {
+    const [bgC, fgC, ringC] = m.roleColor;
+    return `
+    <tr data-idx="${i}" onclick="selectRow(this)">
+      <td style="padding:${fpd}">
+        <div class="person-cell">
+          <div class="avatar" style="background:${m.avatarBg};color:${m.avatarFg};">
+            <div class="avatar-ring" style="background:conic-gradient(${ringC} 0deg,transparent 270deg);opacity:0;"></div>
+            ${m.initials}
+          </div>
+          <div>
+            <div class="person-name">${m.name}</div>
+            <div class="person-handle">${m.handle}</div>
+          </div>
+        </div>
+      </td>
+      <td style="padding:${pdg}">
+        <span class="role-badge" style="background:${bgC};color:${fgC};border-color:${fgC}22;">
+          <span class="role-dot" style="background:${fgC};"></span>
+          ${m.role}
+        </span>
+      </td>
+      <td style="padding:${pdg}">
+        <div class="status-wrap">
+          <div class="status-dot ${m.status}"></div>
+          <span class="status-label">${m.statusLabel}</span>
+        </div>
+      </td>
+      <td style="padding:${pdg}">
+        <div class="skills">${m.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}</div>
+      </td>
+      <td style="padding:${pdg}">
+        <div class="activity-cell">
+          <div class="activity-bars">${buildBars(m.activity)}</div>
+          <div class="activity-label">${m.activity * 10}% active</div>
+        </div>
+      </td>
+      <td style="padding-right:24px;padding-top:${compact?'9':'13'}px;padding-bottom:${compact?'9':'13'}px;">
+        <div class="row-actions">
+          <button class="icon-btn" title="Message">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="Profile">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M18 20a6 6 0 0 0-12 0"/><circle cx="12" cy="10" r="4"/>
+            </svg>
+          </button>
+          <button class="icon-btn" title="More">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+            </svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('footerCount').innerHTML = `<strong>${data.length}</strong> member${data.length !== 1 ? 's' : ''}`;
+}
+
+function selectRow(row) {
+  if (selectedRow) selectedRow.classList.remove('selected');
+  if (selectedRow === row) { selectedRow = null; return; }
+  row.classList.add('selected');
+  selectedRow = row;
+}
+
+// Filter tabs
+document.getElementById('filterTabs').addEventListener('click', e => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  currentFilter = tab.dataset.filter;
+  render();
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input', render);
+
+// Sort
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) {
+      sortAsc = !sortAsc;
+    } else {
+      sortCol = col;
+      sortAsc = true;
+    }
+    document.querySelectorAll('th.sortable').forEach(t => {
+      t.classList.remove('sort-asc','sort-desc');
+    });
+    th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+    render();
+  });
+});
+
+// Density toggle
+document.getElementById('densityBtn').addEventListener('click', () => {
+  compact = !compact;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

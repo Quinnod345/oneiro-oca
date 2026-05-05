@@ -122,10 +122,58 @@ def load_train_samples():
     return train_samples
 
 
-def select_pairs(samples, max_pairs, overall_max_margin, per_category_cap, seed=0):
-    """Sample up to max_pairs close-score pairs, stratified by category."""
+def load_already_graded_pair_keys(samples):
+    """Return set of frozenset({mi_a, mi_b}) for pairs already in
+    comparisons.json — used to dedupe across multiple grader runs."""
+    if not COMPARISONS_PATH.exists():
+        return set()
+    try:
+        comps = json.loads(COMPARISONS_PATH.read_text())
+    except Exception:
+        return set()
+
+    # Build path → manifest_index lookup from the dataset we built above
+    path_to_mi = {}
+    for mi, s in samples:
+        for k in ("image", "screenshot_path"):
+            p = s.get(k)
+            if p:
+                path_to_mi[p] = mi
+
+    seen = set()
+    for pair in comps.get("pairs", []):
+        # Prefer explicit indices (newer pairwise_grader pairs have these)
+        mi_a = pair.get("manifest_index_a")
+        mi_b = pair.get("manifest_index_b")
+        # Fall back to path lookup (older flywheel pairs lack the indices)
+        if mi_a is None:
+            mi_a = path_to_mi.get(pair.get("image_a"))
+        if mi_b is None:
+            mi_b = path_to_mi.get(pair.get("image_b"))
+        if mi_a is not None and mi_b is not None:
+            seen.add(frozenset({int(mi_a), int(mi_b)}))
+    return seen
+
+
+def select_pairs(samples, max_pairs, overall_max_margin, per_category_cap,
+                 seed=0, already_graded=None):
+    """Sample up to max_pairs close-score pairs, stratified by category.
+
+    already_graded (set of frozenset({mi_a, mi_b})) excludes pairs that
+    have already been graded in comparisons.json — lets us run the
+    grader iteratively without re-grading the same pairs.
+    """
+    if already_graded is None:
+        already_graded = set()
     rng = np.random.default_rng(seed)
     overalls = np.array([s["scores"]["overall_aesthetic"] for _, s in samples])
+
+    # Manifest-index lookup so we can check `already_graded` (which is keyed
+    # by manifest index, not by sample-list position).
+    sample_mi = [mi for mi, _ in samples]
+
+    def _is_already_graded(ki, kj):
+        return frozenset({sample_mi[ki], sample_mi[kj]}) in already_graded
 
     # Group by category for stratification
     cats = {}
@@ -142,6 +190,8 @@ def select_pairs(samples, max_pairs, overall_max_margin, per_category_cap, seed=
         for i in range(len(idxs)):
             for j in range(i + 1, len(idxs)):
                 ki, kj = idxs[i], idxs[j]
+                if _is_already_graded(ki, kj):
+                    continue
                 margin = abs(overalls[ki] - overalls[kj])
                 if margin < overall_max_margin:
                     cat_pairs.append((ki, kj, float(margin), cat))
@@ -157,7 +207,7 @@ def select_pairs(samples, max_pairs, overall_max_margin, per_category_cap, seed=
     for _ in range(max_pairs * 3):
         i = int(rng.integers(0, n))
         j = int(rng.integers(0, n))
-        if i == j:
+        if i == j or _is_already_graded(i, j):
             continue
         margin = abs(float(overalls[i]) - float(overalls[j]))
         if margin < overall_max_margin / 2:  # tighter — only very close cross-cat
@@ -360,12 +410,16 @@ def main() -> int:
     print(f"[pairwise] {len(samples)} train-split samples eligible "
           f"(have features, screenshots, overall_aesthetic)")
 
+    already_graded = load_already_graded_pair_keys(samples)
+    print(f"[pairwise] already graded in comparisons.json: {len(already_graded)} pairs (will skip)")
+
     pairs = select_pairs(
         samples,
         max_pairs=args.max_pairs,
         overall_max_margin=args.overall_max_margin,
         per_category_cap=args.per_category_cap,
         seed=args.seed,
+        already_graded=already_graded,
     )
     print(f"[pairwise] selected {len(pairs)} pairs to grade "
           f"(target {args.max_pairs})")

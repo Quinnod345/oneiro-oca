@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Command Palette</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Ambient background orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.35;
+    pointer-events: none;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+  .orb-1 { width: 500px; height: 500px; background: radial-gradient(circle, #7c3aed, transparent); top: -100px; left: -100px; animation-delay: 0s; }
+  .orb-2 { width: 400px; height: 400px; background: radial-gradient(circle, #2563eb, transparent); bottom: -80px; right: -80px; animation-delay: -4s; }
+  .orb-3 { width: 300px; height: 300px; background: radial-gradient(circle, #db2777, transparent); top: 50%; left: 60%; animation-delay: -8s; }
+
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(30px, -20px) scale(1.05); }
+  }
+
+  /* Overlay backdrop */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 5, 15, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14vh;
+    animation: overlayIn 0.18s ease-out;
+  }
+
+  @keyframes overlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* Palette container */
+  .palette {
+    width: 100%;
+    max-width: 640px;
+    background: rgba(18, 16, 36, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 1px rgba(124, 58, 237, 0.15),
+      0 32px 80px rgba(0, 0, 0, 0.6),
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(32px) saturate(180%);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
+    overflow: hidden;
+    animation: paletteIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes paletteIn {
+    from { opacity: 0; transform: scale(0.94) translateY(-12px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* Search bar */
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 18px;
+    height: 60px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    position: relative;
+  }
+
+  .search-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    font-size: 15px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.92);
+    letter-spacing: -0.01em;
+    caret-color: #7c3aed;
+  }
+
+  .search-input::placeholder { color: rgba(255, 255, 255, 0.28); }
+
+  .search-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(124, 58, 237, 0.25);
+    border-top-color: #7c3aed;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results list */
+  .results {
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 8px 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(124, 58, 237, 0.3) transparent;
+  }
+
+  .results::-webkit-scrollbar { width: 4px; }
+  .results::-webkit-scrollbar-track { background: transparent; }
+  .results::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.35); border-radius: 4px; }
+
+  /* Group label */
+  .group-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.28);
+    padding: 10px 18px 4px;
+    user-select: none;
+  }
+
+  .group-label:not(:first-child) {
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 14px;
+  }
+
+  /* Result item */
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    margin: 0 6px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    position: relative;
+    user-select: none;
+  }
+
+  .item:hover,
+  .item.active {
+    background: rgba(124, 58, 237, 0.18);
+  }
+
+  .item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: linear-gradient(to bottom, #a78bfa, #7c3aed);
+    border-radius: 0 3px 3px 0;
+    margin-left: -6px;
+  }
+
+  /* Item icon */
+  .item-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: background 0.1s;
+  }
+
+  .item.active .item-icon,
+  .item:hover .item-icon {
+    background: rgba(124, 58, 237, 0.25);
+    border-color: rgba(124, 58, 237, 0.35);
+  }
+
+  /* Item text */
+  .item-body { flex: 1; min-width: 0; }
+
+  .item-name {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.88);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-desc {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Keyboard shortcut badges */
+  .item-kbd {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .item.active .item-kbd,
+  .item:hover .item-kbd { opacity: 1; }
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    min-width: 20px;
+    padding: 0 5px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Menlo', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.09);
+    border-radius: 5px;
+    letter-spacing: 0;
+    user-select: none;
+  }
+
+  /* Match highlight */
+  mark {
+    background: none;
+    color: #a78bfa;
+    font-weight: 600;
+  }
+
+  /* Footer */
+  .palette-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .footer-hints {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .footer-hint {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.25);
+    letter-spacing: 0.01em;
+  }
+
+  .footer-brand {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(124, 58, 237, 0.45);
+    text-transform: uppercase;
+  }
+
+  /* Empty state */
+  .empty-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 13px;
+  }
+
+  .empty-state svg { opacity: 0.3; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Ambient orbs -->
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- Overlay -->
+<div class="overlay">
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+
+    <!-- Search -->
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75">
+        <circle cx="8.5" cy="8.5" r="5.5"/>
+        <path d="M15 15l-3-3" stroke-linecap="round"/>
+      </svg>
+      <input
+        class="search-input"
+        type="text"
+        placeholder="Search commands, files, and more…"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        id="cmd-input"
+        aria-autocomplete="list"
+        aria-controls="cmd-results"
+      />
+      <div class="search-spinner" id="spinner" style="display:none;"></div>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="cmd-results" role="listbox">
+
+      <!-- Group: Recent -->
+      <div class="group-label">Recent</div>
+
+      <div class="item active" role="option" aria-selected="true" data-action="open-dashboard">
+        <div class="item-icon">📊</div>
+        <div class="item-body">
+          <div class="item-name">Open Dashboard</div>
+          <div class="item-desc">Navigate to the main overview</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>↵</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="new-document">
+        <div class="item-icon">📄</div>
+        <div class="item-body">
+          <div class="item-name">New Document</div>
+          <div class="item-desc">Create a blank document in workspace</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>N</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="invite-member">
+        <div class="item-icon">👤</div>
+        <div class="item-body">
+          <div class="item-name">Invite Team Member</div>
+          <div class="item-desc">Send an invitation by email</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>I</kbd>
+        </div>
+      </div>
+
+      <!-- Group: Navigation -->
+      <div class="group-label">Navigation</div>
+
+      <div class="item" role="option" aria-selected="false" data-action="go-settings">
+        <div class="item-icon">⚙️</div>
+        <div class="item-body">
+          <div class="item-name">Settings</div>
+          <div class="item-desc">Preferences, billing, and account</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>,</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="go-analytics">
+        <div class="item-icon">📈</div>
+        <div class="item-body">
+          <div class="item-name">Analytics</div>
+          <div class="item-desc">Usage trends and reporting</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>G</kbd><kbd>A</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="go-projects">
+        <div class="item-icon">🗂️</div>
+        <div class="item-body">
+          <div class="item-name">Projects</div>
+          <div class="item-desc">Browse all active projects</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>G</kbd><kbd>P</kbd>
+        </div>
+      </div>
+
+      <!-- Group: Actions -->
+      <div class="group-label">Actions</div>
+
+      <div class="item" role="option" aria-selected="false" data-action="toggle-theme">
+        <div class="item-icon">🌙</div>
+        <div class="item-body">
+          <div class="item-name">Toggle Theme</div>
+          <div class="item-desc">Switch between light and dark mode</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="copy-link">
+        <div class="item-icon">🔗</div>
+        <div class="item-body">
+          <div class="item-name">Copy Page Link</div>
+          <div class="item-desc">Copy shareable URL to clipboard</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd>
+        </div>
+      </div>
+
+      <div class="item" role="option" aria-selected="false" data-action="logout">
+        <div class="item-icon">🚪</div>
+        <div class="item-body">
+          <div class="item-name">Sign Out</div>
+          <div class="item-desc">End your current session</div>
+        </div>
+        <div class="item-kbd">
+          <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Q</kbd>
+        </div>
+      </div>
+
+      <!-- Empty state (shown when no results) -->
+      <div class="empty-state" id="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/>
+        </svg>
+        No results found
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="palette-footer">
+      <div class="footer-hints">
+        <div class="footer-hint"><kbd>↑</kbd><kbd>↓</kbd> navigate</div>
+        <div class="footer-hint"><kbd>↵</kbd> select</div>
+        <div class="footer-hint"><kbd>Esc</kbd> close</div>
+      </div>
+      <div class="footer-brand">CMD+K</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function() {
+  const input = document.getElementById('cmd-input');
+  const spinner = document.getElementById('spinner');
+  const results = document.getElementById('cmd-results');
+  const emptyState = document.getElementById('empty-state');
+  const items = () => Array.from(results.querySelectorAll('.item:not([style*="display: none"])'));
+  let activeIdx = 0;
+  let searchTimer = null;
+
+  const allItems = Array.from(results.querySelectorAll('.item')).map(el => ({
+    el,
+    name: el.querySelector('.item-name').textContent,
+    desc: el.querySelector('.item-desc').textContent,
+  }));
+
+  function setActive(idx) {
+    const visible = items();
+    visible.forEach((el, i) => {
+      el.classList.toggle('active', i === idx);
+      el.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+    });
+    activeIdx = idx;
+    if (visible[idx]) visible[idx].scrollIntoView({ block: 'nearest' });
+  }
+
+  function highlightText(text, query) {
+    if (!query) return text;
+    const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(re, '<mark>$1</mark>');
+  }
+
+  function filterItems(query) {
+    const q = query.trim().toLowerCase();
+    let anyVisible = false;
+
+    allItems.forEach(({ el, name, desc }) => {
+      const match = !q || name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+      el.style.display = match ? '' : 'none';
+      if (match) {
+        el.querySelector('.item-name').innerHTML = highlightText(name, q);
+        el.querySelector('.item-desc').innerHTML = highlightText(desc, q);
+        anyVisible = true;
+      }
+    });
+
+    // Hide empty group labels
+    results.querySelectorAll('.group-label').forEach(label => {
+      let next = label.nextElementSibling;
+      let hasVisible = false;
+      while (next && !next.classList.contains('group-label') && !next.id) {
+        if (next.style.display !== 'none') hasVisible = true;
+        next = next.nextElementSibling;
+      }
+      label.style.display = hasVisible ? '' : 'none';
+    });
+
+    emptyState.style.display = anyVisible ? 'none' : 'flex';
+    setActive(0);
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    spinner.style.display = 'block';
+    searchTimer = setTimeout(() => {
+      filterItems(input.value);
+      spinner.style.display = 'none';
+    }, 120);
+  });
+
+  document.addEventListener('keydown', e => {
+    const visible = items();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(Math.min(activeIdx + 1, visible.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(Math.max(activeIdx - 1, 0));
+    } else if (e.key === 'Escape') {
+      document.querySelector('.overlay').style.animation = 'none';
+      document.querySelector('.palette').style.animation = 'none';
+      document.querySelector('.overlay').style.opacity = '0';
+      document.querySelector('.palette').style.transform = 'scale(0.94) translateY(-12px)';
+      document.querySelector('.palette').style.opacity = '0';
+      document.querySelector('.palette').style.transition = 'all 0.15s ease';
+      document.querySelector('.overlay').style.transition = 'opacity 0.15s ease';
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (visible[activeIdx]) {
+        visible[activeIdx].style.background = 'rgba(124,58,237,0.35)';
+        setTimeout(() => filterItems(input.value), 200);
+      }
+    }
+  });
+
+  // Mouse hover
+  results.addEventListener('mousemove', e => {
+    const item = e.target.closest('.item');
+    if (!item) return;
+    const visible = items();
+    const idx = visible.indexOf(item);
+    if (idx !== -1) setActive(idx);
+  });
+
+  input.focus();
+})();
+</script>
+</body>
+</html>
