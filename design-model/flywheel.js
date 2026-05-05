@@ -362,11 +362,11 @@ async function triggerRetrain() {
     encoding: 'utf-8', timeout: 120000, cwd: mlxDir,
   });
 
-  // 2. Retrain the head
-  console.log(`  [retrain] training Phase 2b head...`);
+  // 2. Retrain the head (Phase 5 — falls back to v2-equivalent when aux head can't activate)
+  console.log(`  [retrain] training Phase 5 head...`);
   const trainResult = execSync(
-    `python3 ${join(mlxDir, 'train_v2.py')} --epochs 300 --batch 16 --patience 40`,
-    { encoding: 'utf-8', timeout: 120000, cwd: mlxDir }
+    `python3 ${join(mlxDir, 'train_v5.py')} --epochs 300 --batch 16 --patience 40`,
+    { encoding: 'utf-8', timeout: 300000, cwd: mlxDir }
   );
   console.log(`  [retrain] ${trainResult.split('\n').filter(l => l.includes('best val')).pop()}`);
 
