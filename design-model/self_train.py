@@ -744,6 +744,16 @@ def main():
         default="auto",
         help="Force a specific language for this worker (default: random rotation)",
     )
+    parser.add_argument(
+        "--regrade-every", type=int, default=0,
+        help="Run regrade_uncertain.py every N successful cycles "
+             "(0 = disabled). Worker 0 only — other workers skip to avoid "
+             "double regrading.",
+    )
+    parser.add_argument(
+        "--regrade-top-k", type=int, default=10,
+        help="Regrade this many of the most-uncertain samples per regrade pass",
+    )
     args = parser.parse_args()
 
     total = float("inf") if args.forever else args.cycles
@@ -830,6 +840,33 @@ def main():
                     else:
                         print(f"{prefix}[retrain] skipped — another worker is retraining")
                         sys.stdout.flush()
+
+            # ── Active-learning regrade pass (Phase 6) ──
+            # Only worker 0 runs this so we don't double-regrade in parallel
+            # mode.  Costs API spend, so opt-in via --regrade-every.
+            if (args.regrade_every > 0
+                    and args.worker_id == 0
+                    and current_samples > 0
+                    and current_samples % args.regrade_every == 0):
+                print(f"{prefix}[regrade] uncertainty-driven regrade pass "
+                      f"(top {args.regrade_top_k})")
+                sys.stdout.flush()
+                try:
+                    rg = subprocess.run(
+                        ["python3", "regrade_uncertain.py",
+                         "--top-k", str(args.regrade_top_k)],
+                        cwd=str(Path(__file__).parent),
+                        capture_output=True, text=True, timeout=600,
+                    )
+                    for line in (rg.stdout or "").split("\n"):
+                        if line.strip():
+                            print(f"{prefix}[regrade] {line.rstrip()}")
+                    if rg.returncode != 0:
+                        print(f"{prefix}[regrade] failed: {(rg.stderr or '')[:200]}")
+                    sys.stdout.flush()
+                except Exception as e:
+                    print(f"{prefix}[regrade] error: {e}")
+                    sys.stdout.flush()
 
         i += 1
 

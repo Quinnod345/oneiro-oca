@@ -1,9 +1,10 @@
-// Design Evaluation API — Phase 5 only.
-// The model is the Phase 5 MLX inference server (DesignHeadV5 on M4 GPU,
-// MobileNet V2 feature extractor) at /tmp/design-model-v2.sock. Earlier
-// phases were purged 2026-04-28 — there is no fallback. If the server
-// isn't running, this throws so callers fail loudly instead of silently
-// degrading to a weaker model.
+// Design Evaluation API — Phase 6 (with Phase 5 fallback).
+// The model is the MLX inference server at /tmp/design-model-v2.sock. It
+// loads design-head-v6.safetensors when present (Phase 6 head with
+// uncertainty + LoRA adapter + preference outputs) and falls back to
+// design-head-v5.safetensors otherwise (uncertainty suppressed in fallback).
+// Earlier phases were purged 2026-04-28 — if the server isn't running this
+// throws so callers fail loudly instead of silently degrading.
 //
 // To start the server:
 //   python3 mlx/inference_server.py --warmup &
@@ -12,7 +13,7 @@ import { encodeFromCode, analyzeDesignCode } from './encoder.js';
 import { DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_EMOTIONS, NORMAN_LEVELS } from './knowledge.js';
 
 const SERVER_HINT =
-  'Phase 5 design server is not running. Start it with:\n' +
+  'Design model server (Phase 6) is not running. Start it with:\n' +
   '  cd /Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/mlx && \\\n' +
   '  python3 inference_server.py --warmup &';
 
@@ -51,13 +52,17 @@ export async function evaluateDesign(input, options = {}) {
     scores: serverResult.scores,
     overall: serverResult.overall,
     norman: serverResult.norman,
+    uncertainty: serverResult.uncertainty || null,
+    leastConfident: serverResult.uncertainty
+      ? findLeastConfident(serverResult.uncertainty, 3)
+      : [],
     weakest: findWeakest(serverResult.scores, 3),
     strongest: findStrongest(serverResult.scores, 3),
     suggestions: generateSuggestions(serverResult.scores),
-    modelVersion: serverResult.model_version || 'phase_5',
+    modelVersion: serverResult.model_version || 'phase_6',
     paramCount: serverResult.param_count,
     inferenceMs: elapsed,
-    backend: 'phase_5',
+    backend: serverResult.model_version || 'phase_6',
   };
 
   if (options.detailed && (input.code || input.path)) {
@@ -87,6 +92,14 @@ export async function quickScore(code, context = {}) {
 // ═══════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════
+
+function findLeastConfident(uncertainty, n) {
+  // Highest predicted std → model is least sure → best candidate to re-grade
+  return Object.entries(uncertainty)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, n)
+    .map(([name, std]) => ({ name, std }));
+}
 
 function findWeakest(scores, n) {
   return Object.entries(scores)
