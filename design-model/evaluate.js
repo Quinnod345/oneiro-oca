@@ -1,10 +1,16 @@
-// Design Evaluation API — Phase 9 (DINOv2 ViT-B/14 backbone).
+// Design Evaluation API — Phase 10 (DINOv2 vision + MiniLM text intent).
 // The model is the MLX inference server at /tmp/design-model-v2.sock,
-// loading design-head-v8.safetensors with a frozen DINOv2 ViT-B/14
-// (Meta 2023) feature extractor.  DINOv2 captures design-quality
-// features (typography, spatial composition, distinctiveness) far more
-// crisply than the previous MobileNet V2 (ImageNet 2017) backbone —
-// innovation/distinctiveness MAE dropped 14-25% in the v7→v8 retrain.
+// loading design-head-v9.safetensors with two frozen encoders:
+//   - DINOv2 ViT-B/14 (Meta 2023) for vision (768-d CLS features)
+//   - MiniLM-L6-v2 for design intent (384-d sentence embeddings)
+// The v8→v9 retrain dropped val_loss to 0.0181 best (-28% from v5
+// baseline this morning), with double-digit improvements on
+// minimalism (-16%) and spatial_composition (-12%) since the model
+// can now condition judgments on what's actually being designed.
+//
+// Pass an optional `brief` string in the eval input to give the model
+// design intent.  Omitted → zero text vector (matches training-time
+// text dropout, model handles gracefully).
 //
 // To start the server:
 //   python3 mlx/inference_server.py --warmup &
@@ -13,7 +19,7 @@ import { encodeFromCode, analyzeDesignCode } from './encoder.js';
 import { DESIGN_DIMENSIONS, ANTI_PATTERNS, REFERENCE_APPS, DESIGN_EMOTIONS, NORMAN_LEVELS } from './knowledge.js';
 
 const SERVER_HINT =
-  'Design model server (Phase 9 / DINOv2) is not running. Start it with:\n' +
+  'Design model server (Phase 10 / DINOv2 + MiniLM) is not running. Start it with:\n' +
   '  cd /Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/design-model/mlx && \\\n' +
   '  python3 inference_server.py --warmup &';
 
@@ -41,6 +47,11 @@ export async function evaluateDesign(input, options = {}) {
     const code = input.code || input.path || '';
     serverInput.codeFeatures = Array.from(encodeFromCode(code, input.context || {}));
   }
+  // Phase 10: optional design-intent text.  When provided, MiniLM encodes
+  // it on the server and feeds the v9 trunk's text stream.  Helps the
+  // model judge designs against their actual purpose (e.g., "minimal task
+  // list inspired by Things 3" vs "energetic music player").
+  if (input.brief) serverInput.brief = String(input.brief).slice(0, 800);
   if (!serverInput.screenshot && !serverInput.codeFeatures) {
     throw new Error('Provide at least one of: { screenshot, code, path }.');
   }
@@ -56,13 +67,14 @@ export async function evaluateDesign(input, options = {}) {
     leastConfident: serverResult.uncertainty
       ? findLeastConfident(serverResult.uncertainty, 3)
       : [],
+    briefUsed: serverResult.brief_used || null,
     weakest: findWeakest(serverResult.scores, 3),
     strongest: findStrongest(serverResult.scores, 3),
     suggestions: generateSuggestions(serverResult.scores),
-    modelVersion: serverResult.model_version || 'phase_9',
+    modelVersion: serverResult.model_version || 'phase_10',
     paramCount: serverResult.param_count,
     inferenceMs: elapsed,
-    backend: serverResult.model_version || 'phase_9',
+    backend: serverResult.model_version || 'phase_10',
   };
 
   if (options.detailed && (input.code || input.path)) {
