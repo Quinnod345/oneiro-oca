@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: #F2F1ED;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 52px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 32px;
+    padding: 0 2px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .header-left {}
+
+  .header-meta {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #E2A64A;
+    margin-bottom: 5px;
+  }
+
+  .header-title {
+    font-size: 30px;
+    font-weight: 700;
+    color: #1C1C1E;
+    letter-spacing: -0.6px;
+    line-height: 1;
+  }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    padding-bottom: 2px;
+  }
+
+  .overdue-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #FF3B30;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: 20px;
+    padding: 3px 9px 3px 7px;
+    animation: pulse-badge 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.78; }
+  }
+
+  .overdue-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+  }
+
+  /* ── Progress ── */
+  .progress-block {
+    margin-bottom: 28px;
+    padding: 0 2px;
+  }
+
+  .progress-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .progress-count {
+    font-size: 13px;
+    font-weight: 500;
+    color: #8E8E93;
+  }
+
+  .progress-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: #34C759;
+  }
+
+  .progress-track {
+    height: 5px;
+    background: #E5E5EA;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 29%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #30D158, #34C759);
+    transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ── Section label ── */
+  .section {
+    margin-bottom: 6px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #AFAFAF;
+    padding: 0 4px;
+    margin-bottom: 5px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: #FFFFFF;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  /* ── Task row ── */
+  .task {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.14s ease;
+    position: relative;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .task:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50px;
+    right: 0;
+    height: 0.5px;
+    background: #E5E5EA;
+  }
+
+  .task:hover { background: #F9F9FB; }
+  .task:active { background: #F2F2F7; transition: background 0.04s; }
+
+  /* Completed state */
+  .task.completed {
+    opacity: 0.45;
+  }
+  .task.completed .task-title {
+    text-decoration: line-through;
+    color: #8E8E93;
+  }
+
+  /* Overdue urgency */
+  .task.overdue-task {
+    background: #FFF5F5;
+  }
+  .task.overdue-task:hover { background: #FFF0F0; }
+
+  /* ── Checkbox ── */
+  .check-wrap {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    margin-top: 0px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .check-ring {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #D1D1D6;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .check-ring:hover {
+    border-color: #A8A8AD;
+    transform: scale(1.08);
+  }
+
+  .check-ring:active {
+    transform: scale(0.92);
+  }
+
+  .task.completed .check-ring {
+    border-color: transparent;
+    background: #34C759;
+    animation: pop-check 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes pop-check {
+    0% { transform: scale(0.8); }
+    100% { transform: scale(1); }
+  }
+
+  .check-ring svg.check-icon {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    transition: opacity 0.1s ease 0.05s;
+  }
+
+  .task.completed .check-ring svg.check-icon {
+    opacity: 1;
+  }
+
+  /* Priority dot */
+  .priority-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid #FFFFFF;
+  }
+
+  .priority-high .priority-dot { background: #FF3B30; }
+  .priority-medium .priority-dot { background: #FF9500; }
+  .priority-low .priority-dot { background: #007AFF; }
+
+  /* Overdue ring */
+  .task.overdue-task .check-ring {
+    border-color: #FF3B30;
+    border-style: solid;
+  }
+
+  /* ── Task body ── */
+  .task-body {
+    flex: 1;
+    min-width: 0;
+    padding-top: 1px;
+  }
+
+  .task-title {
+    font-size: 15px;
+    font-weight: 400;
+    color: #1C1C1E;
+    line-height: 1.35;
+    letter-spacing: -0.15px;
+  }
+
+  .task-note {
+    font-size: 12.5px;
+    color: #AEAEB2;
+    margin-top: 1px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6E6E73;
+    background: #F2F2F7;
+    border-radius: 5px;
+    padding: 2px 6px;
+    letter-spacing: 0.01em;
+  }
+
+  .tag-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .due-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 5px;
+    padding: 2px 6px;
+    letter-spacing: 0.01em;
+  }
+
+  .due-chip.overdue {
+    color: #FF3B30;
+    background: #FFF2F1;
+  }
+
+  .due-chip.today {
+    color: #FF9500;
+    background: #FFF8F0;
+  }
+
+  .due-chip.upcoming {
+    color: #8E8E93;
+    background: #F2F2F7;
+  }
+
+  /* ── Task trailing ── */
+  .task-trailing {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 2px;
+  }
+
+  .chevron {
+    width: 7px;
+    height: 12px;
+    opacity: 0.22;
+    transition: opacity 0.14s;
+  }
+
+  .task:hover .chevron { opacity: 0.38; }
+
+  /* ── Area header ── */
+  .area-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 2px;
+    margin: 26px 0 6px;
+  }
+
+  .area-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+
+  .area-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #636366;
+    letter-spacing: -0.1px;
+    flex: 1;
+  }
+
+  .area-count {
+    font-size: 12px;
+    font-weight: 500;
+    color: #AEAEB2;
+  }
+
+  /* ── Add task row ── */
+  .add-task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: text;
+    color: #C7C7CC;
+    font-size: 15px;
+    transition: background 0.14s;
+    border-top: 0.5px solid #E5E5EA;
+  }
+
+  .add-task:hover { background: #F9F9FB; color: #AEAEB2; }
+
+  .add-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px dashed #D1D1D6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 17px;
+    line-height: 1;
+    color: #C7C7CC;
+    padding-bottom: 1px;
+    transition: border-color 0.14s, color 0.14s;
+  }
+
+  .add-task:hover .add-icon {
+    border-color: #AEAEB2;
+    color: #AEAEB2;
+  }
+
+  /* ── Focus time banner ── */
+  .focus-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.14);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .focus-banner:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+
+  .focus-banner:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+  }
+
+  .focus-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255,149,0,0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+
+  .focus-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .focus-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #FF9500;
+    margin-bottom: 2px;
+  }
+
+  .focus-task {
+    font-size: 14px;
+    font-weight: 500;
+    color: #FFFFFF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.1px;
+  }
+
+  .focus-timer {
+    font-size: 18px;
+    font-weight: 700;
+    color: #FFFFFF;
+    letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  /* ── Swipe hint (visual affordance) ── */
+  .swipe-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 20px;
+    color: #C7C7CC;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .swipe-hint-line {
+    width: 24px;
+    height: 0.5px;
+    background: #C7C7CC;
+    border-radius: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-meta">Monday, May 4</div>
+      <div class="header-title">Today</div>
+    </div>
+    <div class="header-right">
+      <div class="overdue-badge">
+        <div class="overdue-dot"></div>
+        2 overdue
+      </div>
+    </div>
+  </div>
+
+  <!-- Focus banner -->
+  <div class="focus-banner">
+    <div class="focus-icon-wrap">⚡</div>
+    <div class="focus-content">
+      <div class="focus-label">Focus Now</div>
+      <div class="focus-task">Finalize Q2 budget proposal</div>
+    </div>
+    <div class="focus-timer">25:00</div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-block">
+    <div class="progress-row">
+      <span class="progress-count">2 of 7 complete</span>
+      <span class="progress-pct">29%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- Overdue section -->
+  <div class="section">
+    <div class="section-label">Overdue</div>
+    <div class="card">
+
+      <div class="task overdue-task priority-high">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Submit tax documents to accountant</div>
+          <div class="task-meta">
+            <div class="due-chip overdue">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              2 days overdue
+            </div>
+            <div class="tag"><div class="tag-dot" style="background:#FF3B30"></div>Finance</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="task overdue-task priority-medium">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Review design system tokens PR</div>
+          <div class="task-note">Left a comment thread open on spacing</div>
+          <div class="task-meta">
+            <div class="due-chip overdue">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              Yesterday
+            </div>
+            <div class="tag"><div class="tag-dot" style="background:#AF52DE"></div>Design</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Work section -->
+  <div class="area-header">
+    <div class="area-icon" style="background:#EEF3FF;">💼</div>
+    <div class="area-name">Work</div>
+    <div class="area-count">3 remaining</div>
+  </div>
+
+  <div class="section">
+    <div class="card">
+
+      <div class="task priority-high">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Finalize Q2 budget proposal</div>
+          <div class="task-note">Needs CFO sign-off before EOD</div>
+          <div class="task-meta">
+            <div class="due-chip today">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.75" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 2.5v2.25l1.25 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              Due today
+            </div>
+            <div class="tag"><div class="tag-dot" style="background:#007AFF"></div>Finance</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="task priority-low">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="priority-dot"></div>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Prep agenda for Thursday standup</div>
+          <div class="task-meta">
+            <div class="due-chip upcoming">Thu, May 7</div>
+            <div class="tag"><div class="tag-dot" style="background:#34AEEF"></div>Team</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="task">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Send invoice to Meridian client</div>
+          <div class="task-meta">
+            <div class="due-chip upcoming">Fri, May 8</div>
+            <div class="tag"><div class="tag-dot" style="background:#FF9500"></div>Clients</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="add-task">
+        <div class="add-icon">+</div>
+        New task
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Personal section -->
+  <div class="area-header">
+    <div class="area-icon" style="background:#F0FFF4;">🏃</div>
+    <div class="area-name">Personal</div>
+    <div class="area-count">2 complete</div>
+  </div>
+
+  <div class="section">
+    <div class="card">
+
+      <div class="task completed">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Morning run — 5k</div>
+          <div class="task-meta">
+            <div class="tag"><div class="tag-dot" style="background:#34C759"></div>Health</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="task completed">
+        <div class="check-wrap">
+          <div class="check-ring">
+            <svg class="check-icon" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="task-body">
+          <div class="task-title">Book dentist appointment</div>
+          <div class="task-meta">
+            <div class="tag"><div class="tag-dot" style="background:#AF52DE"></div>Admin</div>
+          </div>
+        </div>
+        <div class="task-trailing">
+          <svg class="chevron" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#3C3C43" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="add-task">
+        <div class="add-icon">+</div>
+        New task
+      </div>
+
+    </div>
+  </div>
+
+  <div class="swipe-hint">
+    <div class="swipe-hint-line"></div>
+    Swipe left to reschedule · right to complete
+    <div class="swipe-hint-line"></div>
+  </div>
+
+</div>
+
+</body>
+</html>
