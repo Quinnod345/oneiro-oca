@@ -75,6 +75,10 @@ DEFAULT_PAIR_DIM_MARGIN = 0.05
 DEFAULT_MAX_SYNTH_PAIRS = 2000
 DEFAULT_ADAPTER_RANK = 64
 DEFAULT_ADAPTER_ALPHA = 0.05
+# Real Opus pairs (from comparisons.json) carry higher-quality signal
+# than score-margin-derived synthetic pairs.  Up-weight them in the BT
+# loss so the ~70 real pairs aren't drowned by 2000 synthetic ones.
+DEFAULT_REAL_PAIR_WEIGHT = 5.0
 
 SCORE_NAMES = [
     "typography_quality", "color_harmony", "spatial_composition",
@@ -340,14 +344,26 @@ class FeatureDatasetV7:
     def __init__(self, max_synth_pairs: int = DEFAULT_MAX_SYNTH_PAIRS,
                  pair_overall_margin: float = DEFAULT_PAIR_MARGIN,
                  pair_dim_margin: float = DEFAULT_PAIR_DIM_MARGIN,
-                 use_pooled: bool = False):
+                 use_pooled: bool = False,
+                 real_pair_weight: float = DEFAULT_REAL_PAIR_WEIGHT,
+                 split_seed: int = 42):
         """
         use_pooled=False: returns (B, 7, 7, 320) tensors (Phase 7 default)
         use_pooled=True:  returns (B, 1280) tensors from manifest cache.
                           Used when --disable-backbone is set so callers
                           can compare against a v6-equivalent baseline.
+        real_pair_weight: per-pair multiplier applied to real flywheel /
+                          opus_pairwise_grader pairs in the BT loss.  Default
+                          5.0 — real Opus pairs are higher-quality signal
+                          than score-derived synthetic pairs and need up-
+                          weighting to avoid being drowned by the 2000-pair
+                          synthetic majority.
+        split_seed: seed for the train/val split (passed to split() so
+                    multi-seed runs vary which 67 samples become val).
         """
         self.use_pooled = use_pooled
+        self.real_pair_weight = real_pair_weight
+        self.split_seed = split_seed
 
         # ── Load pre-features sidecar ──
         if not PRE_FEATURES_PATH.exists():
@@ -450,7 +466,11 @@ class FeatureDatasetV7:
     def __len__(self):
         return self.n_samples
 
-    def split(self, val_ratio=0.15, seed=42):
+    def split(self, val_ratio=0.15, seed=None):
+        # `seed` arg overrides the dataset's split_seed (kept for backward
+        # compat with callers that pass it explicitly).
+        if seed is None:
+            seed = self.split_seed
         rng = np.random.default_rng(seed)
         n = self.n_samples
         indices = np.arange(n)
@@ -527,14 +547,23 @@ class FeatureDatasetV7:
         return feats, targets, codes, crits, mask
 
     def get_preference_batch(self, indices):
+        """Returns (feat_a, feat_b, code_a, code_b, winner, margin, pair_weight).
+
+        pair_weight is real_pair_weight for indices into self.real_pairs and
+        1.0 for indices into self.synth_pairs.  Layered into the BT loss so
+        each real pair contributes ~real_pair_weight× as much gradient as a
+        synthesized pair.
+        """
         if not indices:
             empty_shape = (0, 1280) if self.use_pooled else (0, 7, 7, 320)
             empty = mx.zeros(empty_shape)
-            return empty, empty, mx.zeros((0, 64)), mx.zeros((0, 64)), \
-                   mx.zeros((0, OUTPUT_DIM)), mx.zeros((0, OUTPUT_DIM))
+            return (empty, empty, mx.zeros((0, 64)), mx.zeros((0, 64)),
+                    mx.zeros((0, OUTPUT_DIM)), mx.zeros((0, OUTPUT_DIM)),
+                    mx.zeros((0,)))
 
         pairs = self.all_pairs
-        feat_a, feat_b, code_a, code_b, win, marg = [], [], [], [], [], []
+        n_real = len(self.real_pairs)
+        feat_a, feat_b, code_a, code_b, win, marg, weights = [], [], [], [], [], [], []
         for k in indices:
             a, b, w, m = pairs[k]
             feat_a.append(self._feats_for(a))
@@ -543,13 +572,17 @@ class FeatureDatasetV7:
             code_b.append(self.code_features[b])
             win.append(w)
             marg.append(m)
+            # Real pairs come first in self.all_pairs (real_pairs + synth_pairs),
+            # so indices < n_real correspond to real pairs.
+            weights.append(self.real_pair_weight if k < n_real else 1.0)
 
         return (mx.array(np.stack(feat_a, dtype=np.float32)),
                 mx.array(np.stack(feat_b, dtype=np.float32)),
                 mx.array(np.stack(code_a, dtype=np.float32).astype(np.float32)),
                 mx.array(np.stack(code_b, dtype=np.float32).astype(np.float32)),
                 mx.array(np.stack(win, dtype=np.float32).astype(np.float32)),
-                mx.array(np.stack(marg, dtype=np.float32).astype(np.float32)))
+                mx.array(np.stack(marg, dtype=np.float32).astype(np.float32)),
+                mx.array(np.asarray(weights, dtype=np.float32)))
 
 
 # ═══════════════════════════════════════════════════
@@ -602,12 +635,22 @@ def cosine_distance_masked(pred_emb, target_emb, mask):
     return mx.sum(masked) / denom
 
 
-def bradley_terry_loss(pref_a, pref_b, winner, margin):
+def bradley_terry_loss(pref_a, pref_b, winner, margin, pair_weight=None):
+    """Margin-weighted BT loss with optional per-pair weight.
+
+    pair_weight: shape (B,) — multiplier applied to each pair's loss
+                 contribution.  Used to up-weight real Opus pairs relative
+                 to synthesized pairs.  None → uniform weighting.
+    """
     abs_winner = mx.abs(winner)
     target_diff = winner * (pref_a - pref_b)
     softplus_neg = mx.logaddexp(mx.zeros_like(target_diff), -target_diff)
     per_elem = softplus_neg * abs_winner * margin
-    denom = mx.maximum(mx.sum(abs_winner * margin), mx.array(1.0))
+    weight_mass = abs_winner * margin
+    if pair_weight is not None:
+        per_elem = per_elem * pair_weight[:, None]
+        weight_mass = weight_mass * pair_weight[:, None]
+    denom = mx.maximum(mx.sum(weight_mass), mx.array(1.0))
     return mx.sum(per_elem) / denom
 
 
@@ -626,14 +669,19 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
           max_synth_pairs=DEFAULT_MAX_SYNTH_PAIRS,
           pair_overall_margin=DEFAULT_PAIR_MARGIN,
           pair_dim_margin=DEFAULT_PAIR_DIM_MARGIN,
+          real_pair_weight=DEFAULT_REAL_PAIR_WEIGHT,
           disable_aux=False, disable_adapter=False, disable_pref=False,
           disable_backbone=True, from_scratch=False,
-          output_suffix=""):
-    """When `output_suffix` is set, weights save to design-head-v7{suffix}
-    and meta to train-v7{suffix}-meta.json — useful for ablations without
-    clobbering the canonical v7 checkpoint."""
+          seed=42, split_seed=42, output_suffix=""):
+    """`seed`        — RNG for batch shuffling and preference sampling.
+                       Vary across multi-seed runs to measure training noise.
+    `split_seed`    — RNG for the train/val split.  Should stay FIXED at 42
+                       in multi-seed evaluation: changing it across runs that
+                       warm-start from v6 (itself trained on the seed=42 split)
+                       leaks v6's training data into new seeds' val sets.
+    `output_suffix` is appended to weight + meta filenames."""
 
-    print("[v7] loading dataset...")
+    print(f"[v7] loading dataset (split_seed={split_seed}, train_seed={seed})...")
     # Always feed the trainable backbone with pre-pool 4D features.  When
     # disable_backbone is set we still pass them through the (frozen)
     # backbone — that gives a deterministic ImageNet-equivalent forward
@@ -643,6 +691,8 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         pair_overall_margin=pair_overall_margin,
         pair_dim_margin=pair_dim_margin,
         use_pooled=False,
+        real_pair_weight=real_pair_weight,
+        split_seed=split_seed,
     )
     print(f"[v7] {len(dataset)} samples (with pre-pool features)")
     print(f"[v7] critique embeddings matched: {dataset.n_matched}")
@@ -698,7 +748,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
     total_steps = epochs * steps_per_epoch
 
     def loss_fn(model, feats, targets, codes, crits, mask,
-                feat_a, feat_b, code_a, code_b, winner, margin):
+                feat_a, feat_b, code_a, code_b, winner, margin, pair_weight):
         scores, log_var, critique_preds, _pref = model(
             feats, codes,
             return_aux=True, return_uncertainty=True, return_preference=True,
@@ -713,7 +763,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         if pref_enabled and feat_a.shape[0] > 0:
             pref_a = model(feat_a, code_a, return_preference=True)[1]
             pref_b = model(feat_b, code_b, return_preference=True)[1]
-            bt = bradley_terry_loss(pref_a, pref_b, winner, margin)
+            bt = bradley_terry_loss(pref_a, pref_b, winner, margin, pair_weight)
             total = total + pref_weight * bt
 
         return total
@@ -731,7 +781,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
     print(f"[v7] regularization: dropout={dropout}, weight_decay={weight_decay}")
     print()
 
-    pref_rng = np.random.default_rng(0)
+    pref_rng = np.random.default_rng(seed)
 
     for epoch in range(epochs):
         model.train()
@@ -741,7 +791,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         model.backbone.eval()
 
         t0 = time.time()
-        rng = np.random.default_rng(epoch)
+        rng = np.random.default_rng(epoch + seed * 1000)
         shuffled = rng.permutation(train_idx).tolist()
 
         epoch_loss = 0.0
@@ -759,7 +809,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
                 ).tolist()
             else:
                 pref_idx = []
-            feat_a, feat_b, code_a, code_b, winner, margin = \
+            feat_a, feat_b, code_a, code_b, winner, margin, pair_weight = \
                 dataset.get_preference_batch(pref_idx)
 
             if global_step < warmup_steps:
@@ -771,7 +821,7 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
 
             loss, grads = loss_and_grad(
                 model, feats, targets, codes, crits, mask,
-                feat_a, feat_b, code_a, code_b, winner, margin,
+                feat_a, feat_b, code_a, code_b, winner, margin, pair_weight,
             )
 
             # Scale backbone gradients (0 = frozen, 0.1 = gentle fine-tune)
@@ -901,9 +951,12 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
                 "synth_overall_margin": pair_overall_margin,
                 "synth_dim_margin": pair_dim_margin,
                 "max_synth_pairs": max_synth_pairs,
+                "real_pair_weight_multiplier": real_pair_weight,
             },
         },
         "warm_start_from_v6": (not from_scratch) and V6_WEIGHTS_PATH.exists(),
+        "seed": seed,
+        "split_seed": split_seed,
     }
     meta_path = (WEIGHTS_DIR / f"train-v7{output_suffix}-meta.json"
                  if output_suffix else WEIGHTS_DIR / "train-v7-meta.json")
@@ -911,6 +964,82 @@ def train(epochs=200, batch_size=16, learning_rate=1e-3,
         json.dump(meta, f, indent=2)
 
     return meta
+
+
+def train_multi_seed(seeds, split_seed=42, **train_kwargs):
+    """Run train() once per training seed (KEEPING the train/val split FIXED
+    at split_seed so the val set is the same across runs).  Reports mean and
+    std val_loss to characterize training-noise variance.
+
+    Why split is fixed: v6's warm-start trunk was trained on a seed=42
+    split.  Changing the split per run shuffles v6's training samples
+    into new seeds' val sets → effective val leakage → artificially low
+    val_loss.  Fix the split, vary only the training RNG (batch shuffle,
+    pref sampling) to get clean variance.
+
+    Best run promotes to the canonical `design-head-v7.safetensors`;
+    per-run weights save to `design-head-v7-seed{i}.safetensors`.
+    """
+    base_suffix = train_kwargs.pop("output_suffix", "")
+    runs = []
+    for seed in seeds:
+        run_suffix = f"{base_suffix}-seed{seed}"
+        print(f"\n{'═' * 60}")
+        print(f"[multi-seed] starting run train_seed={seed} "
+              f"(split_seed={split_seed} fixed)")
+        print('═' * 60)
+        meta = train(seed=seed, split_seed=split_seed,
+                     output_suffix=run_suffix, **train_kwargs)
+        runs.append({"seed": seed, "suffix": run_suffix, "meta": meta})
+
+    # Aggregate
+    val_losses = np.array([r["meta"]["best_val_loss"] for r in runs])
+    per_dim_arrays = {n: np.array([r["meta"]["per_dim_mae"].get(n, 0.0) for r in runs])
+                      for n in SCORE_NAMES}
+
+    best_run = min(runs, key=lambda r: r["meta"]["best_val_loss"])
+    best_path = WEIGHTS_DIR / f"design-head-v7{best_run['suffix']}.safetensors"
+    canonical_target = (WEIGHTS_DIR / f"design-head-v7{base_suffix}.safetensors"
+                        if base_suffix else V7_WEIGHTS_PATH)
+    if best_path.exists():
+        import shutil as _sh
+        _sh.copyfile(str(best_path), str(canonical_target))
+
+    print(f"\n{'═' * 60}")
+    print(f"[multi-seed] {len(runs)} runs complete")
+    print('═' * 60)
+    print(f"\nval_loss: mean {val_losses.mean():.4f}  ±  std {val_losses.std():.4f}  "
+          f"min {val_losses.min():.4f}  max {val_losses.max():.4f}")
+    print(f"\nper-run val_loss:")
+    for r, vl in zip(runs, val_losses):
+        flag = " ← canonical" if r is best_run else ""
+        print(f"  seed={r['seed']:3d}: val_loss={vl:.4f} epochs={r['meta']['epochs']:3d}{flag}")
+
+    print(f"\nper-dim MAE (mean ± std across seeds):")
+    for name in SCORE_NAMES:
+        arr = per_dim_arrays[name]
+        bar = "█" * int(arr.mean() * 50)
+        print(f"  {name:25s}: {arr.mean():.4f} ± {arr.std():.4f}  {bar}")
+
+    summary = {
+        "n_seeds": len(runs),
+        "seeds": list(seeds),
+        "best_seed": best_run["seed"],
+        "val_loss": {
+            "mean": float(val_losses.mean()),
+            "std": float(val_losses.std()),
+            "min": float(val_losses.min()),
+            "max": float(val_losses.max()),
+        },
+        "per_dim_mae_mean": {n: float(per_dim_arrays[n].mean()) for n in SCORE_NAMES},
+        "per_dim_mae_std": {n: float(per_dim_arrays[n].std()) for n in SCORE_NAMES},
+        "runs": [{"seed": r["seed"],
+                  "best_val_loss": r["meta"]["best_val_loss"],
+                  "epochs": r["meta"]["epochs"]} for r in runs],
+    }
+    with open(WEIGHTS_DIR / f"train-v7{base_suffix}-multiseed-summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    return summary
 
 
 if __name__ == "__main__":
@@ -945,9 +1074,25 @@ if __name__ == "__main__":
     parser.add_argument("--output-suffix", default="",
                         help="Save to design-head-v7{suffix}.safetensors "
                              "(used for ablations)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Single-run training seed (default 42 — matches "
+                             "previous v7 runs)")
+    parser.add_argument("--split-seed", type=int, default=42,
+                        help="train/val split seed (default 42).  Keep this "
+                             "fixed in multi-seed runs; changing it leaks v6's "
+                             "warm-start train data into the new val set.")
+    parser.add_argument("--seeds", type=str, default=None,
+                        help="Multi-seed run.  Comma-separated ('0,1,2') "
+                             "or count ('3' → seeds 0..2).  Reports mean ± "
+                             "std val_loss; canonical weights = best run.")
+    parser.add_argument("--real-pair-weight", type=float,
+                        default=DEFAULT_REAL_PAIR_WEIGHT,
+                        help="Per-pair multiplier for real flywheel/Opus "
+                             "pairs in the BT loss (synth pairs stay at 1.0). "
+                             f"Default {DEFAULT_REAL_PAIR_WEIGHT}.")
     args = parser.parse_args()
 
-    train(
+    common_kwargs = dict(
         epochs=args.epochs,
         batch_size=args.batch,
         learning_rate=args.lr,
@@ -962,12 +1107,21 @@ if __name__ == "__main__":
         max_synth_pairs=args.max_synth_pairs,
         pair_overall_margin=args.pair_overall_margin,
         pair_dim_margin=args.pair_dim_margin,
+        real_pair_weight=args.real_pair_weight,
         disable_aux=args.disable_aux,
         disable_adapter=args.disable_adapter,
         disable_pref=args.disable_pref,
-        # Backbone is frozen by default; --enable-backbone flips it to fine-tune.
-        # --disable-backbone is kept as a no-op for backward compat.
         disable_backbone=not args.enable_backbone,
         from_scratch=args.from_scratch,
-        output_suffix=args.output_suffix,
     )
+
+    if args.seeds:
+        if "," in args.seeds:
+            seeds = [int(s.strip()) for s in args.seeds.split(",")]
+        else:
+            seeds = list(range(int(args.seeds)))
+        train_multi_seed(seeds, split_seed=args.split_seed,
+                         output_suffix=args.output_suffix, **common_kwargs)
+    else:
+        train(seed=args.seed, split_seed=args.split_seed,
+              output_suffix=args.output_suffix, **common_kwargs)
