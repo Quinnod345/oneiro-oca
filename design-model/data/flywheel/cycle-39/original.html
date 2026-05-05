@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Directory</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f2f7;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 48px 24px;
+    color: #0f1117;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06), 0 12px 40px rgba(0,0,0,0.04);
+    width: 100%;
+    max-width: 960px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 28px 32px 24px;
+    border-bottom: 1px solid #f0f2f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .header-left h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f1117;
+    letter-spacing: -0.3px;
+    line-height: 1.3;
+  }
+
+  .header-left p {
+    font-size: 13px;
+    color: #8a93a8;
+    margin-top: 3px;
+    font-weight: 400;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    letter-spacing: -0.1px;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: #5c6478;
+    border: 1.5px solid #e4e7ef;
+  }
+
+  .btn-ghost:hover {
+    background: #f7f8fc;
+    border-color: #d0d5e3;
+    color: #0f1117;
+  }
+
+  .btn-primary {
+    background: #4f46e5;
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(79,70,229,0.2), 0 2px 8px rgba(79,70,229,0.15);
+  }
+
+  .btn-primary:hover {
+    background: #4338ca;
+    box-shadow: 0 2px 4px rgba(79,70,229,0.3), 0 4px 12px rgba(79,70,229,0.2);
+    transform: translateY(-1px);
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    padding: 0 32px 20px;
+    padding-top: 20px;
+    gap: 12px;
+    border-bottom: 1px solid #f0f2f7;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 320px;
+  }
+
+  .search-wrap svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0a8bb;
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 9px 12px 9px 36px;
+    border: 1.5px solid #e4e7ef;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: #0f1117;
+    background: #f7f8fc;
+    transition: all 0.15s ease;
+    outline: none;
+  }
+
+  .search-input::placeholder { color: #a0a8bb; }
+
+  .search-input:focus {
+    border-color: #a5b4fc;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(165,180,252,0.2);
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tab {
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .tab:hover { background: #f0f2f7; color: #374151; }
+  .tab.active { background: #ede9fe; color: #5b21b6; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    background: #fafbfd;
+  }
+
+  th {
+    padding: 11px 20px;
+    text-align: left;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    user-select: none;
+    border-bottom: 1.5px solid #f0f2f7;
+  }
+
+  th:first-child { padding-left: 32px; }
+  th:last-child { padding-right: 32px; }
+
+  th.sortable {
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+
+  th.sortable:hover { color: #374151; }
+
+  th.sort-asc .sort-icon, th.sort-desc .sort-icon {
+    color: #4f46e5;
+  }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .sort-icon {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 1.5px;
+    color: #d1d5db;
+    transition: color 0.12s;
+  }
+
+  .sort-icon span {
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+  }
+
+  .sort-icon .up { border-bottom: 4px solid currentColor; }
+  .sort-icon .down { border-top: 4px solid currentColor; }
+
+  th.sort-asc .sort-icon .up { color: #4f46e5; }
+  th.sort-asc .sort-icon .down { color: #d1d5db; }
+  th.sort-desc .sort-icon .up { color: #d1d5db; }
+  th.sort-desc .sort-icon .down { color: #4f46e5; }
+
+  tbody tr {
+    border-bottom: 1px solid #f4f5f9;
+    transition: background 0.12s ease;
+    cursor: pointer;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody tr:hover { background: #f7f8fd; }
+
+  tbody tr:hover td { color: #0f1117; }
+
+  td {
+    padding: 14px 20px;
+    font-size: 13.5px;
+    color: #374151;
+    transition: color 0.12s;
+    vertical-align: middle;
+  }
+
+  td:first-child { padding-left: 32px; }
+  td:last-child { padding-right: 32px; }
+
+  .person-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .avatar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.07);
+  }
+
+  .person-name {
+    font-weight: 500;
+    color: #111827;
+    font-size: 13.5px;
+    letter-spacing: -0.1px;
+  }
+
+  .person-email {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 1px;
+    font-weight: 400;
+  }
+
+  .role-text {
+    font-size: 13px;
+    color: #4b5563;
+  }
+
+  .dept-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: -0.1px;
+  }
+
+  .dept-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+  }
+
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .badge-active { background: #dcfce7; color: #15803d; }
+  .badge-active .badge-dot { background: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.2); }
+
+  .badge-away { background: #fef9c3; color: #92400e; }
+  .badge-away .badge-dot { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.2); }
+
+  .badge-offline { background: #f3f4f6; color: #6b7280; }
+  .badge-offline .badge-dot { background: #9ca3af; }
+
+  .badge-review { background: #ede9fe; color: #6d28d9; }
+  .badge-review .badge-dot { background: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.2); }
+
+  .joined-text {
+    font-size: 13px;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  tbody tr:hover .actions-cell { opacity: 1; }
+
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1.5px solid #e4e7ef;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.12s ease;
+  }
+
+  .icon-btn:hover {
+    background: #f0f2f7;
+    color: #374151;
+    border-color: #d0d5e3;
+  }
+
+  .card-footer {
+    padding: 16px 32px;
+    border-top: 1px solid #f0f2f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafbfd;
+  }
+
+  .footer-info {
+    font-size: 12.5px;
+    color: #9ca3af;
+  }
+
+  .footer-info strong {
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .page-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1.5px solid #e4e7ef;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #6b7280;
+    font-family: inherit;
+    transition: all 0.12s ease;
+  }
+
+  .page-btn:hover { background: #f0f2f7; color: #374151; border-color: #d0d5e3; }
+  .page-btn.active { background: #4f46e5; color: white; border-color: #4f46e5; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .no-results {
+    text-align: center;
+    padding: 64px 32px;
+    color: #9ca3af;
+    font-size: 14px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="header-left">
+      <h1>Team Directory</h1>
+      <p>Manage and view all team members across departments</p>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Member
+      </button>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <div class="search-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" type="text" id="searchInput" placeholder="Search members…">
+    </div>
+    <div class="filter-tabs">
+      <button class="tab active" onclick="filterStatus('all', this)">All</button>
+      <button class="tab" onclick="filterStatus('Active', this)">Active</button>
+      <button class="tab" onclick="filterStatus('Away', this)">Away</button>
+      <button class="tab" onclick="filterStatus('Offline', this)">Offline</button>
+    </div>
+  </div>
+
+  <table id="dataTable">
+    <thead>
+      <tr>
+        <th class="sortable" onclick="sortTable('name')">
+          <div class="th-inner">Member <span class="sort-icon"><span class="up"></span><span class="down"></span></span></div>
+        </th>
+        <th class="sortable" onclick="sortTable('role')">
+          <div class="th-inner">Role <span class="sort-icon"><span class="up"></span><span class="down"></span></span></div>
+        </th>
+        <th class="sortable" onclick="sortTable('dept')">
+          <div class="th-inner">Department <span class="sort-icon"><span class="up"></span><span class="down"></span></span></div>
+        </th>
+        <th class="sortable" onclick="sortTable('status')">
+          <div class="th-inner">Status <span class="sort-icon"><span class="up"></span><span class="down"></span></span></div>
+        </th>
+        <th class="sortable" onclick="sortTable('joined')">
+          <div class="th-inner">Joined <span class="sort-icon"><span class="up"></span><span class="down"></span></span></div>
+        </th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <div class="no-results" id="noResults">No members match your search.</div>
+
+  <div class="card-footer">
+    <div class="footer-info">Showing <strong id="showCount">10</strong> of <strong id="totalCount">10</strong> members</div>
+    <div class="pagination">
+      <button class="page-btn" id="prevBtn" onclick="changePage(-1)" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="page-btn active" id="page1" onclick="goPage(1)">1</button>
+      <button class="page-btn" id="page2" onclick="goPage(2)">2</button>
+      <button class="page-btn" id="nextBtn" onclick="changePage(1)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const people = [
+  { name: 'Sophia Chen', email: 'sophia.chen@company.io', role: 'Product Designer', dept: 'Design', status: 'Active', joined: '2023-03-12', avatar: 'SC', color: ['#e0e7ff','#4f46e5'] },
+  { name: 'Marcus Webb', email: 'marcus.webb@company.io', role: 'Lead Engineer', dept: 'Engineering', status: 'Active', joined: '2021-08-05', avatar: 'MW', color: ['#dcfce7','#16a34a'] },
+  { name: 'Priya Nair', email: 'priya.nair@company.io', role: 'Data Scientist', dept: 'Analytics', status: 'Away', joined: '2022-11-20', avatar: 'PN', color: ['#fce7f3','#be185d'] },
+  { name: 'Jordan Ellis', email: 'jordan.ellis@company.io', role: 'Growth Manager', dept: 'Marketing', status: 'Active', joined: '2022-05-14', avatar: 'JE', color: ['#fff7ed','#c2410c'] },
+  { name: 'Aiko Tanaka', email: 'aiko.tanaka@company.io', role: 'Frontend Engineer', dept: 'Engineering', status: 'In Review', joined: '2023-09-01', avatar: 'AT', color: ['#f5f3ff','#7c3aed'] },
+  { name: 'Samuel Osei', email: 's.osei@company.io', role: 'Account Executive', dept: 'Sales', status: 'Active', joined: '2020-02-28', avatar: 'SO', color: ['#ecfdf5','#059669'] },
+  { name: 'Elena Vasquez', email: 'e.vasquez@company.io', role: 'Content Strategist', dept: 'Marketing', status: 'Offline', joined: '2023-01-09', avatar: 'EV', color: ['#fef2f2','#dc2626'] },
+  { name: 'Tom Hartley', email: 'tom.h@company.io', role: 'DevOps Engineer', dept: 'Engineering', status: 'Active', joined: '2021-06-17', avatar: 'TH', color: ['#f0f9ff','#0369a1'] },
+  { name: 'Nadia Bloom', email: 'nadia.bloom@company.io', role: 'UX Researcher', dept: 'Design', status: 'Away', joined: '2022-08-30', avatar: 'NB', color: ['#fdf4ff','#a21caf'] },
+  { name: 'Chris Park', email: 'chris.park@company.io', role: 'Finance Analyst', dept: 'Finance', status: 'Active', joined: '2020-11-03', avatar: 'CP', color: ['#fffbeb','#b45309'] },
+  { name: 'Lena Müller', email: 'lena.m@company.io', role: 'Backend Engineer', dept: 'Engineering', status: 'Active', joined: '2022-04-11', avatar: 'LM', color: ['#f0fdf4','#15803d'] },
+  { name: 'Diego Reyes', email: 'd.reyes@company.io', role: 'Sales Director', dept: 'Sales', status: 'In Review', joined: '2019-07-22', avatar: 'DR', color: ['#fff1f2','#e11d48'] },
+  { name: 'Yuki Sato', email: 'yuki.s@company.io', role: 'ML Engineer', dept: 'Analytics', status: 'Active', joined: '2023-06-15', avatar: 'YS', color: ['#eff6ff','#1d4ed8'] },
+  { name: 'Amara Diallo', email: 'amara.d@company.io', role: 'Brand Designer', dept: 'Design', status: 'Offline', joined: '2021-12-08', avatar: 'AD', color: ['#fef9c3','#a16207'] },
+];
+
+const deptStyles = {
+  'Design':      { bg: '#f0f4ff', color: '#3730a3', dot: '#6366f1' },
+  'Engineering': { bg: '#f0fdf4', color: '#166534', dot: '#22c55e' },
+  'Analytics':   { bg: '#fdf4ff', color: '#7e22ce', dot: '#a855f7' },
+  'Marketing':   { bg: '#fff7ed', color: '#9a3412', dot: '#f97316' },
+  'Sales':       { bg: '#fff1f2', color: '#9f1239', dot: '#f43f5e' },
+  'Finance':     { bg: '#fffbeb', color: '#92400e', dot: '#f59e0b' },
+};
+
+const statusBadge = {
+  'Active':    { cls: 'badge-active', label: 'Active' },
+  'Away':      { cls: 'badge-away',   label: 'Away' },
+  'Offline':   { cls: 'badge-offline',label: 'Offline' },
+  'In Review': { cls: 'badge-review', label: 'In Review' },
+};
+
+let sortKey = null, sortDir = 1, currentFilter = 'all', searchQuery = '', currentPage = 1;
+const PER_PAGE = 7;
+
+function formatDate(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function filtered() {
+  return people.filter(p => {
+    const matchStatus = currentFilter === 'all' || p.status === currentFilter;
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.role.toLowerCase().includes(q) || p.dept.toLowerCase().includes(q);
+    return matchStatus && matchSearch;
+  });
+}
+
+function sorted(arr) {
+  if (!sortKey) return arr;
+  return [...arr].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'joined') return sortDir * (new Date(av) - new Date(bv));
+    return sortDir * av.localeCompare(bv);
+  });
+}
+
+function render() {
+  const data = sorted(filtered());
+  const total = data.length;
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  if (currentPage > pages) currentPage = 1;
+  const slice = data.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+
+  const tbody = document.getElementById('tableBody');
+  const noRes = document.getElementById('noResults');
+
+  if (slice.length === 0) {
+    tbody.innerHTML = '';
+    noRes.style.display = 'block';
+  } else {
+    noRes.style.display = 'none';
+    tbody.innerHTML = slice.map(p => {
+      const d = deptStyles[p.dept] || deptStyles['Finance'];
+      const s = statusBadge[p.status];
+      return `<tr>
+        <td>
+          <div class="person-cell">
+            <div class="avatar" style="background:${p.color[0]};color:${p.color[1]}">${p.avatar}</div>
+            <div>
+              <div class="person-name">${p.name}</div>
+              <div class="person-email">${p.email}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="role-text">${p.role}</span></td>
+        <td>
+          <span class="dept-tag" style="background:${d.bg};color:${d.color}">
+            <span class="dept-dot" style="background:${d.dot}"></span>${p.dept}
+          </span>
+        </td>
+        <td>
+          <span class="badge ${s.cls}"><span class="badge-dot"></span>${s.label}</span>
+        </td>
+        <td><span class="joined-text">${formatDate(p.joined)}</span></td>
+        <td>
+          <div class="actions-cell">
+            <button class="icon-btn" title="View profile">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+            <button class="icon-btn" title="Edit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="icon-btn" title="More options" style="color:#d1d5db">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('showCount').textContent = slice.length;
+  document.getElementById('totalCount').textContent = total;
+
+  // Pagination
+  document.getElementById('prevBtn').disabled = currentPage === 1;
+  document.getElementById('nextBtn').disabled = currentPage >= pages;
+  document.getElementById('page1').classList.toggle('active', currentPage === 1);
+  document.getElementById('page2').classList.toggle('active', currentPage === 2);
+  document.getElementById('page2').style.display = pages > 1 ? '' : 'none';
+}
+
+function sortTable(key) {
+  const th = [...document.querySelectorAll('th.sortable')];
+  const keys = ['name','role','dept','status','joined'];
+  const idx = keys.indexOf(key);
+
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = 1; }
+
+  th.forEach(el => el.classList.remove('sort-asc','sort-desc'));
+  if (idx >= 0) th[idx].classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+
+  currentPage = 1;
+  render();
+}
+
+function filterStatus(status, btn) {
+  currentFilter = status;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentPage = 1;
+  render();
+}
+
+function changePage(dir) {
+  currentPage += dir;
+  render();
+}
+
+function goPage(p) {
+  currentPage = p;
+  render();
+}
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  currentPage = 1;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

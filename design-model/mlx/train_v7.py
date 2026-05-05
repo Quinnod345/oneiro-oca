@@ -1006,9 +1006,16 @@ def train_multi_seed(seeds, split_seed=42, **train_kwargs):
     best_path = WEIGHTS_DIR / f"design-head-v7{best_run['suffix']}.safetensors"
     canonical_target = (WEIGHTS_DIR / f"design-head-v7{base_suffix}.safetensors"
                         if base_suffix else V7_WEIGHTS_PATH)
+    canonical_meta_target = (WEIGHTS_DIR / f"train-v7{base_suffix}-meta.json"
+                             if base_suffix else WEIGHTS_DIR / "train-v7-meta.json")
+    best_meta_path = WEIGHTS_DIR / f"train-v7{best_run['suffix']}-meta.json"
     if best_path.exists():
         import shutil as _sh
         _sh.copyfile(str(best_path), str(canonical_target))
+        # Promote the matching meta JSON too — otherwise canonical weights
+        # and canonical meta drift apart across runs.
+        if best_meta_path.exists():
+            _sh.copyfile(str(best_meta_path), str(canonical_meta_target))
 
     print(f"\n{'═' * 60}")
     print(f"[multi-seed] {len(runs)} runs complete")
