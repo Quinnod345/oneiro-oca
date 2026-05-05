@@ -283,20 +283,20 @@ def retrain():
     print("[retrain] extracting features...")
     subprocess.run(["python3", "extract_features.py"], cwd=mlx_dir, capture_output=True)
 
-    # ── 3. Train the Phase 5 design head (aux head auto-disables if
-    #       critique dataset is too small — behaves like train_v2 in
-    #       that case but still saves design-head-v5.safetensors). ──
-    print("[retrain] training v5...")
+    # ── 3. Train the Phase 6 design head (adapter + uncertainty + preference,
+    #       warm-started from v5).  The Phase 5 critique aux head still
+    #       auto-disables if too few cycle-id matches exist. ──
+    print("[retrain] training v6...")
     result = subprocess.run(
-        ["python3", "train_v5.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
+        ["python3", "train_v6.py", "--epochs", "300", "--batch", "16", "--patience", "40"],
         cwd=mlx_dir, capture_output=True, text=True,
     )
-    # Surface the aux-head status + best val loss
+    # Surface phase status + best val loss
     for line in (result.stdout or "").split("\n"):
-        if any(k in line for k in ("aux head ENABLED", "aux head DISABLED", "best val loss", "matched:")):
+        if any(k in line for k in ("phases:", "best val loss", "matched:", "preference pairs")):
             print(f"[retrain] {line.strip()}")
     if result.returncode != 0 and result.stderr:
-        print(f"[retrain] train_v5 stderr: {result.stderr[:300]}")
+        print(f"[retrain] train_v6 stderr: {result.stderr[:300]}")
 
 
 CRITIQUES_DIR = DATA_DIR / "critiques"

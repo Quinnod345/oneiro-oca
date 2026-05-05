@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Design Model Inference Server — Phase 2b/3.
+Design Model Inference Server — Phase 5/6.
 
 Provides real-time design evaluation via Unix socket or HTTP.
 Any process (Node.js, Python, CLI) can query design scores.
 
 Architecture:
   - PyTorch MobileNet V2 feature extractor (loaded once, ~2.26M params)
-  - MLX DesignHead (675K params, hot-reloadable weights)
+  - MLX DesignHead (loads Phase 6 v6 weights if present, falls back to
+    Phase 5 v5 weights — both share the same trunk)
   - Unix socket at /tmp/design-model-v2.sock (default)
   - Optional HTTP mode at --port 8234
 
 Actions:
-  evaluate       — screenshot → 1280-dim features → 12 design scores
+  evaluate       — screenshot → 1280-dim features → 16 design scores
+                   (with predicted per-dim uncertainty when running v6)
   extract_features — screenshot → 1280-dim MobileNet features only
-  status         — model info, uptime, request count
+  status         — model info, uptime, request count, phase
   reload         — hot-reload DesignHead weights without restart
 
 Usage:
@@ -39,14 +41,16 @@ from mlx.utils import tree_flatten
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent))
-# Phase 5 ONLY. Earlier phases were purged 2026-04-28.
-from train_v5 import DesignHeadV5, SCORE_NAMES, OUTPUT_DIM
+# Prefer Phase 6 (v6) if its weights exist; gracefully fall back to v5.
+# v6 = v5 trunk + uncertainty + adapter + preference heads, so its
+# safetensors is a strict superset.  Older phases were purged 2026-04-28.
+from train_v6 import DesignHeadV6, SCORE_NAMES, OUTPUT_DIM
 
 WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
-WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v5.safetensors"
+V6_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v6.safetensors"
+V5_WEIGHTS_PATH = WEIGHTS_DIR / "design-head-v5.safetensors"
 SOCKET_PATH = "/tmp/design-model-v2.sock"
 PID_PATH = "/tmp/design-model-v2.pid"
-PHASE = "phase_5"
 
 # ═══════════════════════════════════════════════════
 # MOBILENET V2 FEATURE EXTRACTOR (PyTorch)
@@ -93,23 +97,36 @@ class MobileNetExtractor:
 
 
 def load_design_model():
-    """Load Phase 5 design head. Phase 5 is the only supported phase.
+    """Load the latest design head — prefer v6, fall back to v5.
 
-    Errors out if the V5 weights file is missing — earlier-phase fallbacks
-    were intentionally removed so callers get a single, unambiguous model.
-    Re-train V5 (mlx/train_v5.py) to regenerate weights if they're lost.
+    Errors out if both weights files are missing.  The v6 architecture
+    is a strict superset of v5 (it adds adapter / log_var / pref_head
+    parameters on the same trunk), so the same DesignHeadV6 class can
+    load either checkpoint via strict=False.
     """
-    if not WEIGHTS_PATH.exists():
+    model = DesignHeadV6(dropout=0.0)
+
+    if V6_WEIGHTS_PATH.exists():
+        model.load_weights(str(V6_WEIGHTS_PATH))
+        weights_path = V6_WEIGHTS_PATH
+        phase = "phase_6"
+    elif V5_WEIGHTS_PATH.exists():
+        # v5 lacks adapter / log_var / pref_head — load non-strict so those
+        # stay at random init.  Predicted uncertainty will be meaningless
+        # in this mode; callers should retrain to v6 for real Phase 6 signal.
+        model.load_weights(str(V5_WEIGHTS_PATH), strict=False)
+        weights_path = V5_WEIGHTS_PATH
+        phase = "phase_5_compat"
+    else:
         raise FileNotFoundError(
-            f"Phase 5 weights not found at {WEIGHTS_PATH}. "
-            f"Earlier phases were purged; re-train via `python mlx/train_v5.py` to regenerate."
+            f"No weights at {V6_WEIGHTS_PATH} or {V5_WEIGHTS_PATH}. "
+            f"Train via `python mlx/train_v6.py` to regenerate."
         )
-    model = DesignHeadV5(dropout=0.0)
-    model.load_weights(str(WEIGHTS_PATH))
+
     total = sum(p.size for _, p in tree_flatten(model.parameters()))
-    print(f"[server] loaded Phase 5 head: {WEIGHTS_PATH.name} ({total:,} params)")
+    print(f"[server] loaded {phase}: {weights_path.name} ({total:,} params)")
     model.eval()
-    return model, PHASE
+    return model, phase
 
 
 # ═══════════════════════════════════════════════════
@@ -132,7 +149,7 @@ class InferenceServer:
             print("[server] warming up MLX JIT...")
             dummy = mx.random.uniform(shape=(1, 1280))
             dummy_code = mx.zeros((1, 64))
-            _ = self.model(dummy, dummy_code)
+            _ = self.model(dummy, dummy_code, return_uncertainty=True)
             mx.eval(_)
             print("[server] warmup complete")
 
@@ -155,12 +172,16 @@ class InferenceServer:
         else:
             code_features = np.zeros(64, dtype=np.float32)
 
-        # MLX forward pass
+        # MLX forward pass — v6 also returns per-dim log_var
         vis_mx = mx.array(vis_features[None, :])
         code_mx = mx.array(code_features[None, :])
-        scores_mx = self.model(vis_mx, code_mx)
-        mx.eval(scores_mx)
+        scores_mx, log_var_mx = self.model(vis_mx, code_mx, return_uncertainty=True)
+        mx.eval(scores_mx, log_var_mx)
         scores = scores_mx[0].tolist()
+        log_var = mx.clip(log_var_mx, -7.0, 4.0)
+        std_mx = mx.sqrt(mx.exp(log_var))
+        mx.eval(std_mx)
+        stds = std_mx[0].tolist()
 
         elapsed_ms = (time.time() - t0) * 1000
         self.request_count += 1
@@ -170,9 +191,16 @@ class InferenceServer:
         score_dict = {SCORE_NAMES[i]: round(scores[i], 4) for i in range(OUTPUT_DIM)}
         overall_idx = SCORE_NAMES.index("overall_aesthetic")
 
+        # Uncertainty is meaningful only when v6 weights are loaded; in
+        # phase_5_compat mode log_var is random so we suppress it.
+        uncertainty = None
+        if self.phase == "phase_6":
+            uncertainty = {SCORE_NAMES[i]: round(stds[i], 4) for i in range(OUTPUT_DIM)}
+
         return {
             "scores": score_dict,
             "overall": round(scores[overall_idx], 4),
+            "uncertainty": uncertainty,
             "norman": {
                 "visceral": round(scores[SCORE_NAMES.index("visceral_score")], 4),
                 "behavioral": round(scores[SCORE_NAMES.index("behavioral_score")], 4),
@@ -203,6 +231,8 @@ class InferenceServer:
     def status(self) -> dict:
         uptime = time.time() - self.start_time
         avg_ms = self.total_inference_ms / max(self.request_count, 1)
+        weights_path = (V6_WEIGHTS_PATH if V6_WEIGHTS_PATH.exists()
+                        else V5_WEIGHTS_PATH)
         return {
             "status": "running",
             "phase": self.phase,
@@ -210,7 +240,7 @@ class InferenceServer:
             "uptime_s": round(uptime, 1),
             "requests": self.request_count,
             "avg_inference_ms": round(avg_ms, 1),
-            "weights": str(WEIGHTS_PATH),
+            "weights": str(weights_path),
             "socket": SOCKET_PATH,
             "device": str(mx.default_device()),
         }
