@@ -259,6 +259,29 @@ def retrain():
     mlx_dir = Path(__file__).parent / "mlx"
     design_dir = Path(__file__).parent
 
+    # ── 0. Defense in depth: backfill any opus_self_train manifest sample
+    #       that's missing its Phase 5 critique JSON.  Older entries
+    #       pre-date save_critique_for_training; without backfilling them
+    #       the aux head can't activate.  Idempotent (skips samples that
+    #       already have critiques) and capped to a small batch per retrain
+    #       so a single retrain doesn't burn the daily Opus budget. ──
+    backfill_script = design_dir / "backfill_critiques.py"
+    if backfill_script.exists():
+        print("[retrain] backfilling missing critique JSONs (max 30 / retrain)...")
+        try:
+            bf_result = subprocess.run(
+                ["python3", str(backfill_script), "--max-samples", "30"],
+                cwd=design_dir, capture_output=True, text=True, timeout=900,
+            )
+            for line in (bf_result.stdout or "").split("\n"):
+                if any(k in line for k in ("complete:", "nothing to do",
+                                           "[backfill] aborting", "approximate spend")):
+                    print(f"[retrain] {line.strip()}")
+            if bf_result.returncode != 0 and bf_result.stderr:
+                print(f"[retrain] backfill stderr: {bf_result.stderr[:200]}")
+        except Exception as e:
+            print(f"[retrain] backfill error (non-fatal): {str(e)[:120]}")
+
     # ── 1. Embed any newly-captured critiques into critique_embeddings.npz ──
     # Idempotent and cheap when there's nothing new. This is the Phase 5
     # pipeline — critique text → OpenAI embeddings → training signal.
