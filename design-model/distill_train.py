@@ -349,8 +349,21 @@ def train(model_id: str, epochs: int, batch_size: int, grad_accum: int,
             out = model(**inputs)
             loss = out.loss / grad_accum
             loss.backward()
-            epoch_loss += float(loss) * grad_accum
+            # Detach before scalar conversion — float() on a requires_grad
+            # tensor warns about leaking the computation graph.
+            loss_value = loss.detach().item() * grad_accum
+            epoch_loss += loss_value
             accum_steps += 1
+
+            # Per-sample heartbeat — the macro print only fires every 5
+            # optimizer steps, which is too sparse for slow MPS forwards.
+            if (k + 1) % 4 == 0 or k == 0:
+                elapsed = time.time() - t0_run
+                rate = (k + 1) / max(elapsed, 1)
+                eta = (len(examples) * (epochs - epoch) - (k + 1)) / max(rate, 0.01) / 60
+                print(f"  epoch {epoch+1}/{epochs} sample {k+1:3d}/{len(examples)}  "
+                      f"loss={loss_value:.3f}  "
+                      f"{rate:.2f} samples/s  ETA ~{eta:.0f}min")
 
             if accum_steps >= grad_accum:
                 torch.nn.utils.clip_grad_norm_(
@@ -360,12 +373,6 @@ def train(model_id: str, epochs: int, batch_size: int, grad_accum: int,
                 optimizer.zero_grad()
                 accum_steps = 0
                 step += 1
-
-                if step % 5 == 0:
-                    elapsed = time.time() - t0_run
-                    print(f"  epoch {epoch+1}/{epochs} step {step:3d} "
-                          f"sample {k+1:3d}/{len(examples)}  loss={float(loss)*grad_accum:.3f}  "
-                          f"elapsed {elapsed/60:.1f}min")
 
         avg = epoch_loss / max(len(examples), 1)
         print(f"[distill] epoch {epoch+1} complete  avg_loss={avg:.4f}")
