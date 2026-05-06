@@ -3,18 +3,13 @@
 distill_train.py — LoRA fine-tune a small VLM to mimic Opus's
 teacher data from distill_collect.py.
 
-⚠️  STATUS (2026-05-06): Use distill_to_mlx_jsonl.py + mlx-vlm CLI instead.
-    See README-style block at the bottom for the working command.
-
-    PyTorch+MPS path on M4 Max measured at 0.04 it/s = 13 hour ETA for 4
-    epochs.  The MLX path measured at ~2.0 it/s = ~15 minutes.  Use MLX.
-
-    HOWEVER: mlx-vlm 0.4.4's `apply_lora_layers` has a bug where adapters
-    trained with its own trainer fail to load coherently at inference
-    time on Qwen2.5-VL — model degenerates to "You are a" repetition.
-    The training itself works (loss drops, weights save).  Until the
-    mlx-vlm bug is fixed upstream, distill artifacts are best held as
-    raw weights and replayed via custom inference glue.
+STATUS (2026-05-06): Canonical path is PyTorch + Qwen2.5-VL-3B-Instruct
++ PEFT LoRA on MPS.  ~4-6 hours for 4 epochs over 458 teacher samples
+on M4 Max.  Slower than mlx-vlm in raw it/s, but PEFT's adapter
+loading is reliable end-to-end (mlx-vlm 0.4.4 has known adapter-
+inference bugs on Qwen2.5-VL/LLaVA — see git history 2026-05-05/06).
+Inference uses standard `PeftModel.from_pretrained(adapter)` — see
+distill_inference.py.
 
 Why
   The v9 head is a scalar regressor — it produces 16 numbers but cannot
@@ -26,16 +21,17 @@ Why
     3. Same-or-faster inference on M4 Max with MPS
 
 Default student
-  Qwen/Qwen2.5-VL-7B-Instruct (~7B params)
-    - Strongest open VLM under 10B as of late 2025
-    - Excellent at reading dense text in UI screenshots — important
-      for design-quality judgments where typography + microcopy matter
+  Qwen/Qwen2.5-VL-3B-Instruct (~3.75B params)
+    - Sweet spot for PyTorch+MPS LoRA fine-tuning on M4 Max
+    - ~6 GB bf16 weights, ~12-18 GB peak training memory at batch=1
+    - 3× faster training per step than 7B (~4-5 hr vs ~12 hr for 4 epochs)
+    - More than enough capacity for 458-sample distillation; 7B would
+      overfit before contributing extra capability at this data scale
+    - Inference: ~600ms per evaluation on M4 Max + MPS
     - Apache 2.0 licensed
-    - ~14 GB bf16 weights, ~25-30 GB peak training memory at batch=1
-    - Inference: ~1.5s per evaluation on M4 Max + MPS
 
 Alternatives (swap with --model):
-    Qwen/Qwen2.5-VL-3B-Instruct      # ~6 GB, ~600ms inference, slightly weaker
+    Qwen/Qwen2.5-VL-7B-Instruct      # ~14 GB, slower train, marginally stronger
     HuggingFaceTB/SmolVLM-Instruct   # ~5 GB, fastest, but materially weaker
     google/paligemma2-3b-pt-224      # MLX-VLM friendly
     OpenGVLab/InternVL2_5-8B         # roughly tied with Qwen2.5-VL 7B
@@ -45,9 +41,9 @@ Output
     adapter_config.json
     adapter_model.safetensors
 
-Cost / time (Qwen2.5-VL 7B, ~500 teacher samples)
-  Teacher data:    ~$40 in Opus 4.7 calls (one-time, see distill_collect.py)
-  LoRA fine-tune:  4 epochs ≈ 12-20 hours on M4 Max + MPS
+Cost / time (Qwen2.5-VL 3B, 458 teacher samples)
+  Teacher data:    already collected (data/distill/cycle-*.json, 458 records)
+  LoRA fine-tune:  4 epochs ≈ 4-6 hours on M4 Max + MPS
   No API spend during training; pure local compute.
 
 Usage
@@ -74,7 +70,7 @@ DATA_DIR = ROOT / "data"
 DISTILL_DIR = DATA_DIR / "distill"
 WEIGHTS_DIR = ROOT / "weights"
 
-DEFAULT_MODEL = "Qwen/Qwen2.5-VL-7B-Instruct"
+DEFAULT_MODEL = "Qwen/Qwen2.5-VL-3B-Instruct"
 DEFAULT_LORA_R = 16
 DEFAULT_LORA_ALPHA = 32
 DEFAULT_LORA_DROPOUT = 0.05
