@@ -157,16 +157,26 @@ def build_lora_model(model_id: str, lora_r: int, lora_alpha: int,
     """Load the VLM in PyTorch (MPS), wrap with PEFT LoRA on attention
     projections.  Returns (model, processor)."""
     import torch
-    from transformers import AutoModelForVision2Seq, AutoProcessor
+    import transformers
+    from transformers import AutoProcessor
     from peft import LoraConfig, get_peft_model
+
+    # transformers 4.x → AutoModelForVision2Seq
+    # transformers 5.x → AutoModelForImageTextToText (renamed)
+    # Try the modern name first, fall back for older installs.
+    try:
+        from transformers import AutoModelForImageTextToText as _AutoVLM
+    except ImportError:
+        from transformers import AutoModelForVision2Seq as _AutoVLM
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-    print(f"[distill] loading {model_id} on {device}...")
+    print(f"[distill] loading {model_id} on {device} "
+          f"(transformers {transformers.__version__}, using {_AutoVLM.__name__})...")
     t0 = time.time()
     # bfloat16 is well-supported on MPS and halves memory
     dtype = torch.bfloat16 if device == "mps" else torch.float32
-    model = AutoModelForVision2Seq.from_pretrained(
+    model = _AutoVLM.from_pretrained(
         model_id, torch_dtype=dtype, low_cpu_mem_usage=True,
     ).to(device)
     processor = AutoProcessor.from_pretrained(model_id)
