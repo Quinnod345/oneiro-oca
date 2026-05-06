@@ -176,10 +176,42 @@ def build_lora_model(model_id: str, lora_r: int, lora_alpha: int,
     t0 = time.time()
     # bfloat16 is well-supported on MPS and halves memory
     dtype = torch.bfloat16 if device == "mps" else torch.float32
-    model = _AutoVLM.from_pretrained(
-        model_id, torch_dtype=dtype, low_cpu_mem_usage=True,
-    ).to(device)
-    processor = AutoProcessor.from_pretrained(model_id)
+    # transformers 5.x renamed `torch_dtype` to `dtype`; pass `dtype` first
+    # then fall back for older releases.
+    try:
+        model = _AutoVLM.from_pretrained(
+            model_id, dtype=dtype, low_cpu_mem_usage=True,
+        ).to(device)
+    except TypeError:
+        model = _AutoVLM.from_pretrained(
+            model_id, torch_dtype=dtype, low_cpu_mem_usage=True,
+        ).to(device)
+
+    # Gradient checkpointing — trades ~30% extra compute for ~70% less
+    # activation memory.  Critical at our model size on M4 Max + MPS.
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+        # MPS bf16 + checkpointing needs use_cache=False
+        if hasattr(model, "config"):
+            model.config.use_cache = False
+        print(f"[distill] gradient checkpointing enabled")
+
+    # Cap image resolution at the processor.  Qwen2.5-VL's vision tower
+    # tokenizes at 28×28 patches; without a cap a 1440×900 UI screenshot
+    # produces thousands of vision tokens whose activations blow past the
+    # 64 GB unified memory.  768×768 = ~750 tokens, fits easily.
+    MAX_PIXELS = 768 * 768
+    MIN_PIXELS = 256 * 256
+    try:
+        processor = AutoProcessor.from_pretrained(
+            model_id, min_pixels=MIN_PIXELS, max_pixels=MAX_PIXELS,
+        )
+        print(f"[distill] processor capped: min_pixels={MIN_PIXELS}, max_pixels={MAX_PIXELS}")
+    except TypeError:
+        # Older processors don't accept these args — load default
+        processor = AutoProcessor.from_pretrained(model_id)
+        print(f"[distill] WARNING: processor does not accept pixel caps; "
+              f"forward-pass memory may blow up on large screenshots")
     print(f"[distill] loaded in {time.time()-t0:.1f}s · "
           f"{sum(p.numel() for p in model.parameters())/1e6:.0f}M params")
 
