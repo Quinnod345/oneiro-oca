@@ -3,6 +3,19 @@
 distill_train.py — LoRA fine-tune a small VLM to mimic Opus's
 teacher data from distill_collect.py.
 
+⚠️  STATUS (2026-05-06): Use distill_to_mlx_jsonl.py + mlx-vlm CLI instead.
+    See README-style block at the bottom for the working command.
+
+    PyTorch+MPS path on M4 Max measured at 0.04 it/s = 13 hour ETA for 4
+    epochs.  The MLX path measured at ~2.0 it/s = ~15 minutes.  Use MLX.
+
+    HOWEVER: mlx-vlm 0.4.4's `apply_lora_layers` has a bug where adapters
+    trained with its own trainer fail to load coherently at inference
+    time on Qwen2.5-VL — model degenerates to "You are a" repetition.
+    The training itself works (loss drops, weights save).  Until the
+    mlx-vlm bug is fixed upstream, distill artifacts are best held as
+    raw weights and replayed via custom inference glue.
+
 Why
   The v9 head is a scalar regressor — it produces 16 numbers but cannot
   explain WHY a design fails.  A small VLM (SmolVLM 2B / PaliGemma 2 3B
