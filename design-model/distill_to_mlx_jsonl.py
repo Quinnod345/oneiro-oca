@@ -79,26 +79,18 @@ def format_prompt(record: dict) -> str:
 
 
 def to_mlx_record(record: dict) -> dict | None:
+    """Emit a {images, question, answer} record.  mlx-vlm's
+    transform_dataset_to_messages will wrap question/answer in the
+    model-specific chat template at training time, so this format
+    works across LLaVA, Qwen2.5-VL, PaliGemma, etc. without us having
+    to reimplement each model's prompt grammar."""
     img_path = record["screenshot_path"]
     if not Path(img_path).exists():
         return None
     return {
         "images": [str(Path(img_path).resolve())],
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": format_prompt(record)},
-                ],
-            },
-            {
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": format_target(record)},
-                ],
-            },
-        ],
+        "question": format_prompt(record),
+        "answer": format_target(record),
     }
 
 
@@ -160,10 +152,8 @@ def main():
 
     print(f"[convert] wrote {len(train_records)} train ({len(base_train)} unique × {args.epochs} epochs) "
           f"+ {len(val_records)} val records")
-    print(f"[convert] train: {train_path}")
-    print(f"[convert] val:   {val_path}")
-    print(f"[convert] sample target preview:")
-    print("  " + records[0]["messages"][1]["content"][0]["text"][:200].replace("\n", "\n  "))
+    print(f"[convert] columns per record: {sorted(records[0].keys())}")
+    print(f"[convert] sample question: {records[0]['question'][:140]}...")
     return 0
 
 
