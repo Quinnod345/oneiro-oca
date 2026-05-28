@@ -105,6 +105,22 @@ ocaRouter.get('/oca/sense', async (req, res) => {
     // Attach latest vision analysis if available
     const sensoryMod = await import('./sensory/perception.js');
     perception.vision = sensoryMod.default.getLastVisionAnalysis();
+    const visual = perception.visual || {};
+    const activeApp =
+      perception.activeApp ||
+      visual.active_app ||
+      visual.frontApp ||
+      perception.attention_target ||
+      null;
+    const activeWindow =
+      perception.activeWindow ||
+      visual.active_window?.title ||
+      visual.windowTitle ||
+      null;
+    perception.activeApp = activeApp && activeApp !== 'unknown' ? activeApp : null;
+    perception.activeWindow = activeWindow && activeWindow !== 'unknown' ? activeWindow : null;
+    perception.presence = perception.presence || perception.user_presence || null;
+    perception.activity = perception.activity || perception.user_activity || null;
     res.json(perception);
   } catch (e) {
     res.status(500).json({ error: e.message });

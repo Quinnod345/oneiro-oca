@@ -61,9 +61,21 @@ function buildFallbackPerception() {
 // INDIVIDUAL CHANNEL ACCESSORS (backward compat)
 // ═══════════════════════════════════════════════════
 
-export function getVisualState() {
+function freshSharedState(maxAgeMs = 30000) {
   const shared = readPerceptualState();
-  if (shared?.visual) {
+  if (!shared?.timestamp) return null;
+  const timestamp = new Date(shared.timestamp).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Date.now() - timestamp <= maxAgeMs ? shared : null;
+}
+
+function isKnownString(value) {
+  return typeof value === 'string' && value.trim() !== '' && value !== 'unknown';
+}
+
+export function getVisualState() {
+  const shared = freshSharedState();
+  if (shared?.visual && isKnownString(shared.visual.active_app)) {
     return {
       frontApp: shared.visual.active_app || 'unknown',
       windowTitle: shared.visual.active_window?.title || '',
@@ -102,7 +114,7 @@ export function getVisualState() {
 }
 
 export function getAudioState() {
-  const shared = readPerceptualState();
+  const shared = freshSharedState();
   if (shared?.auditory) return { ...shared.auditory, timestamp: shared.timestamp };
 
   let nowPlaying = '', volume = 50, muted = false;
@@ -118,13 +130,13 @@ export function getAudioState() {
 }
 
 export function getInteroception() {
-  const shared = readPerceptualState();
+  const shared = freshSharedState();
   if (shared?.interoceptive) return { ...shared.interoceptive, timestamp: shared.timestamp };
   return swiftBridge.getLatestInteroception() || { timestamp: new Date().toISOString() };
 }
 
 export function getTemporalState() {
-  const shared = readPerceptualState();
+  const shared = freshSharedState();
   if (shared?.temporal) return shared.temporal;
 
   const now = new Date();
@@ -137,7 +149,7 @@ export function getTemporalState() {
 }
 
 export function getProprioception() {
-  const shared = readPerceptualState();
+  const shared = freshSharedState();
   if (shared?.proprioceptive) return shared.proprioceptive;
 
   let clipboard = '', wifi = 'unknown', uptime = 'unknown';
