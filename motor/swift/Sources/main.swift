@@ -11,6 +11,11 @@ import CoreGraphics
 import ApplicationServices
 import Foundation
 
+func axElement(from value: CFTypeRef?) -> AXUIElement? {
+    guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    return unsafeBitCast(value, to: AXUIElement.self)
+}
+
 // ═══════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
@@ -334,9 +339,9 @@ func captureSnapshot() -> [String: Any] {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var focusedWindow: AnyObject?
         AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &focusedWindow)
-        if let win = focusedWindow {
+        if let win = axElement(from: focusedWindow) {
             var titleVal: AnyObject?
-            AXUIElementCopyAttributeValue(win as! AXUIElement, kAXTitleAttribute as CFString, &titleVal)
+            AXUIElementCopyAttributeValue(win, kAXTitleAttribute as CFString, &titleVal)
             windowTitle = titleVal as? String ?? ""
         }
     }
@@ -530,7 +535,9 @@ class MotorSocketServer {
                         if let data = try? JSONSerialization.data(withJSONObject: result),
                            var str = String(data: data, encoding: .utf8) {
                             str += "\n"
-                            handle.write(str.data(using: .utf8)!)
+                            if let bytes = str.data(using: .utf8) {
+                                handle.write(bytes)
+                            }
                         }
                     }
                 }

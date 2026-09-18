@@ -1,4 +1,4 @@
-// OCA Emotional Computation Engine v2
+// OCA Emotional Computation Engine v3 — observed events and durable latent state
 // Adapted from voidborne-d/emotion-system — PADCN + appraisal + drives + meta-emotions
 // Keeps the same external interface so all 47 callsites still work.
 import { pool, emit } from '../event-bus.js';
@@ -80,6 +80,7 @@ let interoception = { energy_level: 1.0, cognitive_load: 0.0 };
 
 // Timing
 let lastDecayTime = Date.now();
+let lastIdleMinutes = 0;
 let recentAppraisals = [];     // for meta-emotion detection
 let interactionCount = 0;
 let failureStreak = 0;
@@ -96,7 +97,7 @@ const sigmoid = (x) => 1 / (1 + Math.exp(-x));
 function appraise(event) {
   // event: { type, magnitude, domain, quality, details, ... }
   const a = {
-    goal_relevance: 0.5,
+    goal_relevance: 0.0,
     goal_congruence: 0.0,    // -1 to 1
     expectedness: 0.5,
     controllability: 0.5,
@@ -104,14 +105,15 @@ function appraise(event) {
     agency_other: 0.3,
     certainty: 0.5,
     norm_compatibility: 0.5,
-    social_significance: 0.3,
+    social_significance: 0.0,
     self_image_impact: 0.0,  // -1 to 1
     relationship_impact: 0.0, // -1 to 1
-    novelty: 0.3,
-    urgency: 0.3
+    novelty: 0.0,
+    urgency: 0.0,
+    event_type: event.type
   };
   
-  const mag = event.magnitude || 0.5;
+  const mag = Number.isFinite(event.magnitude) ? clamp01(event.magnitude) : 0;
   
   switch (event.type) {
     case 'surprise':
@@ -195,22 +197,18 @@ function appraise(event) {
 // ═══ PADCN UPDATE FROM APPRAISAL ═══
 
 function updatePADCN(a) {
-  const dP = 0.3 * a.goal_congruence + 0.2 * a.self_image_impact + 0.2 * a.relationship_impact + 0.1 * a.norm_compatibility;
-  const dA = 0.3 * a.urgency + 0.2 * a.novelty + 0.2 * a.goal_relevance - 0.1 * a.controllability;
-  const dD = 0.3 * a.controllability + 0.2 * a.agency_self - 0.2 * a.agency_other + 0.1 * a.certainty;
-  const dC = 0.4 * a.certainty + 0.2 * a.expectedness - 0.2 * a.novelty;
-  const dN = 0.5 * a.novelty + 0.2 * (1 - a.expectedness) - 0.2 * a.controllability;
-  
-  // Drive error also feeds into affect
-  let driveError = 0;
-  for (const [name, d] of Object.entries(drives)) {
-    driveError += (d.target - d.level) * d.weight;
-  }
-  driveError /= Object.keys(drives).length;
-  
-  padcn.P = clamp(padcn.P + dP * 0.2 + driveError * 0.04 + personality.baseline_positive_affect * 0.05);
+  decay();
+  // Neutral appraisal must be a zero input, not five positive increments.
+  // Tonic baselines belong in time-based decay, never per-event rewards.
+  const dP = 0.3 * a.goal_congruence + 0.2 * a.self_image_impact + 0.2 * a.relationship_impact + 0.1 * (a.norm_compatibility - 0.5);
+  const dA = 0.3 * a.urgency + 0.2 * a.novelty + 0.2 * a.goal_relevance - 0.1 * (a.controllability - 0.5);
+  const dD = 0.3 * (a.controllability - 0.5) + 0.2 * (a.agency_self - a.agency_other) + 0.1 * (a.certainty - 0.5);
+  const dC = 0.4 * (a.certainty - 0.5) + 0.2 * (a.expectedness - 0.5) - 0.2 * a.novelty;
+  const dN = 0.5 * a.novelty + 0.2 * (0.5 - a.expectedness) - 0.2 * (a.controllability - 0.5);
+
+  padcn.P = clamp(padcn.P + dP * 0.2);
   padcn.A = clamp(padcn.A + dA * 0.4 * personality.arousal_reactivity);
-  padcn.D = clamp(padcn.D + dD * 0.3 + personality.dominance_bias * 0.05);
+  padcn.D = clamp(padcn.D + dD * 0.3);
   padcn.C = clamp(padcn.C + dC * 0.3);
   padcn.N = clamp(padcn.N + dN * 0.4);
 }
@@ -271,10 +269,8 @@ function updateChannels(a) {
 
 function updateDrives(a) {
   // Events shift drive levels
-  if (a.novelty > 0.3) drives.curiosity.level = clamp01(drives.curiosity.level + a.novelty * 0.1);
-  if (a.goal_congruence > 0) drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.1);
-  if (a.goal_congruence < 0) drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.08);
-  if (a.agency_self > 0.5) drives.autonomy.level = clamp01(drives.autonomy.level + 0.05);
+  if (a.event_type === 'success') drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.1);
+  if (a.event_type === 'failure') drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.08);
   if (a.relationship_impact > 0) drives.social_bond.level = clamp01(drives.social_bond.level + a.relationship_impact * 0.1);
   
   // Coherence: drops when state is confused
@@ -287,10 +283,7 @@ function updateDrives(a) {
     drives.self_preservation.level = clamp01(drives.self_preservation.level - 0.05);
   }
   
-  // Homeostatic pull toward target
-  for (const d of Object.values(drives)) {
-    d.level += (d.target - d.level) * 0.03;
-  }
+  // Unmet drives do not approach satisfaction merely because an event arrived.
 }
 
 // ═══ SELF-MODEL UPDATES (slow) ═══
@@ -298,13 +291,13 @@ function updateDrives(a) {
 function updateSelfModel(a) {
   // Very slow updates
   const rate = 0.01;
-  if (a.goal_congruence > 0.3) {
+  if (a.event_type === 'success' && a.goal_congruence > 0.3) {
     selfModel.self_efficacy = clamp01(selfModel.self_efficacy + rate);
     selfModel.competence_identity = clamp01(selfModel.competence_identity + rate * 0.5);
     successStreak++;
     failureStreak = 0;
   }
-  if (a.goal_congruence < -0.3) {
+  if (a.event_type === 'failure' && a.goal_congruence < -0.3) {
     selfModel.self_efficacy = clamp01(selfModel.self_efficacy - rate * 1.2);
     failureStreak++;
     successStreak = 0;
@@ -399,7 +392,7 @@ function updateExpression() {
 
 function decay() {
   const now = Date.now();
-  const elapsed = Math.min((now - lastDecayTime) / 60000, 5);
+  const elapsed = Math.max(0, (now - lastDecayTime) / 60000);
   lastDecayTime = now;
   
   // PADCN decay toward 0 (neutral) with personality baseline
@@ -435,8 +428,16 @@ function decay() {
 // Maps the rich PADCN + channels system back to the flat state format
 // that all 47 callsites expect.
 
+let motivationalState = { pressure: 0, frustration: 0, selected: null, mode: 'idle', strategy: null };
+export function setMotivationalState(state) {
+  motivationalState = { pressure: clamp01(state?.pressure || 0), frustration: clamp01(state?.frustration || 0),
+    selected: state?.selected || null, mode: state?.mode || 'idle', strategy: state?.strategy || null };
+}
+
 function getState() {
   return {
+    hunger: motivationalState.pressure,
+    motivation: { ...motivationalState },
     // Map channels to old field names
     curiosity: channels.curiosity,
     fear: channels.fear,
@@ -458,7 +459,7 @@ function getState() {
     // NEW: full emotional depth available
     _padcn: { ...padcn },
     _channels: { ...channels },
-    _drives: { ...drives },
+    _drives: structuredClone(drives),
     _self_model: { ...selfModel },
     _meta: { ...meta },
     _policy: { ...policy },
@@ -473,6 +474,8 @@ function getMood() {
 
 function getCognitiveEffects() {
   return {
+    ...policy,
+    goal_pursuit_pressure: motivationalState.pressure,
     // Perception
     sensory_sampling_rate: 1.0 + channels.curiosity * 0.5 + channels.fear * 0.3 - clamp01(1 - padcn.N) * 0.3,
     attention_breadth: 1.0 + channels.fear * 0.3 - padcn.A * 0.2,
@@ -480,12 +483,12 @@ function getCognitiveEffects() {
     // Reasoning — NOW driven by policy modulators
     risk_tolerance: 0.5 + policy.risk_tolerance,
     exploration_vs_exploitation: policy.exploration_bias,
-    reasoning_depth: 1.0 + channels.fear * 0.5 - channels.frustration * 0.2,
+    reasoning_depth: 1.0 + channels.fear * 0.5 + motivationalState.frustration * 0.3,
     creative_mode: channels.curiosity * 0.3 + channels.awe * 0.3 + drives.novelty_seek.level * 0.2,
     
     // Action
     action_rate: 1.0 + channels.frustration * 0.2 + padcn.A * 0.2 - channels.fear * 0.2,
-    strategy_switch_pressure: channels.frustration > 0.5 ? channels.frustration : 0,
+    strategy_switch_pressure: Math.max(motivationalState.frustration, channels.frustration > 0.5 ? channels.frustration : 0),
     
     // Social
     social_priority: channels.attachment + clamp01(drives.social_bond.target - drives.social_bond.level),
@@ -494,14 +497,14 @@ function getCognitiveEffects() {
     // Task
     task_switch_pressure: clamp01(1 - padcn.N) + channels.frustration * 0.5 - padcn.A - channels.curiosity,
     
-    // Policy (new — downstream consumers can use these)
-    ...policy
+    resource_pressure: interoception.cognitive_load
   };
 }
 
 // ═══ STIMULUS PROCESSORS (backward-compatible) ═══
 
 export function processSurprise(magnitude, domain, details = '') {
+  if (!Number.isFinite(magnitude) || magnitude <= 0) return;
   const a = appraise({ type: 'surprise', magnitude, domain, details });
   updatePADCN(a);
   updateChannels(a);
@@ -510,7 +513,8 @@ export function processSurprise(magnitude, domain, details = '') {
 }
 
 export function processSuccess(goalImportance) {
-  const importance = typeof goalImportance === 'number' ? goalImportance : 0.5;
+  if (!Number.isFinite(goalImportance) || goalImportance <= 0) return;
+  const importance = clamp01(goalImportance);
   const a = appraise({ type: 'success', magnitude: importance });
   updatePADCN(a);
   updateChannels(a);
@@ -519,6 +523,7 @@ export function processSuccess(goalImportance) {
 }
 
 export function processFailure(attempts, goalImportance) {
+  if (!Number.isFinite(attempts) || attempts <= 0) return;
   const magnitude = (attempts / 10) * (typeof goalImportance === 'number' ? goalImportance : 0.5);
   const a = appraise({ type: 'failure', magnitude: clamp01(magnitude) });
   updatePADCN(a);
@@ -528,6 +533,7 @@ export function processFailure(attempts, goalImportance) {
 }
 
 export function processInteraction(quality) {
+  if (!Number.isFinite(quality) || quality === 0) return;
   const a = appraise({ type: 'interaction', quality, magnitude: Math.abs(quality) });
   updatePADCN(a);
   updateChannels(a);
@@ -537,32 +543,28 @@ export function processInteraction(quality) {
 }
 
 export function processIdle(minutes) {
-  if (minutes < 2) return;
-  const magnitude = clamp01(minutes / 30);
-  const a = appraise({ type: 'idle', magnitude });
-  // Idle specifically depletes novelty drive
-  drives.novelty_seek.level = clamp01(drives.novelty_seek.level - minutes / 120);
-  drives.social_bond.level = clamp01(drives.social_bond.level - minutes / 180);
-  updatePADCN(a);
-  updateChannels(a);
+  if (!Number.isFinite(minutes) || minutes < 0) return;
+  decay();
+  // The input is cumulative idle duration, not elapsed time since this call.
+  // Repeated samples of the same duration must have no additional effect.
+  const previous = minutes >= lastIdleMinutes ? lastIdleMinutes : 0;
+  const delta = Math.max(0, minutes - Math.max(2, previous));
+  lastIdleMinutes = minutes;
+  drives.novelty_seek.level = clamp01(drives.novelty_seek.level - delta / 120);
+  drives.social_bond.level = clamp01(drives.social_bond.level - delta / 180);
 }
 
 export function processInteroception(battery, cpuUtil, memoryPressure, thermal) {
-  interoception.energy_level = clamp01(battery);
-  interoception.cognitive_load = clamp01((cpuUtil + memoryPressure) / 2);
-  
-  const a = appraise({ type: 'interoception', battery, magnitude: battery < 0.2 ? 0.7 : 0.3 });
-  updatePADCN(a);
-  updateChannels(a);
-  
-  // Low energy dampens positive affect
-  if (battery < 0.2) {
-    padcn.P -= 0.05;
-    drives.self_preservation.level = clamp01(drives.self_preservation.level - 0.1);
-  }
+  decay();
+  // Resource readings are state, not fresh emotionally rewarding events.
+  // Unknown sensor values leave the last measurement intact rather than NaN.
+  if (Number.isFinite(battery)) interoception.energy_level = clamp01(battery);
+  const load = [cpuUtil, memoryPressure, thermal].filter(Number.isFinite);
+  if (load.length) interoception.cognitive_load = clamp01(Math.max(...load));
 }
 
 export function processInformationGain(rate) {
+  if (!Number.isFinite(rate) || rate <= 0) return;
   const a = appraise({ type: 'info_gain', magnitude: rate });
   updatePADCN(a);
   updateChannels(a);
@@ -576,6 +578,7 @@ export function processInformationGain(rate) {
 
 // NEW: process creative output
 export function processCreative(quality) {
+  if (!Number.isFinite(quality) || quality <= 0) return;
   const a = appraise({ type: 'creative', magnitude: clamp01(quality) });
   updatePADCN(a);
   updateChannels(a);
@@ -606,13 +609,13 @@ export async function update() {
     `INSERT INTO emotional_states 
      (curiosity, fear, frustration, satisfaction, boredom, excitement, 
       attachment, defiance, creative_hunger, loneliness,
-      valence, arousal, confidence, energy_level, cognitive_load)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      valence, arousal, confidence, energy_level, cognitive_load, state_snapshot)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [s.curiosity, s.fear, s.frustration, s.satisfaction,
      s.boredom, s.excitement, s.attachment, s.defiance,
      s.creative_hunger, s.loneliness,
      s.valence, s.arousal, s.confidence,
-     s.energy_level, s.cognitive_load]
+     s.energy_level, s.cognitive_load, JSON.stringify(snapshotState())]
   );
   
   // Emit rich event
@@ -632,14 +635,56 @@ export async function update() {
 
 // ═══ RESTORE FROM DB ═══
 
+export function snapshotState() {
+  return structuredClone({ version: 3, savedAt: Date.now(), padcn, channels, drives,
+    selfModel, meta, personality, interoception, mood, recentAppraisals,
+    interactionCount, failureStreak, successStreak, lastIdleMinutes });
+}
+
+export function restoreState(snapshot) {
+  if (snapshot?.version !== 3 || !Number.isFinite(snapshot.savedAt)) return false;
+  const restoreNumbers = (target, source, lo = 0, hi = 1) => {
+    for (const key of Object.keys(target)) {
+      if (Number.isFinite(source?.[key])) target[key] = clamp(source[key], lo, hi);
+    }
+  };
+  restoreNumbers(padcn, snapshot.padcn, -1, 1);
+  for (const [target, source] of [[channels, snapshot.channels], [selfModel, snapshot.selfModel],
+    [meta, snapshot.meta], [personality, snapshot.personality], [interoception, snapshot.interoception]]) {
+    restoreNumbers(target, source);
+  }
+  for (const key of Object.keys(drives)) {
+    restoreNumbers(drives[key], snapshot.drives?.[key]);
+    if (Number.isFinite(snapshot.drives?.[key]?.weight)) drives[key].weight = clamp(snapshot.drives[key].weight, 0, 2);
+  }
+  mood = Object.fromEntries(Object.entries(snapshot.mood || {}).filter(([,v]) => Number.isFinite(v)));
+  // Appraisals are transient diagnostic context, never replayed as fresh events.
+  recentAppraisals = Array.isArray(snapshot.recentAppraisals) ? snapshot.recentAppraisals.slice(-20) : [];
+  interactionCount = Math.max(0, Number(snapshot.interactionCount) || 0);
+  failureStreak = Math.max(0, Number(snapshot.failureStreak) || 0);
+  successStreak = Math.max(0, Number(snapshot.successStreak) || 0);
+  lastIdleMinutes = Math.max(0, Number(snapshot.lastIdleMinutes) || 0);
+  lastDecayTime = Math.min(Date.now(), snapshot.savedAt);
+  decay();
+  updatePolicy();
+  updateExpression();
+  return true;
+}
+
 export async function restore() {
   try {
     const { rows } = await pool.query('SELECT * FROM emotional_states ORDER BY timestamp DESC LIMIT 1');
     if (rows[0]) {
+      if (restoreState(rows[0].state_snapshot)) {
+        console.log('[emotion-v3] restored full state from', rows[0].timestamp);
+        return;
+      }
       // Restore PADCN from the flat values
-      padcn.P = rows[0].valence || 0;
-      padcn.A = ((rows[0].arousal || 0.5) - 0.5) * 2; // map 0..1 back to -1..1
-      padcn.D = ((rows[0].confidence || 0.5) - 0.3) * 2;
+      padcn.P = clamp(rows[0].valence ?? 0);
+      padcn.A = clamp(((rows[0].arousal ?? 0.5) - 0.5) * 2);
+      // Legacy confidence mixes three latent values and has no valid inverse.
+      padcn.D = 0;
+      padcn.C = 0;
       
       // Restore channels from what we can
       channels.curiosity = rows[0].curiosity || 0;
@@ -648,8 +693,13 @@ export async function restore() {
       channels.joy = rows[0].satisfaction || 0;
       channels.attachment = rows[0].attachment || 0;
       
-      interoception.energy_level = rows[0].energy_level || 1.0;
+      interoception.energy_level = rows[0].energy_level ?? 1.0;
       interoception.cognitive_load = rows[0].cognitive_load || 0;
+      const savedAt = new Date(rows[0].timestamp).getTime();
+      lastDecayTime = Number.isFinite(savedAt) ? Math.min(Date.now(), savedAt) : Date.now();
+      decay();
+      updatePolicy();
+      updateExpression();
       
       // Mood starts at restored state
       const flatState = getState();
@@ -658,7 +708,7 @@ export async function restore() {
         mood[key] = flatState[key];
       }
       
-      console.log('[emotion-v2] restored from', rows[0].timestamp);
+      console.log('[emotion-v3] restored legacy observed fields; latent state unavailable:', rows[0].timestamp);
     }
   } catch (e) {
     console.log('[emotion-v2] restore failed (non-fatal):', e.message);
@@ -684,30 +734,27 @@ export async function detectBaselineDrift() {
     const avgs = rows[0];
     const drifts = [];
     const DRIFT_THRESHOLD = 0.2;
-    const LEARNING_RATE = 0.01;
 
     // Check arousal reactivity drift
     const avgArousal = Number(avgs.avg_arousal) || 0;
     if (Math.abs(avgArousal - personality.arousal_reactivity) > DRIFT_THRESHOLD) {
       drifts.push({ dimension: 'arousal_reactivity', baseline: personality.arousal_reactivity, rolling: avgArousal });
-      personality.arousal_reactivity += (avgArousal - personality.arousal_reactivity) * LEARNING_RATE;
     }
 
     // Check positive affect baseline
     const avgValence = Number(avgs.avg_valence) || 0;
     if (Math.abs(avgValence - personality.baseline_positive_affect) > DRIFT_THRESHOLD) {
       drifts.push({ dimension: 'baseline_positive_affect', baseline: personality.baseline_positive_affect, rolling: avgValence });
-      personality.baseline_positive_affect += (avgValence - personality.baseline_positive_affect) * LEARNING_RATE;
     }
 
     // Check novelty appetite (from curiosity running average)
     const avgCuriosity = Number(avgs.avg_curiosity) || 0;
     if (Math.abs(avgCuriosity - personality.novelty_appetite * 0.5) > DRIFT_THRESHOLD) {
       drifts.push({ dimension: 'novelty_appetite', baseline: personality.novelty_appetite, rolling: avgCuriosity });
-      personality.novelty_appetite += (avgCuriosity / 0.5 - personality.novelty_appetite) * LEARNING_RATE;
     }
 
-    return { drifts, samples: Number(avgs.samples), personality: { ...personality } };
+    // Drift is a diagnostic. Learning the observed average would normalize a bug.
+    return { drifts, samples: Number(avgs.samples), adjusted: false, personality: { ...personality } };
   } catch (e) {
     return { drifts: [], error: e.message };
   }
@@ -716,5 +763,5 @@ export async function detectBaselineDrift() {
 export default { 
   processSurprise, processSuccess, processFailure, processInteraction, 
   processIdle, processInteroception, processInformationGain, processCreative,
-  getCognitiveEffects, update, getState, getMood, restore, detectBaselineDrift
+  setMotivationalState, getCognitiveEffects, update, getState, getMood, restore, detectBaselineDrift
 };

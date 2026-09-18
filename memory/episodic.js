@@ -1,6 +1,6 @@
 // OCA Episodic Memory — raw experiences
 import { pool, emit } from '../event-bus.js';
-import OpenAI from 'openai';
+import OpenAI from '../local-openai-shim.js';
 import { readFileSync } from 'fs';
 
 const apiKey = process.env.OPENAI_API_KEY || (() => {

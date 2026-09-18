@@ -9,17 +9,41 @@
  */
 
 import puppeteer from 'puppeteer';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { dirname, join } from 'path';
+import { homedir } from 'os';
 
 let browser = null;
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900, deviceScaleFactor: 2 };
 
+// Chrome for Testing 146/147 hang indefinitely on Page.captureScreenshot
+// under macOS 26.x — every screenshot times out at the 180s protocolTimeout.
+// Chrome 137 is the newest cached build that still composites correctly, so
+// prefer it when present. Override with PUPPETEER_EXECUTABLE_PATH if needed.
+function resolveChromePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+  const cacheDir = join(homedir(), '.cache', 'puppeteer', 'chrome');
+  if (!existsSync(cacheDir)) return undefined;
+  const builds = readdirSync(cacheDir)
+    .filter(d => d.startsWith('mac_arm-'))
+    .map(d => ({ dir: d, major: parseInt(d.split('-')[1]) || 0 }))
+    .filter(b => b.major > 0 && b.major <= 145)
+    .sort((a, b) => b.major - a.major);
+  for (const b of builds) {
+    const exe = join(cacheDir, b.dir, 'chrome-mac-arm64',
+      'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing');
+    if (existsSync(exe)) return exe;
+  }
+  return undefined;
+}
+
 async function getBrowser() {
   if (!browser) {
     browser = await puppeteer.launch({
       headless: true,
+      protocolTimeout: 45000,
+      executablePath: resolveChromePath(),
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     // Cleanup on exit

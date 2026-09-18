@@ -1,8 +1,12 @@
 // OCA Motor Skill: Browser — all web interaction via agent-browser CLI
 import { execSync } from 'child_process';
 import { emit } from '../../event-bus.js';
+import { join } from 'path';
 
-const PROFILE = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/private/browser-profile';
+const APP_SUPPORT = process.env.ONEIRO_APP_SUPPORT ||
+  join(process.env.HOME || '/tmp', 'Library', 'Application Support', 'Oneiro');
+const PROFILE = process.env.ONEIRO_BROWSER_PROFILE ||
+  join(APP_SUPPORT, 'browser-profile');
 const SESSION = 'oca';
 const STEALTH_ARGS = '--disable-blink-features=AutomationControlled';
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';

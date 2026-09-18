@@ -10,11 +10,18 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { homedir } from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OCA_ROOT = join(__dirname, '..');
-const SANDBOX_DIR = join(__dirname, 'sandbox');
-const PROPOSALS_DIR = join(__dirname, 'proposals');
+const BUNDLED_APP = process.env.ONEIRO_BUNDLED_APP === '1' ||
+  __dirname.includes('.app/Contents/Resources/oca-cognitive/');
+const APP_SUPPORT = process.env.ONEIRO_APP_SUPPORT ||
+  join(homedir(), 'Library/Application Support/Oneiro');
+const AUTONOMIC_STATE_DIR = process.env.OCA_AUTONOMIC_STATE_DIR ||
+  (BUNDLED_APP ? join(APP_SUPPORT, 'oca', 'autonomic') : __dirname);
+const SANDBOX_DIR = join(AUTONOMIC_STATE_DIR, 'sandbox');
+const PROPOSALS_DIR = join(AUTONOMIC_STATE_DIR, 'proposals');
 const MAX_PROPOSALS_PER_CYCLE = 2;
 const MIN_OBSERVATION_WINDOW_HOURS = 2;
 const PROPOSAL_COOLDOWN_CYCLES = 100; // ~15 min at 10s cycles

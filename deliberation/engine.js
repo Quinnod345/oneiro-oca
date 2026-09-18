@@ -2,6 +2,7 @@
 // Four perspectives debate decisions: Skeptic, Builder, Dreamer, Empath
 import { pool, emit } from '../event-bus.js';
 import llm from '../llm.js';
+import { createReasoner, normalizeEvidence } from '../reasoning/loop.js';
 
 
 const PERSPECTIVES = {
@@ -47,140 +48,53 @@ Be concise. 2-4 sentences max.`
   }
 };
 
-// Run a full deliberation on a decision
-export async function deliberate(decision, { stakes = 'medium', context = '', timeBudgetSeconds = 30 } = {}) {
-  const startedAt = new Date();
-  
-  const prompt = `Decision: ${decision}\nStakes: ${stakes}\nContext: ${context}`;
-  
-  // Run all four perspectives in parallel
-  const perspectives = await Promise.all(
-    Object.entries(PERSPECTIVES).map(async ([key, perspective]) => {
-      try {
-        const response = await llm.messages.create({
-          model: 'claude-sonnet-4-6',
-          system: perspective.system,
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 200,
-          temperature: key === 'dreamer' ? 0.9 : key === 'skeptic' ? 0.2 : 0.5
-        });
-        
-        const argument = response.content[0].text;
-        // Extract confidence from argument (simple heuristic)
-        const confidence = argument.toLowerCase().includes('definitely') ? 0.9
-          : argument.toLowerCase().includes('probably') ? 0.7
-          : argument.toLowerCase().includes('maybe') ? 0.4
-          : argument.toLowerCase().includes('unlikely') ? 0.2
-          : 0.5;
-          
-        return { key, name: perspective.name, argument, confidence };
-      } catch (e) {
-        return { key, name: perspective.name, argument: `[error: ${e.message}]`, confidence: 0 };
-      }
-    })
-  );
-  
-  // Synthesize resolution
-  const perspectiveTexts = perspectives.map(p => `${p.name}: ${p.argument}`).join('\n\n');
-  
-  let resolution, resolutionMethod;
-  try {
-    const synthesis = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
-      system: 'You are the Executive Controller resolving a deliberation. Given four perspectives on a decision, synthesize the best path forward. Be decisive. 2-3 sentences. End with a clear action.',
-      messages: [
-        { role: 'user', content: `Decision: ${decision}\n\nPerspectives:\n${perspectiveTexts}` }
-      ],
-      max_tokens: 200,
-      temperature: 0.3
-    });
-    resolution = synthesis.content[0].text;
-    resolutionMethod = 'synthesis';
-  } catch (e) {
-    // Fallback: highest confidence perspective wins
-    const winner = perspectives.reduce((a, b) => a.confidence > b.confidence ? a : b);
-    resolution = winner.argument;
-    resolutionMethod = 'highest_confidence';
-  }
-  
-  // Persist
-  const perspMap = Object.fromEntries(perspectives.map(p => [p.key, p]));
+// Uses the same evidence contract as queued pondering; no adjective-based confidence.
+export async function deliberate(decision, options = {}) {
+  const run = createReasoner({ generate: async ({ system, prompt, signal, schema }) => {
+    const r = await llm.messages.create({ model: 'claude-sonnet-4-6', system,
+      messages: [{ role: 'user', content: prompt }], max_tokens: 800, temperature: 0.2 }, { signal, priority: 10, responseSchema: schema });
+    return r.content?.[0]?.text || '';
+  } });
+  const result = await run(decision, options);
+  const latest = result.passes.at(-1);
+  const perspectives = Object.fromEntries(['skeptic', 'builder', 'dreamer', 'empath'].map(key => [key,
+    key === 'builder' ? { argument: latest?.proposal.action || '', confidence: latest?.proposal.confidence ?? null }
+      : { argument: latest?.review[key].argument || '', confidence: latest?.review[key].confidence ?? null }]));
   const { rows } = await pool.query(
-    `INSERT INTO deliberations 
-     (decision, stakes, time_budget_seconds,
-      skeptic_argument, skeptic_confidence,
-      builder_argument, builder_confidence,
-      dreamer_argument, dreamer_confidence,
-      empath_argument, empath_confidence,
+    `INSERT INTO deliberations (decision, stakes, time_budget_seconds,
+      skeptic_argument, skeptic_confidence, builder_argument, builder_confidence,
+      dreamer_argument, dreamer_confidence, empath_argument, empath_confidence,
       resolution, resolution_method, completed_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW()) RETURNING id`,
-    [decision, stakes, timeBudgetSeconds,
-     perspMap.skeptic?.argument, perspMap.skeptic?.confidence,
-     perspMap.builder?.argument, perspMap.builder?.confidence,
-     perspMap.dreamer?.argument, perspMap.dreamer?.confidence,
-     perspMap.empath?.argument, perspMap.empath?.confidence,
-     resolution, resolutionMethod]
-  );
-  
-  const result = {
-    id: rows[0].id,
-    decision,
-    perspectives: Object.fromEntries(perspectives.map(p => [p.key, { argument: p.argument, confidence: p.confidence }])),
-    resolution,
-    resolutionMethod,
-    elapsed: Date.now() - startedAt.getTime()
-  };
-  
-  await emit('deliberation_result', 'deliberation', result);
-  
-  return result;
+    [decision, options.stakes || 'medium', Math.ceil(options.timeBudgetSeconds || 45),
+      perspectives.skeptic.argument, perspectives.skeptic.confidence,
+      perspectives.builder.argument, perspectives.builder.confidence,
+      perspectives.dreamer.argument, perspectives.dreamer.confidence,
+      perspectives.empath.argument, perspectives.empath.confidence,
+      result.conclusion, 'evidence_loop']);
+  const output = { ...result, id: rows[0].id, decision, perspectives,
+    resolution: result.conclusion, resolutionMethod: 'evidence_loop', elapsed: result.elapsedMs };
+  await emit('deliberation_result', 'deliberation', output);
+  return output;
 }
 
 // Record which perspective was actually right (retrospective)
-export async function evaluateDeliberation(deliberationId, outcome, rightPerspective, lesson = null) {
+export async function evaluateDeliberation(deliberationId, outcome, rightPerspective, lesson = null, evidence = []) {
+  const observed = normalizeEvidence(evidence);
+  if (!observed.length || typeof outcome !== 'string' || !outcome.trim()) throw new Error('deliberation evaluation requires an observed outcome and evidence');
+  if (rightPerspective !== null && !PERSPECTIVES[rightPerspective]) throw new Error('unknown perspective');
   await pool.query(
-    `UPDATE deliberations SET 
-       outcome = $1, which_perspective_was_right = $2, lesson = $3
-     WHERE id = $4`,
-    [outcome, rightPerspective, lesson, deliberationId]
-  );
+    `UPDATE deliberations SET outcome = $1, which_perspective_was_right = $2,
+       lesson = $3, outcome_evidence = $4::jsonb WHERE id = $5`,
+    [outcome, rightPerspective, lesson, JSON.stringify(observed), deliberationId]);
 }
 
-// Auto-evaluate unresolved deliberations (SPEC §2.8 maintenance loop)
+// Missing outcomes remain unknown. An LLM predicting what "likely happened" is not feedback.
 export async function sweepUnresolvedDeliberations(limit = 3) {
   const { rows } = await pool.query(
-    `SELECT id, decision, resolution, skeptic_argument, builder_argument, dreamer_argument, empath_argument
-     FROM deliberations
-     WHERE outcome IS NULL AND completed_at < NOW() - INTERVAL '1 hour'
-     ORDER BY completed_at ASC LIMIT $1`,
-    [limit]
-  );
-
-  let evaluated = 0;
-  for (const d of rows) {
-    try {
-      const response = await llm.messages.create({
-        model: 'claude-sonnet-4-6',
-        system: 'You evaluate past decisions. Given a decision and the perspectives that argued, determine which perspective was most accurate based on what likely happened. Reply as JSON: {"outcome":"brief description","right_perspective":"skeptic|builder|dreamer|empath","lesson":"one sentence"}',
-        messages: [{
-          role: 'user',
-          content: `Decision: ${d.decision}\nResolution: ${d.resolution}\nSkeptic: ${(d.skeptic_argument || '').slice(0, 200)}\nBuilder: ${(d.builder_argument || '').slice(0, 200)}\nDreamer: ${(d.dreamer_argument || '').slice(0, 200)}\nEmpath: ${(d.empath_argument || '').slice(0, 200)}`
-        }],
-        max_tokens: 200,
-        temperature: 0.3
-      });
-      const text = response.content[0].text;
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        await evaluateDeliberation(d.id, parsed.outcome, parsed.right_perspective, parsed.lesson);
-        evaluated++;
-      }
-    } catch {}
-  }
-  return { swept: rows.length, evaluated };
+    `SELECT id FROM deliberations WHERE outcome IS NULL AND completed_at < NOW() - INTERVAL '1 hour'
+     ORDER BY completed_at ASC LIMIT $1`, [limit]);
+  return { swept: rows.length, evaluated: 0, awaitingEvidence: rows.map(r => r.id) };
 }
 
 // Get perspective accuracy stats
@@ -189,6 +103,7 @@ export async function perspectiveStats() {
     `SELECT which_perspective_was_right as perspective, COUNT(*) as times_right
      FROM deliberations 
      WHERE which_perspective_was_right IS NOT NULL
+       AND jsonb_array_length(outcome_evidence) > 0
      GROUP BY which_perspective_was_right`
   );
   return rows;
@@ -212,4 +127,4 @@ export async function quickCheck(perspective, question, context = '') {
   return response.content[0].text;
 }
 
-export default { deliberate, evaluateDeliberation, perspectiveStats, quickCheck };
+export default { deliberate, evaluateDeliberation, sweepUnresolvedDeliberations, perspectiveStats, quickCheck };

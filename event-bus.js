@@ -9,7 +9,11 @@ import { dirname } from 'path';
 const { Pool } = pg;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || `postgres://${process.env.USER || 'postgres'}@localhost/oneiro`
+  connectionString: process.env.DATABASE_URL || `postgres://${process.env.USER || 'postgres'}@localhost/oneiro`,
+  // A pathological vector scan (e.g. similarity LIMIT 5000 over many
+  // rows) used to be able to block the cognitive loop indefinitely.
+  // 10s is generous for legitimate queries but bounds the worst case.
+  statement_timeout: 10_000
 });
 
 // ═══════════════════════════════════════════════════
@@ -18,16 +22,47 @@ const pool = new Pool({
 
 const listeners = new Map(); // event_type -> [callback]
 
+function isUnsupportedEventTypeError(error) {
+  return error?.code === '22P02'
+    && /cognitive_event_type/i.test(String(error?.message || ''));
+}
+
+export function fallbackEventForUnsupportedType(eventType, payload) {
+  return {
+    eventType: 'workspace_broadcast',
+    payload: {
+      __event_type: eventType,
+      payload
+    }
+  };
+}
+
 export async function emit(eventType, sourceLayer, payload, { targetLayer = null, priority = 0.5 } = {}) {
-  const result = await pool.query(
-    `INSERT INTO cognitive_events (event_type, source_layer, target_layer, priority, payload)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id, timestamp`,
-    [eventType, sourceLayer, targetLayer, priority, JSON.stringify(payload)]
-  );
+  let result;
+  let storedEventType = eventType;
+  let storedPayload = payload;
+  try {
+    result = await pool.query(
+      `INSERT INTO cognitive_events (event_type, source_layer, target_layer, priority, payload)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, timestamp`,
+      [eventType, sourceLayer, targetLayer, priority, JSON.stringify(payload)]
+    );
+  } catch (error) {
+    if (!isUnsupportedEventTypeError(error)) throw error;
+    const fallback = fallbackEventForUnsupportedType(eventType, payload);
+    storedEventType = fallback.eventType;
+    storedPayload = fallback.payload;
+    result = await pool.query(
+      `INSERT INTO cognitive_events (event_type, source_layer, target_layer, priority, payload)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, timestamp`,
+      [storedEventType, sourceLayer, targetLayer, priority, JSON.stringify(storedPayload)]
+    );
+  }
 
   const event = {
     id: result.rows[0].id,
     eventType, sourceLayer, targetLayer, priority, payload,
+    storedEventType,
     timestamp: result.rows[0].timestamp
   };
 

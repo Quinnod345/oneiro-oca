@@ -4,16 +4,18 @@
 import { pool, emit } from '../event-bus.js';
 import llm from '../llm.js';
 import motor from '../motor/engine.js';
-import { setDreamLifecycle } from '../../psyche.js';
+import { setDreamLifecycle } from '../../runtime/workspace/oneiro-core/psyche.js';
 import { execSync, spawnSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, renameSync, unlinkSync } from 'fs';
 import { dirname, join, basename } from 'path';
 import { loadTargetProject } from '../design-model/target-derivation.js';
 
 // OCA_ROOT is the cognitive/ directory (where all OCA code lives)
 const OCA_ROOT = new URL('..', import.meta.url).pathname;
-// REPO_ROOT is the oneiro-core/ directory (parent of cognitive/)
-const REPO_ROOT = new URL('../..', import.meta.url).pathname;
+// REPO_ROOT is the oneiro-core/ directory (parent of cognitive/).
+// Node resolves this file through the real oca-cognitive path, not the
+// runtime/workspace/oneiro-core/cognitive symlink, so keep this explicit.
+const REPO_ROOT = new URL('../../runtime/workspace/oneiro-core/', import.meta.url).pathname;
 
 // Smart path resolver: handles paths relative to cognitive/ or oneiro-core/
 function resolveOCAPath(relativePath) {
@@ -28,10 +30,135 @@ const PRIVATE_DIR = join(OCA_ROOT, '..', 'private');
 const MAX_TASK_RETRIES = 8;
 const TASK_TIMEOUT_MS = 1_200_000;
 const SELF_BUILD_TIMEOUT_MS = 300_000;
+
+// ────────────────────────────────────────────────────────────────
+// Builder error ring — surfaced via /oca/builder/errors so the
+// Swift BuildersPanel can show plain-English failure cards instead
+// of pretending the executor is happily idle. Bounded so a tight
+// failure loop doesn't blow memory.
+// ────────────────────────────────────────────────────────────────
+const BUILDER_ERROR_RING_SIZE = 25;
+const builderErrors = []; // newest first
+export function recordBuilderError({ stage, dreamId = null, dreamTag = null, summary, detail = '', hint = null }) {
+  builderErrors.unshift({
+    at: new Date().toISOString(),
+    stage,                // 'detect_gaps' | 'verify' | 'execute_task' | 'self_build' | …
+    dreamId,
+    dreamTag,
+    summary,              // 1-line, plain English
+    detail: String(detail || '').slice(0, 1200),
+    hint                  // optional next-step
+  });
+  while (builderErrors.length > BUILDER_ERROR_RING_SIZE) builderErrors.pop();
+  // Also fire on the event bus so any in-process subscriber can
+  // react (e.g. emit a toolbar notice). Best-effort.
+  try {
+    emit('builder.error', 'executive', {
+      stage, dreamId, dreamTag, summary, detail: String(detail || '').slice(0, 600), hint
+    }, { priority: 0.55 }).catch(() => {});
+  } catch {}
+}
+export function getBuilderErrors() {
+  return builderErrors.slice();
+}
+export function clearBuilderErrors() {
+  builderErrors.length = 0;
+}
+
+// Every executor LLM call uses one explicit provider. Keep autonomous
+// planning local unless the operator deliberately opts into Codex usage.
+const EXECUTOR_LLM_PROVIDER = process.env.ONEIRO_EXECUTOR_PROVIDER || 'local';
+const EXECUTOR_LLM_MODEL = process.env.ONEIRO_EXECUTOR_MODEL ||
+  process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen2.5:7b';
+async function executorLLM({ system, prompt, maxTokens = 2000, temperature = 0.3 }) {
+  return llm.messages.create({
+    provider: EXECUTOR_LLM_PROVIDER,
+    model: EXECUTOR_LLM_MODEL,
+    system,
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: maxTokens,
+    temperature
+  });
+}
 const MAX_SELF_BUILDS_PER_CYCLE = 3;
 
 // Track what we've built this session to avoid infinite loops
 const builtThisSession = new Set();
+const validMotorSkillCache = { timestamp: 0, files: [] };
+
+function nodeCheck(filePath, timeout = 5_000) {
+  const result = spawnSync(process.execPath, ['--check', filePath], {
+    encoding: 'utf8',
+    timeout,
+    stdio: 'pipe'
+  });
+  return {
+    ok: result.status === 0,
+    output: [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
+  };
+}
+
+function looksLikeAssistantProse(code) {
+  return /^(the file|the write|now i have|i need write permission|please approve|here's what|here is what|once you approve)\b/i
+    .test(String(code || '').trim());
+}
+
+function isValidMotorSkillFile(fileName) {
+  if (!fileName.endsWith('.js') || fileName === 'index.js') return false;
+  const fullPath = join(MOTOR_SKILLS_DIR, fileName);
+  try {
+    const source = readFileSync(fullPath, 'utf8');
+    if (looksLikeAssistantProse(source) || !/\bexport\s+default\b/.test(source)) return false;
+    return nodeCheck(fullPath).ok;
+  } catch {
+    return false;
+  }
+}
+
+function listValidMotorSkillFiles() {
+  if (Date.now() - validMotorSkillCache.timestamp < 60_000) {
+    return validMotorSkillCache.files;
+  }
+  try {
+    const files = readdirSync(MOTOR_SKILLS_DIR).filter(isValidMotorSkillFile).sort();
+    validMotorSkillCache.timestamp = Date.now();
+    validMotorSkillCache.files = files;
+    return files;
+  } catch {
+    validMotorSkillCache.timestamp = Date.now();
+    validMotorSkillCache.files = [];
+    return [];
+  }
+}
+
+function exportIdentifierForSkill(name, used = new Set()) {
+  const base = String(name || 'skill')
+    .replace(/\.js$/i, '')
+    .replace(/[^a-zA-Z0-9_$]+([a-zA-Z0-9_$])/g, (_, c) => c.toUpperCase())
+    .replace(/[^a-zA-Z0-9_$]/g, '');
+  let candidate = /^[a-zA-Z_$]/.test(base) ? base : `skill${base || 'Module'}`;
+  while (used.has(candidate)) candidate = `${candidate}Skill`;
+  used.add(candidate);
+  return candidate;
+}
+
+function writeJavaScriptChecked(fullPath, code, { requireDefaultExport = false } = {}) {
+  if (looksLikeAssistantProse(code)) {
+    throw new Error('Generated output was assistant prose, not JavaScript');
+  }
+  if (requireDefaultExport && !/\bexport\s+default\b/.test(code)) {
+    throw new Error('Motor skills must export a default object');
+  }
+
+  const tmpPath = `${fullPath}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tmpPath, code, 'utf8');
+  const syntax = nodeCheck(tmpPath);
+  if (!syntax.ok) {
+    try { unlinkSync(tmpPath); } catch {}
+    throw new Error(`Generated JavaScript failed syntax check: ${syntax.output || 'unknown parser error'}`);
+  }
+  renameSync(tmpPath, fullPath);
+}
 
 // ═══════════════════════════════════════════════════
 // DREAM VERIFICATION — check if code-referencing dreams are still relevant
@@ -141,11 +268,10 @@ Respond with JSON only:
     );
     
     const response = await Promise.race([
-      llm.messages.create({
-        model: 'claude-sonnet-4-6',
+      executorLLM({
         system: 'You are a code analysis engine. Respond ONLY with valid JSON. No markdown fences.',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500,
+        prompt,
+        maxTokens: 500,
         temperature: 0.1
       }),
       timeoutPromise
@@ -232,7 +358,7 @@ function getCapabilities() {
 
   // Scan motor skills directory
   try {
-    const skills = readdirSync(MOTOR_SKILLS_DIR).filter(f => f.endsWith('.js') && f !== 'index.js');
+    const skills = listValidMotorSkillFiles();
     capabilities.motorSkills = skills.map(f => f.replace('.js', ''));
   } catch {}
 
@@ -357,11 +483,12 @@ POST HISTORY (what's already been posted to @quinnod7):
 ${await getPostHistory()}`;
 
   try {
-    const response = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
+    // Route through the configured executor provider. The launch agent keeps
+    // this local by default so background planning cannot spend Codex usage.
+    const response = await executorLLM({
       system: 'You are a planning engine. Respond ONLY with valid JSON. No markdown fences. No explanation.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
+      prompt,
+      maxTokens: 2000,
       temperature: 0.3
     });
 
@@ -376,6 +503,16 @@ ${await getPostHistory()}`;
     return { can_execute_now: false, gaps: [{ description: 'Failed to parse analysis', gap_type: 'unknown', severity: 'blocking', self_buildable: false }], tasks_if_ready: [] };
   } catch (e) {
     console.error('[dream-executor] gap detection failed:', e.message);
+    recordBuilderError({
+      stage: 'detect_gaps',
+      dreamId: dream.id,
+      dreamTag: dream.tag || null,
+      summary: 'Could not plan how to build this dream',
+      detail: e.message || String(e),
+      hint: /fetch failed|ECONNREFUSED|11434/i.test(String(e?.message || ''))
+        ? 'The local reasoner (Ollama on 127.0.0.1:11434) is not running. Start Ollama or explicitly set ONEIRO_EXECUTOR_PROVIDER=codex.'
+        : 'Check Settings → Intelligence for a working LLM provider.'
+    });
     return { can_execute_now: false, gaps: [], tasks_if_ready: [] };
   }
 }
@@ -509,16 +646,15 @@ CONTEXT:
 - For browser automation on bot-protected sites, prefer Peekaboo CLI ('peekaboo' commands)
 - For X/Twitter without API keys: use browser automation via motor.openUrl + motor.type + motor.press, OR peekaboo for bot-protected flows
 
-Existing motor skills for reference: ${readdirSync(MOTOR_SKILLS_DIR).filter(f => f.endsWith('.js')).join(', ')}
+Existing motor skills for reference: ${listValidMotorSkillFiles().join(', ')}
 
 RESPOND WITH ONLY THE CODE. No markdown fences. No explanation. Just the JavaScript file content.`;
 
       try {
-        const codeResp = await llm.messages.create({
-          model: 'claude-sonnet-4-6',
+        const codeResp = await executorLLM({
           system: 'Generate ONLY the JavaScript code. No markdown fences. No explanation. Just the file content.',
-          messages: [{ role: 'user', content: codePrompt }],
-          max_tokens: 4000,
+          prompt: codePrompt,
+          maxTokens: 4000,
           temperature: 0.2
         });
         let code = (codeResp.content?.[0]?.text || '').trim();
@@ -527,12 +663,28 @@ RESPOND WITH ONLY THE CODE. No markdown fences. No explanation. Just the JavaScr
         code = code.replace(/^```(?:javascript|js)?\n?/i, '').replace(/\n?```$/i, '').trim();
 
         mkdirSync(dirname(fullPath), { recursive: true });
-        writeFileSync(fullPath, code, 'utf8');
+        if (fullPath.endsWith('.js')) {
+          writeJavaScriptChecked(fullPath, code, {
+            requireDefaultExport: fullPath.startsWith(`${MOTOR_SKILLS_DIR}/`) && basename(fullPath) !== 'index.js'
+          });
+          validMotorSkillCache.timestamp = 0;
+        } else {
+          writeFileSync(fullPath, code, 'utf8');
+        }
         buildLog.push(`Created: ${fileSpec.path} (${code.length} bytes)`);
         console.log(`[dream-executor] ✅ created ${fileSpec.path} (${code.length} bytes)`);
       } catch (e) {
         buildLog.push(`Failed to create ${fileSpec.path}: ${e.message}`);
         console.error(`[dream-executor] ❌ failed to create ${fileSpec.path}: ${e.message}`);
+        recordBuilderError({
+          stage: 'self_build_create',
+          dreamId,
+          summary: `Couldn't generate ${fileSpec.path}`,
+          detail: e.message || String(e),
+          hint: /fetch failed|ECONNREFUSED|11434/i.test(String(e?.message || ''))
+            ? 'Local LLM provider unreachable. Start Ollama or explicitly set ONEIRO_EXECUTOR_PROVIDER=codex.'
+            : null
+        });
         success = false;
       }
     }
@@ -564,11 +716,10 @@ Respond with ONLY the complete modified file content. No markdown fences. No exp
 Make the minimum necessary changes. Preserve all existing functionality.`;
 
       try {
-        const modResp = await llm.messages.create({
-          model: 'claude-sonnet-4-6',
+        const modResp = await executorLLM({
           system: 'Output ONLY the complete modified file content. No markdown fences. No explanation.',
-          messages: [{ role: 'user', content: modPrompt }],
-          max_tokens: 8000,
+          prompt: modPrompt,
+          maxTokens: 8000,
           temperature: 0.2
         });
         let newCode = (modResp.content?.[0]?.text || '').trim();
@@ -577,12 +728,28 @@ Make the minimum necessary changes. Preserve all existing functionality.`;
 
         // Safety: back up original
         writeFileSync(fullPath + '.bak', existingCode, 'utf8');
-        writeFileSync(fullPath, newCode, 'utf8');
+        if (fullPath.endsWith('.js')) {
+          writeJavaScriptChecked(fullPath, newCode, {
+            requireDefaultExport: fullPath.startsWith(`${MOTOR_SKILLS_DIR}/`) && basename(fullPath) !== 'index.js'
+          });
+          validMotorSkillCache.timestamp = 0;
+        } else {
+          writeFileSync(fullPath, newCode, 'utf8');
+        }
         buildLog.push(`Modified: ${modSpec.path} (backed up to .bak)`);
         console.log(`[dream-executor] ✅ modified ${modSpec.path}`);
       } catch (e) {
         buildLog.push(`Failed to modify ${modSpec.path}: ${e.message}`);
         console.error(`[dream-executor] ❌ failed to modify ${modSpec.path}: ${e.message}`);
+        recordBuilderError({
+          stage: 'self_build_modify',
+          dreamId,
+          summary: `Couldn't modify ${modSpec.path}`,
+          detail: e.message || String(e),
+          hint: /fetch failed|ECONNREFUSED|11434/i.test(String(e?.message || ''))
+            ? 'Local LLM provider unreachable. Start Ollama or explicitly set ONEIRO_EXECUTOR_PROVIDER=codex.'
+            : null
+        });
         success = false;
       }
     }
@@ -594,10 +761,13 @@ Make the minimum necessary changes. Preserve all existing functionality.`;
         const indexPath = join(MOTOR_SKILLS_DIR, 'index.js');
         let indexContent = readFileSync(indexPath, 'utf8');
 
+        const usedExportNames = new Set(
+          Array.from(indexContent.matchAll(/export\s+\{\s+default\s+as\s+([a-zA-Z_$][\w$]*)\s+\}/g)).map(m => m[1])
+        );
         for (const skill of newSkills) {
           const name = basename(skill.path, '.js');
-          const camelName = name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-          const exportLine = `export { default as ${camelName} } from './${name}.js';`;
+          const exportName = exportIdentifierForSkill(name, usedExportNames);
+          const exportLine = `export { default as ${exportName} } from './${name}.js';`;
 
           if (!indexContent.includes(name)) {
             indexContent += `\n${exportLine}`;
@@ -605,7 +775,7 @@ Make the minimum necessary changes. Preserve all existing functionality.`;
           }
         }
 
-        writeFileSync(indexPath, indexContent, 'utf8');
+        writeJavaScriptChecked(indexPath, indexContent);
       } catch (e) {
         buildLog.push(`Failed to update skill index: ${e.message}`);
       }
@@ -851,10 +1021,75 @@ async function executeTask(task, dreamId) {
 }
 
 // ═══════════════════════════════════════════════════
+// STALE-EXECUTING AUTO-REVIVE
+// ═══════════════════════════════════════════════════
+//
+// A dream gets stuck when something crashes mid-execution — the
+// executor flipped lifecycle_state to 'executing' but never wrote a
+// terminal status. Subsequent cycles skip it (we only pick up
+// 'dispatched') and the dream sits forever. The UI then dutifully
+// shows "Now building" even though no work is happening.
+//
+// Every cycle, sweep dreams that have been 'executing' with no
+// activity for STALL_THRESHOLD_MINUTES and flip them back to
+// 'dispatched' so the next cycle re-plans tasks. Record a builder
+// error so the user can see what happened.
+//
+// 5 min is generous — a real long-running task should produce SOME
+// row in dream_tasks (which bumps lifecycle_updated_at through the
+// emit() side-effects) well within that window.
+const STALL_THRESHOLD_MINUTES = 5;
+
+async function reviveStuckExecutions() {
+  const { rows } = await pool.query(
+    `UPDATE dreams
+       SET lifecycle_state = 'dispatched',
+           executing_at = NULL,
+           lifecycle_updated_at = NOW(),
+           lifecycle_context = COALESCE(lifecycle_context, '{}'::jsonb) || $1::jsonb
+     WHERE lifecycle_state = 'executing'
+       AND NOT resolved
+       AND lifecycle_updated_at < NOW() - ($2 || ' minutes')::interval
+     RETURNING id, content, lifecycle_updated_at`,
+    [
+      JSON.stringify({
+        redispatch_reason: 'stale_executing_sweep',
+        redispatch_at: new Date().toISOString(),
+      }),
+      String(STALL_THRESHOLD_MINUTES),
+    ]
+  );
+  for (const row of rows) {
+    const tag = String(row.content || '').slice(0, 80);
+    console.warn(
+      `[dream-executor] 🔄 reviving stuck dream #${row.id} — no activity for >${STALL_THRESHOLD_MINUTES}min`
+    );
+    recordBuilderError({
+      stage: 'stale_executing_revived',
+      dreamId: row.id,
+      dreamTag: tag,
+      summary: `dream #${row.id} was stuck in 'executing' with no activity for >${STALL_THRESHOLD_MINUTES}min — auto-redispatched`,
+      detail: `last update: ${row.lifecycle_updated_at}`,
+      hint: 'executor will re-plan tasks on the next cycle',
+    });
+  }
+  return rows.length;
+}
+
+// ═══════════════════════════════════════════════════
 // MAIN EXECUTION LOOP
 // ═══════════════════════════════════════════════════
 
 export async function executeDreams() {
+  // Step 0: rescue dreams that crashed mid-execution. Without this
+  // sweep, a single crash leaves the dream forever-marked 'executing'
+  // and the executor skips it on every subsequent cycle.
+  try {
+    await reviveStuckExecutions();
+  } catch (e) {
+    console.warn('[dream-executor] reviveStuckExecutions failed:', e.message);
+  }
+
   const executionBatchId = `oca-${Date.now().toString(36)}`;
   const { rows: dreams } = await pool.query(
     `WITH next_dreams AS (
@@ -1142,11 +1377,10 @@ Respond with JSON:
 }`;
 
   try {
-    const reactResp = await llm.messages.create({
-      model: 'claude-sonnet-4-6',
+    const reactResp = await executorLLM({
       system: 'Respond ONLY with valid JSON. No markdown fences. No explanation.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
+      prompt,
+      maxTokens: 2000,
       temperature: 0.3
     });
 
@@ -1157,6 +1391,15 @@ Respond with JSON:
     return { success: false };
   } catch (e) {
     console.error('[dream-executor] reactive build failed:', e.message);
+    recordBuilderError({
+      stage: 'reactive_build',
+      dreamId: dream?.id ?? null,
+      summary: 'Reactive self-build failed',
+      detail: e.message || String(e),
+      hint: /fetch failed|ECONNREFUSED|11434/i.test(String(e?.message || ''))
+        ? 'LLM provider unreachable.'
+        : null
+    });
     return { success: false, error: e.message };
   }
 }

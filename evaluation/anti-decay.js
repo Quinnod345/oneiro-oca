@@ -3,7 +3,7 @@
 // Computes CRM trends on 3 horizons, per-component decomposition,
 // failure conditions, and automatic remediation.
 import { pool } from '../event-bus.js';
-import crm from './chinese-room-meter.js';
+import crm, { EVALUATION_VERSION } from './chinese-room-meter.js';
 import benchmarkHarness from './benchmark-harness.js';
 
 const CRM_COMPONENTS = [
@@ -48,7 +48,8 @@ export async function computeTrend(horizon = 'medium') {
   try {
     const { rows } = await pool.query(
       `SELECT composite, components, operating_time_ms FROM benchmark_history
-       ORDER BY created_at DESC LIMIT 1`
+       WHERE evaluation_version = $1 ORDER BY created_at DESC LIMIT 1`,
+      [EVALUATION_VERSION]
     );
     if (rows[0] && rows[0].composite != null) {
       currentSnapshot = rows[0];
@@ -71,27 +72,15 @@ export async function computeTrend(horizon = 'medium') {
     const { rows } = await pool.query(
       `SELECT composite, components, operating_time_ms
        FROM benchmark_history
-       WHERE operating_time_ms IS NOT NULL AND operating_time_ms <= $1
+       WHERE evaluation_version = $2 AND composite IS NOT NULL
+         AND operating_time_ms IS NOT NULL AND operating_time_ms <= $1
        ORDER BY operating_time_ms DESC LIMIT 1`,
-      [baselineTarget + windowMs * 0.1] // allow 10% slack
+      [baselineTarget + windowMs * 0.1, EVALUATION_VERSION] // allow 10% slack
     );
     if (rows[0]) baselineSnapshot = rows[0];
   } catch {}
 
-  // If no baseline with operating_time, fall back to time-based
-  if (!baselineSnapshot) {
-    try {
-      const days = cfg.opHoursWindow / 24;
-      const { rows } = await pool.query(
-        `SELECT composite, components, operating_time_ms
-         FROM benchmark_history
-         WHERE created_at <= NOW() - ($1 || ' days')::interval
-         ORDER BY created_at DESC LIMIT 1`,
-        [days]
-      );
-      if (rows[0]) baselineSnapshot = rows[0];
-    } catch {}
-  }
+  // Wall-clock history cannot stand in for an operating-time baseline.
 
   const currentComposite = currentSnapshot.composite;
   const baselineComposite = baselineSnapshot?.composite;
@@ -103,7 +92,7 @@ export async function computeTrend(horizon = 'medium') {
     : null;
 
   // Compute deltas
-  const crmDelta = baselineComposite != null
+  const crmDelta = currentComposite != null && baselineComposite != null
     ? currentComposite - baselineComposite
     : null;
 
@@ -120,6 +109,7 @@ export async function computeTrend(horizon = 'medium') {
   }
 
   return {
+    evaluation_version: EVALUATION_VERSION,
     horizon,
     operating_time_ms: currentOpTime,
     crm_current: currentComposite,
@@ -327,7 +317,10 @@ export async function getAntiDecayHistory({ horizon = 'medium', days = 30, limit
 
 // Positive case check (§18.4.5)
 export function isAntiDecaySatisfied(trends) {
-  if (!trends?.long?.has_baseline) return { satisfied: false, reason: 'insufficient_data' };
+  if (!trends?.long?.has_baseline || !Number.isFinite(trends.long.crm_delta)
+    || CRM_COMPONENTS.some(k => !Number.isFinite(trends.long.component_deltas?.[k]?.delta))) {
+    return { satisfied: false, reason: 'insufficient_data' };
+  }
   if (trends.long.crm_delta != null && trends.long.crm_delta < 0) {
     return { satisfied: false, reason: 'aggregate_negative_long_horizon' };
   }

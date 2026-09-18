@@ -4,11 +4,15 @@
 // Pure JS, zero dependencies.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 const INPUT_DIM = 18;
 const HIDDEN_DIM = 12;
 const OUTPUT_DIM = 9;
-const WEIGHTS_PATH = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/private/crm-mlp-weights.json';
+const APP_SUPPORT = process.env.ONEIRO_APP_SUPPORT ||
+  join(process.env.HOME || '/tmp', 'Library', 'Application Support', 'Oneiro');
+const WEIGHTS_PATH = process.env.ONEIRO_CRM_MLP_WEIGHTS ||
+  join(APP_SUPPORT, 'oca-cognitive', 'crm-mlp-weights.json');
 const LEARNING_RATE = 0.002;
 const GRADIENT_CLIP = 1.5;
 

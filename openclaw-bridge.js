@@ -8,7 +8,7 @@ import oca from './index.js';
 export async function processInbound(message, sender = 'Quinn', channel = 'telegram') {
   // 0. Index into RAG conversation log
   try {
-    const { indexTurn } = await import('../conversation-indexer.js');
+    const { indexTurn } = await import('../runtime/workspace/oneiro-core/conversation-indexer.js');
     await indexTurn({
       source: sender.toLowerCase().includes('quinn') ? 'quinn' : sender.toLowerCase(),
       channel,
@@ -54,7 +54,7 @@ export async function processInbound(message, sender = 'Quinn', channel = 'teleg
 export async function processOutbound(response, channel = 'telegram') {
   // Index into RAG conversation log
   try {
-    const { indexTurn } = await import('../conversation-indexer.js');
+    const { indexTurn } = await import('../runtime/workspace/oneiro-core/conversation-indexer.js');
     await indexTurn({
       source: 'oneiro',
       channel,

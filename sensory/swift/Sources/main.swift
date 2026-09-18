@@ -14,6 +14,11 @@ import IOKit
 import IOKit.ps
 import Speech
 
+func axElement(from value: CFTypeRef?) -> AXUIElement? {
+    guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+    return unsafeBitCast(value, to: AXUIElement.self)
+}
+
 // ═══════════════════════════════════════════════════
 // CONFIGURATION (SPEC §5.2 Capture Parameters)
 // ═══════════════════════════════════════════════════
@@ -88,7 +93,7 @@ class SocketServer {
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = path.utf8CString
         withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-            let bound = ptr.withMemoryRebound(to: CChar.self, capacity: 104) { dest in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 104) { dest in
                 pathBytes.withUnsafeBufferPointer { src in
                     let count = min(src.count, 104)
                     dest.update(from: src.baseAddress!, count: count)
@@ -172,6 +177,7 @@ class VisualCortex: NSObject, SCStreamOutput {
     private var isUserIdle = false
     private var lastSceneGraph: [String: Any] = [:]
     private let screenshotsDir: URL
+    private var sceneGraphTimer: Timer?
     private var lastSavedScreenshotTime = Date.distantPast
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -192,9 +198,7 @@ class VisualCortex: NSObject, SCStreamOutput {
             emitEvent("system", [
                 "message": "Visual cortex: screen capture disabled (ONEIRO_DISABLE_SCREEN_CAPTURE); Accessibility scene graph only"
             ])
-            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                self?.buildSceneGraph()
-            }
+            scheduleSceneGraphTimer()
             return
         }
 
@@ -220,13 +224,26 @@ class VisualCortex: NSObject, SCStreamOutput {
             emitEvent("system", ["message": "Visual cortex online (SCStream continuous capture)"])
 
             // Periodic scene graph via Accessibility
-            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                self?.buildSceneGraph()
-            }
+            scheduleSceneGraphTimer()
         } catch {
             emitEvent("error", ["message": "Visual cortex failed: \(error.localizedDescription)"])
             startFallbackCapture()
         }
+    }
+
+    private func scheduleSceneGraphTimer() {
+        sceneGraphTimer?.invalidate()
+        sceneGraphTimer = Timer.scheduledTimer(
+            timeInterval: 2.0,
+            target: self,
+            selector: #selector(handleSceneGraphTimer(_:)),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func handleSceneGraphTimer(_ timer: Timer) {
+        buildSceneGraph()
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -333,14 +350,14 @@ class VisualCortex: NSObject, SCStreamOutput {
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
             var focusedWindow: AnyObject?
             AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &focusedWindow)
-            if let win = focusedWindow {
+            if let win = axElement(from: focusedWindow) {
                 var titleVal: AnyObject?
-                AXUIElementCopyAttributeValue(win as! AXUIElement, kAXTitleAttribute as CFString, &titleVal)
+                AXUIElementCopyAttributeValue(win, kAXTitleAttribute as CFString, &titleVal)
                 windowTitle = titleVal as? String ?? ""
 
                 // Extract top-level UI roles
                 var children: AnyObject?
-                AXUIElementCopyAttributeValue(win as! AXUIElement, kAXChildrenAttribute as CFString, &children)
+                AXUIElementCopyAttributeValue(win, kAXChildrenAttribute as CFString, &children)
                 if let kids = children as? [AXUIElement] {
                     for (i, child) in kids.prefix(20).enumerated() {
                         var role: AnyObject?
@@ -633,9 +650,10 @@ class TactileCortex {
             options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                let cortex = Unmanaged<TactileCortex>.fromOpaque(refcon!).takeUnretainedValue()
+                guard let refcon else { return Unmanaged.passUnretained(event) }
+                let cortex = Unmanaged<TactileCortex>.fromOpaque(refcon).takeUnretainedValue()
                 cortex.handleEvent(type: type, event: event)
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {

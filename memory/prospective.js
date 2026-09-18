@@ -123,10 +123,16 @@ export async function check(currentState) {
 
 // Complete an intention
 export async function complete(intentionId) {
-  await pool.query(
-    `UPDATE prospective_memory SET status = 'completed', completed_at = NOW() WHERE id = $1`,
+  if (!Number.isSafeInteger(Number(intentionId)) || Number(intentionId) < 1) throw new Error('Valid intention ID required');
+  const { rows } = await pool.query(
+    `UPDATE prospective_memory SET status = 'completed', completed_at = NOW()
+     WHERE id = $1 AND status IN ('pending','triggered') RETURNING id, intention, status, completed_at`,
     [intentionId]
   );
+  if (rows[0]) return rows[0];
+  const { rows: existing } = await pool.query(`SELECT id, intention, status, completed_at FROM prospective_memory WHERE id=$1`, [intentionId]);
+  if (existing[0]?.status === 'completed') return existing[0];
+  throw new Error('Intention not found or no longer active');
 }
 
 // Cancel an intention

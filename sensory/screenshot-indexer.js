@@ -2,7 +2,7 @@
 // Ingests screenshots, runs structured vision extraction, embeds summaries,
 // stores vectors in screenshot_memory, and maintains retention state.
 import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
+import OpenAI from '../local-openai-shim.js';
 import {
   existsSync,
   mkdirSync,
