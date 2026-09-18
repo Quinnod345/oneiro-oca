@@ -1,5 +1,5 @@
 import { createPursuitWork } from './reasoning/pursuit-work.js';
-import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls } from './reasoning/ponder-service.js';
+import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal } from './reasoning/ponder-service.js';
 import { createPonderRouter } from './reasoning/ponder-router.js';
 import { createUserWorkspace } from './user-workspace.js';
 import { createUserOperations } from './user-operations.js';
@@ -27,7 +27,7 @@ ocaRouter.use('/oca/ui', async (_req, res, next) => {
   catch (e) { res.status(503).json({ error: `Workspace is unavailable: ${e.message}` }); }
 });
 ocaRouter.use(userWorkspace.router);
-const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, canStart: async () => !(await userControls.get()).queuePaused });
+const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, risk: riskJournal, canStart: async () => !(await userControls.get()).queuePaused });
 const pursuitWorkReady = pursuitWork.init().then(() => pursuitWork.start());
 // Attach a rejection observer immediately; requests retain the real startup error.
 pursuitWorkReady.catch(error => console.error('[pursuit-work] startup:', error.message));
@@ -1844,6 +1844,33 @@ ocaRouter.post('/oca/worth/observe', async (req, res) => {
 // A want priced from the ledger. Body: { stakes: [{ entityKey, share? }] }
 ocaRouter.post('/oca/worth/price', async (req, res) => {
   try { res.json(await oca.worth.price(req.body?.stakes || [])); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// ── RISK ── how the engine weighs an action: expected worth gained vs lost, bounded by reversibility.
+ocaRouter.get('/oca/risk', async (req, res) => {
+  try { res.json({ ...await riskJournal.status(), recent: await riskJournal.recent({ limit: Math.min(200, Number(req.query.limit) || 25) }) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+ocaRouter.get('/oca/risk/:id', async (req, res) => {
+  try { const d = await riskJournal.get(req.params.id); res.status(d ? 200 : 404).json(d || { error: 'risk decision not found' }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Dry-run an appraisal without recording it. Body: a proposal { kind, description, serves, touches, reversibility, recipient?, verified?, firedBy? }
+ocaRouter.post('/oca/risk/appraise', async (req, res) => {
+  try {
+    const { createProposal, appraise } = await import('./motivation/risk.js');
+    const proposal = createProposal(req.body || {});
+    const keys = [...new Set([...proposal.serves, ...proposal.touches].map(s => s.entityKey).concat(proposal.recipient ? [proposal.recipient] : [], [`self:${proposal.capability}`]))];
+    const { rows } = await pool.query('SELECT key, state FROM worth_entities WHERE key = ANY($1)', [keys]);
+    const byKey = new Map(rows.map(r => [r.key, r.state]));
+    const { appetite } = await riskJournal.appetite();
+    res.json({ proposal, ...appraise(proposal, { lookup: k => byKey.get(k) || null, appetite, controls: (await riskJournal.status()).controls }) });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Attach what happened to a recorded decision. Body: { result: success|failure|harm|not_attempted, evidence: [...], note? }
+ocaRouter.post('/oca/risk/:id/observe', async (req, res) => {
+  try { res.json(await riskJournal.observe(req.params.id, req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 

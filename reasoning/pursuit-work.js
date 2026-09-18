@@ -59,8 +59,10 @@ export async function verifyWorkSources(candidates, { roots, workRoot, startedAt
 export function createPursuitWork({ pool, queue, runner = runCodex,
   root = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work',
   sourceRoots = ['/Users/quinnodonnell/oneiro'], model = process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra',
-  clock = Date.now, leaseMs = 90_000, canStart = async () => true } = {}) {
+  clock = Date.now, leaseMs = 90_000, canStart = async () => true, risk = null } = {}) {
   const aborts = new Map();
+  // Risk decisions are best-effort records around a person-fired slice; a journal error never blocks the work.
+  const riskSafe = async fn => { if (!risk) return null; try { return await fn(); } catch (e) { console.warn('[pursuit-work] risk journal:', e.message); return null; } };
   let timer, inFlight = false;
   async function init() {
     await pool.query(`CREATE TABLE IF NOT EXISTS pursuit_work (
@@ -132,6 +134,12 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
       if (parents[0].status === 'running') throw Error('The evidence review is still running. Let it finish before starting a research slice.');
       const current = await client.query("SELECT * FROM pursuit_work WHERE chain_id=$1 AND status IN ('queued','running')", [chainId]);
       if (current.rows[0]) { await client.query('COMMIT'); return current.rows[0]; }
+      // A research slice is a person-fired, sandboxed attempt for whatever the pursuit is for. Appraised and journaled;
+      // only a constraint refusal stops it.
+      const decision = await riskSafe(() => risk.decide({ id: `slice:${requestId}`, chainId: Number(chainId), kind: 'research_slice', firedBy: 'person',
+        description: `Research slice for pursuit ${chainId}: ${(instruction || parents[0].seed).slice(0, 300)}`,
+        serves: parents[0].ponder_state?.want?.stakes || [], touches: [], reversibility: 'sandboxed' }));
+      if (decision?.decision === 'refuse') throw Error('Refused: ' + decision.reasons.join(' '));
       const { rows } = await client.query(`INSERT INTO pursuit_work (id,chain_id,request_id,instruction,model)
         VALUES ($1,$2,$3,$4,$5) RETURNING *`, [randomUUID(), chainId, requestId, instruction, model]);
       await client.query("UPDATE thought_chains SET ponder_state=jsonb_set(ponder_state,'{researchActive}','true'),updated_at=now() WHERE id=$1", [chainId]);
@@ -216,10 +224,19 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
       await pool.query(`UPDATE pursuit_work SET status=$3, report=$4::jsonb,lease=NULL,lease_until=NULL,updated_at=now()
         WHERE id=$1 AND lease=$2 AND status='running'`, [run.id, lease,
         report.remainingQuestions.length || evidenceError ? 'needs_input' : 'completed', JSON.stringify(final)]);
+      // The slice ran to a report. It succeeded if it added verified evidence to the pursuit; a report with nothing
+      // usable is an observed failure of the attempt. The observation is the runtime fact, not the report's prose.
+      await riskSafe(() => risk.observe(`slice:${run.request_id}`, { result: evidenceApplied ? 'success' : 'failure',
+        evidence: [{ id: `slice-${run.id}`, source: 'pursuit work runtime status',
+          observation: `Slice ${run.id} completed with ${verified.evidence.length} verified sources; evidence applied: ${evidenceApplied}${evidenceError ? '; ' + evidenceError : ''}.` }] }));
       return final;
     } catch (error) {
       const changed = await pool.query("UPDATE pursuit_work SET status='failed',error=$3,lease=NULL,updated_at=now() WHERE id=$1 AND lease=$2 AND status='running' RETURNING id", [run.id, lease, redact(error.message)]);
       if (changed.rowCount) await append(run.id, { kind: 'error', text: redact(error.message) });
+      // Cancellation and transport failures are not failures of the attempt; an incomplete report is.
+      const attempted = /returned an incomplete|incomplete report/i.test(error.message);
+      await riskSafe(() => risk.observe(`slice:${run.request_id}`, { result: attempted ? 'failure' : 'not_attempted', note: redact(error.message).slice(0, 300),
+        evidence: [{ id: `slice-${run.id}-error`, source: 'pursuit work runtime status', observation: `Slice ${run.id} ended with an error: ${redact(error.message).slice(0, 500)}` }] }));
       return { error: error.message };
     } finally { clearInterval(heartbeat); await writes; aborts.delete(run.id); await clearResearchFlag(run.chain_id); }
   }

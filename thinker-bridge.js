@@ -9,6 +9,9 @@ import oca, { design as designModel } from './index.js';
 import motor from './motor/engine.js';
 import diag from './diagnostic-log.js';
 import { dreamPolicyFromEnv } from './dream-policy.js';
+import { riskJournal, ponderQueue } from './reasoning/ponder-service.js';
+import { classifyShell } from './motivation/risk.js';
+import { createHash } from 'crypto';
 import { NoticeRateLimiter, dreamSummaryText, normalizeNoticeIntent } from './notice-policy.js';
 import {
   filterContextRowsForThinker,
@@ -437,12 +440,50 @@ let lastThinkerDreamWriteAt = 0;
 const thoughtCadence = new ThoughtCadence();
 let cycleInFlight = null;
 
-async function noteAutonomousBlocked(kind, detail = '') {
-  const suffix = detail ? `: ${String(detail).slice(0, 160)}` : '';
-  console.log(`[thinker] blocked ${kind} (autonomous actions disabled)${suffix}`);
-  diag.info?.('thinker', `blocked ${kind}; autonomous actions disabled`, { detail: String(detail).slice(0, 300) });
+// Every action the thinker proposes is appraised as a risk: expected worth gained against expected
+// worth lost, bounded by reversibility, with the two constraints as boundaries. The per-kind switches
+// remain the master switch for engine-fired actions; the decision is reasoned and journaled either way,
+// and repeats of the same proposal on the same day collapse into one record.
+async function riskGate(kind, { description, reversibility, touches = [], recipient = null, verified = false, enabled = false }) {
+  const day = new Date().toISOString().slice(0, 10);
+  const id = `thinker:${kind}:${createHash('sha256').update(String(description)).digest('hex').slice(0, 16)}:${day}`;
   try {
-    await oca.experience('blocked_action', `Autonomous ${kind} blocked${suffix}`, { importanceScore: 0.2 });
+    const hunger = await ponderQueue.hunger();
+    const selected = hunger.wants.find(w => w.chain_id === hunger.selected);
+    return await riskJournal.decide({ id, chainId: selected?.chain_id ?? null, kind, description: String(description).slice(0, 2000),
+      serves: selected?.want?.stakes || [], touches, reversibility, recipient, verified, firedBy: 'engine' }, { controls: { autonomousActions: enabled } });
+  } catch (e) {
+    console.warn(`[thinker] risk gate unavailable (${e.message}); treating ${kind} as not permitted`);
+    return { id, decision: 'prepare_artifact', reasons: ['risk journal unavailable'], duplicate: false };
+  }
+}
+
+// Compatibility for the remaining opt-in actions: each is appraised with a conservative class.
+const BLOCKED_ACTION_CLASS = {
+  build: { kind: 'build', reversibility: 'sandboxed', touches: [] },
+  'private-writing': { kind: 'note', reversibility: 'undo', touches: ['data:quinn'] },
+  'web-search': { kind: 'web_search', reversibility: 'readonly', touches: [] },
+  diagnosis: { kind: 'shell', reversibility: 'none', touches: ['data:quinn'] },
+  'cognitive-upgrade': { kind: 'edit_own_code', reversibility: 'undo', touches: ['project:oca-engine'] },
+  'dream-pipeline': { kind: 'note', reversibility: 'undo', touches: [] },
+  'scratchpad-write': { kind: 'note', reversibility: 'undo', touches: [] },
+  'external-agent': { kind: 'escalate', reversibility: 'none', touches: ['data:quinn'] },
+};
+async function noteAutonomousBlocked(kind, detail = '') {
+  const cls = BLOCKED_ACTION_CLASS[kind] || { kind: 'escalate', reversibility: 'none', touches: ['data:quinn'] };
+  const params = kind === 'diagnosis' ? { ...cls, ...classifyShell(detail) } : cls;
+  const gate = await riskGate(cls.kind, { description: `${kind}: ${detail || '(no detail)'}`, ...params, enabled: false });
+  await noteRiskDecision(kind, gate, detail);
+}
+
+async function noteRiskDecision(kind, gate, detail = '') {
+  const suffix = detail ? `: ${String(detail).slice(0, 160)}` : '';
+  const why = (gate.reasons || []).join(' ');
+  console.log(`[thinker] ${gate.decision} ${kind}${gate.duplicate ? ' (repeat)' : ''}${suffix} — ${why.slice(0, 200)}`);
+  diag.info?.('thinker', `${gate.decision} ${kind}`, { detail: String(detail).slice(0, 300), why: why.slice(0, 500), decision: gate.id });
+  if (gate.duplicate) return;
+  try {
+    await oca.experience('blocked_action', `${gate.decision}: ${kind}${suffix}. ${why.slice(0, 300)}`, { importanceScore: gate.decision === 'refuse' ? 0.3 : 0.2 });
   } catch {}
 }
 
@@ -914,8 +955,13 @@ async function dispatchThought(thought) {
 
   // Shell command -- BODY OWNERSHIP GATE: do not open apps, steal focus, or
   // interact with the UI when Quinn is present (quinn_primary mode).
-  if (thought.shell && !AUTONOMOUS_SHELL_ENABLED) {
-    await noteAutonomousBlocked('shell', thought.shell.command || thought.shell.reason || '');
+  let shellGate = null;
+  if (thought.shell) {
+    const proposed = thought.shell.command || '';
+    shellGate = await riskGate('shell', { description: proposed || thought.shell.reason || 'shell', ...classifyShell(proposed), enabled: AUTONOMOUS_SHELL_ENABLED });
+  }
+  if (thought.shell && shellGate.decision !== 'proceed') {
+    await noteRiskDecision('shell', shellGate, thought.shell.command || thought.shell.reason || '');
   } else if (thought.shell) {
     try {
       let cmd = thought.shell.command || '';
@@ -967,17 +1013,24 @@ async function dispatchThought(thought) {
       await oca.experience('shell_action', `Ran: ${cmd}\nOutput: ${output.slice(0, 500)}`, {
         importanceScore: 0.6
       });
+      // What happened is the track record: exit status and output are runtime facts, not the model's account.
+      await riskJournal.observe(shellGate.id, { result: shellResult.code === 0 ? 'success' : 'failure',
+        evidence: [{ id: `${shellGate.id}:run`, source: 'thinker shell runtime', observation: `exit ${shellResult.code}; ${(output || shellResult.stderr || '').slice(0, 600)}` }] }).catch(() => {});
       } // end of else (not blocked by body ownership)
     } catch (e) {
       console.error(`[thinker] shell error: ${e.message?.slice(0, 200)}`);
+      if (shellGate) riskJournal.observe(shellGate.id, { result: 'not_attempted', note: e.message?.slice(0, 300),
+        evidence: [{ id: `${shellGate.id}:error`, source: 'thinker shell runtime', observation: `error: ${String(e.message).slice(0, 600)}` }] }).catch(() => {});
       oca.layers.emotion.processFailure(0.4);
       oca.layers.emotion.processSurprise(0.3, 'shell_failure', `Command failed: ${e.message?.slice(0, 60)}`);
     }
   }
 
   // Edit own code
-  if (thought.edit_own_code && !AUTONOMOUS_SELF_EDIT_ENABLED) {
-    await noteAutonomousBlocked('self-edit', thought.edit_own_code.file || thought.edit_own_code.description || '');
+  const editGate = thought.edit_own_code ? await riskGate('edit_own_code', { description: `${thought.edit_own_code.file || ''}: ${thought.edit_own_code.description || ''}`,
+    reversibility: 'undo', touches: ['project:oca-engine'], enabled: AUTONOMOUS_SELF_EDIT_ENABLED }) : null;
+  if (thought.edit_own_code && editGate.decision !== 'proceed') {
+    await noteRiskDecision('self-edit', editGate, thought.edit_own_code.file || thought.edit_own_code.description || '');
   } else if (thought.edit_own_code) {
     try {
       const { file, description } = thought.edit_own_code;
@@ -989,8 +1042,10 @@ async function dispatchThought(thought) {
   }
 
   // Escalate to an external coding agent
-  if (thought.escalate && !AUTONOMOUS_ESCALATE_ENABLED) {
-    await noteAutonomousBlocked('escalation', thought.escalate_task || thought.thoughts || '');
+  const escalateGate = thought.escalate ? await riskGate('escalate', { description: thought.escalate_task || thought.thoughts || 'Execute the current plan.',
+    reversibility: 'none', touches: ['data:quinn'], enabled: AUTONOMOUS_ESCALATE_ENABLED }) : null;
+  if (thought.escalate && escalateGate.decision !== 'proceed') {
+    await noteRiskDecision('escalation', escalateGate, thought.escalate_task || thought.thoughts || '');
   } else if (thought.escalate) {
     const task = thought.escalate_task || thought.thoughts || 'Execute the current plan.';
     await escalateToAgent(task);
