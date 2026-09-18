@@ -18,6 +18,7 @@ import creative from './creative/engine.js';
 import sensory from './sensory/perception.js';
 import executive from './executive/engine.js';
 import prospective from './memory/prospective.js';
+import { createWorthLedger } from './motivation/worth-ledger.js';
 import { ingestCoOccurrenceConnections, maintainSynapses } from './neural-connections.js';
 import { loadModel as loadDesignModel } from './design-model/model.js';
 import { evaluateDesign } from './design-model/evaluate.js';
@@ -28,10 +29,13 @@ import { isServerRunning as isDesignServerRunning } from './design-model/client.
 import { suggestChanges, generateCssPatch } from './design-model/suggest.js';
 import { build as buildDesign } from './design-model/builder.js';
 
+// Worth: the baseline for risk. Projected only from ratings, observed outcomes and constraints.
+export const worth = createWorthLedger({ pool, emit });
+
 export const layers = {
   emotion, hypothesis, episodic, semantic, procedural,
   consolidation, metacognition, deliberation, reasoningController, simulation,
-  causal, entityGraph, creative, sensory, executive, prospective
+  causal, entityGraph, creative, sensory, executive, prospective, worth
 };
 
 // Design subsystem — decoupled, any agent can use it
@@ -374,6 +378,14 @@ export async function init() {
   await emotion.restore();
   console.log('[oca] emotion restored');
 
+  // Worth ledger: install the decisions of record (constraints and priors) if absent.
+  try {
+    const seeded = await worth.seed();
+    console.log(`[oca] worth ledger ready (${seeded.inserted} new seed signals of ${seeded.total})`);
+  } catch (e) {
+    console.error('[oca] worth ledger unavailable (run migrations/057_worth_ledger.sql):', e.message);
+  }
+
   // Step 6 (L5-L9): Start cognitive processes
   // Register workspace broadcast handlers (SPEC §14.6)
   registerWorkspaceHandlers();
@@ -484,7 +496,7 @@ export function applyInteroceptiveEffects(interoState) {
 }
 
 export default {
-  layers, cycle, experience, learn, predict, remember, know, decide,
+  layers, worth, cycle, experience, learn, predict, remember, know, decide,
   reason, imagine, create, sense, reflect, status, init,
   applyInteroceptiveEffects
 };

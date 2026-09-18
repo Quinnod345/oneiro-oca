@@ -8,6 +8,7 @@ import llm from './llm.js';
 // These endpoints expose the cognitive architecture to OpenClaw and external systems
 import { Router } from 'express';
 import oca from './index.js';
+import { randomUUID } from 'node:crypto';
 import motor from './motor/engine.js';
 import { pool } from './event-bus.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
@@ -1807,6 +1808,43 @@ export default ocaRouter;
 ocaRouter.get('/oca/hunger', async (req, res) => {
   try { res.json(await ponderQueue.hunger()); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── WORTH LEDGER ── the baseline for risk. Read it, rate an entity, or report an observed outcome.
+ocaRouter.get('/oca/worth', async (req, res) => {
+  try { res.json(await oca.worth.list({ kind: req.query.kind || null })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+ocaRouter.get('/oca/worth/:kind/:name', async (req, res) => {
+  try {
+    const state = await oca.worth.get(`${req.params.kind}:${req.params.name}`);
+    if (!state) return res.status(404).json({ error: 'no worth recorded for this entity' });
+    res.json(state);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// An explicit rating from a person. Body: { entityKey, rating: -1|0|1, by?, about?, id? }
+ocaRouter.post('/oca/worth/rate', async (req, res) => {
+  try {
+    const { entityKey, rating, by = 'quinn', about = '', id = `rate:${randomUUID()}` } = req.body || {};
+    res.json(await oca.worth.record({ id, entityKey, kind: 'rated', rating, by, about }));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// An observed outcome with evidence. Body: { entityKey, outcome, evidence: [{id, source, observation}], progress?, about?, id }
+ocaRouter.post('/oca/worth/observe', async (req, res) => {
+  try {
+    const { entityKey, outcome, evidence, progress, about = '', id } = req.body || {};
+    if (typeof id !== 'string' || !id.trim()) return res.status(400).json({ error: 'an observed signal needs a caller-supplied idempotent id' });
+    res.json(await oca.worth.record({ id, entityKey, kind: 'observed', outcome, evidence, progress, about }));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// A want priced from the ledger. Body: { stakes: [{ entityKey, share? }] }
+ocaRouter.post('/oca/worth/price', async (req, res) => {
+  try { res.json(await oca.worth.price(req.body?.stakes || [])); }
+  catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 ocaRouter.get('/oca/interests', async (req, res) => {
