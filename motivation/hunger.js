@@ -2,13 +2,36 @@
 // Persistent inputs live with the want; all transitions are pure and time-based, never tick-based.
 import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence } from '../reasoning/loop.js';
+import { priceWant, parseEntityKey } from './worth.js';
 const clamp = n => Math.max(0, Math.min(1, n));
 
-export function createWant({ description, doneWhen, value = 0.7, now = Date.now() }) {
+// A want is for something. Its value is the worth of what it is for, priced from the ledger;
+// `value` alone is the legacy explicit priority and stays the fallback when no ledger is wired.
+export function createWant({ description, doneWhen, value = 0.7, stakes = null, outcomeKey = null, now = Date.now() }) {
   if (![description, doneWhen].every(s => typeof s === 'string' && s.trim())) throw new Error('a want needs a description and an observable satisfaction criterion');
   if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error('want value must be in [0, 1]');
-  return { version: 1, description, doneWhen, value, createdAt: now, lastProgressAt: now,
+  const want = { version: 2, description, doneWhen, value, createdAt: now, lastProgressAt: now,
     progress: 0, attempts: 0, failedAttempts: 0, strategy: 0, receipts: [], status: 'active' };
+  if (outcomeKey !== null) { parseEntityKey(outcomeKey); want.outcomeKey = outcomeKey; }
+  if (stakes !== null) {
+    if (!Array.isArray(stakes) || stakes.length > 16) throw new Error('stakes must be an array of at most 16 entries');
+    want.stakes = stakes.map(s => {
+      parseEntityKey(s?.entityKey);
+      const share = s.share === undefined ? 1 : s.share;
+      if (!Number.isFinite(share) || share <= 0) throw new Error('a stake share must be positive');
+      return { entityKey: s.entityKey, share };
+    });
+    want.pricing = { value, provenance: 'priority', unpriced: true };
+  }
+  return want;
+}
+// Re-price a want from current worth. Pure: `lookup(entityKey)` returns ledger state or null.
+export function repriceWant(want, lookup, now = Date.now()) {
+  if (!want?.stakes) return want;
+  const priced = priceWant(want.stakes, lookup);
+  const pricing = { value: priced.value, confidence: priced.confidence, provenance: priced.provenance, unpriced: priced.unpriced,
+    stakes: priced.stakes.map(s => ({ entityKey: s.entityKey, share: s.share, worth: s.worth, constraint: s.constraint })), pricedAt: now };
+  return { ...want, value: priced.value, pricing };
 }
 export function appetite(want, now = Date.now()) {
   if (!want || want.status === 'sated' || want.status === 'cancelled') {
@@ -22,6 +45,7 @@ export function appetite(want, now = Date.now()) {
   return { pressure: clamp(want.value * gap * (0.65 + 0.35 * persistence)), gap,
     frustration, mode: frustration >= 2 / 3 ? 'change_strategy' : 'pursue',
     strategy: strategies[(want.strategy || 0) % strategies.length],
+    value: want.value, valueProvenance: want.pricing?.provenance || 'priority', unpriced: want.pricing?.unpriced === true,
     description: want.description, doneWhen: want.doneWhen };
 }
 export function recordAttempt(want, { result, now = Date.now() }) {

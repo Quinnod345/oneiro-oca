@@ -1,11 +1,14 @@
 import emotion from '../emotion/engine.js';
-import { pool } from '../event-bus.js';
+import { pool, emit } from '../event-bus.js';
 import { reason } from './controller.js';
 import { createPonderQueue } from './ponder-queue.js';
 import { createInterestEngine } from '../motivation/interest-engine.js';
+import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createUserControls, createControlledPonderRunner } from '../user-controls.js';
 export const userControls = createUserControls(pool);
-export const ponderQueue = createPonderQueue({ pool, reason: (goal, options) => reason(goal, { ...options,
+// Same journal the orchestrator seeds; wants are priced from it and receipts feed it.
+export const worthLedger = createWorthLedger({ pool, emit });
+export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, reason: (goal, options) => reason(goal, { ...options,
   provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }) });
 export const interestEngine = createInterestEngine({ pool, queue: ponderQueue });
 let lastInterestSync = 0;

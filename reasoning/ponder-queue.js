@@ -4,30 +4,66 @@ import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence, currentEvidence } from './loop.js';
 import { defaultTimeBudgetSeconds } from './budget.js';
-import { createWant, appetite, recordAttempt, recordOutcome } from '../motivation/hunger.js';
+import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from '../motivation/hunger.js';
 
-export function createPonderQueue({ pool, reason, clock = Date.now }) {
+const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+
+// `worth` is the ledger (optional). Without it, wants keep their explicit priority as value.
+export function createPonderQueue({ pool, reason, clock = Date.now, worth = null }) {
   const snapshot = row => row ? { chain_id: row.id, seed: row.seed, status: row.status, depth: row.depth,
     updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock()) } : null;
+  // Live pricing: one ledger read for every stake named by the given rows, then a pure re-price.
+  async function reprice(rows) {
+    if (!worth) return rows;
+    const keys = [...new Set(rows.flatMap(r => (r.ponder_state?.want?.stakes || []).map(s => s.entityKey)))];
+    if (!keys.length) return rows;
+    const { rows: states } = await pool.query('SELECT key, state FROM worth_entities WHERE key = ANY($1)', [keys]);
+    const byKey = new Map(states.map(r => [r.key, r.state]));
+    // The stored state stays on the row: claims compare-and-swap against what is in the database,
+    // while ordering and the run itself use the live price.
+    return rows.map(r => r.ponder_state?.want?.stakes
+      ? { ...r, stored_state: r.stored_state || r.ponder_state, ponder_state: { ...r.ponder_state, want: repriceWant(r.ponder_state.want, k => byKey.get(k) || null, clock()) } } : r);
+  }
   async function get(id, client = pool) {
     const { rows } = await client.query('SELECT * FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL', [id]);
-    return snapshot(rows[0]);
+    return snapshot((await reprice(rows))[0]);
+  }
+  // Worth signals are best-effort side effects of observed events; a ledger error never blocks the want.
+  async function signal(input) {
+    if (!worth) return null;
+    try { return await worth.record(input); }
+    catch (e) { console.warn('[ponder] worth signal not recorded:', e.message); return { rejected: e.message }; }
   }
   async function enqueue({ seed, context = '', evidence = [], priority = 0.7, doneWhen, topic = '', learning = true,
-    maxPasses = 3, timeBudgetSeconds = defaultTimeBudgetSeconds, clientRequestId = null } = {}, { client = pool, origin = { kind: 'explicit' } } = {}) {
+    maxPasses = 3, timeBudgetSeconds = defaultTimeBudgetSeconds, clientRequestId = null, stakes = null } = {}, { client = pool, origin = { kind: 'explicit' } } = {}) {
     if (typeof seed !== 'string' || !seed.trim() || seed.length > 12000) throw new Error('seed must be a non-empty string of at most 12000 characters');
     if (typeof context !== 'string' || context.length > 20000) throw new Error('context must be a string of at most 20000 characters');
     if (typeof topic !== 'string' || topic.length > 160) throw new Error('topic must be a string of at most 160 characters');
     if (typeof learning !== 'boolean') throw new Error('learning must be a boolean');
     if (!Number.isInteger(maxPasses) || maxPasses < 2 || maxPasses > 8) throw new Error('maxPasses must be in [2, 8]');
     if (!Number.isFinite(timeBudgetSeconds) || timeBudgetSeconds <= 0 || timeBudgetSeconds > 180) throw new Error('timeBudgetSeconds must be in (0, 180]');
-    const want = createWant({ description: seed, doneWhen: doneWhen || 'An observed outcome satisfies this request; a proposal alone is not completion.', value: priority, now: clock() });
+    // What this want is for: its own outcome, the named project (from the topic), and any stakes the caller declares.
+    const outcomeKey = worth ? `outcome:ponder-${randomUUID()}` : null;
+    const declared = worth ? [{ entityKey: outcomeKey, share: 1 }, ...(slug(topic) ? [{ entityKey: `project:${slug(topic)}`, share: 1 }] : []),
+      ...(Array.isArray(stakes) ? stakes : [])].filter((s, i, all) => all.findIndex(x => x?.entityKey === s?.entityKey) === i) : null;
+    let want = createWant({ description: seed, doneWhen: doneWhen || 'An observed outcome satisfies this request; a proposal alone is not completion.',
+      value: priority, stakes: declared, outcomeKey, now: clock() });
+    if (worth) {
+      // A person asking for this is a grounded rating of its outcome. The engine asking itself is not.
+      if (origin.kind === 'explicit') {
+        await signal({ id: `request:${outcomeKey}`, entityKey: outcomeKey, kind: 'rated', rating: 1, by: origin.by || 'quinn', about: seed.slice(0, 500) });
+        if (priority !== 0.7) await signal({ id: `request-priority:${outcomeKey}`, entityKey: outcomeKey, kind: 'prior', worth: priority, weight: 4, reason: 'Priority stated with the request.' });
+      }
+      want = (await reprice([{ ponder_state: { want } }]))[0].ponder_state.want;
+    }
     const state = { version: 1, context, topic: topic.trim(), learning, origin, evidence: normalizeEvidence(evidence), maxPasses, timeBudgetSeconds,
       checkpoint: null, result: null, attempts: 0, want, createdAt: clock(), priorRuns: [] };
     if (clientRequestId !== null) {
       if (typeof clientRequestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(clientRequestId)) throw new Error('Invalid client request ID');
       state.clientRequestId = clientRequestId;
-      state.inputFingerprint = createHash('sha256').update(JSON.stringify({seed, context, topic:state.topic, learning, evidence:state.evidence, maxPasses, timeBudgetSeconds, priority, doneWhen:want.doneWhen})).digest('hex');
+      // Stakes join the fingerprint only when supplied, so requests saved before stakes existed still match on retry.
+      state.inputFingerprint = createHash('sha256').update(JSON.stringify({seed, context, topic:state.topic, learning, evidence:state.evidence, maxPasses, timeBudgetSeconds, priority, doneWhen:want.doneWhen,
+        ...(Array.isArray(stakes) ? { stakes } : {})})).digest('hex');
     }
     const { rows } = await client.query(
       `INSERT INTO thought_chains (seed, priority, status, ponder_state) VALUES ($1,$2,'pondering',$3::jsonb) ${clientRequestId ? "ON CONFLICT ((ponder_state->>'clientRequestId')) WHERE ponder_state->>'clientRequestId' IS NOT NULL DO NOTHING" : ''} RETURNING *`,
@@ -62,9 +98,10 @@ export function createPonderQueue({ pool, reason, clock = Date.now }) {
             OR jsonb_array_length(COALESCE(ponder_state #> '{checkpoint,passes}', '[]'::jsonb)) > 0)))
        AND ($2::int IS NULL OR id = $2)
        ORDER BY (COALESCE(ponder_state #>> '{origin,kind}', 'explicit') = 'interest'), priority DESC, created_at ASC LIMIT 100`, [clock(), id]);
-    rows.sort((a, b) => Number(a.ponder_state.origin?.kind === 'interest') - Number(b.ponder_state.origin?.kind === 'interest')
+    const priced = await reprice(rows);
+    priced.sort((a, b) => Number(a.ponder_state.origin?.kind === 'interest') - Number(b.ponder_state.origin?.kind === 'interest')
       || appetite(b.ponder_state.want, clock()).pressure - appetite(a.ponder_state.want, clock()).pressure || a.id - b.id);
-    for (const row of rows) {
+    for (const row of priced) {
       if (row.ponder_state.origin?.kind === 'interest') {
         const parent = await get(row.ponder_state.origin.parentChainId);
         if (!parent || parent.want.status !== 'active') { await cancel(row.id); continue; }
@@ -75,7 +112,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now }) {
         `UPDATE thought_chains SET status = 'running', ponder_state = $1::jsonb, updated_at = NOW()
          WHERE id = $2 AND ponder_state = $3::jsonb AND
          (status = 'pondering' OR status = 'budget' OR (status = 'running' AND (ponder_state->>'leaseUntil')::float8 < $4)) RETURNING id`,
-        [JSON.stringify(state), row.id, JSON.stringify(row.ponder_state), clock()]);
+        [JSON.stringify(state), row.id, JSON.stringify(row.stored_state || row.ponder_state), clock()]);
       if (!claimed.rowCount) continue;
       if (state.attempts > 3) {
         state.result = { status: 'failed', error: 'Crash/retry budget exhausted; inspect the chain before resuming.' };
@@ -102,6 +139,13 @@ export function createPonderQueue({ pool, reason, clock = Date.now }) {
           want: recordAttempt(state.want, { result: result.status, now: clock() }) };
         const status = ({ converged: 'ready', needs_evidence: 'awaiting_evidence', stalled: 'stalled', budget: 'budget', failed: 'failed' })[result.status] || 'failed';
         await save(row.id, lease, state, status);
+        // The reasoner ran and did not get there: an observed failure of the engine's own pondering.
+        // Converging is not a success (a plan satiates nothing); a transport failure is not a failure of thought.
+        if (['stalled', 'budget'].includes(result.status)) {
+          await signal({ id: `attempt:${row.id}:${state.attempts}:${result.status}`, entityKey: 'self:ponder', kind: 'observed', outcome: 'failure',
+            about: `chain ${row.id} attempt ${state.attempts}`, evidence: [{ id: `attempt-${row.id}-${state.attempts}`, source: 'ponder runtime status',
+              observation: `Attempt ${state.attempts} ended ${result.status} (${result.stopReason || 'no stop reason'}) after ${result.checkpoint?.passes?.length || 0} passes.` }] });
+        }
         return get(row.id);
       } catch (e) {
         if (e.code === 'LEASE_LOST') return get(row.id);
@@ -165,10 +209,28 @@ export function createPonderQueue({ pool, reason, clock = Date.now }) {
     });
   }
   async function outcome(id, receipt) {
-    return mutate(id, row => {
+    const chain = await mutate(id, row => {
       const want = recordOutcome(row.ponder_state.want, { ...receipt, now: clock() });
       return { status: want.status === 'sated' ? 'resolved' : row.status === 'resolved' ? 'ready' : row.status, state: { ...row.ponder_state, want } };
     });
+    const saved = chain.want.receipts.find(r => r.receiptId === receipt.receiptId);
+    if (worth && saved && chain.want.stakes) {
+      // Progress feeds hunger. Observed usefulness feeds worth: of the outcome, of what it was for,
+      // and of the engine's own pondering. Idempotent per receipt and entity.
+      const targets = [...new Set([chain.want.outcomeKey, ...chain.want.stakes.map(s => s.entityKey), 'self:ponder'].filter(Boolean))];
+      const worthSignals = [];
+      for (const entityKey of targets) {
+        if (Number.isFinite(saved.usefulness)) {
+          worthSignals.push(await signal({ id: `receipt:${id}:${saved.receiptId}:usefulness:${entityKey}`, entityKey, kind: 'observed', outcome: 'progress',
+            progress: saved.usefulness, about: `chain ${id} receipt ${saved.receiptId}`, evidence: saved.evidence }));
+        } else if (saved.criterionMet && entityKey === 'self:ponder') {
+          worthSignals.push(await signal({ id: `receipt:${id}:${saved.receiptId}:sated:${entityKey}`, entityKey, kind: 'observed', outcome: 'success',
+            about: `chain ${id} satisfied by receipt ${saved.receiptId}`, evidence: saved.evidence }));
+        }
+      }
+      return { ...chain, worthSignals: worthSignals.filter(Boolean).map(r => r.rejected ? { rejected: r.rejected } : { id: r.signal.id, duplicate: r.duplicate }) };
+    }
+    return chain;
   }
   async function cancel(id) {
     return mutate(id, row => ({ status: 'cancelled', state: { ...row.ponder_state, lease: randomUUID(), want: { ...row.ponder_state.want, status: 'cancelled' } } }), { allowRunning: true });
@@ -176,8 +238,9 @@ export function createPonderQueue({ pool, reason, clock = Date.now }) {
   async function hunger() {
     const { rows } = await pool.query(`SELECT * FROM thought_chains WHERE ponder_state IS NOT NULL
       AND ponder_state #>> '{want,status}' = 'active' ORDER BY priority DESC, id LIMIT 100`);
-    const wants = rows.map(snapshot).sort((a, b) => b.hunger.pressure - a.hunger.pressure);
-    return { wants, pressure: wants[0]?.hunger.pressure || 0, selected: wants[0]?.chain_id || null };
+    const wants = (await reprice(rows)).map(snapshot).sort((a, b) => b.hunger.pressure - a.hunger.pressure);
+    return { wants, pressure: wants[0]?.hunger.pressure || 0, selected: wants[0]?.chain_id || null,
+      pricing: worth ? 'live_from_worth_ledger' : 'explicit_priority' };
   }
   return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger };
 }
