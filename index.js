@@ -272,15 +272,16 @@ export async function decide(decision, opts = {}) {
 
   if (useStructuredReasoning) {
     const reasoning = await reasoningController.reason(decision, {
+      ...opts,
       context: opts.context || '',
       stakes,
-      timeBudgetSeconds: opts.timeBudgetSeconds || 45,
+      timeBudgetSeconds: opts.timeBudgetSeconds,
       minConfidence: Number.isFinite(Number(opts.minConfidence)) ? Number(opts.minConfidence) : 0.55
     });
-    const propose = reasoning.steps?.find(s => s.stage === 'propose')?.output || '';
-    const critique = reasoning.steps?.find(s => s.stage === 'critique')?.output || '';
-    const revise = reasoning.steps?.find(s => s.stage === 'revise')?.output || '';
-    const verify = reasoning.steps?.find(s => s.stage === 'verify')?.output || '';
+    const propose = reasoning.steps?.findLast(s => s.stage === 'propose')?.output || '';
+    const critique = reasoning.steps?.findLast(s => s.stage === 'critique')?.output || '';
+    const revise = reasoning.steps?.findLast(s => s.stage === 'revise')?.output || '';
+    const verify = reasoning.steps?.findLast(s => s.stage === 'verify')?.output || '';
     return {
       resolutionMethod: 'reasoning_controller',
       resolution: reasoning.conclusion,
@@ -289,8 +290,8 @@ export async function decide(decision, opts = {}) {
       shouldExecute: reasoning.shouldExecute,
       perspectives: {
         skeptic: { argument: critique || 'No critique generated' },
-        builder: { argument: propose || 'No proposal generated' },
-        dreamer: { argument: revise || 'No revision generated' },
+        builder: { argument: revise || propose || 'No proposal generated' },
+        dreamer: { argument: reasoning.steps?.findLast(s => s.stage === 'alternatives')?.output || 'No alternatives generated' },
         empath: { argument: verify || 'No verification generated' }
       },
       reasoning
@@ -449,10 +450,10 @@ function registerWorkspaceHandlers() {
     }
   });
 
-  // Emotion: update state when significant items enter workspace
+  // Admission to working memory is attention, not proof of information gain.
   executive.registerWorkspaceHandler('emotion', async (item) => {
-    if (item.salience > 0.6) {
-      emotion.processInformationGain(item.salience * 0.3);
+    if (item.contentType === 'perception' && item.salience > 0.6) {
+      emotion.processSurprise(item.salience * 0.3, 'perception');
     }
   });
 
@@ -474,11 +475,11 @@ export function applyInteroceptiveEffects(interoState) {
 
   const energyPolicy = interoState.energy_policy;
   if (energyPolicy === 'low_energy') {
-    emotion.processInteroception?.({ energy: 0.2 });
+    emotion.processInteroception?.(0.2);
   } else if (energyPolicy === 'overheat_cooldown') {
-    emotion.processInteroception?.({ energy: 0.3, stress: 0.5 });
+    emotion.processInteroception?.(undefined, undefined, undefined, 1);
   } else if (energyPolicy === 'cognitive_overload') {
-    emotion.processInteroception?.({ energy: 0.5, stress: 0.3 });
+    emotion.processInteroception?.(undefined, 1);
   }
 }
 

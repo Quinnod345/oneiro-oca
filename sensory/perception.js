@@ -1,7 +1,7 @@
 // OCA Sensory Cortex — multi-modal perception (SPEC §5)
 // Primary source: shared PerceptualState from Swift sensory process
 // Fallback: osascript for basic queries when Swift sensory not running
-import { execSync } from 'child_process';
+import fallback from './fallback-reader.js';
 import { emit, readPerceptualState } from '../event-bus.js';
 import swiftBridge from './swift-bridge.js';
 import visualMemory from './screenshot-indexer.js';
@@ -15,12 +15,13 @@ export function getFullPerception() {
   const shared = readPerceptualState();
   if (shared && shared.timestamp) {
     const age = Date.now() - new Date(shared.timestamp).getTime();
-    if (age < 10000) return shared; // fresh enough (< 10s old)
+    if (age >= 0 && age < 10000) return shared; // fresh enough (< 10s old)
   }
 
   // Fallback from swift bridge cached data
   const bridgeState = swiftBridge.getFullPerception();
-  if (bridgeState && bridgeState.user_presence !== 'unknown') return bridgeState;
+  const bridgeAge = Date.now() - new Date(bridgeState?.timestamp).getTime();
+  if (bridgeState && bridgeAge >= 0 && bridgeAge < 10000 && bridgeState.user_presence !== 'unknown') return bridgeState;
 
   // Last resort: osascript fallback for minimal perception
   return buildFallbackPerception();
@@ -33,7 +34,7 @@ function buildFallbackPerception() {
   const temporal = getTemporalState();
   const proprio = getProprioception();
 
-  let userActivity = 'idle';
+  let userActivity = 'unknown';
   const app = visual.frontApp || 'unknown';
   if (['Terminal', 'Cursor', 'Xcode'].includes(app)) userActivity = 'coding';
   else if (['Arc', 'Safari', 'Chrome', 'Dia'].includes(app)) userActivity = 'browsing';
@@ -49,7 +50,8 @@ function buildFallbackPerception() {
     proprioceptive: proprio,
     interoceptive: intero,
     temporal,
-    user_presence: 'active',
+    user_presence: 'unknown',
+    source: 'fallback_commands',
     user_activity: userActivity,
     environment_stability: 'unknown',
     attention_target: app,
@@ -66,7 +68,8 @@ function freshSharedState(maxAgeMs = 30000) {
   if (!shared?.timestamp) return null;
   const timestamp = new Date(shared.timestamp).getTime();
   if (!Number.isFinite(timestamp)) return null;
-  return Date.now() - timestamp <= maxAgeMs ? shared : null;
+  const age = Date.now() - timestamp;
+  return age >= 0 && age <= maxAgeMs ? shared : null;
 }
 
 function isKnownString(value) {
@@ -84,49 +87,14 @@ export function getVisualState() {
     };
   }
 
-  // osascript fallback
-  let frontApp = 'unknown', windowTitle = '', runningApps = [];
-  try {
-    frontApp = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true' 2>/dev/null",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim() || 'unknown';
-  } catch {}
-
-  if (frontApp !== 'unknown') {
-    try {
-      windowTitle = execSync(
-        `osascript -e 'tell application "System Events" to get title of front window of application process "${frontApp}"' 2>/dev/null`,
-        { encoding: 'utf8', timeout: 3000 }
-      ).trim();
-    } catch {}
-  }
-
-  try {
-    const raw = execSync(
-      "osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false' 2>/dev/null",
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
-    runningApps = raw.split(', ').filter(Boolean);
-  } catch {}
-
-  return { frontApp, windowTitle, runningApps, timestamp: new Date().toISOString() };
+  return fallback.get('visual') || { frontApp: 'unknown', windowTitle: '', runningApps: [], timestamp: null, source: 'unavailable' };
 }
 
 export function getAudioState() {
   const shared = freshSharedState();
   if (shared?.auditory) return { ...shared.auditory, timestamp: shared.timestamp };
 
-  let nowPlaying = '', volume = 50, muted = false;
-  try {
-    nowPlaying = execSync(
-      `/usr/bin/osascript -e 'if application "Music" is running then tell application "Music" to if player state is playing then return (name of current track) & " - " & (artist of current track)' 2>/dev/null || echo ''`,
-      { encoding: 'utf8', timeout: 3000 }
-    ).trim();
-  } catch {}
-  try { volume = parseInt(execSync("/usr/bin/osascript -e 'output volume of (get volume settings)'", { encoding: 'utf8', timeout: 3000 }).trim()); } catch {}
-  try { muted = execSync("/usr/bin/osascript -e 'output muted of (get volume settings)'", { encoding: 'utf8', timeout: 3000 }).trim() === 'true'; } catch {}
-  return { now_playing: nowPlaying || null, volume, muted, timestamp: new Date().toISOString() };
+  return fallback.get('auditory') || { now_playing: null, volume: null, muted: null, timestamp: null, source: 'unavailable' };
 }
 
 export function getInteroception() {
@@ -152,11 +120,7 @@ export function getProprioception() {
   const shared = freshSharedState();
   if (shared?.proprioceptive) return shared.proprioceptive;
 
-  let clipboard = '', wifi = 'unknown', uptime = 'unknown';
-  try { clipboard = execSync("pbpaste 2>/dev/null | head -c 200", { encoding: 'utf8', timeout: 2000 }).trim(); } catch {}
-  try { wifi = execSync("/System/Library/PrivateFrameworks/Apple80211.framework/Resources/airport -I 2>/dev/null | grep ' SSID' | awk '{print $2}'", { encoding: 'utf8', timeout: 3000 }).trim() || 'disconnected'; } catch {}
-  try { uptime = execSync("uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1}'", { encoding: 'utf8', timeout: 3000 }).trim(); } catch {}
-  return { clipboard: clipboard.slice(0, 200), network: { wifi }, uptime, timestamp: new Date().toISOString() };
+  return fallback.get('proprioceptive') || { clipboard: null, network: { wifi: 'unknown' }, uptime: 'unknown', timestamp: null, source: 'unavailable' };
 }
 
 // ═══════════════════════════════════════════════════

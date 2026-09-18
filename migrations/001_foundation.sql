@@ -29,7 +29,9 @@ CREATE TYPE cognitive_event_type AS ENUM (
     'workspace_broadcast',
     'interrupt',
     'body_ownership_request',
-    'body_ownership_grant'
+    'body_ownership_grant',
+    'thinker.thought',
+    'thinker.proactive_intent'
 );
 
 CREATE TABLE cognitive_events (

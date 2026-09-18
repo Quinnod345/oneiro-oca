@@ -1,0 +1,33 @@
+import emotion from '../emotion/engine.js';
+import { pool } from '../event-bus.js';
+import { reason } from './controller.js';
+import { createPonderQueue } from './ponder-queue.js';
+import { createInterestEngine } from '../motivation/interest-engine.js';
+import { createUserControls, createControlledPonderRunner } from '../user-controls.js';
+export const userControls = createUserControls(pool);
+export const ponderQueue = createPonderQueue({ pool, reason: (goal, options) => reason(goal, { ...options,
+  provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }) });
+export const interestEngine = createInterestEngine({ pool, queue: ponderQueue });
+let lastInterestSync = 0;
+let interestState = { lastSyncAt: null, error: null, result: null };
+export const interestStatus = () => ({ ...interestState });
+async function syncInterests() {
+  if (Date.now() - lastInterestSync < 60000) return;
+  lastInterestSync = Date.now();
+  try {
+    const result = await interestEngine.sync();
+    interestState = { lastSyncAt: Date.now(), error: null, result };
+    if (result.originated) console.log('[oca] self-originated inquiry:', result.originated.chain_id, 'from want', result.originated.parentChainId);
+  } catch (e) {
+    interestState = { ...interestState, error: e.message };
+    console.error('[oca] interest learning:', e.message);
+  }
+}
+export async function refreshHunger() {
+  const state = await ponderQueue.hunger();
+  const selected = state.wants.find(w => w.chain_id === state.selected);
+  emotion.setMotivationalState({ ...selected?.hunger, pressure: state.pressure, selected: state.selected });
+  return state;
+}
+export const runPendingPonder = createControlledPonderRunner({ controls: userControls,
+  syncInterests, refreshHunger, runNext: id => ponderQueue.runNext(id) });

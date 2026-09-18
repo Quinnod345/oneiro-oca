@@ -5,10 +5,15 @@
 // Pure JS, zero dependencies beyond neural-bus.  Weights persist to disk across restarts.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { TOTAL_DIM, OFFSETS, LAYERS } from './neural-bus.js';
 
 const HIDDEN_DIM = 64;
-const WEIGHTS_PATH = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/private/mlp-weights.json';
+const APP_SUPPORT = process.env.ONEIRO_APP_SUPPORT ||
+  join(homedir(), 'Library/Application Support/Oneiro');
+const WEIGHTS_PATH = process.env.OCA_MLP_WEIGHTS_PATH ||
+  join(APP_SUPPORT, 'oca', 'private', 'mlp-weights.json');
 const LEARNING_RATE = 0.001;
 const GRADIENT_CLIP = 1.0;
 const SCHEMA_VERSION = 2; // v2 = residual targets + per-layer weights

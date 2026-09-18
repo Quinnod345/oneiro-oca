@@ -104,8 +104,8 @@ async function updateMode() {
 async function updateCRM() {
     const data = await f('/oca/crm');
     if (!data) return;
-    const score = data.composite ?? 0;
-    document.getElementById('crmScoreLarge').textContent = `${Math.round(score * 100)}`;
+    const score = data.composite;
+    document.getElementById('crmScoreLarge').textContent = Number.isFinite(score) ? `${Math.round(score * 100)}` : '—';
     document.getElementById('crmInterpretation').textContent = data.interpretation || '';
 
     // Components + MLP prediction overlay
@@ -114,8 +114,9 @@ async function updateCRM() {
     if (data.components) {
         container.innerHTML = '';
         for (const [name, comp] of Object.entries(data.components)) {
-            const s = comp.score ?? 0;
-            const color = s > 0.7 ? 'var(--seafoam)' : s > 0.4 ? 'var(--gold)' : 'var(--ember)';
+            const measured = Number.isFinite(comp.score);
+            const s = measured ? comp.score : 0;
+            const color = !measured ? 'var(--dim)' : s > 0.7 ? 'var(--seafoam)' : s > 0.4 ? 'var(--gold)' : 'var(--ember)';
             const mlpErr = mlpErrors[name];
             const surpriseTag = mlpErr?.surprised ? ' <span style="color:var(--ember);font-size:8px">SURPRISE</span>' : '';
             const mlpPred = mlpErr?.predicted != null ? `<span style="font-size:8px;color:var(--dim);margin-left:4px">mlp:${Math.round(mlpErr.predicted*100)}</span>` : '';
@@ -123,14 +124,16 @@ async function updateCRM() {
                 <div class="comp-row">
                     <span class="comp-name">${name}${surpriseTag}</span>
                     <div class="comp-bar"><div class="comp-fill" style="width:${s*100}%;background:${color}"></div></div>
-                    <span class="comp-val" style="color:${color}">${Math.round(s*100)}${mlpPred}</span>
+                    <span class="comp-val" style="color:${color}">${measured ? Math.round(s*100) : '—'}${mlpPred}</span>
                 </div>`;
         }
     }
 
     // CRM MLP dedicated panel in left column
     const crmMlpPanel = document.getElementById('crmMlpPanel');
-    if (crmMlpPanel && data.mlp_status) {
+    if (crmMlpPanel && data.mlp_status?.available === false) {
+        crmMlpPanel.textContent = 'Previous model used activity scores. No comparable behavioral training data yet.';
+    } else if (crmMlpPanel && data.mlp_status) {
         const ms = data.mlp_status;
         const perComp = ms.per_component_running_error || {};
         let html = `<div class="mlp-panel-title">CRM MLP (18d &rarr; 12h &rarr; 9)</div>`;

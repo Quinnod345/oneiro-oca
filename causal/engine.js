@@ -48,7 +48,7 @@ export async function startExperiment(id) {
   const { rows: [row] } = await pool.query(
     `UPDATE causal_experiments
      SET status = 'running', started_at = COALESCE(started_at, NOW()), updated_at = NOW()
-     WHERE id = $1
+     WHERE id = $1 AND status = 'designed'
      RETURNING *`,
     [id]
   );
@@ -64,6 +64,13 @@ export async function completeExperiment(id, {
   predictionLedgerId = null,
   metadata = {},
 } = {}) {
+  if (!['completed', 'failed', 'abandoned'].includes(status)) throw new Error('invalid experiment terminal status');
+  if (typeof actualOutcome !== 'string' || !actualOutcome.trim()) throw new Error('an observed outcome or explicit failure/abandonment reason is required');
+  if (causalSupport !== null) throw new Error('causal support requires a verified comparison; a supplied score alone is not evidence');
+  if (status === 'completed' && (!Array.isArray(metadata?.outcomeEvidence) || !metadata.outcomeEvidence.length
+    || !metadata.outcomeEvidence.every(e => ['id', 'source', 'observation'].every(k => typeof e?.[k] === 'string' && e[k].trim())))) {
+    throw new Error('completion requires outcomeEvidence with id, source, and observation');
+  }
   const { rows: [row] } = await pool.query(
     `UPDATE causal_experiments
      SET status = $2,
@@ -75,14 +82,15 @@ export async function completeExperiment(id, {
          model_update = $6,
          prediction_ledger_id = COALESCE($7, prediction_ledger_id),
          metadata = COALESCE(causal_experiments.metadata, '{}'::jsonb) || $8::jsonb
-     WHERE id = $1
+     WHERE id = $1 AND status IN ('designed', 'running')
+       AND ($2 <> 'completed' OR (status = 'running' AND started_at IS NOT NULL))
      RETURNING *`,
     [
       id,
       status,
       actualOutcome || null,
-      Number.isFinite(Number(outcomeValence)) ? Number(outcomeValence) : null,
-      Number.isFinite(Number(causalSupport)) ? Number(causalSupport) : null,
+      status === 'completed' && Number.isFinite(outcomeValence) ? Math.max(-1, Math.min(1, outcomeValence)) : null,
+      null,
       modelUpdate || null,
       predictionLedgerId,
       JSON.stringify(metadata || {}),

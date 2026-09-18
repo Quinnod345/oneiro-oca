@@ -11,7 +11,7 @@ function cleanStatus(status, success) {
   if (status) return status;
   if (success === false) return 'failed';
   if (success === true) return 'completed';
-  return 'completed';
+  return 'unverifiable';
 }
 
 export async function startPrediction({
@@ -42,7 +42,7 @@ export async function startPrediction({
         JSON.stringify(safeJson(actionDetails)),
         expectedOutcome,
         expectedStructured ? JSON.stringify(expectedStructured) : null,
-        Math.max(0, Math.min(1, Number(confidence) || 0.5)),
+        Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5,
         hypothesisId,
         simulationId,
         procedureId,
@@ -99,7 +99,7 @@ export async function completePrediction(
         evaluationMode,
         evaluationReason,
         verifiability,
-        Number.isFinite(Number(predictionError)) ? Number(predictionError) : null,
+        Number.isFinite(predictionError) ? predictionError : null,
         JSON.stringify(mergedMeta),
       ]
     );

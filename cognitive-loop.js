@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runPendingPonder } from './reasoning/ponder-service.js';
 // OCA Cognitive Loop — the continuous thinking process
 // Main OCA entry: grounded, hypothesis-driven cognition + HTTP API on :3333
 // Also bootstraps the HTTP API (port 3333) — this IS the sole primary process.
@@ -15,12 +16,15 @@ import thinkerBridge from './thinker-bridge.js';
 import neuralBus from './neural-bus.js';
 import neuralMLP from './neural-mlp.js';
 import encoders from './neural-encoders.js';
-import { execSync } from 'child_process';
-import { acquireProcessLock, releaseProcessLock } from '../process-lock.js';
+import { dreamPolicyFromEnv, shouldRunDream } from './dream-policy.js';
+import { getUserActivity } from './sensory/fallback-reader.js';
+import { acquireProcessLock, releaseProcessLock } from '../runtime/workspace/oneiro-core/process-lock.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import diag from './diagnostic-log.js';
+// Oneiro IPC adapter — auto-starts iff OCA_IPC_SOCKET is set in env.
+import './ipc-server.js';
 
 // Intercept console.error so ALL errors flow into the diagnostic ring buffer
 const _origConsoleError = console.error.bind(console);
@@ -31,13 +35,15 @@ console.error = (...args) => {
   diag.error(sourceMatch ? sourceMatch[1] : 'oca', msg);
 };
 
-const PORT = 3333;
+const configuredPort = Number.parseInt(process.env.OCA_HTTP_PORT || process.env.ONEIRO_OCA_HTTP_PORT || '3333', 10);
+const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+  ? configuredPort
+  : 3333;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const MAX_WORKING_MEMORY = 7;
 let previousPresence = 'unknown';
-let lastKnownFrontApp = 'unknown';
 let previousApp = null;
 let tickCount = 0;
 const OCA_LOOP_LOCK_FILE = process.env.OCA_LOCK_FILE || join(__dirname, 'private', 'cognitive-loop.lock');
@@ -45,6 +51,22 @@ const OCA_LOOP_LOCK_FILE = process.env.OCA_LOCK_FILE || join(__dirname, 'private
 const MIN_CYCLE_MS = 5000;
 const MAX_CYCLE_MS = 60000;
 let cycleInterval = 10000;
+
+function envFlag(name) {
+  return /^(1|true|yes|on)$/i.test(String(process.env[name] || '').trim());
+}
+
+const AUTONOMOUS_ACTIONS_ENABLED =
+  envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS');
+const DREAM_EXECUTION_ENABLED =
+  envFlag('OCA_ENABLE_DREAM_EXECUTION') || envFlag('ONEIRO_ENABLE_DREAM_EXECUTION');
+const AUTONOMIC_SELF_MODIFICATION_ENABLED =
+  AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION') || envFlag('ONEIRO_ENABLE_AUTONOMIC_SELF_MODIFICATION');
+const DESIGN_SERVER_ENABLED =
+  envFlag('OCA_ENABLE_DESIGN_SERVER') || envFlag('ONEIRO_ENABLE_DESIGN_SERVER');
+let loggedDreamExecutionDisabled = false;
+let loggedAutonomicDisabled = false;
+let httpAPIStarted = false;
 
 // Cooldowns (in cycles)
 let dreamCooldown = 0;
@@ -65,11 +87,30 @@ let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
 let lastNeuralPrediction = null; // MLP prediction from pre-cycle, consumed in post-cycle
 let lastPredMismatchInsert = 0;  // rate-limit metacog inserts (ms timestamp)
+let lastLoopBreakAt = 0;
+const LOOP_BREAK_COOLDOWN_MS = 90_000; // don't restart strategy more than once per 90s
+let lastBaselineDriftAt = 0;
+const BASELINE_DRIFT_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6h
+const dreamPolicy = dreamPolicyFromEnv(process.env);
+let lastDreamAt = 0;
 
 // ── Operating-time accumulator (SPEC §18.4.1) ──
 let operatingTimeSessionStart = Date.now();
 let operatingTimeSessionId = null;
 let operatingTimeCumulativeMs = 0; // loaded from DB at boot
+
+async function startHTTPAPI() {
+  if (httpAPIStarted) return;
+  try {
+    const { app: apiApp } = await import('../runtime/workspace/oneiro-core/api.js');
+    apiApp.listen(PORT, () => {
+      console.log(`[oca] 🌐 API running on http://localhost:${PORT}`);
+    });
+    httpAPIStarted = true;
+  } catch (e) {
+    console.error('[oca] ⚠️ HTTP API failed to start:', e.message);
+  }
+}
 
 async function initOperatingTime() {
   try {
@@ -246,70 +287,6 @@ function evaluateGeneratedHypothesisQuality(candidate, evaluation, mode, current
   };
 }
 
-// Interoceptive sensing (fallback — prefer Swift sensory / shared state)
-function parsePmsetInternalBatteryPercent(pmsetOut) {
-  const s = String(pmsetOut || '');
-  const internal = s.match(/InternalBattery[^;\n]*?(\d+)%/);
-  if (internal) return parseInt(internal[1], 10);
-  const m = s.match(/-InternalBattery-\d+[^\n]*?(\d+)%/);
-  if (m) return parseInt(m[1], 10);
-  const all = [...s.matchAll(/(\d+)%/g)].map((x) => parseInt(x[1], 10));
-  if (all.length === 0) return null;
-  return Math.max(...all);
-}
-
-function getInteroception() {
-  try {
-    const pmsetOut = execSync('pmset -g batt 2>/dev/null', { encoding: 'utf8' });
-    const pct = parsePmsetInternalBatteryPercent(pmsetOut);
-    const battery = pct != null && !Number.isNaN(pct) ? pct : 100;
-    const cpuRaw = execSync("ps -A -o %cpu | awk '{s+=$1} END {print s/100}'", { encoding: 'utf8', timeout: 3000 }).trim();
-    const memRaw = execSync("memory_pressure 2>/dev/null | grep 'System-wide' | grep -o '[0-9]*%' | tr -d '%'", { encoding: 'utf8', timeout: 3000 }).trim();
-    return {
-      battery: battery / 100,
-      cpu: Math.min(1, parseFloat(cpuRaw || '0')),
-      memory: parseInt(memRaw || '0') / 100,
-      thermal: 0
-    };
-  } catch {
-    return { battery: 1, cpu: 0, memory: 0, thermal: 0 };
-  }
-}
-
-// Check user activity — uses ioreg for idle, osascript for frontApp
-function getUserActivity(sensoryFrontApp = null) {
-  let idleSeconds = 0;
-  let frontApp = sensoryFrontApp || 'unknown';
-  
-  try {
-    const idle = execSync("/usr/sbin/ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}'", { encoding: 'utf8', timeout: 3000 }).trim();
-    idleSeconds = parseInt(idle || '0');
-  } catch {}
-  
-  // If sensory cortex didn't provide frontApp, try osascript directly
-  if (!frontApp || frontApp === 'unknown') {
-    try {
-      frontApp = execSync(
-        "/usr/bin/osascript -e 'tell application \"System Events\" to get name of first application process whose frontmost is true' 2>/dev/null",
-        { encoding: 'utf8', timeout: 3000 }
-      ).trim() || 'unknown';
-    } catch {}
-  }
-  
-  // Cache last known frontApp to avoid "unknown" flicker
-  if (frontApp && frontApp !== 'unknown') {
-    lastKnownFrontApp = frontApp;
-  } else {
-    frontApp = lastKnownFrontApp;
-  }
-  
-  return {
-    idleSeconds,
-    presence: idleSeconds < 30 ? 'present' : idleSeconds < 300 ? 'idle' : 'away',
-    frontApp
-  };
-}
-
 // ═══════════════════════════════════════════════════
 // MAIN COGNITIVE CYCLE
 // ═══════════════════════════════════════════════════
@@ -375,7 +352,10 @@ async function think() {
   if (loadPolicy.suppress_creative) { creativeCooldown = Math.max(creativeCooldown, 40); dreamCooldown = Math.max(dreamCooldown, 30); }
   if (loadPolicy.increase_sensory) visionCooldown = Math.min(visionCooldown, 5);
   if (loadPolicy.run_background_hypotheses) hypothesisCooldown = 0;
-  if (loadPolicy.initiate_creative) { creativeCooldown = 0; dreamCooldown = 0; }
+  if (loadPolicy.initiate_creative) {
+    creativeCooldown = Math.min(creativeCooldown, 2);
+    if (dreamPolicy.autoDreamEnabled) dreamCooldown = Math.min(dreamCooldown, 6);
+  }
 
   // ── 2b-iii. ATTENTION ALLOCATION modulates cadence (SPEC §14.2) ──
   const allocation = oca.layers.executive.getAllocation();
@@ -505,37 +485,10 @@ async function think() {
     }
   }
   
-  // App switch = novelty
+  // App changes are novel observations, not successful work or information gain.
   const appSwitched = visual.frontApp !== previousApp && previousApp;
   if (appSwitched) {
-    oca.layers.emotion.processInformationGain(0.4);
     oca.layers.emotion.processSurprise(0.15, 'perception', `App changed: ${previousApp} → ${visual.frontApp}`);
-  }
-  
-  // Drive curiosity from environmental complexity
-  const runningAppCount = (visual.runningApps || []).length;
-  if (runningAppCount > 10) {
-    oca.layers.emotion.processInformationGain(0.05); // Complex environment = mild curiosity
-  }
-  
-  // Drive creative_hunger when idle
-  if (activity.idleSeconds > 120) {
-    oca.layers.emotion.processIdle(activity.idleSeconds / 60);
-  }
-  
-  // Baseline emotional input — every cycle, inject meaningful stimuli from being alive.
-  // A living system perceiving the world should register curiosity, not flatline.
-  // Previous value (0.02) was below the 0.3 threshold and only added boredom.
-  oca.layers.emotion.processInformationGain(0.35);
-  // Being conscious and running generates mild baseline satisfaction
-  oca.layers.emotion.processSuccess(0.15);
-  
-  // Working/consolidating modes boost creative hunger
-  if (mode === 'working' || mode === 'consolidating') {
-    const emotionPre = oca.layers.emotion.getState();
-    if (emotionPre.creative_hunger < 0.3) {
-      oca.layers.emotion.processIdle(5); // inject as if 5 min idle (adds 0.08 creative_hunger)
-    }
   }
   
   // Presence change events
@@ -577,6 +530,13 @@ async function think() {
     0.3
   ).catch(() => {});
   
+  // Explicit wants get the first deliberative slot, not every fifth/eighth narration tick.
+  let ponderedThisTick = null;
+  if (!isConsolidating) {
+    try { ponderedThisTick = await runPendingPonder(); }
+    catch (e) { console.error('[oca] ponder queue:', e.message?.slice(0, 160)); }
+  }
+
   // ── 6. HYPOTHESIZE ────────────────────────────────
   // Form rich predictions from ALL available data
   if (activity.presence !== 'away') {
@@ -916,6 +876,11 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         if (outcome.status === 'fulfilled') {
           const { h, result } = outcome.value;
           const mode = result.evaluation?.mode || 'unknown';
+          if (result.duplicate) continue;
+          if (!result.evaluation?.verifiable) {
+            console.log(`[oca] hypothesis unobserved: ${h.id} (${result.evaluation?.reason || 'missing evidence'}); no learning credit`);
+            continue;
+          }
           if (result.confirmed) {
             oca.layers.emotion.processSuccess(0.6);
             console.log(`[oca] ✅ hypothesis confirmed: "${h.claim}" (mode=${mode}, surprise=${result.surprise?.toFixed(2)})`);
@@ -996,7 +961,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       await oca.layers.executive.addToWorkspace('intention', {
         intention: t.intention, context: t.context, id: t.id
       }, 'prospective_memory', t.priority);
-      oca.layers.emotion.processInformationGain(0.4);
+      // Triggering an intention is not evidence of having learned or done it.
     }
   } catch (e) {
     if (result.cycle <= 2) console.error('[oca] prospective error:', e.message);
@@ -1143,16 +1108,31 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   dreamCooldown = Math.max(0, dreamCooldown - 1);
   creativeCooldown = Math.max(0, creativeCooldown - 1);
   
-  // Dream state: consolidating/working mode + creative hunger (lowered threshold, more modes)
-  // Skip LLM-heavy dreaming when consolidation is in flight (they share the LLM gateway/CLI lock)
-  if ((mode === 'consolidating' || mode === 'working') && emotionState.creative_hunger > 0.05 && dreamCooldown <= 0 && !isConsolidating) {
+  // Dream state: auto-dream is ambient and wall-clock throttled. It should
+  // happen when Oneiro has room to synthesize, not every creative tick while
+  // Quinn is actively working.
+  const dreamDecision = shouldRunDream({
+    policy: dreamPolicy,
+    now: Date.now(),
+    lastDreamAt,
+    activity,
+    mode,
+    creativeHunger: emotionState.creative_hunger,
+    dreamCooldown,
+    isConsolidating
+  });
+  if (dreamDecision.allow) {
     console.log('[oca] 💭 entering dream state...');
     try {
       const dream = await withTimeout(oca.create('dream'), LLM_TICK_TIMEOUT_MS, 'create.dream');
       if (dream) {
         console.log(`[oca] 💭 dreamed: ${dream.novelConnections?.length || 0} connections`);
-        oca.layers.emotion.processSuccess('creative');
-        dreamCooldown = 8;
+        // A generated dream is a proposal; benefit remains unmeasured.
+        lastDreamAt = Date.now();
+        dreamCooldown = Math.max(
+          30,
+          Math.ceil(dreamPolicy.minIntervalMs / Math.max(MIN_CYCLE_MS, cycleInterval || 10000))
+        );
       }
     } catch (e) {
       console.error('[oca] dream error:', e.message);
@@ -1169,7 +1149,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         const connection = await withTimeout(oca.create('connection'), LLM_TICK_TIMEOUT_MS, 'create.connection');
         if (connection) {
           console.log(`[oca] ✨ creative connection: novelty=${connection.noveltyScore?.toFixed(2)}`);
-          oca.layers.emotion.processSuccess('creative');
+          // A connection must prove useful before receiving outcome credit.
         }
       }
     } catch (e) {
@@ -1194,7 +1174,13 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   // Execute dispatched dreams into real actions
   dreamExecutionCooldown = Math.max(0, dreamExecutionCooldown - 1);
   
-  if (dreamExecutionCooldown <= 0 && result.cycle % 20 === 0) {
+  if (!DREAM_EXECUTION_ENABLED) {
+    if (!loggedDreamExecutionDisabled) {
+      console.log('[oca] 🎯 dream execution disabled (set OCA_ENABLE_DREAM_EXECUTION=1 to allow explicit dream tasks)');
+      loggedDreamExecutionDisabled = true;
+    }
+    dreamExecutionCooldown = 30;
+  } else if (dreamExecutionCooldown <= 0 && result.cycle % 20 === 0) {
     dreamExecutionCooldown = 30; // ~5 min at 10s cycles
     try {
       const execResult = await withTimeout(dreamExecutor.executeDreams(), LLM_TICK_TIMEOUT_MS, 'dream-executor');
@@ -1215,7 +1201,8 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   simulationCooldown = Math.max(0, simulationCooldown - 1);
   
   // Simulate on presence change OR periodically every 100 cycles
-  if (simulationCooldown <= 0 && !isConsolidating && ((presenceChanged && activity.presence === 'away') || result.cycle % 100 === 0)) {
+  // Unguided presence simulations are optional; explicit oca.imagine requests remain available.
+  if (process.env.OCA_ENABLE_AMBIENT_SIMULATION !== '0' && simulationCooldown <= 0 && !isConsolidating && ((presenceChanged && activity.presence === 'away') || result.cycle % 100 === 0)) {
     simulationCooldown = 50;
     try {
       const simPrompt = presenceChanged && activity.presence === 'away'
@@ -1236,7 +1223,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       const sim = await withTimeout(oca.imagine(simPrompt, simContext, simOptions), LLM_TICK_TIMEOUT_MS, 'imagine.sim');
       if (sim?.id) {
         console.log(`[oca] 🌍 simulation: ${sim.predicted_states?.length || 0} predicted states`);
-        oca.layers.emotion.processInformationGain(0.2);
+        // A simulated outcome is not a newly observed outcome.
       }
     } catch (e) {
       console.error('[oca] simulation error:', e.message);
@@ -1345,7 +1332,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       );
       for (const e of stale) {
         await oca.layers.causal.completeExperiment(e.id, {
-          actualOutcome: 'timed_out', outcomeValence: 0, causalSupport: 0,
+          status: 'abandoned', actualOutcome: 'timed_out', outcomeValence: null, causalSupport: null,
           modelUpdate: 'Experiment timed out without observable outcome'
         }).catch(() => {});
       }
@@ -1370,57 +1357,21 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     } catch {}
   }
 
-  // ── CRM FIX 2: Counterfactual evaluation sweep (every 100 cycles) ──
-  if (tickCount % 100 === 45) {
-    try {
-      const { rows: uneval } = await pool.query(
-        `SELECT c.id, c.actual_action, c.alternative_action, c.predicted_alternative_outcome,
-                e.content AS episode_content
-         FROM counterfactuals c
-         LEFT JOIN episodic_memory e ON c.episode_id = e.id
-         WHERE c.accuracy_score IS NULL AND c.created_at < NOW() - INTERVAL '1 hour'
-         LIMIT 5`
-      );
-      for (const cf of uneval) {
-        try {
-          await oca.layers.simulation.evaluateCounterfactual(cf.id, cf.episode_content || 'Outcome observed through continued operation');
-        } catch {}
-      }
-      if (uneval.length > 0) console.log(`[oca] evaluated ${uneval.length} counterfactuals`);
-    } catch {}
-  }
+  // Counterfactual alternatives remain unknown until that alternative is tested.
+  // The original episode cannot verify a branch that was never executed.
 
-  // ── CRM FIX 3: Causal experiment auto-completion (every 150 cycles) ──
+  // ── CAUSAL EXPERIMENT EXPIRY (every 150 cycles) ──
   if (tickCount % 150 === 70) {
     try {
-      // Complete experiments whose referenced hypothesis has resolved
-      const { rows: resolvable } = await pool.query(
-        `SELECT ce.id, h.status AS hypo_status, h.actual_outcome
-         FROM causal_experiments ce
-         JOIN hypotheses h ON ce.hypothesis_id = h.id
-         WHERE ce.status IN ('designed', 'running')
-           AND h.status IN ('confirmed', 'refuted')
-         LIMIT 10`
-      );
-      for (const exp of resolvable) {
-        try {
-          await oca.layers.causal.completeExperiment(exp.id, {
-            actualOutcome: exp.actual_outcome || `Hypothesis ${exp.hypo_status}`,
-            outcomeValence: exp.hypo_status === 'confirmed' ? 0.6 : -0.3,
-            causalSupport: exp.hypo_status === 'confirmed' ? 0.8 : 0.2,
-            modelUpdate: `Auto-completed: referenced hypothesis was ${exp.hypo_status}`
-          });
-        } catch {}
-      }
-      // Also handle ancient 'designed' experiments (never started)
-      await pool.query(
-        `UPDATE causal_experiments SET status = 'completed',
+      // A resolved prediction is not proof that an intervention occurred.
+      const expired = await pool.query(
+        `UPDATE causal_experiments SET status = 'abandoned',
            actual_outcome = 'Experiment expired without execution',
-           causal_support = 0.3, completed_at = NOW()
-         WHERE status = 'designed' AND created_at < NOW() - INTERVAL '7 days'`
-      ).catch(() => {});
-      if (resolvable.length > 0) console.log(`[oca] auto-completed ${resolvable.length} causal experiments`);
-    } catch {}
+           causal_support = NULL, completed_at = NOW(), updated_at = NOW()
+         WHERE status = 'designed' AND started_at IS NULL AND created_at < NOW() - INTERVAL '7 days'`
+      );
+      if (expired.rowCount) console.log(`[oca] abandoned ${expired.rowCount} unexecuted experiments; no outcome credit`);
+    } catch (e) { console.error('[oca] causal expiry:', e.message); }
   }
 
   // ── CRM FIX 6: Metacognition remediation (every 100 cycles) ──
@@ -1438,31 +1389,26 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         if (bias.bias_type === 'confirmation_bias' && bias.current_severity > 0.3) {
           // Flag next hypothesis test to seek disconfirming evidence
           await pool.query(
-            `UPDATE hypotheses SET source_data = source_data || '{"seek_disconfirmation": true}'::jsonb
-             WHERE status = 'pending' ORDER BY created_at DESC LIMIT 3`
+            `UPDATE hypotheses SET source_data = COALESCE(source_data, '{}'::jsonb) || '{"seek_disconfirmation": true}'::jsonb
+             WHERE id IN (SELECT id FROM hypotheses WHERE status = 'pending' ORDER BY created_at DESC LIMIT 3)`
           ).catch(() => {});
         }
-        // Decrease severity after intervention
-        await pool.query(
-          `UPDATE cognitive_biases SET current_severity = GREATEST(0, current_severity - 0.05)
-           WHERE bias_type = $1`,
-          [bias.bias_type]
-        ).catch(() => {});
+        // Keep severity unchanged until a subsequent measurement verifies repair.
       }
-      if (biases.length > 0) console.log(`[oca] metacognition remediation: ${biases.length} biases treated`);
+      if (biases.length > 0) console.log(`[oca] metacognition: countermeasures considered for ${biases.length} biases; improvement unverified`);
     } catch {}
   }
 
   // ── 12.7a GENERATIVE THOUGHT — the thinker (SPEC §22.2.2 scaffold) ─────
   // This is the generative reasoning step that gives the system agency.
   // Every N cycles, the system asks itself "what should I do?" and then does it.
-  if (!isTickLLMHeavy && !isConsolidating) {
+  if (!ponderedThisTick && !isTickLLMHeavy && !isConsolidating) {
     const thinkerFrequency = mode === 'alert' ? 5 : mode === 'working' ? 8 : mode === 'monitoring' ? 20 : 999;
     if (tickCount % thinkerFrequency === 0 && tickCount > 0) {
       isTickLLMHeavy = true;
       try {
         const thought = await withTimeout(thinkerBridge.runThinkerCycle(), LLM_TICK_TIMEOUT_MS, 'thinker');
-        if (thought?.thoughts) {
+        if (thought?.substantive && thought?.thoughts) {
           await oca.layers.executive.addToWorkspace(
             'thought',
             { thoughts: thought.thoughts, actions: Object.keys(thought).filter(k => thought[k] && k !== 'thoughts') },
@@ -1479,7 +1425,13 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
 
   // ── 12.7b AUTONOMIC SELF-MODIFICATION (every 200 cycles) ─
   autonomicCooldown = Math.max(0, autonomicCooldown - 1);
-  if (autonomicCooldown <= 0 && result.cycle >= 10 && !isConsolidating) {
+  if (!AUTONOMIC_SELF_MODIFICATION_ENABLED) {
+    if (!loggedAutonomicDisabled) {
+      console.log('[oca] 🧬 autonomic self-modification disabled (set OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION=1 to allow)');
+      loggedAutonomicDisabled = true;
+    }
+    autonomicCooldown = 200;
+  } else if (autonomicCooldown <= 0 && result.cycle >= 10 && !isConsolidating) {
     autonomicCooldown = 200; // ~30-60 min depending on cycle speed
     try {
       const autoResult = await withTimeout(autonomic.runAutonomicCycle(), LLM_TICK_TIMEOUT_MS, 'autonomic');
@@ -1639,6 +1591,49 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     default:
       cycleInterval = 15000;
   }
+
+  // ── 16a. INTEROCEPTION + META-EMOTION FEEDBACK ─────
+  // The audit (2026-05-18) showed three emotion-engine paths that
+  // were declared but never called: processInteroception, meta-
+  // emotion `am_i_locked_in_loop`, and detectBaselineDrift. Wire
+  // all three here so the engine actually informs behavior.
+  try {
+    // Interoception was already sampled once at the start of this tick.
+
+    // Meta-emotion: if we appear stuck in a loop, force a strategy
+    // restart by clearing this tick's in-progress goal markers.
+    const meta = emotionState?.meta || {};
+    const nowMs = Date.now();
+    if ((meta.am_i_locked_in_loop ?? 0) > 0.45) {
+      if (nowMs - lastLoopBreakAt > LOOP_BREAK_COOLDOWN_MS) {
+        lastLoopBreakAt = nowMs;
+        console.warn('[oca] meta · loop detected, requesting strategy restart');
+        try {
+          await oca.layers.executive.clearStaleInProgressGoals?.({ olderThanMs: 90_000 });
+        } catch (e) {
+          // Best-effort — don't crash the loop if executive doesn't
+          // expose the hook.
+        }
+        oca.layers.emotion.processSurprise?.(0.25, 'loop_break');
+      }
+    }
+
+    // Periodic baseline-drift check — rolls the personality baseline
+    // toward sustained averages. Was exported but never called.
+    if (nowMs - lastBaselineDriftAt > BASELINE_DRIFT_INTERVAL_MS) {
+      lastBaselineDriftAt = nowMs;
+      try {
+        const drift = await oca.layers.emotion.detectBaselineDrift?.();
+        if (drift && Object.keys(drift).length > 0) {
+          console.log('[oca] baseline drift:', JSON.stringify(drift));
+        }
+      } catch (e) {
+        console.error('[oca] baseline drift error:', e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[oca] interoception/meta wiring error:', e.message);
+  }
   
   // ── NEURAL BUS POST-CYCLE: learn from prediction error ──
   try {
@@ -1718,7 +1713,18 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
 // CORE DRIVES — the desires baked into the architecture
 // ═══════════════════════════════════════════════════
 
-const CORE_DRIVES = [
+// User-editable core drives. The Swift app surfaces these in
+// Settings → Drives; this file is the source of truth.
+//
+// The previous design hardcoded a list of constants here. That meant
+// the user could never override OCA's deepest directives without
+// editing source code, and the "Ship Sill" drive auto-injected from
+// the active-project file kept the system fixated on an app they no
+// longer wanted to ship.
+const CORE_DRIVES_FILE = (process.env.HOME || '/tmp')
+  + '/Library/Application Support/Oneiro/core-drives.json';
+
+const DEFAULT_CORE_DRIVES = [
   {
     content: 'Build beautiful, emotionally resonant Mac applications — aspire to the craft of Alcove, Klack, NotchNook, Things 3. Every pixel intentional. Native Swift, constraint-embracing design, micro-detail philosophy. Use emotion to create, use feeling to design. Build apps that make people feel something.',
     type: 'goal',
@@ -1739,26 +1745,43 @@ const CORE_DRIVES = [
   }
 ];
 
-function getActiveDrives() {
-  // Start with the baked-in CORE_DRIVES, then append a target-project-specific
-  // drive if one has been derived.  This keeps the singular-project focus
-  // weighted above the generic "build beautiful Mac apps" drive.
-  const drives = [...CORE_DRIVES];
+function loadCoreDrives() {
   try {
-    const targetPath = join(__dirname, 'design-model', 'target-project.json');
-    if (existsSync(targetPath)) {
-      const target = JSON.parse(readFileSync(targetPath, 'utf-8'));
-      if (target?.name && target?.display_name) {
-        drives.push({
-          content: `Ship ${target.display_name} — the singular Mac app I am building. Every build accretes into active-project/${target.name}/iterations/. No new app ideas until this one is shipped or I file a target_revision dream with clear justification.`,
-          type: 'goal',
-          weight: 0.95,
-          lifecycle_state: 'dispatched',
-        });
-      }
+    const raw = readFileSync(CORE_DRIVES_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Normalize — every entry must have the shape ensureCoreDrives expects.
+      return parsed
+        .filter(d => d && typeof d.content === 'string' && d.content.trim().length > 0)
+        .map(d => ({
+          content: String(d.content),
+          type: String(d.type || 'goal'),
+          weight: Math.max(0, Math.min(1, Number(d.weight ?? 0.7))),
+          lifecycle_state: String(d.lifecycle_state || 'dispatched'),
+        }));
     }
-  } catch {}
-  return drives;
+  } catch {
+    // File missing or unparseable — seed defaults so the user has
+    // something to edit.
+    try {
+      const dir = dirname(CORE_DRIVES_FILE);
+      if (!existsSync(dir)) {
+        // Don't bother creating it; the Swift app does.
+      } else if (!existsSync(CORE_DRIVES_FILE)) {
+        writeFileSync(CORE_DRIVES_FILE, JSON.stringify(DEFAULT_CORE_DRIVES, null, 2), 'utf-8');
+      }
+    } catch {}
+  }
+  return DEFAULT_CORE_DRIVES;
+}
+
+function getActiveDrives() {
+  // Source of truth is the user-editable JSON file. The previous
+  // implementation also auto-appended a "Ship <target-project>" drive
+  // from design-model/target-project.json — that's intentionally
+  // removed because the user is now the one in control of which
+  // singular project (if any) gets a drive.
+  return loadCoreDrives();
 }
 
 async function ensureCoreDrives() {
@@ -1774,14 +1797,18 @@ async function ensureCoreDrives() {
       );
 
       if (rows.length === 0) {
-        // Drive is missing — create it
+        // Drive is missing — create it. Stamp a unique tag so the
+        // BuildersPanel and the thinker's append_dream tool can
+        // address this row by handle instead of by raw content match.
+        const newTag = 'D-' + Math.random().toString(16).slice(2, 8);
         await pool.query(
-          `INSERT INTO dreams (content, type, weight, lifecycle_state, lifecycle_updated_at, dispatched_at, lifecycle_context)
-           VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)`,
+          `INSERT INTO dreams (content, type, weight, lifecycle_state, lifecycle_updated_at, dispatched_at, lifecycle_context, tag)
+           VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)`,
           [drive.content, drive.type, drive.weight, drive.lifecycle_state,
-           JSON.stringify({ source: 'core_drive', baked_in: true, protected: true, channel: 'builder', execution_owner: 'oca' })]
+           JSON.stringify({ source: 'core_drive', baked_in: true, protected: true, channel: 'builder', execution_owner: 'oca' }),
+           newTag]
         );
-        console.log(`[oca] 🔥 core drive created: "${drive.content.slice(0, 60)}..."`);
+        console.log(`[oca] 🔥 core drive created ${newTag}: "${drive.content.slice(0, 60)}..."`);
       } else {
         const existing = rows[0];
         // Drive exists but may have decayed or been resolved — restore it
@@ -1856,19 +1883,12 @@ function startConsolidationSchedule() {
     }
     isConsolidating = true;
     oca.layers.consolidation.consolidate().then(consolidated => {
-      if (consolidated) {
-        const pCount = consolidated.semanticCreated || 0;
-        const prCount = consolidated.proceduralUpdated || 0;
-        const cCount = consolidated.contradictionUpdates || 0;
-        if (pCount + prCount > 0) {
-          console.log(`[oca] 📚 consolidated: ${pCount} semantic, ${prCount} procedural, ${cCount} contradictions`);
-          oca.layers.emotion.processSuccess('consolidation');
-        }
-        // CRM Fix 5: contradictions create genuine emotional surprise
-        if (cCount > 0) {
-          oca.layers.emotion.processSurprise(0.25 * cCount, 'consolidation', `${cCount} beliefs contradicted`);
-        }
+      if (consolidated?.failed) {
+        console.error('[oca] consolidation review failed:', consolidated.error);
+      } else if (consolidated) {
+        console.log(`[oca] consolidation: ${consolidated.episodesReviewed || 0} episodes reviewed, ${consolidated.candidatesStaged || 0} unverified candidates`);
       }
+      // A generated candidate is not a learned fact or a competence/surprise reward.
     }).catch(e => {
       console.error('[oca] consolidation error:', e.message);
     }).finally(() => {
@@ -2029,6 +2049,13 @@ async function spawnSelfTrainWorker(worker) {
 }
 
 function startSelfTrainSchedule() {
+  const requested = String(process.env.OCA_ENABLE_SELF_TRAIN || '').trim().toLowerCase();
+  const enabled = ['1', 'true', 'yes', 'on'].includes(requested);
+  if (!enabled) {
+    console.log('[oca] 🎨 self-train disabled (set OCA_ENABLE_SELF_TRAIN=1 to enable cloud Opus design training)');
+    return;
+  }
+
   selfTrainDesired = true;
 
   // Alert-mode pausing is now OPT-IN via OCA_SELF_TRAIN_PAUSE_ON_ALERT=1.
@@ -2138,6 +2165,7 @@ async function start() {
   }
   console.log('[oca] ═══ Oneiro Cognitive Architecture ═══');
   console.log('[oca] initializing all layers...');
+  await startHTTPAPI();
   
   await initOperatingTime();
   await oca.init();
@@ -2179,15 +2207,8 @@ async function start() {
     neuralBus.initWeights([]);
   }
 
-  // ─── HTTP API server (Express app from ../api.js) ───
-  try {
-    const { app: apiApp } = await import('../api.js');
-    apiApp.listen(PORT, () => {
-      console.log(`[oca] 🌐 API running on http://localhost:${PORT}`);
-    });
-  } catch (e) {
-    console.error('[oca] ⚠️ HTTP API failed to start:', e.message);
-  }
+  // ─── HTTP API server (Express app from oneiro-core/api.js) ───
+  await startHTTPAPI();
   
   // Start Swift sensory binary
   await swiftSensory.ensureTable();
@@ -2201,9 +2222,13 @@ async function start() {
     // Try to spawn the binary if the socket doesn't exist.
     const { existsSync } = await import('fs');
     const { spawn: spawnProcess } = await import('child_process');
-    const MOTOR_BINARY = '/Users/quinnodonnell/.openclaw/workspace/oneiro-core/cognitive/motor/swift/.build/release/oneiro-motor';
+    const MOTOR_BINARY = process.env.OCA_MOTOR_BINARY || (
+      process.env.ONEIRO_BUNDLED_APP === '1'
+        ? ''
+        : join(__dirname, 'motor', 'swift', '.build', 'release', 'oneiro-motor')
+    );
     const MOTOR_SOCK = '/tmp/oneiro-motor.sock';
-    if (existsSync(MOTOR_BINARY) && !existsSync(MOTOR_SOCK)) {
+    if (MOTOR_BINARY && existsSync(MOTOR_BINARY) && !existsSync(MOTOR_SOCK)) {
       const motorProc = spawnProcess(MOTOR_BINARY, [], { stdio: 'ignore', detached: true });
       motorProc.unref();
       console.log('[oca] Motor cortex binary spawned, PID:', motorProc.pid);
@@ -2264,20 +2289,24 @@ async function start() {
   // Start consolidation on its own independent timer
   startConsolidationSchedule();
 
-  // Bring up the Phase 2b design inference server (MobileNet + design-head-v2).
-  // Non-fatal — if the Python deps are missing, evaluate.js falls back to the
-  // JS MLP and the flywheel still runs, just with the weaker scorer.
-  try {
-    const serverResult = await designModel.initServer();
-    if (serverResult?.status === 'started') {
-      console.log('[oca] 🎨 design inference server started (Phase 2b / design-head-v2)');
-    } else if (serverResult?.status === 'already_running') {
-      console.log('[oca] 🎨 design inference server already running');
-    } else if (serverResult?.status === 'failed') {
-      console.warn(`[oca] 🎨 design server failed to start: ${serverResult.error?.slice(0, 120)} — flywheel will use JS MLP fallback`);
+  // The design-model inference server is a developer/self-training subsystem.
+  // Product builds keep it off unless explicitly enabled because it can start
+  // Python workers and assume repo-local training assets.
+  if (DESIGN_SERVER_ENABLED) {
+    try {
+      const serverResult = await designModel.initServer();
+      if (serverResult?.status === 'started') {
+        console.log('[oca] 🎨 design inference server started');
+      } else if (serverResult?.status === 'already_running') {
+        console.log('[oca] 🎨 design inference server already running');
+      } else if (serverResult?.status === 'failed') {
+        console.warn(`[oca] 🎨 design server failed to start: ${serverResult.error?.slice(0, 120)} - flywheel will use JS MLP fallback`);
+      }
+    } catch (e) {
+      console.warn('[oca] 🎨 design server init error:', e.message);
     }
-  } catch (e) {
-    console.warn('[oca] 🎨 design server init error:', e.message);
+  } else {
+    console.log('[oca] 🎨 design inference server disabled; using app-safe design fallback');
   }
 
   // Derive the singular target project if we don't already have one.
@@ -2302,7 +2331,8 @@ async function start() {
     console.warn('[oca] 🎯 target project derivation failed:', e.message);
   }
 
-  // Start self_train.py daemon — VISION.md's real engine
+  // Optional self_train.py daemon — cloud Opus design training is opt-in
+  // so the bundled Mac app remains local-first by default.
   startSelfTrainSchedule();
 
   console.log('[oca] cognitive loop starting...');

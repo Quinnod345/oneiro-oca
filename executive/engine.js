@@ -235,6 +235,9 @@ export async function negotiateOwnership(userIdleSeconds) {
 
   if (collaborativeMode) {
     newMode = 'collaborative';
+  } else if (!Number.isFinite(userIdleSeconds) || userIdleSeconds < 0) {
+    // Unavailable activity cannot establish that the user is away, nor invent a keystroke.
+    newMode = 'quinn_primary';
   } else if (userIdleSeconds < 5) {
     // Recent keystroke activity — Quinn owns it
     newMode = 'quinn_primary';
@@ -248,7 +251,8 @@ export async function negotiateOwnership(userIdleSeconds) {
   }
 
   if (newMode !== currentOwnership) {
-    await setBodyOwnership(newMode, `Idle ${userIdleSeconds}s`);
+    await setBodyOwnership(newMode, Number.isFinite(userIdleSeconds) && userIdleSeconds >= 0
+      ? `Idle ${userIdleSeconds}s` : 'Activity unavailable; user retains focus');
   }
   return newMode;
 }

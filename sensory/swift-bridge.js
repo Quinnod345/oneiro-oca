@@ -10,9 +10,23 @@ import { fileURLToPath } from 'url';
 import net from 'net';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const BUNDLED_APP = process.env.ONEIRO_BUNDLED_APP === '1' ||
+  import.meta.url.includes('.app/Contents/Resources/oca-cognitive');
+const EXPLICIT_BINARY_PATH = process.env.OCA_SENSORY_BINARY || process.env.ONEIRO_SENSORY_BINARY || '';
 const BINARY_PATH_RELEASE = join(__dirname, 'swift/.build/release/oneiro-sensory');
+const BINARY_PATH_ARCH_RELEASE = join(__dirname, 'swift/.build/arm64-apple-macosx/release/oneiro-sensory');
 const BINARY_PATH_DEBUG = join(__dirname, 'swift/.build/debug/oneiro-sensory');
-const BINARY_PATH = existsSync(BINARY_PATH_RELEASE) ? BINARY_PATH_RELEASE : BINARY_PATH_DEBUG;
+const BINARY_PATH_ARCH_DEBUG = join(__dirname, 'swift/.build/arm64-apple-macosx/debug/oneiro-sensory');
+const BINARY_CANDIDATES = BUNDLED_APP && !EXPLICIT_BINARY_PATH
+  ? []
+  : [
+      EXPLICIT_BINARY_PATH,
+      BINARY_PATH_RELEASE,
+      BINARY_PATH_ARCH_RELEASE,
+      BINARY_PATH_DEBUG,
+      BINARY_PATH_ARCH_DEBUG
+    ];
+const BINARY_PATH = BINARY_CANDIDATES.filter(Boolean).find(path => existsSync(path)) || '';
 const SOCKET_PATH = '/tmp/oneiro-sensory.sock';
 
 /** After socket close or child exit, OCA used to always respawn sensory in 5s — killing the PID never stuck. */
@@ -99,6 +113,15 @@ async function trySocketConnect() {
 }
 
 function startAsChild() {
+  if (!BINARY_PATH) {
+    const detail = BUNDLED_APP
+      ? 'bundled app uses Swift SensoryPipeline; no child sensory binary is shipped'
+      : 'oneiro-sensory binary not built';
+    console.log(`[sensory-bridge] child sensory disabled: ${detail}`);
+    mode = 'disconnected';
+    return false;
+  }
+
   try {
     // Inherit process.env (../.env via npm start).
     // Screen capture: ONEIRO_DISABLE_SCREEN_CAPTURE=1 for DRM without SCStream.
@@ -124,6 +147,12 @@ function startAsChild() {
       mode = 'disconnected';
       childProcess = null;
       scheduleSensoryReconnect();
+    });
+
+    childProcess.on('error', (error) => {
+      console.error('[sensory-bridge] child process error:', error.message);
+      mode = 'disconnected';
+      childProcess = null;
     });
 
     console.log('[sensory-bridge] started as child process, PID:', childProcess.pid);

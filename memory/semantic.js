@@ -1,6 +1,6 @@
 // OCA Semantic Memory — abstracted knowledge and principles
 import { pool, emit } from '../event-bus.js';
-import OpenAI from 'openai';
+import OpenAI from '../local-openai-shim.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
