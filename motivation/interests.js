@@ -98,6 +98,8 @@ export function proposeInquiry(chain, interest) {
     doneWhen: 'A new observed test or source resolves this question: ' + question + '\nA proposed plan alone is not resolution.',
     context: 'This inquiry has a narrower scope than its parent: answer only the question, not the parent project. Do not execute actions. The question may be mistaken: inspect its premise. Explicit supersedes metadata determines which observations are current; array order and source labels do not establish chronology. Do not assert historical and current descriptions as simultaneous facts. Parent outcome criterion (context only): ' + chain.want.doneWhen.slice(0, 1600),
     evidence: active,
+    // A narrower question serves what its parent is for; it inherits the parent's stakes and earns no rating of its own.
+    stakes: (chain.want.stakes || []).map(s => ({ ...s })),
     priority: Math.min(0.6, chain.want.value * (0.25 + 0.75 * interest.usefulness) * (1 - chain.want.progress)),
     maxPasses: 3, timeBudgetSeconds: 90 };
 }
