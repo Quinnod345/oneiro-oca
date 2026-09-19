@@ -467,3 +467,6 @@ function resetAPI() {
 
 export { messages, getStatus, forceCLI, resetAPI };
 export default { messages, getStatus, forceCLI, resetAPI };
+
+// Backend health for /oca/health: circuit state of the local inference transport.
+export function inferenceHealth() { return localOpenAI.inferenceHealth?.() || null; }

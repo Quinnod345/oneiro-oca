@@ -576,7 +576,7 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
       temperature: 0.7
-    }, { jsonMode: true });
+    }, { jsonMode: true, timeoutMs: 90_000 });
 
     const rawText = response.content?.[0]?.text || '';
     const parsed = parseThought(rawText);
@@ -699,6 +699,7 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
     recordThinkerRun({ durationMs: elapsed, thought: thought.thoughts || '' });
     return thought;
   } catch (e) {
+    if (e.code === 'CIRCUIT_OPEN') { thoughtCadence.record(false); recordThinkerError(e.message); return null; }   // already logged once by the transport
     console.error('[thinker] failed:', e.message?.slice(0, 200));
     thoughtCadence.record(false);
     recordThinkerError(e.message);

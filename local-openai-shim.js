@@ -187,6 +187,7 @@ export const openai = {
       }
     }
   },
+  inferenceHealth: () => createChat.health?.() || null,
   // No-op for vision images-in-chat — most callers route through chat.completions.create
   // with image_url content; the local text reasoner does not host vision, but
   // our `vision_server.py` (7802) does.
