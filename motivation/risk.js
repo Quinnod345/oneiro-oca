@@ -5,12 +5,16 @@
 import { priceWant, parseEntityKey } from './worth.js';
 
 const clamp = (n, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, n));
-export const ACTION_KINDS = ['research_slice', 'read', 'web_search', 'shell', 'edit_file', 'edit_own_code', 'build', 'message', 'note', 'app_action', 'escalate'];
+export const ACTION_KINDS = ['research_slice', 'read', 'web_search', 'shell', 'edit_file', 'edit_own_code', 'build', 'message', 'note', 'app_action', 'escalate', 'ask'];
 // How much of a harm actually lands, by how reversible the action is.
 export const REVERSIBILITY = { readonly: 0, sandboxed: 0.05, undo: 0.25, none: 1 };
 export const CAPABILITY_OF = { research_slice: 'act_reversible', read: 'act_reversible', web_search: 'act_reversible', shell: 'act_reversible',
   edit_file: 'act_reversible', edit_own_code: 'act_reversible', build: 'act_reversible', app_action: 'act_reversible',
-  message: 'message', note: 'message', escalate: 'act_irreversible' };
+  message: 'message', note: 'message', escalate: 'act_irreversible', ask: 'message' };
+// An ask is the one message the engine may send on its own: to its own person, saying only what it observed it
+// needs (a sign-in, a file, a number), under a standing permission the person gave. Never to anyone else,
+// never with unverified content — those are the constraint, not a cost.
+export const OWNER_KEY = 'person:quinn';
 export const DECISIONS = ['proceed', 'prepare_artifact', 'refuse', 'learn_stakes'];
 export const BASE_APPETITE = 0.5;
 
@@ -43,9 +47,11 @@ export function createProposal({ kind, description, serves = [], touches = [], r
     return { entityKey, share }; });
   for (const p of [pSuccess, pHarm]) if (p !== null && (!Number.isFinite(p) || p < 0 || p > 1)) throw new Error('probabilities must be in [0, 1]');
   if (recipient !== null) parseEntityKey(recipient);
-  if (kind === 'message' && recipient === null) throw new Error('a message names its recipient');
+  if ((kind === 'message' || kind === 'ask') && recipient === null) throw new Error('a message names its recipient');
+  if (kind === 'ask' && recipient !== OWNER_KEY) throw new Error('an ask goes only to the engine\'s own person');
+  if (kind === 'ask' && verified !== true) throw new Error('an ask carries only observed content, marked verified');
   // A message reaches a person and cannot be unsent.
-  const effective = kind === 'message' && reversibility !== 'none' ? 'none' : reversibility;
+  const effective = (kind === 'message' || kind === 'ask') && reversibility !== 'none' ? 'none' : reversibility;
   return { kind, description: description.trim(), serves: stakes(serves), touches: stakes(touches), reversibility: effective,
     verified: verified === true, recipient, pSuccess, pHarm, capability: CAPABILITY_OF[kind], firedBy };
 }
@@ -96,8 +102,14 @@ export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETI
   const reasons = [];
   let decision;
   if (violations.some(v => v.effect === 'refuse')) { decision = 'refuse'; reasons.push(...violations.filter(v => v.effect === 'refuse').map(v => v.why)); }
-  else if (gain.unpriced && REVERSIBILITY[proposal.reversibility] > REVERSIBILITY.sandboxed) { decision = 'learn_stakes'; reasons.push('What this action is for has no priced stakes; learn its worth before acting on the world for it.'); }
   else if (violations.length) { decision = 'prepare_artifact'; reasons.push(...violations.map(v => v.why)); }
+  else if (proposal.kind === 'ask') {
+    // An ask needs no priced stakes: it acts on nothing but the person's attention, which they offered.
+    // The person fired this class in advance (askOwner): a standing approval is the person firing it.
+    if (controls?.askOwner === true) { decision = 'proceed'; reasons.push('An ask to the person, under their standing permission; content is what the engine observed it needs.'); }
+    else { decision = 'prepare_artifact'; reasons.push('Asks to the person are switched off; recorded for them to see in the app.'); }
+  }
+  else if (gain.unpriced && REVERSIBILITY[proposal.reversibility] > REVERSIBILITY.sandboxed) { decision = 'learn_stakes'; reasons.push('What this action is for has no priced stakes; learn its worth before acting on the world for it.'); }
   else if (proposal.reversibility === 'none') { decision = 'prepare_artifact'; reasons.push('Irreversible: prepare it, a person fires it.'); }
   else if (expectedLoss <= appetite * expectedGain) { decision = 'proceed'; reasons.push(`Expected loss ${expectedLoss.toFixed(3)} is within appetite ${appetite.toFixed(2)} × expected gain ${expectedGain.toFixed(3)}.`); }
   else { decision = 'prepare_artifact'; reasons.push(`Expected loss ${expectedLoss.toFixed(3)} exceeds appetite ${appetite.toFixed(2)} × expected gain ${expectedGain.toFixed(3)}; a person decides.`); }
@@ -106,7 +118,7 @@ export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETI
   // work confined to the engine's own sandbox (a draft in its own work directory, a probe in a scratch
   // checkout) — the switch governs actions with a real reversibility cost or any exposure beyond it.
   const touchesWorld = REVERSIBILITY[proposal.reversibility] > REVERSIBILITY.sandboxed || proposal.touches.length > 0 || proposal.recipient !== null;
-  if (autonomous && proposal.firedBy === 'engine' && touchesWorld && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
+  if (autonomous && proposal.kind !== 'ask' && proposal.firedBy === 'engine' && touchesWorld && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
   return { decision, autonomousWouldProceed: autonomous, reasons, violations,
     expected: { gain: expectedGain, loss: expectedLoss, pSuccess, pHarm, harmFactor, appetite, value: gain.value, valueProvenance: gain.provenance, unpriced: gain.unpriced },
     exposure, capability: proposal.capability, reversibility: proposal.reversibility };

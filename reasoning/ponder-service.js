@@ -62,7 +62,8 @@ export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect:
 // Appetite reads the live affect state; the master switch is the existing autonomous-actions flag.
 const envFlag = name => ['1', 'true', 'yes', 'on'].includes(String(process.env[name] || '').trim().toLowerCase());
 export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: emotion,
-  controls: () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS') }),
+  controls: async () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS'),
+    askOwner: await userControls.get().then(c => c.askOwner === true).catch(() => false) }),
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 riskRef.current = riskJournal;
 export const selfBuild = createSelfBuild({ pool, queue: ponderQueue, worth: worthLedger, risk: riskJournal, controls: userControls,

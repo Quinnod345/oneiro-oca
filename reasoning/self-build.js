@@ -28,7 +28,7 @@ export function isConstitutional(path) {
 
 // Friction that is the engine's own to fix, as opposed to the environment's (a model outage, a usage limit).
 const ENVIRONMENT = /usage limit|not logged|unauthori|rate limit|quota|timed out|fetch failed|ECONN|ENOTFOUND|circuit open|network|HTTP 5\d\d|model down|Codex CLI exited/i;
-const DEFECT = /TypeError|ReferenceError|is not a function|is not defined|Cannot read propert|undefined|returned no id|unexpected token|SyntaxError|invalid|schema|malformed|unverifiable_prediction_shape|no_usable/i;
+const DEFECT = /TypeError|ReferenceError|is not a function|is not defined|Cannot read propert|undefined|returned no id|unexpected token|SyntaxError|invalid|schema|malformed|unverifiable_prediction_shape|no_usable|\btooling:/i;
 // A defect's identity: its observation with ids and counts blanked, so the same failure on a different want
 // or a different decision is the same defect. The fingerprint names the self-want made from it.
 export function defectKey(observation) { return text(String(observation || '').replace(/#?\d+/g, '#'), 160); }
