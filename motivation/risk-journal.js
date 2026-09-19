@@ -21,7 +21,7 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
   }
   async function currentControls() {
     const c = typeof controls === 'function' ? await controls() : controls;
-    return { autonomousActions: c?.autonomousActions === true };
+    return { autonomousActions: c?.autonomousActions === true, askOwner: c?.askOwner === true };
   }
 
   // Appraise and record. Idempotent on id: the same id with a different proposal is an error.

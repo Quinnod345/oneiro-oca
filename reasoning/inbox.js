@@ -28,7 +28,7 @@ function parseNote(md) {
   return m ? { title: m[1], meta: m[2], body: m[3].trim() } : { title: '', meta: '', body: String(md).trim() };
 }
 
-export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null }) {
+export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null, asks = null }) {
   const safeName = s => /^[A-Za-z0-9._-]{1,120}$/.test(String(s)) && !String(s).includes('..');
 
   async function activeWants() {
@@ -76,6 +76,7 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
       return { kind: 'want', chainId: row.id, description: text(w.description, 400), doneWhen: text(w.doneWhen, 300), progress: w.progress || 0,
         status: row.status, strategy: w.strategy, origin: row.state.origin?.kind || 'explicit', updatedAt: row.updated_at,
         continuous: row.state.continuous === true, continuity: row.state.continuity || null, researchActive: row.state.researchActive === true,
+        needs: (row.state.needs || []).map(n => ({ kind: n.kind, host: n.host, at: n.at })),
         conclusion: text(r.conclusion, 400), missing: (r.missingEvidence || []).slice(0, 3).map(m => text(m, 200)), receipts: (w.receipts || []).length }; });
   }
 
@@ -86,8 +87,8 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
 
   async function list() {
     const rows = await activeWants();
-    const [a, n, e] = await Promise.all([artifacts(rows), notes(), entities()]);
-    return { at: clock(), toRate: [...a, ...n].sort((x, y) => (y.at || 0) - (x.at || 0)), wants: wantsOf(rows), entities: e };
+    const [a, n, e, open] = await Promise.all([artifacts(rows), notes(), entities(), asks ? asks.open().catch(() => []) : []]);
+    return { at: clock(), toRate: [...a, ...n].sort((x, y) => (y.at || 0) - (x.at || 0)), wants: wantsOf(rows), entities: e, asks: open };
   }
 
   // A person's verdict on a deliverable: a receipt on its want. "Useful" or better is progress; anything
@@ -161,5 +162,6 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return queue.setContinuous(id, on === true);
   }
 
-  return { list, rate, progress, want, continuous, artifacts: async () => artifacts(await activeWants()), notes };
+  async function answerAsk({ id, reply = 'done' }) { if (!asks) throw new Error('asks are not available'); return asks.answer(Number(id), reply); }
+  return { list, rate, progress, want, continuous, answerAsk, artifacts: async () => artifacts(await activeWants()), notes };
 }

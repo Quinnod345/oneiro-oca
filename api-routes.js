@@ -1,6 +1,7 @@
 import { createPursuitWork } from './reasoning/pursuit-work.js';
 import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal, selfBuild, draftProvider, strategyDeps } from './reasoning/ponder-service.js';
 import { createPursuitDrafts } from './reasoning/pursuit-draft.js';
+import { createAsks } from './reasoning/asks.js';
 import { looksObservable } from './motivation/done-when.js';
 import episodic from './memory/episodic.js';
 import { contextForText as entityContextForText } from './memory/entity-graph.js';
@@ -33,7 +34,10 @@ ocaRouter.use('/oca/ui', async (_req, res, next) => {
   catch (e) { res.status(503).json({ error: `Workspace is unavailable: ${e.message}` }); }
 });
 ocaRouter.use(userWorkspace.router);
-const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, risk: riskJournal, canStart: async () => !(await userControls.get()).queuePaused });
+// The engine may ask its person for what it observed it needs — under their standing permission, only to them.
+const asks = createAsks({ pool, risk: riskJournal });
+asks.init().catch(e => console.warn('[asks] init:', e.message));
+const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, risk: riskJournal, asks, canStart: async () => !(await userControls.get()).queuePaused });
 const pursuitWorkReady = pursuitWork.init().then(() => pursuitWork.start());
 // Attach a rejection observer immediately; requests retain the real startup error.
 pursuitWorkReady.catch(error => console.error('[pursuit-work] startup:', error.message));
@@ -1512,7 +1516,11 @@ const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: 
     visual: (q, n) => visualMemory.searchVisualMemory(q, n),
     entities: q => entityContextForText(q, { limit: 8 }),
   } });
-const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts });
+const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks });
+// The person answers an ask (or just clears it): { reply? }
+ocaRouter.post('/oca/inbox/asks/:id/answer', async (req, res) => {
+  try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done' })); } catch (e) { res.status(400).json({ error: e.message }); }
+});
 pursuitDrafts.sweep().then(r => { if (r.failed) console.log(`[draft] ${r.failed} draft(s) left mid-flight by a restart marked failed`); }).catch(() => {});
 // Body: { clientRequestId (uuid), text, answers?: [{questionId, answer}], by? } → 202 while drafting; poll GET /oca/inbox/draft/:id?wait=25
 ocaRouter.post('/oca/inbox/draft', async (req, res) => {

@@ -82,7 +82,7 @@ test('the MCP server speaks JSON-RPC over stdio, lists only read tools, and answ
   await new Promise(r => child.on('close', r));
   const msgs = out.trim().split('\n').map(l => JSON.parse(l));
   assert.equal(msgs.find(m => m.id === 1).result.serverInfo.name, 'aside');
-  assert.deepEqual(msgs.find(m => m.id === 2).result.tools.map(t => t.name), ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs'], 'read tools only');
+  assert.deepEqual(msgs.find(m => m.id === 2).result.tools.map(t => t.name), ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs', 'aside_read_tab', 'aside_snapshot_tab'], 'read tools only');
   const read = msgs.find(m => m.id === 3).result;
   assert.equal(read.isError, true); assert.match(read.content[0].text, /no other browser/, 'no Aside installed: no browser, not another one');
   assert.match(msgs.find(m => m.id === 4).error.message, /unknown tool/);

@@ -59,7 +59,7 @@ export async function verifyWorkSources(candidates, { roots, workRoot, startedAt
 export function createPursuitWork({ pool, queue, runner = runCodex,
   root = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work',
   sourceRoots = ['/Users/quinnodonnell/oneiro'], model = process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra',
-  clock = Date.now, leaseMs = 90_000, canStart = async () => true, risk = null } = {}) {
+  clock = Date.now, leaseMs = 90_000, canStart = async () => true, risk = null, asks = null } = {}) {
   const aborts = new Map();
   // Risk decisions are best-effort records around a person-fired slice; a journal error never blocks the work.
   const riskSafe = async fn => { if (!risk) return null; try { return await fn(); } catch (e) { console.warn('[pursuit-work] risk journal:', e.message); return null; } };
@@ -194,11 +194,19 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
         + `User direction for this slice: ${run.instruction || 'Find and resolve what is blocking this pursuit; produce a concrete next step.'}\n`
         + `Previous result: ${JSON.stringify(prior.rows[0]?.report || null)}\n`
         + `Return the structured report. sources must quote exact text from existing unchanged files outside your work directory, using absolute paths. The engine independently reads these files before attaching observations. If facts cannot be collected, explain precisely what is missing and give the user an actionable way to provide it. A plan, draft or generated report is not proof of success.`;
+      // What the slice observed about access while it worked: sign-in walls the Aside tools reported, and how
+      // many Aside reads it made. Observed by the runtime, so an ask built from it is verified content.
+      const blocks = new Map(); let asideCalls = 0;
       const result = await runner(prompt, { workingDirectory: directory, model: run.model, persistent: true,
         threadId: prior.rows[0]?.thread_id || null, sandbox: 'workspace-write', timeoutMs: 10 * 60_000,
         signal: ctl.signal, outputSchema: workSchema,
         onEvent: async event => {
           if (ctl.signal.aborted) throw Error('Work cancelled');
+          if (event.type === 'item.completed' && event.item?.type === 'mcp_tool_call' && /^aside_/.test(String(event.item.tool || ''))) {
+            asideCalls++;
+            const block = observedBlock(event.item.result);
+            if (block?.host && !blocks.has(block.host)) blocks.set(block.host, { ...block, at: clock() });
+          }
           if (event.type === 'thread.started' && uuid(event.thread_id)) await pool.query("UPDATE pursuit_work SET thread_id=$3 WHERE id=$1 AND lease=$2 AND status='running'", [run.id, lease, event.thread_id]);
           const visible = visibleWorkEvent(event); if (visible) await append(run.id, visible, lease);
         } });
@@ -228,10 +236,14 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
         report.remainingQuestions.length || evidenceError ? 'needs_input' : 'completed', JSON.stringify(final)]);
       // The slice ran to a report. It succeeded if it added verified evidence to the pursuit; a report with nothing
       // usable is an observed failure of the attempt. The observation is the runtime fact, not the report's prose.
+      // A slice that read the web a lot and still could not attach a verified row is friction in the engine's own
+      // tooling — named as such so introspection can turn it into a want about itself.
+      const tooling = !evidenceApplied && asideCalls >= 5 && !blocks.size ? ` tooling: ${asideCalls} Aside reads yielded no verifiable rows.` : '';
       await riskSafe(() => risk.observe(`slice:${run.request_id}`, { result: evidenceApplied ? 'success' : 'failure',
         evidence: [{ id: `slice-${run.id}`, source: 'pursuit work runtime status',
-          observation: `Slice ${run.id} completed with ${verified.evidence.length} verified sources; evidence applied: ${evidenceApplied}${evidenceError ? '; ' + evidenceError : ''}.` }] }));
+          observation: `Slice ${run.id} completed with ${verified.evidence.length} verified sources; evidence applied: ${evidenceApplied}${evidenceError ? '; ' + evidenceError : ''}.${tooling}` }] }));
       await noteContinuity(run.chain_id, { found: evidenceApplied, remaining: report.remainingQuestions.slice(0, 3), nextStep: report.nextStep });
+      await noteNeeds(run.chain_id, [...blocks.values()], parent);
       return final;
     } catch (error) {
       const changed = await pool.query("UPDATE pursuit_work SET status='failed',error=$3,lease=NULL,updated_at=now() WHERE id=$1 AND lease=$2 AND status='running' RETURNING id", [run.id, lease, redact(error.message)]);
@@ -244,6 +256,31 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
       return { error: error.message };
     } finally { clearInterval(heartbeat); await writes; aborts.delete(run.id); await clearResearchFlag(run.chain_id); }
   }
+  // A sign-in wall reported by an Aside tool result (the MCP server marks it on the result it returns).
+  function observedBlock(result) {
+    try {
+      const raw = result?.content?.find?.(c => c.type === 'text')?.text ?? result?.structured_content ?? result;
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const b = obj?.accessBlocked;
+      return b && b.kind === 'sign_in' ? { kind: 'sign_in', host: String(b.host || '').slice(0, 120), url: String(b.url || '').slice(0, 300), title: String(b.title || '').slice(0, 120) } : null;
+    } catch { return null; }
+  }
+  // What the want needs from its person, as observed this slice: recorded on the want, asked once, and cleared
+  // (with its ask marked answered) the moment a later slice gets through.
+  async function noteNeeds(chainId, blocks, parent) {
+    const needs = blocks.map(b => ({ kind: b.kind, host: b.host, url: b.url, title: b.title, at: b.at }));
+    await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{needs}', $2::jsonb) WHERE id = $1`, [chainId, JSON.stringify(needs)]).catch(() => {});
+    if (!asks) return;
+    for (const b of needs) {
+      try { await asks.ask({ chainId, kind: b.kind, host: b.host, want: parent?.want?.description || parent?.seed || '', stakes: parent?.want?.stakes || [] }); }
+      catch (e) { console.warn('[pursuit-work] ask:', e.message); }
+    }
+    if (!needs.length) {
+      const open = await asks.recent({ chainId, hours: 72 }).catch(() => []);
+      for (const a of open.filter(a => !a.replied_at && a.metadata?.kind === 'sign_in')) await asks.answer(a.id, 'resolved: the engine got through on its next slice').catch(() => {});
+    }
+  }
+
   // ── continuity: "there should always be an agent working on it" ──
   // A continuous want that is waiting on evidence, or stalled, gets an engine-fired slice on a cadence:
   // every `intervalMs` while slices keep finding something, doubling (up to 16×) while they come back dry
