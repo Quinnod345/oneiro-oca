@@ -318,12 +318,27 @@ func showNotification(title: String, body: String) -> [String: Any] {
     return runAppleScript("display notification \"\(body)\" with title \"\(title)\"")
 }
 
+// The engine's one browser is Aside. A URL never goes to NSWorkspace (the person's default browser);
+// it is handed to the Aside CLI, and if Aside is missing the answer is "no browser", not another one.
 func openURL(_ url: String) -> [String: Any] {
-    if let nsurl = URL(string: url) {
-        NSWorkspace.shared.open(nsurl)
-        return ["success": true, "url": url]
+    guard let nsurl = URL(string: url), let scheme = nsurl.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+        return ["success": false, "error": "a browser opens http(s) URLs only"]
     }
-    return ["success": false, "error": "Invalid URL"]
+    let cli = ProcessInfo.processInfo.environment["OCA_ASIDE_CLI"]
+        ?? (NSHomeDirectory() as NSString).appendingPathComponent(".local/bin/aside")
+    guard FileManager.default.isExecutableFile(atPath: cli) else {
+        return ["success": false, "error": "Aside is not installed at \(cli); the engine has no other browser"]
+    }
+    let encoded = (try? JSONSerialization.data(withJSONObject: [nsurl.absoluteString])).flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
+    let code = "const page = await openTab(\(encoded.dropFirst().dropLast())); console.log(await page.title());"
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: cli)
+    task.arguments = ["repl", code]
+    let out = Pipe(); task.standardOutput = out; task.standardError = out
+    do { try task.run() } catch { return ["success": false, "error": "could not start Aside: \(error.localizedDescription)"] }
+    task.waitUntilExit()
+    let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return ["success": task.terminationStatus == 0, "url": url, "browser": "aside", "output": String(text.prefix(400))]
 }
 
 // ═══════════════════════════════════════════════════

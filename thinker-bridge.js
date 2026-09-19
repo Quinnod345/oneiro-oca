@@ -14,6 +14,7 @@ import { classifyShell } from './motivation/risk.js';
 import { createHash } from 'crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { NoticeRateLimiter, normalizeNoticeIntent } from './notice-policy.js';
+import aside from './aside.js';
 import {
   filterContextRowsForThinker,
   targetProjectPromptSection,
@@ -874,35 +875,19 @@ async function dispatchThought(thought) {
     } catch {}
   }
 
-  // Web search via agent-browser — async spawn, no hard timeouts
+  // Web search through Aside — the engine's one browser. What the page showed is recorded as such.
   if (thought.web_search && !AUTONOMOUS_WEB_ENABLED) {
     await noteAutonomousBlocked('web-search', thought.web_search.query || '');
   } else if (thought.web_search) {
     try {
-      const query = thought.web_search.query;
-      console.log(`[thinker] web_search: ${query}`);
-      const encoded = encodeURIComponent(query);
-      const BROWSER_PROFILE = `${PROJECT_ROOT}/private/browser-profile`;
-      await runAsync('agent-browser', [
-        'open',
-        `https://www.google.com/search?q=${encoded}`,
-        '--session', 'oca',
-        '--profile', BROWSER_PROFILE,
-      ], { silentWatchdogMs: 90 * 1000 });
-      // Grab visible text from results
-      try {
-        const snapResult = await runAsync('agent-browser', [
-          'snapshot', '-c',
-          '--session', 'oca',
-          '--profile', BROWSER_PROFILE,
-        ], { silentWatchdogMs: 60 * 1000 });
-        const snap = (snapResult.stdout || '').trim();
-        const preview = snap.slice(0, 600);
-        console.log(`[thinker] search results: ${preview.slice(0, 200)}`);
-        await oca.experience('web_search', `Searched: ${query}\nResults: ${preview}`, { importanceScore: 0.4 });
-      } catch {}
+      const query = String(thought.web_search.query || '').trim();
+      if (!query) throw new Error('empty query');
+      console.log(`[thinker] web_search via Aside: ${query}`);
+      const r = await aside.search(query, { maxChars: 2000 });
+      console.log(`[thinker] search results: ${r.text.slice(0, 200)}`);
+      await oca.experience('web_search', `Searched: ${query}\nSource: ${r.source}\nResults: ${r.text.slice(0, 600)}`, { importanceScore: 0.4 });
     } catch (e) {
-      console.error(`[thinker] web_search error: ${e.message?.slice(0, 80)}`);
+      console.error(`[thinker] web_search error: ${e.message?.slice(0, 120)}`);
     }
   }
 

@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { pool, emit, readPerceptualState } from '../event-bus.js';
 import procedural from '../memory/procedural.js';
+import aside, { isForeignBrowser } from '../aside.js';
 
 const MOTOR_SOCKET = '/tmp/oneiro-motor.sock';
 let socketConnected = false;
@@ -152,10 +153,18 @@ export async function plan(intention, options = {}) {
     capture_after: !skipVerification
   };
 
-  result = await sendMotorCommand(command);
-
-  if (result.fallback) {
-    result = await executeFallback(intention);
+  // A URL is opened in Aside, the engine's one browser — never handed to the OS motor, which would
+  // reach the person's default browser.
+  if (intention.action === 'open_url') {
+    try { result = await aside.openUrl(intention.parameters?.url); }
+    catch (e) { result = { success: false, error: e.message, browser: 'aside' }; }
+  } else if ((intention.action === 'launch' || intention.action === 'activate') && isForeignBrowser(intention.parameters?.bundle_id || intention.parameters?.app)) {
+    result = { success: false, error: `the engine's browser is Aside; it does not launch ${intention.parameters?.bundle_id || intention.parameters?.app}` };
+  } else {
+    result = await sendMotorCommand(command);
+    if (result.fallback) {
+      result = await executeFallback(intention);
+    }
   }
 
   // 5. Log motor action
@@ -292,8 +301,8 @@ async function executeFallback(intention) {
         return { success: true, fallback: true };
       }
       case 'open_url': {
-        execSync(`open "${parameters.url}"`, { timeout: 3000 });
-        return { success: true, fallback: true };
+        // Never the OS `open`: that is the person's default browser. Aside or nothing.
+        return { success: false, error: 'open_url goes through Aside; it has no OS fallback', fallback: true };
       }
       default:
         return { success: false, error: `Fallback: unknown action ${action}` };
