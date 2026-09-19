@@ -29,6 +29,11 @@ export function isConstitutional(path) {
 // Friction that is the engine's own to fix, as opposed to the environment's (a model outage, a usage limit).
 const ENVIRONMENT = /usage limit|not logged|unauthori|rate limit|quota|timed out|fetch failed|ECONN|ENOTFOUND|circuit open|network|HTTP 5\d\d|model down|Codex CLI exited/i;
 const DEFECT = /TypeError|ReferenceError|is not a function|is not defined|Cannot read propert|undefined|returned no id|unexpected token|SyntaxError|invalid|schema|malformed|unverifiable_prediction_shape|no_usable/i;
+// A defect's identity: its observation with ids and counts blanked, so the same failure on a different want
+// or a different decision is the same defect. The fingerprint names the self-want made from it.
+export function defectKey(observation) { return text(String(observation || '').replace(/#?\d+/g, '#'), 160); }
+export function defectFingerprint(observation) { return digest({ key: defectKey(observation) }); }
+
 export function classifyFriction(message) {
   const m = String(message || '');
   if (!m.trim()) return 'none';
@@ -50,12 +55,14 @@ export function parseTestOutput(out) {
   return { tests: n('tests'), pass: n('pass'), fail: n('fail'), passing, failing };
 }
 
-export function createSelfBuild({ pool, queue, worth = null, risk = null, controls, runner = null, llm = null, clock = Date.now,
+export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = null, controls, runner = null, llm = null, clock = Date.now,
   repoDir = REPO_DEFAULT, workRoot = process.env.OCA_SELF_BUILD_ROOT || join(REPO_DEFAULT, '..', 'runtime', 'workspace', 'self-build'),
-  provider = 'local', model = 'qwen-agent', remote = 'origin', maxBuildsPerDay = 3, maxConsecutiveFailures = 3, enterPressure = 0.25,
-  exitCooldownMs = 30 * 60_000, log = console } = {}) {
+  provider = 'local', model = 'qwen-agent', remote = 'origin', mainBranch = 'main', maxBuildsPerDay = 3, maxConsecutiveFailures = 3, enterPressure = 0.25,
+  quietPeriodMs = 24 * 3600_000, exitCooldownMs = 30 * 60_000, log = console } = {}) {
   let phase = { active: false, since: null, reason: null, wantId: null, builds: 0, failures: 0, lastExitAt: 0 };
-  let lastTickAt = 0;
+  let lastTickAt = 0, lastFetchAt = 0;
+  // The queue's strategies need this module, so it may be handed over lazily.
+  const queue = new Proxy({}, { get: (_, k) => (typeof queueDep === 'function' ? queueDep() : queueDep)?.[k] });
   const git = (args, cwd = repoDir, opts = {}) => run('git', args, { cwd, maxBuffer: 16 * 1024 * 1024, ...opts });
   const journal = (kind, chainId, payload) => pool.query('INSERT INTO self_build_events (kind, chain_id, payload) VALUES ($1, $2, $3::jsonb)', [kind, chainId, JSON.stringify(payload)]).catch(e => log.warn?.('[self-build] journal:', e.message));
 
@@ -75,7 +82,7 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
       // wanting to fix the failure to fix would recurse without end.
       if (/^improve_myself ended/.test(observation) || String(f.id).endsWith(':improve_myself')) continue;
       if (classifyFriction(observation) !== 'defect') continue;
-      const key = text(observation.replace(/#?\d+/g, '#'), 160);
+      const key = defectKey(observation);
       const d = defects.get(key) || { key, capability: f.capability, count: 0, examples: [] };
       d.count++; if (d.examples.length < 3) d.examples.push({ id: f.id, observation: text(observation, 600), at: f.created_at });
       defects.set(key, d);
@@ -130,10 +137,74 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     return phase;
   }
 
+  // What became of a published branch is observed, never assumed. A branch whose tip is an ancestor of the
+  // remote main was merged by a person: that is the receipt the want has waited for, and the want parks
+  // again for the quiet period. An introspected defect that stays out of the risk journal for the whole quiet
+  // period sates its want; one that recurs after the merge reopens it, and the self-build strategy applies again.
+  async function reconcile() {
+    const merged = [], settled = [];
+    const { rows } = await pool.query(`SELECT id, status, ponder_state AS state FROM thought_chains
+      WHERE ponder_state IS NOT NULL AND ponder_state #>> '{origin,kind}' = 'self' AND ponder_state #>> '{want,status}' = 'active'
+        AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(ponder_state -> 'commitments', '[]'::jsonb)) c WHERE c ->> 'kind' = 'branch')`);
+    const pending = rows.filter(r => r.state.commitments.some(c => c.kind === 'branch' && !c.merged));
+    if (pending.length && clock() - lastFetchAt >= 5 * 60_000) {
+      lastFetchAt = clock();
+      await git(['fetch', '-q', remote, mainBranch]).catch(e => log.warn?.('[self-build] fetch:', text(e.message, 200)));   // offline: judge by what is already known
+    }
+    const ancestorOfMain = sha => git(['merge-base', '--is-ancestor', sha, `refs/remotes/${remote}/${mainBranch}`]).then(() => true, () => false);
+    for (const row of pending) {
+      const branches = new Map();
+      for (const c of row.state.commitments) if (c.kind === 'branch' && !c.merged && c.branch) branches.set(c.branch, c);
+      for (const [branch, c] of branches) {
+        // The tip supersedes earlier pushes of the same branch; a branch deleted after its merge is judged by the commit it recorded.
+        const tip = await git(['rev-parse', '--verify', '-q', `refs/remotes/${remote}/${branch}`]).then(r => r.stdout.trim(), () => null);
+        const sha = tip || c.sha;
+        if (!sha || !(await ancestorOfMain(sha))) continue;
+        const running = await git(['merge-base', '--is-ancestor', sha, 'HEAD']).then(() => true, () => false);
+        const mergedAt = clock();
+        try {
+          await queue.outcome(row.id, { receiptId: `merged-${sha.slice(0, 12)}`, progress: Math.max(0.5, Math.min(0.9, (row.state.want.progress || 0) + 0.25)), criterionMet: false,
+            evidence: [{ id: `merged-${sha.slice(0, 7)}`, source: `git: ${remote}/${mainBranch} contains the branch tip`,
+              observation: `${branch} (${sha.slice(0, 7)}) was merged into ${mainBranch} by a person${running ? '; the running checkout carries it' : '; the running checkout does not carry it yet'}. Remaining: ${Math.round(quietPeriodMs / 3600_000)} hours of operation without the same failure.` }] }, { park: true });
+        } catch (e) { log.warn?.(`[self-build] merge receipt for #${row.id}:`, text(e.message, 200)); continue; }   // running a pass: observed again next tick
+        const next = row.state.commitments.map(x => x.kind === 'branch' && x.branch === branch ? { ...x, merged: true, mergedAt, mergedSha: sha } : x);
+        await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb), updated_at = NOW() WHERE id = $1`, [row.id, JSON.stringify(next)]);
+        row.state.commitments = next;
+        await journal('merged', row.id, { branch, sha, running });
+        merged.push({ chainId: row.id, branch, sha });
+        log.log?.(`[self-build] want #${row.id}: ${branch} merged into ${mainBranch}`);
+      }
+    }
+    // The quiet period, for wants that came from the journal: only they name a defect that can be looked for.
+    for (const row of rows) {
+      const { origin, want } = row.state;
+      if (origin?.source !== 'introspection' || !origin.fingerprint) continue;
+      const last = row.state.commitments.filter(c => c.kind === 'branch').at(-1);
+      if (!last?.merged || !last.mergedAt) continue;
+      const { rows: fails } = await pool.query(`SELECT id, outcome, resolved_at FROM risk_decisions
+        WHERE outcome->>'result' = 'failure' AND resolved_at > to_timestamp($1 / 1000.0) ORDER BY resolved_at ASC LIMIT 500`, [last.mergedAt]);
+      const same = fails.filter(f => { const o = f.outcome?.evidence?.[0]?.observation || f.outcome?.note || ''; return classifyFriction(o) === 'defect' && defectFingerprint(o) === origin.fingerprint; });
+      const receipt = same.length
+        ? { receiptId: `recurred-${same[0].id}`.slice(0, 200), progress: Math.min(0.25, want.progress || 0), criterionMet: false,
+            evidence: [{ id: `recurred-${text(same[0].id, 60)}`, source: 'risk journal: the same failure observed after the merge', observation: `The failure this want was made from recurred ${same.length} time(s) after ${last.branch} was merged; first at ${new Date(same[0].resolved_at).toISOString()}: ${text(same[0].outcome?.evidence?.[0]?.observation || same[0].outcome?.note, 300)}` }] }
+        : clock() - last.mergedAt >= quietPeriodMs
+          ? { receiptId: `quiet-${last.mergedSha?.slice(0, 12) || last.branch}`, progress: 1, criterionMet: true,
+              evidence: [{ id: `quiet-${(last.mergedSha || last.branch).slice(0, 7)}`, source: 'risk journal: no matching failure for the quiet period after the merge', observation: `${Math.round(quietPeriodMs / 3600_000)} hours of operation after ${last.branch} was merged, ${fails.length} failure(s) journaled, none of them this defect.` }] }
+          : null;
+      if (!receipt || want.receipts?.some(r => r.receiptId === receipt.receiptId)) continue;
+      try { await queue.outcome(row.id, receipt); } catch (e) { log.warn?.(`[self-build] quiet-period receipt for #${row.id}:`, text(e.message, 200)); continue; }
+      await journal(same.length ? 'recurred' : 'settled', row.id, { branch: last.branch, sha: last.mergedSha, failures: fails.length, same: same.length });
+      settled.push({ chainId: row.id, branch: last.branch, recurred: same.length > 0 });
+      log.log?.(`[self-build] want #${row.id}: ${same.length ? 'the defect recurred after the merge' : 'quiet for the whole period after the merge; sated'}`);
+    }
+    return { merged, settled };
+  }
+
   // Called with the hunger refresh. The engine decides; the person only permits.
   async function tick({ force = false } = {}) {
     if (!force && clock() - lastTickAt < 60_000) return phase;
     lastTickAt = clock();
+    try { await reconcile(); } catch (e) { log.warn?.('[self-build] reconcile:', e.message); }   // a person's merge counts whether or not the phase is permitted
     const { enabled } = await permitted();
     if (!enabled) { if (phase.active) await exit('permission withdrawn'); return phase; }
     let wants = [];
@@ -156,7 +227,8 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     return { phase, permission: await permitted(), selfWants: wants.map(w => ({ chain_id: w.chain_id, description: w.want.description, pressure: w.hunger.pressure, status: w.status, strategy: w.hunger.strategy })),
       constitution: [...CONSTITUTION, ...CONSTITUTION_DIRS], recent: rows,
       policy: { enters_when: `a self-want reaches pressure ${enterPressure}`, exits_when: `no self-wants, ${maxConsecutiveFailures} consecutive failures, or ${maxBuildsPerDay} builds in a phase`,
-        edits: 'on a branch in a private worktree; tests must all still pass and none may disappear; constitution untouchable', publishes: 'the branch, always; main only with selfBuildAutoMerge' } };
+        edits: 'on a branch in a private worktree; tests must all still pass and none may disappear; constitution untouchable', publishes: 'the branch, always; main only with selfBuildAutoMerge',
+        settles: `a merge is observed from ${remote}/${mainBranch}; an introspected defect absent from the risk journal for ${Math.round(quietPeriodMs / 3600_000)} hours after it sates the want, one that recurs reopens it` } };
   }
 
   // ── the build itself ──
@@ -299,5 +371,5 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     return { ok: true, sha: built.sha };
   }
 
-  return { introspect, tick, enter, exit, status, build, isActive, permitted, selfWants };
+  return { introspect, reconcile, tick, enter, exit, status, build, isActive, permitted, selfWants };
 }

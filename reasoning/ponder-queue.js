@@ -264,7 +264,9 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       return { status: 'pondering', state: s };
     });
   }
-  async function outcome(id, receipt) {
+  // `park`: the receipt is progress noted while the world still owes the rest (a merge awaiting its quiet
+  // period); the want keeps its evidence but waits instead of pondering again.
+  async function outcome(id, receipt, { park = false } = {}) {
     const before = await get(id);
     if (!before) throw new Error('ponder chain not found');
     const chain = await mutate(id, row => {
@@ -282,6 +284,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       }
       // A correction to a resolved want leaves its reviewable answer standing ('ready'); anything still open reponders.
       if (row.status === 'resolved') return { status: 'ready', state: { ...s, want, evidence } };
+      if (park) return { status: 'awaiting_evidence', state: { ...s, want, evidence, checkpoint: null, attempts: 0, stallStreak: 0 } };
       return { status: 'pondering', state: { ...s, want, evidence, checkpoint: null, attempts: 0, stallStreak: 0,
         priorRuns: [...s.priorRuns, { checkpoint: s.checkpoint, result: s.result, at: clock() }] } };
     });

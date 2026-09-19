@@ -40,7 +40,7 @@ A read-only step that touches nothing cannot affect the world, so the engine may
 
 ## The engine may want things about itself
 
-Friction the engine observes in its own operation — an attempt that failed on a defect, a capability it cannot measure — can become a want about itself, priced like any other want, pursued in a self-build phase it enters and leaves on its own. It may change its own code on a branch, prove the change with its tests, and publish the branch. It may not touch its constitution: the worth ledger's rules, the risk gate, or the self-build gate itself. Those change only by a person's hand. An engine that can edit its own reward is not hungry; it is hallucinating satisfaction.
+Friction the engine observes in its own operation — an attempt that failed on a defect, a capability it cannot measure — can become a want about itself, priced like any other want, pursued in a self-build phase it enters and leaves on its own. It may change its own code on a branch, prove the change with its tests, and publish the branch. Whether a person merged it is observed from the repository, never assumed, and a merged change earns nothing until the failure it was made for stays absent for a day. It may not touch its constitution: the worth ledger's rules, the risk gate, or the self-build gate itself. Those change only by a person's hand. An engine that can edit its own reward is not hungry; it is hallucinating satisfaction.
 
 ## The person is the only reward
 

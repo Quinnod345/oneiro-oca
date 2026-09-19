@@ -27,6 +27,12 @@ Everything a person needs to understand a want is one call away: `GET /oca/trace
 - Reach a person with unverified content, or write to their data without a way back — these are constraints, not weights, and the risk gate refuses them outright.
 - Act on the world on its own while the master switch is off. Thinking is not acting: read-only steps that touch nothing proceed; anything with a reversibility cost is recorded as a proposal for a person.
 
+## The self-build phase
+
+Friction the engine observes in its own operation becomes a want about itself (`reasoning/self-build.js`), priced like any other want. A person permits the phase (`selfBuild` in the controls); the engine enters it when a self-want has pressure and leaves when its self-wants are quiet, it keeps failing, or the day's build budget is spent. A build happens on a branch in a private worktree, with Codex when available and the local model otherwise: the suite must still pass with no test lost, the constitution (worth, risk, this gate, the philosophy, the migrations) is untouchable, and the branch is pushed for a person to merge — main moves only by a person's hand unless `selfBuildAutoMerge` is on.
+
+What became of the branch is observed, never assumed. Each tick the engine checks whether the branch tip is an ancestor of `origin/main`; a merge is the receipt the want was waiting for, and the want parks for a quiet period of 24 hours. If the defect the want was made from stays out of the risk journal for that period, the want is sated; if it recurs, the want reopens and the engine may build again. A merged fix is never rebuilt on a guess.
+
 ## Measured
 
 `npm run benchmark` runs the isolated mechanism suite (every behavioral contract as a test) and the Chinese Room Meter, and writes [`evaluation/results/latest.json`](evaluation/results/latest.json). Each dimension is measured against a stated baseline with its n, or says what evidence it still needs. The composite stays null until every dimension is measured.
@@ -69,7 +75,7 @@ Environment: `ONEIRO_LOCAL_REASONER_URL`, `ONEIRO_LOCAL_REASONER_TRANSPORT=ollam
 
 ```
 motivation/    worth.js, worth-ledger.js, hunger.js, risk.js, risk-journal.js, interests.js
-reasoning/     strategies.js, ponder-queue.js, ponder-service.js, loop.js (the evidence-bound reasoner), trace.js
+reasoning/     strategies.js, ponder-queue.js, ponder-service.js, loop.js (the evidence-bound reasoner), trace.js, self-build.js
 emotion/       engine.js (affect v4)
 hypothesis/    typed, falsifiable predictions and their evaluation against observed metrics
 simulation/    forward simulation scored by later outcomes
