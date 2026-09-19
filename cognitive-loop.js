@@ -552,15 +552,15 @@ async function think() {
       thermal: intero.thermal?.pressure || 'unknown',
       app_switches_15min: Number(switches[0]?.cnt || 0),
     };
+    // A prediction about a want is settled by that want's observed progress, read at evaluation time.
+    const progressFor = async h => {
+      const chainId = h.source_data?.want_chain_id; if (!chainId) return observedState;
+      const { rows } = await pool.query("SELECT ponder_state #>> '{want,progress}' AS p FROM thought_chains WHERE id = $1", [chainId]).catch(() => ({ rows: [] }));
+      return rows[0]?.p == null ? observedState : { ...observedState, want_progress: Number(rows[0].p) };
+    };
     // Test overdue hypotheses in parallel — each is independent
     if (!isConsolidating && overdue.length > 0) {
       const outcomeDesc = `Current state: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
-      // A prediction about a want is settled by that want's observed progress, read at evaluation time.
-      const progressFor = async h => {
-        const chainId = h.source_data?.want_chain_id; if (!chainId) return observedState;
-        const { rows } = await pool.query("SELECT ponder_state #>> '{want,progress}' AS p FROM thought_chains WHERE id = $1", [chainId]).catch(() => ({ rows: [] }));
-        return rows[0]?.p == null ? observedState : { ...observedState, want_progress: Number(rows[0].p) };
-      };
       const testResults = await Promise.allSettled(
         overdue.map(async h =>
           withTimeout(
@@ -599,11 +599,11 @@ async function think() {
     if (hypothesisSlaCooldown <= 0 && !isConsolidating) {
       hypothesisSlaCooldown = HYPOTHESIS_SLA_CYCLES;
       const { rows: slaCandidates } = await pool.query(
-        `SELECT id, claim, prediction
+        `SELECT id, claim, prediction, source_data
          FROM hypotheses
          WHERE status = 'pending'
            AND (
-             created_at < NOW() - $1::interval
+             (prediction_deadline IS NULL AND created_at < NOW() - $1::interval)
              OR (
                prediction_deadline IS NOT NULL
                AND prediction_deadline < NOW() + INTERVAL '2 minutes'
@@ -616,10 +616,11 @@ async function think() {
 
       if (slaCandidates.length > 0) {
         const slaOutcomeDesc = `SLA sweep snapshot: app=${visual.frontApp}, presence=${activity.presence}, battery=${batteryPct}%, charging=${isCharging}, thermal=${intero.thermal?.pressure || 'unknown'}, idle=${activity.idleSeconds}s, app_switches_15min=${observedState.app_switches_15min}`;
+        // A prediction with a deadline is settled at its deadline, never before, and with the want's progress in view.
         const slaResults = await Promise.allSettled(
-          slaCandidates.map(h =>
+          slaCandidates.map(async h =>
             withTimeout(
-              oca.layers.hypothesis.test(h.id, { description: slaOutcomeDesc, observed: observedState }),
+              oca.layers.hypothesis.test(h.id, { description: slaOutcomeDesc, observed: await progressFor(h) }),
               LLM_TICK_TIMEOUT_MS, 'hypothesis.test.sla'
             )
           )
