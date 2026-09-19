@@ -36,9 +36,25 @@ const strategyDeps = { llm, hypothesis, simulate, evaluateSimulation, writeArtif
   provider: process.env.OCA_STRATEGY_PROVIDER || 'local', model: process.env.OCA_STRATEGY_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen-agent' };
 // The risk journal is created below; the queue receives it through this indirection.
 const riskRef = { current: null };
+// The pursuit reasoner prefers the Codex subscription for hard steps; when Codex is unavailable (usage limit,
+// sign-in, transport) the same pass runs on the local model so an outage never fails the attempt on its own.
+const CODEX_UNAVAILABLE = /usage limit|not logged|unauthori|rate limit|quota|exited \d+|ENOENT|timed out|ECONN|network/i;
+let codexBackoffUntil = 0;
+async function pursuitReason(goal, options) {
+  const local = { ...options, provider: strategyDeps.provider, model: strategyDeps.model };
+  if (Date.now() < codexBackoffUntil) return reason(goal, local);
+  // The loop reports transport failures as a failed result rather than throwing, so both shapes are checked.
+  let result;
+  try { result = await reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }); }
+  catch (e) { result = { status: 'failed', error: String(e.message) }; }
+  if (result.status !== 'failed' || !CODEX_UNAVAILABLE.test(String(result.error || ''))) return result;
+  codexBackoffUntil = Date.now() + 15 * 60_000;
+  console.warn(`[ponder] Codex unavailable (${String(result.error).slice(0, 140)}); using ${strategyDeps.model} locally for 15 min`);
+  return reason(goal, local);
+}
 export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect: emotion, strategies: strategyDeps,
   risk: { decide: (...a) => riskRef.current.decide(...a), observe: (...a) => riskRef.current.observe(...a) },
-  reason: (goal, options) => reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }) });
+  reason: pursuitReason });
 // Risk: every proposed action is appraised against worth, journaled, and calibrated on what happened.
 // Appetite reads the live affect state; the master switch is the existing autonomous-actions flag.
 const envFlag = name => ['1', 'true', 'yes', 'on'].includes(String(process.env[name] || '').trim().toLowerCase());

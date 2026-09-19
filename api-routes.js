@@ -9,6 +9,7 @@ import llm from './llm.js';
 import { Router } from 'express';
 import oca from './index.js';
 import { randomUUID } from 'node:crypto';
+import { createTrace } from './reasoning/trace.js';
 import motor from './motor/engine.js';
 import { pool } from './event-bus.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
@@ -1441,6 +1442,13 @@ ocaRouter.get('/oca/logs/summary', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── TRACE ── the story of a want from the journals: attempts, appraisals, commitments, settlements, affect.
+const trace = createTrace({ pool });
+ocaRouter.get('/oca/trace/:chainId', async (req, res) => {
+  try { const t = await trace.forChain(Number(req.params.chainId)); res.status(t ? 200 : 404).json(t || { error: 'no such want' }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 ocaRouter.get('/oca/hunger', async (req, res) => {

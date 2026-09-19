@@ -217,7 +217,10 @@ export function runCodex(prompt, {
         return;
       }
 
-      const detail = stderr.trim().split('\n').slice(-4).join(' | ');
+      // Prefer the lines that explain the failure over skill-loader warnings that precede them.
+      const lines = stderr.trim().split('\n').filter(l => l.trim());
+      const explanatory = lines.filter(l => /^ERROR:|usage limit|unauthori|not logged|rate limit|quota|timed out|ECONN|network/i.test(l) && !/failed to load skill/i.test(l));
+      const detail = (explanatory.length ? explanatory.slice(-2) : lines.filter(l => !/failed to load skill/i.test(l)).slice(-4)).join(' | ');
       finish(new Error(`Codex CLI exited ${code}${detail ? `: ${detail}` : ''}`));
     });
 
