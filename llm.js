@@ -258,7 +258,8 @@ async function callLocal(params, options = {}) {
     temperature: params.temperature ?? 0.3,
     max_tokens: params.max_tokens ?? 2000,
     ...(options.responseSchema ? { response_format: { type: 'json_schema',
-      json_schema: { name: 'oca_response', strict: true, schema: options.responseSchema } } } : {}),
+      json_schema: { name: 'oca_response', strict: true, schema: options.responseSchema } } }
+      : options.jsonMode ? { response_format: { type: 'json_object' } } : {}),
   }, options);
   const localModel =
     process.env.ONEIRO_OCA_THINKER_MODEL ||

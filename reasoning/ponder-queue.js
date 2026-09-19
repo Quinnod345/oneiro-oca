@@ -247,6 +247,34 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
   async function cancel(id) {
     return mutate(id, row => ({ status: 'cancelled', state: { ...row.ponder_state, lease: randomUUID(), want: { ...row.ponder_state.want, status: 'cancelled' } } }), { allowRunning: true });
   }
+  // Wants saved before stakes existed get an outcome entity so they can be priced. An explicit request
+  // was a grounded rating by the person who asked; a child inherits its parent's stakes. Idempotent.
+  async function adoptLegacyWants() {
+    if (!worth) return { adopted: 0 };
+    const { rows } = await pool.query(`SELECT id, seed, priority, ponder_state FROM thought_chains WHERE ponder_state IS NOT NULL
+      AND ponder_state #>> '{want,status}' = 'active' AND ponder_state #> '{want,stakes}' IS NULL ORDER BY id`);
+    let adopted = 0;
+    for (const row of rows.sort((a, b) => (a.ponder_state.origin?.kind === 'interest') - (b.ponder_state.origin?.kind === 'interest'))) {
+      const state = row.ponder_state, origin = state.origin || { kind: 'explicit' };
+      const outcomeKey = `outcome:ponder-legacy-${row.id}`;
+      let stakes = [{ entityKey: outcomeKey, share: 1 }];
+      if (slug(state.topic)) stakes.push({ entityKey: `project:${slug(state.topic)}`, share: 1 });
+      if (origin.kind === 'interest' && origin.parentChainId) {
+        const parent = await get(origin.parentChainId);
+        for (const st of parent?.want?.stakes || []) if (!stakes.some(x => x.entityKey === st.entityKey)) stakes.push({ ...st });
+      } else {
+        await signal({ id: `request:${outcomeKey}`, entityKey: outcomeKey, kind: 'rated', rating: 1, by: origin.by || 'quinn', about: row.seed.slice(0, 500) });
+        if (Number.isFinite(row.priority) && row.priority !== 0.7) {
+          await signal({ id: `request-priority:${outcomeKey}`, entityKey: outcomeKey, kind: 'prior', worth: row.priority, weight: 4, reason: 'Priority stated with the request.' });
+        }
+      }
+      const want = { ...state.want, version: 2, outcomeKey, stakes, pricing: { value: state.want.value, provenance: 'priority', unpriced: true } };
+      const { rowCount } = await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want}', $2::jsonb), updated_at = NOW()
+        WHERE id = $1 AND ponder_state #> '{want,stakes}' IS NULL`, [row.id, JSON.stringify(want)]);
+      adopted += rowCount;
+    }
+    return { adopted };
+  }
   async function hunger() {
     const { rows } = await pool.query(`SELECT * FROM thought_chains WHERE ponder_state IS NOT NULL
       AND ponder_state #>> '{want,status}' = 'active' ORDER BY priority DESC, id LIMIT 100`);
@@ -254,5 +282,5 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     return { wants, pressure: wants[0]?.hunger.pressure || 0, selected: wants[0]?.chain_id || null,
       pricing: worth ? 'live_from_worth_ledger' : 'explicit_priority' };
   }
-  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger };
+  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger, adoptLegacyWants };
 }

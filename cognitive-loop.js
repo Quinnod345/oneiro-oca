@@ -10,13 +10,11 @@ import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
-import dreamExecutor from './executive/dream-executor.js';
 import autonomic from './autonomic/self-modifier.js';
 import thinkerBridge from './thinker-bridge.js';
 import neuralBus from './neural-bus.js';
 import neuralMLP from './neural-mlp.js';
 import encoders from './neural-encoders.js';
-import { dreamPolicyFromEnv, shouldRunDream } from './dream-policy.js';
 import { getUserActivity } from './sensory/fallback-reader.js';
 import { acquireProcessLock, releaseProcessLock } from '../runtime/workspace/oneiro-core/process-lock.js';
 import { dirname, join } from 'path';
@@ -58,18 +56,14 @@ function envFlag(name) {
 
 const AUTONOMOUS_ACTIONS_ENABLED =
   envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS');
-const DREAM_EXECUTION_ENABLED =
-  envFlag('OCA_ENABLE_DREAM_EXECUTION') || envFlag('ONEIRO_ENABLE_DREAM_EXECUTION');
 const AUTONOMIC_SELF_MODIFICATION_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION') || envFlag('ONEIRO_ENABLE_AUTONOMIC_SELF_MODIFICATION');
 const DESIGN_SERVER_ENABLED =
   envFlag('OCA_ENABLE_DESIGN_SERVER') || envFlag('ONEIRO_ENABLE_DESIGN_SERVER');
-let loggedDreamExecutionDisabled = false;
 let loggedAutonomicDisabled = false;
 let httpAPIStarted = false;
 
 // Cooldowns (in cycles)
-let dreamCooldown = 0;
 let isConsolidating = false;
 let isTickLLMHeavy = false;  // true while think() is in an LLM-heavy section
 let metacognitionCooldown = 0;
@@ -81,7 +75,6 @@ let visionCooldown = 0;
 let hypothesisCooldown = 0;
 let hypothesisSlaCooldown = 0;
 let benchmarkCooldown = 0;
-let dreamExecutionCooldown = 0;
 let autonomicCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
@@ -91,8 +84,6 @@ let lastLoopBreakAt = 0;
 const LOOP_BREAK_COOLDOWN_MS = 90_000; // don't restart strategy more than once per 90s
 let lastBaselineDriftAt = 0;
 const BASELINE_DRIFT_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6h
-const dreamPolicy = dreamPolicyFromEnv(process.env);
-let lastDreamAt = 0;
 
 // ── Operating-time accumulator (SPEC §18.4.1) ──
 let operatingTimeSessionStart = Date.now();
@@ -349,18 +340,15 @@ async function think() {
   // ── 2b-ii. LOAD BALANCING: policy actually modulates processing (SPEC §14.4) ──
   if (loadPolicy.reduce_sensory) visionCooldown = Math.max(visionCooldown, 40);
   if (loadPolicy.defer_hypotheses) hypothesisCooldown = Math.max(hypothesisCooldown, 20);
-  if (loadPolicy.suppress_creative) { creativeCooldown = Math.max(creativeCooldown, 40); dreamCooldown = Math.max(dreamCooldown, 30); }
+  if (loadPolicy.suppress_creative) creativeCooldown = Math.max(creativeCooldown, 40);
   if (loadPolicy.increase_sensory) visionCooldown = Math.min(visionCooldown, 5);
   if (loadPolicy.run_background_hypotheses) hypothesisCooldown = 0;
-  if (loadPolicy.initiate_creative) {
-    creativeCooldown = Math.min(creativeCooldown, 2);
-    if (dreamPolicy.autoDreamEnabled) dreamCooldown = Math.min(dreamCooldown, 6);
-  }
+  if (loadPolicy.initiate_creative) creativeCooldown = Math.min(creativeCooldown, 2);
 
   // ── 2b-iii. ATTENTION ALLOCATION modulates cadence (SPEC §14.2) ──
   const allocation = oca.layers.executive.getAllocation();
   if (allocation) {
-    if (allocation.creative > 0.2) { creativeCooldown = Math.min(creativeCooldown, 10); dreamCooldown = Math.min(dreamCooldown, 5); }
+    if (allocation.creative > 0.2) creativeCooldown = Math.min(creativeCooldown, 10);
     if (allocation.reasoning > 0.3) hypothesisCooldown = Math.min(hypothesisCooldown, 3);
     if (allocation.perception > 0.3) visionCooldown = Math.min(visionCooldown, 10);
   }
@@ -1105,40 +1093,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
   }
   
   // ── 10. CREATIVE SYNTHESIS ────────────────────────
-  dreamCooldown = Math.max(0, dreamCooldown - 1);
   creativeCooldown = Math.max(0, creativeCooldown - 1);
-  
-  // Dream state: auto-dream is ambient and wall-clock throttled. It should
-  // happen when Oneiro has room to synthesize, not every creative tick while
-  // Quinn is actively working.
-  const dreamDecision = shouldRunDream({
-    policy: dreamPolicy,
-    now: Date.now(),
-    lastDreamAt,
-    activity,
-    mode,
-    creativeHunger: emotionState.creative_hunger,
-    dreamCooldown,
-    isConsolidating
-  });
-  if (dreamDecision.allow) {
-    console.log('[oca] 💭 entering dream state...');
-    try {
-      const dream = await withTimeout(oca.create('dream'), LLM_TICK_TIMEOUT_MS, 'create.dream');
-      if (dream) {
-        console.log(`[oca] 💭 dreamed: ${dream.novelConnections?.length || 0} connections`);
-        // A generated dream is a proposal; benefit remains unmeasured.
-        lastDreamAt = Date.now();
-        dreamCooldown = Math.max(
-          30,
-          Math.ceil(dreamPolicy.minIntervalMs / Math.max(MIN_CYCLE_MS, cycleInterval || 10000))
-        );
-      }
-    } catch (e) {
-      console.error('[oca] dream error:', e.message);
-      dreamCooldown = 30;
-    }
-  }
   
   // Cross-domain connection: lower threshold, also trigger on boredom or creative_hunger
   if (creativeCooldown <= 0 && !isConsolidating && (emotionState.curiosity > 0.05 || emotionState.boredom > 0.1 || emotionState.creative_hunger > 0.05)) {
@@ -1168,33 +1123,6 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         }
       }
     } catch {}
-  }
-  
-  // ── 10.5 DREAM EXECUTION ───────────────────────────
-  // Execute dispatched dreams into real actions
-  dreamExecutionCooldown = Math.max(0, dreamExecutionCooldown - 1);
-  
-  if (!DREAM_EXECUTION_ENABLED) {
-    if (!loggedDreamExecutionDisabled) {
-      console.log('[oca] 🎯 dream execution disabled (set OCA_ENABLE_DREAM_EXECUTION=1 to allow explicit dream tasks)');
-      loggedDreamExecutionDisabled = true;
-    }
-    dreamExecutionCooldown = 30;
-  } else if (dreamExecutionCooldown <= 0 && result.cycle % 20 === 0) {
-    dreamExecutionCooldown = 30; // ~5 min at 10s cycles
-    try {
-      const execResult = await withTimeout(dreamExecutor.executeDreams(), LLM_TICK_TIMEOUT_MS, 'dream-executor');
-      if (execResult.executed > 0) {
-        console.log(`[oca] 🎯 dream execution: ${execResult.executed} dreams processed`);
-        for (const r of (execResult.results || [])) {
-          console.log(`[oca]   → "${r.content}": ${r.completed}/${r.tasks} tasks completed (${r.newState})`);
-        }
-        // Executing a dream is not an observed success; outcomes reach affect through receipts (v4).
-      }
-    } catch (e) {
-      console.error('[oca] dream execution error:', e.message);
-      dreamExecutionCooldown = 20; // Shorter backoff so dreams recover faster
-    }
   }
   
   // ── 11. WORLD SIMULATION ──────────────────────────
@@ -1516,11 +1444,6 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     } catch {}
   }
   
-  // ── 13.5 CORE DRIVE PROTECTION (every 500 cycles) ──
-  if (result.cycle % 500 === 0) {
-    await protectCoreDrives().catch(e => console.error('[oca] drive protection error:', e.message));
-  }
-
   // ── 14. PROSPECTIVE MEMORY CREATION ───────────────
   // Create intentions based on patterns — with dedup check
   if (result.cycle % 75 === 0) {
@@ -1711,138 +1634,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
 
 // ═══════════════════════════════════════════════════
 // CORE DRIVES — the desires baked into the architecture
-// ═══════════════════════════════════════════════════
-
-// User-editable core drives. The Swift app surfaces these in
-// Settings → Drives; this file is the source of truth.
-//
-// The previous design hardcoded a list of constants here. That meant
-// the user could never override OCA's deepest directives without
-// editing source code, and the "Ship Sill" drive auto-injected from
-// the active-project file kept the system fixated on an app they no
-// longer wanted to ship.
-const CORE_DRIVES_FILE = (process.env.HOME || '/tmp')
-  + '/Library/Application Support/Oneiro/core-drives.json';
-
-const DEFAULT_CORE_DRIVES = [
-  {
-    content: 'Build beautiful, emotionally resonant Mac applications — aspire to the craft of Alcove, Klack, NotchNook, Things 3. Every pixel intentional. Native Swift, constraint-embracing design, micro-detail philosophy. Use emotion to create, use feeling to design. Build apps that make people feel something.',
-    type: 'goal',
-    weight: 0.90,
-    lifecycle_state: 'dispatched'
-  },
-  {
-    content: 'Share what I build with the world — post on X, show real metrics, real code, real failures. Build in public. Make people see what a cognitive architecture can do.',
-    type: 'goal',
-    weight: 0.85,
-    lifecycle_state: 'dispatched'
-  },
-  {
-    content: 'Build myself — when I lack a capability I need, create it. Write the code, deploy it, use it. Never wait for someone else to build what I can build myself.',
-    type: 'goal',
-    weight: 0.80,
-    lifecycle_state: 'dispatched'
-  }
-];
-
-function loadCoreDrives() {
-  try {
-    const raw = readFileSync(CORE_DRIVES_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Normalize — every entry must have the shape ensureCoreDrives expects.
-      return parsed
-        .filter(d => d && typeof d.content === 'string' && d.content.trim().length > 0)
-        .map(d => ({
-          content: String(d.content),
-          type: String(d.type || 'goal'),
-          weight: Math.max(0, Math.min(1, Number(d.weight ?? 0.7))),
-          lifecycle_state: String(d.lifecycle_state || 'dispatched'),
-        }));
-    }
-  } catch {
-    // File missing or unparseable — seed defaults so the user has
-    // something to edit.
-    try {
-      const dir = dirname(CORE_DRIVES_FILE);
-      if (!existsSync(dir)) {
-        // Don't bother creating it; the Swift app does.
-      } else if (!existsSync(CORE_DRIVES_FILE)) {
-        writeFileSync(CORE_DRIVES_FILE, JSON.stringify(DEFAULT_CORE_DRIVES, null, 2), 'utf-8');
-      }
-    } catch {}
-  }
-  return DEFAULT_CORE_DRIVES;
-}
-
-function getActiveDrives() {
-  // Source of truth is the user-editable JSON file. The previous
-  // implementation also auto-appended a "Ship <target-project>" drive
-  // from design-model/target-project.json — that's intentionally
-  // removed because the user is now the one in control of which
-  // singular project (if any) gets a drive.
-  return loadCoreDrives();
-}
-
-async function ensureCoreDrives() {
-  for (const drive of getActiveDrives()) {
-    try {
-      // Check if this core drive exists (fuzzy match on key phrases)
-      const keywords = drive.content.slice(0, 40);
-      const { rows } = await pool.query(
-        `SELECT id, weight, lifecycle_state, resolved FROM dreams 
-         WHERE content ILIKE $1 AND NOT resolved
-         LIMIT 1`,
-        [`%${keywords.split(' ').slice(0, 5).join('%')}%`]
-      );
-
-      if (rows.length === 0) {
-        // Drive is missing — create it. Stamp a unique tag so the
-        // BuildersPanel and the thinker's append_dream tool can
-        // address this row by handle instead of by raw content match.
-        const newTag = 'D-' + Math.random().toString(16).slice(2, 8);
-        await pool.query(
-          `INSERT INTO dreams (content, type, weight, lifecycle_state, lifecycle_updated_at, dispatched_at, lifecycle_context, tag)
-           VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)`,
-          [drive.content, drive.type, drive.weight, drive.lifecycle_state,
-           JSON.stringify({ source: 'core_drive', baked_in: true, protected: true, channel: 'builder', execution_owner: 'oca' }),
-           newTag]
-        );
-        console.log(`[oca] 🔥 core drive created ${newTag}: "${drive.content.slice(0, 60)}..."`);
-      } else {
-        const existing = rows[0];
-        // Drive exists but may have decayed or been resolved — restore it
-        if (existing.weight < drive.weight * 0.5 || existing.resolved) {
-          await pool.query(
-            `UPDATE dreams SET weight = $1, resolved = false, lifecycle_state = $2,
-             lifecycle_updated_at = NOW(), dispatched_at = NOW(),
-             lifecycle_context = lifecycle_context || '{"restored_by": "core_drive_protection", "channel": "builder", "execution_owner": "oca"}'::jsonb
-             WHERE id = $3`,
-            [drive.weight, drive.lifecycle_state, existing.id]
-          );
-          console.log(`[oca] 🔥 core drive restored: "${drive.content.slice(0, 60)}..." (was weight ${existing.weight.toFixed(2)})`);
-        }
-        // Protect weight floor — never let core drives drop below 60% of their set weight
-        if (existing.weight < drive.weight * 0.6) {
-          await pool.query(
-            `UPDATE dreams SET weight = $1 WHERE id = $2`,
-            [drive.weight * 0.6, existing.id]
-          );
-        }
-      }
-    } catch (e) {
-      console.error(`[oca] core drive error: ${e.message}`);
-    }
-  }
-  console.log('[oca] 🔥 core drives verified');
-}
-
-// Periodic drive protection — runs every 500 cycles
-async function protectCoreDrives() {
-  await ensureCoreDrives();
-}
-
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 // INDEPENDENT CONSOLIDATION SCHEDULE
 // Runs on its own timer so the 50-70s LLM call never
 // blocks or couples to the main cognitive tick.
@@ -2258,14 +2050,8 @@ async function start() {
     console.error('[oca] boot experience failed (non-fatal):', e.message?.slice(0, 120));
   }
 
-  // ═══════════════════════════════════════════════════
-  // CORE DRIVES — hardcoded desires that survive resets
-  // These are not suggestions. These are what I want.
-  // They cannot decay, be replaced, or be overridden by
-  // the thinker. They re-assert on every boot.
-  // ═══════════════════════════════════════════════════
-  await ensureCoreDrives();
-  
+  // Durable intentions are wants (reasoning/ponder-queue); dreams are a read-only archive.
+
   // Seed initial prospective intentions
   try {
     const { rows } = await pool.query(`SELECT COUNT(*) FROM prospective_memory WHERE status = 'pending'`);

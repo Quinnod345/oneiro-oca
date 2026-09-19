@@ -157,24 +157,6 @@ async function collectPerformanceMetrics() {
     metrics.consolidation = { error: e.message };
   }
 
-  // Dream execution success rate
-  try {
-    const { rows } = await pool.query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE success) as successful
-      FROM self_builds
-      WHERE built_at > NOW() - INTERVAL '7 days'
-    `);
-    metrics.dreamExecution = {
-      total: parseInt(rows[0].total),
-      successful: parseInt(rows[0].successful),
-      successRate: parseInt(rows[0].total) > 0 
-        ? parseInt(rows[0].successful) / parseInt(rows[0].total) : 0,
-    };
-  } catch (e) {
-    metrics.dreamExecution = { error: e.message };
-  }
 
   // Cycle performance
   try {
@@ -281,19 +263,6 @@ async function analyzeTrends() {
     };
   }
 
-  // Dream execution trend
-  const dreamRates = history
-    .map(h => h.metrics?.dreamExecution?.successRate)
-    .filter(v => Number.isFinite(v));
-  if (dreamRates.length >= 3) {
-    const recent = dreamRates.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
-    const older = dreamRates.slice(-3).reduce((a, b) => a + b, 0) / 3;
-    trends.dreamExecution = {
-      direction: recent > older ? 'improving' : recent < older ? 'degrading' : 'stable',
-      recentRate: recent,
-      olderRate: older,
-    };
-  }
 
   return { metrics, trends };
 }
@@ -352,16 +321,6 @@ async function generateProposals(metrics, trends) {
       problem: `Neural connections shrinking: ${trends.neuralGrowth.current} → ${trends.neuralGrowth.previous}`,
       severity: 0.5,
       targetFile: 'neural-connections.js',
-    });
-  }
-
-  // Low dream execution success
-  if (metrics.dreamExecution?.total > 3 && metrics.dreamExecution?.successRate < 0.3) {
-    problems.push({
-      area: 'executive',
-      problem: `Dream execution success rate only ${(metrics.dreamExecution.successRate * 100).toFixed(0)}%`,
-      severity: 0.7,
-      targetFile: 'executive/dream-executor.js',
     });
   }
 

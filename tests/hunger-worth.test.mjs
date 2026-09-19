@@ -181,6 +181,30 @@ test('an interest-originated inquiry inherits its parent stakes and gets no rati
   assert.ok(child.want.value <= 0.6);
 }));
 
+test('legacy wants are adopted once: an explicit one is rated by its requester, a child inherits, both become priced', async () => database(async pool => {
+  let now = 10 * DAY;
+  const worth = createWorthLedger({ pool, clock: () => now });
+  await worth.seed();
+  const legacy = createPonderQueue({ pool, reason: blocked, clock: () => now });          // no ledger: saves wants without stakes
+  const parent = await legacy.enqueue({ seed: 'Old explicit request', topic: 'Legacy Topic', priority: 0.9, evidence });
+  const child = await legacy.enqueue({ seed: 'Old child', evidence }, { origin: { kind: 'interest', parentChainId: parent.chain_id } });
+  assert.equal(parent.want.stakes, undefined);
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth });
+  assert.equal((await queue.hunger()).wants.every(w => w.hunger.unpriced), true, 'unpriced until adopted');
+  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 2 });
+  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 0 });
+  const p = await queue.get(parent.chain_id), c = await queue.get(child.chain_id);
+  assert.equal(p.want.outcomeKey, `outcome:ponder-legacy-${parent.chain_id}`);
+  assert.deepEqual(p.want.stakes.map(s => s.entityKey), [p.want.outcomeKey, 'project:legacy-topic']);
+  const outcome = await worth.get(p.want.outcomeKey);
+  assert.equal(outcome.signals.rated, 1); assert.ok(outcome.worth > 0.8, 'stated priority 0.9 became a prior');
+  assert.equal(p.want.pricing.provenance, 'rated'); assert.equal(p.hunger.unpriced, false);
+  assert.ok(c.want.stakes.some(s => s.entityKey === p.want.outcomeKey), 'child inherits the parent outcome');
+  assert.equal(await worth.get(c.want.outcomeKey), null, 'a child gets no rating of its own');
+  const { rows: [{ n }] } = await pool.query("SELECT COUNT(*)::int AS n FROM worth_signals WHERE kind = 'rated'");
+  assert.equal(n, 1);
+}));
+
 test('without a ledger the queue behaves exactly as before', async () => database(async pool => {
   const queue = createPonderQueue({ pool, reason: blocked });
   const chain = await queue.enqueue({ seed: 'Legacy', topic: 'Old', evidence, priority: 0.3 });

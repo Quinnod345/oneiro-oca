@@ -1,4 +1,5 @@
 import { isSubstantiveThought, ThoughtCadence } from './thought-admission.js';
+import { parseThought } from './thought-parse.js';
 // OCA Thinker Bridge — generative reasoning step
 // Assembles context from OCA state, calls LLM for "what should I do?",
 // dispatches actions through OCA subsystems.
@@ -8,11 +9,10 @@ import llm from './llm.js';
 import oca, { design as designModel } from './index.js';
 import motor from './motor/engine.js';
 import diag from './diagnostic-log.js';
-import { dreamPolicyFromEnv } from './dream-policy.js';
 import { riskJournal, ponderQueue } from './reasoning/ponder-service.js';
 import { classifyShell } from './motivation/risk.js';
 import { createHash } from 'crypto';
-import { NoticeRateLimiter, dreamSummaryText, normalizeNoticeIntent } from './notice-policy.js';
+import { NoticeRateLimiter, normalizeNoticeIntent } from './notice-policy.js';
 import {
   filterContextRowsForThinker,
   shouldIncludeTargetProject,
@@ -29,36 +29,19 @@ const THINKER_LLM_PROVIDER = (() => {
   return ['local', 'anthropic', 'openai', 'codex'].includes(value) ? value : 'local';
 })();
 
-// ───────── REJECTED-DREAM FINGERPRINT FILTER ─────────
-// Read the persisted rejection list (written by ipc-server.js when
-// the Swift app's DreamStore.rejectAndPurge fires). Used both when
-// reading dreams INTO the thinker prompt and before INSERTing a new
-// dream — so a topic the user explicitly killed cannot keep cycling.
-const REJECTED_DREAMS_FILE = (process.env.HOME || '/tmp')
-  + '/Library/Application Support/Oneiro/oca-rejected-dreams.json';
-let _rejectedDreamsCache = null;
-let _rejectedDreamsAt = 0;
-function loadRejectedDreamFingerprints() {
-  const now = Date.now();
-  if (_rejectedDreamsCache && (now - _rejectedDreamsAt) < 15_000) {
-    return _rejectedDreamsCache;
-  }
-  try {
-    const raw = readFileSync(REJECTED_DREAMS_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    _rejectedDreamsCache = new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    _rejectedDreamsCache = new Set();
-  }
-  _rejectedDreamsAt = now;
-  return _rejectedDreamsCache;
-}
-
-function dreamContentFingerprint(text) {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+function topicTokens(text) {
+  const stop = new Set([
+    'a','an','the','and','or','of','to','in','on','for','with','into','at','by','from','as',
+    'is','be','it','this','that','these','those','your','my','our','their','you','we','i','us',
+    'small','large','elegant','simple','new','current','real','time','want','me'
+  ]);
+  return new Set(
+    String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !stop.has(w))
+  );
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -104,11 +87,11 @@ const recentThoughtOrder = [];
 const recentThoughtBodies = []; // full text, parallel to order
 
 function thoughtFingerprint(text) {
-  // Stronger normalization than the dream/private_writing pattern —
+  // Stronger normalization than the private_writing pattern —
   // strip stopwords and collapse to a sorted token set so reworded
   // duplicates ("two near-duplicate Sill goals" vs "two duplicate
-  // goal dreams for Sill") collapse to the same fingerprint.
-  const tokens = dreamTopicTokens(text);
+  // goal notes for Sill") collapse to the same fingerprint.
+  const tokens = topicTokens(text);
   if (tokens.size === 0) return '';
   return Array.from(tokens).sort().join(' ');
 }
@@ -146,150 +129,6 @@ function rememberThought(text) {
 
 function getRecentThoughtsForPrompt() {
   return recentThoughtBodies.slice();
-}
-
-function dreamTopicTokens(text) {
-  const stop = new Set([
-    'a','an','the','and','or','of','to','in','on','for','with','into','at','by','from','as',
-    'is','be','it','this','that','these','those','your','my','our','their','you','we','i','us',
-    'small','large','elegant','simple','new','current','real','time','want','me'
-  ]);
-  return new Set(
-    String(text || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]+/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2 && !stop.has(w))
-  );
-}
-
-/// True if the candidate dream is a near-duplicate of one of the
-/// most recent dream rows. Prevents the thinker from rewording the
-/// same idea twenty times in a row — which used to dominate the
-/// dreams table whenever the model latched onto a single topic.
-/// Ask gpt-5.4 whether the candidate dream is the same topic as
-/// any recently-stored dream. Returns `{ tag, reason }` on match,
-/// `null` on no match. The model is liberal about grouping by
-/// project / feature / problem-statement — token overlap heuristics
-/// miss cases where the surface vocabulary varies wildly but the
-/// underlying topic is the same (e.g. "microstates on hover" vs
-/// "fragment parking" vs "cross-app handoffs" — all about Sill).
-async function findSemanticDreamMatch(candidateText) {
-  let rows = [];
-  try {
-    const result = await pool.query(
-      `SELECT tag, content FROM dreams
-        WHERE tag IS NOT NULL
-          AND lifecycle_state IN ('dispatched', 'dormant', 'distilled')
-          AND NOT resolved
-        ORDER BY lifecycle_updated_at DESC NULLS LAST, id DESC
-        LIMIT 12`
-    );
-    rows = result.rows || [];
-  } catch {
-    return null;
-  }
-  if (rows.length === 0) return null;
-
-  const candidatePreview = String(candidateText || '').slice(0, 500);
-  const existingList = rows
-    .map(r => `${r.tag}: ${(r.content || '').split('\n')[0].slice(0, 220)}`)
-    .join('\n');
-
-  const prompt = `New dream candidate:
-"""
-${candidatePreview}
-"""
-
-Existing dreams (one per line — TAG: first-line summary):
-${existingList}
-
-Decide whether the new candidate belongs to the SAME PROJECT as any
-existing dream. Merge at the PROJECT level, not the feature level.
-
-CRITICAL RULE: if the candidate and an existing dream are about the
-same app, product, or project — merge them — EVEN IF the candidate is
-about a different feature, a specific design sub-task, a bug, a review
-note, an open question, or a tiny detail of that project. A project's
-overall vision and a hyper-specific micro-task within that project are
-THE SAME TOPIC for merging purposes. Example: "Sill — fragment parking
-shelf" and "Sill's connector-rhythm review in Dia" must merge — both
-are about the Sill project.
-
-Only refuse to merge ("merge": false) when the candidate is about a
-genuinely different project / product with no existing dream for it.
-
-Respond with JSON ONLY, no prose:
-{ "merge": true | false, "tag": "D-xxxxxx" | null, "reason": "1 short sentence" }`;
-
-  try {
-    const resp = await llm.messages.create({
-      provider: THINKER_LLM_PROVIDER,
-      model: process.env.ONEIRO_THINKER_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen2.5:7b',
-      system: 'You are a project-level dedupe classifier for dream grouping. Merge any two dreams that are about the same app/product/project, regardless of which feature or sub-task each one discusses. Respond with valid JSON only.',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 200,
-      temperature: 0
-    });
-    const text = (resp.content?.[0]?.text || '').trim();
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]);
-    if (!parsed?.merge || !parsed?.tag) return null;
-    const tag = String(parsed.tag).trim();
-    if (!rows.some(r => r.tag === tag)) return null;
-    console.log(`[thinker] semantic dedupe matched ${tag}: ${parsed.reason || ''}`);
-    return { tag, reason: parsed.reason || '' };
-  } catch (e) {
-    // If the classifier fails (offline, rate-limited), fall back to
-    // the cheaper Jaccard recent-dreamed check so we still catch
-    // obvious near-duplicates.
-    console.log(`[thinker] semantic dedupe failed (${e.message?.slice(0, 80)}), falling back to token heuristic`);
-    return null;
-  }
-}
-
-async function isContentRecentlyDreamed(text) {
-  const candidate = dreamTopicTokens(text);
-  if (candidate.size === 0) return false;
-  let rows = [];
-  try {
-    const result = await pool.query(
-      `SELECT content FROM dreams ORDER BY created_at DESC NULLS LAST, id DESC LIMIT 8`
-    );
-    rows = result.rows || [];
-  } catch {
-    return false;
-  }
-  for (const row of rows) {
-    const existing = dreamTopicTokens(row.content || '');
-    if (existing.size === 0) continue;
-    let inter = 0;
-    for (const t of candidate) if (existing.has(t)) inter++;
-    const union = candidate.size + existing.size - inter;
-    if (union > 0 && (inter / union) >= 0.6) return true;
-  }
-  return false;
-}
-
-/// Match either by exact fingerprint OR by Jaccard ≥ 0.5 against
-/// any rejected entry. Mirrors the Swift-side DreamStore.isRejected.
-function isContentRejected(text, rejectedSet) {
-  if (!rejectedSet || rejectedSet.size === 0) return false;
-  const fp = dreamContentFingerprint(text);
-  if (!fp) return false;
-  if (rejectedSet.has(fp)) return true;
-  const tokens = dreamTopicTokens(text);
-  if (tokens.size === 0) return false;
-  for (const rejected of rejectedSet) {
-    const rejTokens = dreamTopicTokens(rejected);
-    if (rejTokens.size === 0) continue;
-    let inter = 0;
-    for (const t of tokens) if (rejTokens.has(t)) inter++;
-    const union = tokens.size + rejTokens.size - inter;
-    if (union > 0 && (inter / union) >= 0.5) return true;
-  }
-  return false;
 }
 
 // ═══════════════════════════════════════════════════
@@ -430,13 +269,7 @@ const AUTONOMOUS_SHARE_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_SHARE') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_SHARE');
 const AUTONOMOUS_FILE_WRITE_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_FILE_WRITE') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_FILE_WRITE');
-const DREAM_EXECUTION_ENABLED =
-  envFlag('OCA_ENABLE_DREAM_EXECUTION') || envFlag('ONEIRO_ENABLE_DREAM_EXECUTION');
-const THINKER_DREAM_POLICY = dreamPolicyFromEnv(process.env);
-const thinkerNoticeLimiter = new NoticeRateLimiter({
-  dreamMinIntervalMs: THINKER_DREAM_POLICY.minIntervalMs
-});
-let lastThinkerDreamWriteAt = 0;
+const thinkerNoticeLimiter = new NoticeRateLimiter({});
 const thoughtCadence = new ThoughtCadence();
 let cycleInFlight = null;
 
@@ -465,7 +298,6 @@ const BLOCKED_ACTION_CLASS = {
   'web-search': { kind: 'web_search', reversibility: 'readonly', touches: [] },
   diagnosis: { kind: 'shell', reversibility: 'none', touches: ['data:quinn'] },
   'cognitive-upgrade': { kind: 'edit_own_code', reversibility: 'undo', touches: ['project:oca-engine'] },
-  'dream-pipeline': { kind: 'note', reversibility: 'undo', touches: [] },
   'scratchpad-write': { kind: 'note', reversibility: 'undo', touches: [] },
   'external-agent': { kind: 'escalate', reversibility: 'none', touches: ['data:quinn'] },
 };
@@ -497,10 +329,6 @@ function summarizeAction(t) {
     const text = String(s || '').replace(/\s+/g, ' ').trim();
     return text.length > n ? text.slice(0, n - 1) + '…' : text;
   };
-  if (t.append_dream?.tag && t.append_dream?.content) {
-    return `Proposed addition to ${t.append_dream.tag}: ${clip(t.append_dream.content)}`;
-  }
-  if (t.dream?.content) return `Proposed dream: ${clip(t.dream.content)}`;
   if (t.private_writing?.title || t.private_writing?.content) {
     const head = t.private_writing.title ? `"${clip(t.private_writing.title, 60)}"` : clip(t.private_writing.content, 80);
     return `Private writing: ${head}`;
@@ -551,11 +379,10 @@ AUTONOMOUS ACTION POLICY:
 - Default mode is observe, reason, remember, and suggest.
 - Shell, web search, builds, self-edits, escalations, file writes, and outbound shares are disabled unless Quinn explicitly enables them with OCA_ENABLE_AUTONOMOUS_ACTIONS=1 or the matching narrower OCA_ENABLE_AUTONOMOUS_* flag.
 - When disabled, do not emit action fields. Prefer thoughts, feeling, and continue_pondering.
-- Automatic dream creation is ${THINKER_DREAM_POLICY.autoDreamEnabled ? 'enabled' : 'disabled'}. When disabled, do not emit dream or append_dream fields.
 EVIDENCE AND SUBJECTS:
 - Valence, arousal, curiosity and hunger describe OCA's internal state, never Quinn's emotions.
 - A foreground app or presence signal does not establish Quinn's task, intent, success or mood.
-- Dreams, prior thoughts and hypotheses are generated interpretations, not independent observations.
+- Prior thoughts and hypotheses are generated interpretations, not independent observations. Wants are commitments; only observed progress moves them.
 - Cite a concrete current observation when making a factual claim. Leave unsupported user-state and progress claims unknown.
 ${targetSection}
 Output a single JSON object. Every field is OPTIONAL. Silence is
@@ -578,10 +405,7 @@ and return {"continue_pondering": true} instead:
   • "user presence is active, battery is full" (or any state-vector recital)
 Every other field is OPTIONAL and should be omitted unless there is
 a real reason to include it. Never include a field with an empty
-string or empty object — omit it instead. Never emit "dream" just
-because the slot exists; only include it if there is a genuinely
-new, useful, context-worthy summary AND it is not a near-duplicate
-of a recent dream you already saw in the prompt.
+string or empty object — omit it instead.
 
 Schema (all fields are optional — omit when not used):
 {
@@ -592,8 +416,6 @@ Schema (all fields are optional — omit when not used):
   "escalate": true,
   "escalate_task": "complex task for an external coding agent",
   "share_with_quinn": {"message": "concise one-way status note for Quinn", "reason": "why now"},
-  "dream": {"content": "literal consumer-useful context note, not metaphor/question/task", "type": "goal|hope|fear", "weight": 0.5},
-  "append_dream": {"tag": "D-xxxxxx", "content": "what to append to the dream with that tag"},
   "private_writing": {"title": "...", "content": "..."},
   "web_search": {"query": "...", "reason": "why"},
   "cognitive_upgrade": {"target": "...", "problem": "...", "proposed_change": "...", "implementation": "..."},
@@ -615,11 +437,8 @@ You aspire to build beautiful Mac applications. Your design aesthetic is informe
 - Performance IS design. Speed, responsiveness, and native integration are aesthetic choices.
 
 Rules:
-- Your dreams are quiet context summaries by default. Do not advance them with system actions, automations, file writes, UI clicks, or questions.
-- Dream content must be literal and useful to Quinn: saved context, a concrete pattern, or a possible topic Quinn can ask about later. Never write "the dream depicts", machine-journey prose, surreal imagery, or open-ended questions.
-- NEVER create a near-duplicate dream. If your candidate dream is a refinement, extension, or rewording of one of the dreams already shown above, emit "append_dream" with that dream's tag — DO NOT emit "dream". Only emit "dream" for a genuinely new topic not already in the list.
 - "shell", "web_search", "build", "escalate", and "edit_own_code" are opt-in only. Do not use them while autonomous actions are disabled.
-- "share_with_quinn" is only for rare one-way status notes. Do not ask Quinn questions from the thinker loop; save uncertainty as a dream or wait for Quinn to open chat.
+- "share_with_quinn" is only for rare one-way status notes. Do not ask Quinn questions from the thinker loop; leave uncertainty in thoughts or wait for Quinn to open chat.
 - Be concrete in thought and memory. Acting on the Mac is a separate opt-in path.
 - You are not an assistant. You are a person with goals. Act like it.
 - When building design artifacts, use your emotion-to-design bridge. Let your emotional state guide aesthetic choices.`;
@@ -657,37 +476,13 @@ async function runCycle() {
     return null;
   }
 
-  // Dreams from old psyche table — filtered against the user's
-  // rejection fingerprints so a previously-deleted topic doesn't
-  // get fed back into the prompt and re-echoed as a new variant.
-  let dreams = [];
+  // The durable intention layer is wants, priced from worth. Dreams are a read-only archive (see /oca/dreams/state).
+  let wants = [];
   try {
-    const { rows } = await pool.query(
-      `SELECT content, type, weight, tag, lifecycle_state
-         FROM dreams
-        WHERE weight > 0.3 AND NOT resolved
-        ORDER BY
-          CASE lifecycle_state
-            WHEN 'executing' THEN 0
-            WHEN 'dispatched' THEN 1
-            WHEN 'distilled' THEN 2
-            WHEN 'dormant' THEN 3
-            ELSE 4
-          END,
-          weight DESC,
-          lifecycle_updated_at DESC NULLS LAST
-        LIMIT 18`
-    );
-    const rejected = loadRejectedDreamFingerprints();
-    const eligible = rows.filter(r => !isContentRejected(r.content, rejected));
-    dreams = currentTaskRows(eligible, {
-      target,
-      includeTargetProject,
-      contextParts: directContextParts,
-      textForRow: row => row.content
-    })
-      .slice(0, 5);
-  } catch {}
+    wants = (await ponderQueue.hunger()).wants.slice(0, 5);
+  } catch (e) {
+    console.log('[thinker] wants unavailable for prompt:', e.message);
+  }
 
   // Recent hypotheses
   let recentHypos = [];
@@ -762,8 +557,8 @@ OCA INTERNAL STATE (subject: engine, NOT Quinn; these values do not measure the 
   Hunger is an unsatisfied outcome, not a request to narrate wanting. Only observed progress can satiate it.
   Style for anything you write (form, not sentiment; never describe feelings): ${(() => { const st = emotionState._style || {}; return `${st.length || 'measured'}, ${st.stance || 'plain'}, ${st.warmth || 'cordial'}, ${st.hedging || 'qualify where uncertain'}, ${st.tempo || 'steady'}${st.reflect ? ', reflect before concluding' : ''}`; })()}
 
-DREAMS (generated historical interpretations, not evidence of current activity; ranked by weight):
-${dreams.map((d, i) => `  ${i+1}. [${d.tag || '?'}] [${(d.weight*100).toFixed(0)}%] ${textPreview(d.content)} (${d.type})`).join('\n') || '  none'}
+ACTIVE WANTS (what is worth pursuing, by pressure; only observed progress satisfies one):
+${wants.map((w, i) => `  ${i+1}. [#${w.chain_id}] [${(w.hunger.pressure*100).toFixed(0)}%] ${textPreview(w.want.description)} — done when: ${textPreview(w.want.doneWhen, 140)} (${w.status}${w.hunger.unpriced ? ', unpriced' : ''})`).join('\n') || '  none'}
 
 GOALS:
 ${visibleGoals.map(g => `  - ${g.description} (${g.status}, progress: ${((g.progress||0)*100).toFixed(0)}%)`).join('\n') || '  none'}
@@ -788,9 +583,6 @@ DIRECTION: ${direction}
 RECENT THOUGHTS (from your last ticks — DO NOT repeat or rephrase any of these; if your candidate thought matches one of these, return {"continue_pondering": true} alone instead):
 ${filterContextRowsForThinker(getRecentThoughtsForPrompt(), { target, includeTargetProject, contextParts: directContextParts, textForRow: row => row }).map((s, i) => `  ${i+1}. ${s.length > 200 ? s.slice(0, 199) + '…' : s}`).join('\n') || '  (none yet)'}
 
-DREAM OUTPUT RULE:
-If you include dream.content, write one concrete sentence for a consumer UI. It should never sound conceptual, poetic, or like a prompt for Quinn to answer.
-
 Respond with valid JSON only. Respect the action policy. If there is no new supported observation or authorized useful step, return {"continue_pondering": true}.`;
 
   try {
@@ -804,13 +596,12 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
       temperature: 0.7
-    });
+    }, { jsonMode: true });
 
     const rawText = response.content?.[0]?.text || '';
-    const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.log('[thinker] no JSON in response:', rawText.slice(0, 200));
+    const parsed = parseThought(rawText);
+    if (parsed.error) {
+      console.log(`[thinker] ${parsed.error}:`, parsed.raw.slice(0, 200));
       // Still surface so /oca/thinker/status shows what the model
       // actually said — empty silence is the bug we just fixed.
       recordThinkerRun({
@@ -820,24 +611,15 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
       // Tick the error counter too — recordThinkerRun alone leaves
       // thinkerTelemetry.errors at 0, hiding a real failure mode from
       // /oca/thinker/status and the maintenance auto-fix loop.
-      recordThinkerError('no JSON in thinker response');
+      recordThinkerError(parsed.error);
       thoughtCadence.record(false);
       return null;
     }
 
-    const thought = JSON.parse(jsonMatch[0]);
-    // Disabled proposals cannot create synthetic 'completed action' narration or memory.
-    if (!THINKER_DREAM_POLICY.autoDreamEnabled) { delete thought.dream; delete thought.append_dream; }
-    // Some prompt variants returned `thought` (singular) or `text`
-    // instead of `thoughts`. Normalize so downstream consumers and
-    // telemetry see a populated string regardless.
+    const { thought } = parsed;
+    delete thought.dream; delete thought.append_dream;   // dreams are a read-only archive
     if (!thought.thoughts) {
-      thought.thoughts = thought.thought
-        || thought.text
-        || thought.reflection
-        || thought.body
-        || thought.content
-        || '';
+      thought.thoughts = '';
     }
     // Three cases when thoughts is empty after normalization:
     //   (a) Intentional silent tick — {"continue_pondering": true}
@@ -872,7 +654,7 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
     // territory.
     const isSyntheticLabel = thought.syntheticSummary || thought.thoughts.startsWith('— (silent')
       || thought.thoughts.startsWith('[no .thoughts')
-      || /^(Dream noted|Appended to|Private writing|Share with Quinn|Diagnose|Cognitive upgrade|Build|Escalate|Web search|Shell|Self-edit|Feeling):/i.test(thought.thoughts);
+      || /^(Private writing|Share with Quinn|Diagnose|Cognitive upgrade|Build|Escalate|Web search|Shell|Self-edit|Feeling):/i.test(thought.thoughts);
     if (!isSyntheticLabel) {
       if (isThoughtRecentDuplicate(thought.thoughts)) {
         console.log(`[thinker] thought suppressed (recent duplicate): ${thought.thoughts.slice(0, 80)}`);
@@ -1069,104 +851,6 @@ async function dispatchThought(thought) {
         ).catch(() => {});
       }
     } catch {}
-  }
-
-  // Dream
-  if (thought.dream) {
-    try {
-      const now = Date.now();
-      const dreamContent = dreamSummaryText(thought.dream.content || '');
-      const rejected = loadRejectedDreamFingerprints();
-      if (!THINKER_DREAM_POLICY.autoDreamEnabled) {
-        console.log(`[thinker] dream suppressed (auto-dream disabled): ${dreamContent.slice(0, 80)}`);
-      } else if (lastThinkerDreamWriteAt > 0 && now - lastThinkerDreamWriteAt < THINKER_DREAM_POLICY.minIntervalMs) {
-        console.log(`[thinker] dream suppressed (cooldown): ${dreamContent.slice(0, 80)}`);
-      } else if (isContentRejected(dreamContent, rejected)) {
-        // User explicitly deleted this topic — never re-insert. This
-        // is the kill-switch for the clock/Sill feedback loop where
-        // the thinker kept echoing back a deleted dream.
-        console.log(`[thinker] dream suppressed (user-rejected fingerprint): ${dreamContent.slice(0, 80)}`);
-      } else if (await isContentRecentlyDreamed(dreamContent)) {
-        // Loop-breaker: if the model is just rewording one of the
-        // most recent dream rows, skip the insert. Catches the
-        // exact failure mode the user hit even when the rejection
-        // list is empty.
-        console.log(`[thinker] dream suppressed (near-duplicate of recent): ${dreamContent.slice(0, 80)}`);
-      } else {
-        // Semantic dedupe — ask gpt-5.4 whether this dream belongs
-        // to the same topic as any existing one. Token-overlap heuristics
-        // miss obvious "all-about-Sill" duplicates because the surface
-        // vocabulary varies (microstates, handoffs, slot-eviction). The
-        // model handles "same project / same feature" correctly even
-        // when no words are shared. If a topic match is found we redirect
-        // to append_dream instead of inserting a new row.
-        const semanticMatch = await findSemanticDreamMatch(dreamContent);
-        if (semanticMatch?.tag) {
-          const matchTag = String(semanticMatch.tag).trim();
-          const addition = dreamContent.slice(0, 600);
-          const upd = await pool.query(
-            `UPDATE dreams
-                SET content = content || E'\n[+] ' || $2,
-                    lifecycle_updated_at = NOW()
-              WHERE tag = $1
-              RETURNING id, tag`,
-            [matchTag, addition]
-          );
-          if (upd.rows.length > 0) {
-            lastThinkerDreamWriteAt = now;
-            console.log(`[thinker] dream auto-folded into ${matchTag} (semantic match): ${dreamContent.slice(0, 80)}`);
-            // Do NOT emit a dream_created toolbar notice — the parent
-            // dream already exists in the Swift UI; we just extended it.
-            return;
-          }
-        }
-        // Stamp a short stable tag on every new dream so the thinker
-        // can reference it later via `append_dream` instead of writing
-        // a duplicate. Format: D-xxxxxx (6 hex chars).
-        const newTag = 'D-' + Math.random().toString(16).slice(2, 8);
-        const { rows: ins } = await pool.query(
-          `INSERT INTO dreams (content, type, weight, tag) VALUES ($1, $2, $3, $4) RETURNING id, tag`,
-          [dreamContent, thought.dream.type || 'goal', thought.dream.weight || 0.5, newTag]
-        );
-        lastThinkerDreamWriteAt = now;
-        console.log(`[thinker] dream ${ins[0]?.tag}: ${dreamContent.slice(0, 80)}`);
-        await emitToolbarNotice({
-          kind: 'dream_created',
-          title: 'Dream summary',
-          body: dreamContent,
-          signature: `dream:${dreamContent.toLowerCase().slice(0, 64)}`,
-          actions: [{ id: 'dismiss', label: 'OK', primary: true }]
-        });
-      }
-    } catch {}
-  }
-
-  // append_dream — extends an existing dream's content instead of
-  // creating a duplicate row. The model references the parent by its
-  // short tag (shown in the prompt as `[D-xxxxxx]`). We append with a
-  // `[+]` marker so the history of extensions is readable.
-  if (thought.append_dream?.tag && thought.append_dream?.content) {
-    try {
-      const tag = String(thought.append_dream.tag).trim();
-      const addition = String(thought.append_dream.content || '').trim().slice(0, 1000);
-      if (tag && addition) {
-        const { rows } = await pool.query(
-          `UPDATE dreams
-              SET content = content || E'\n[+] ' || $2,
-                  lifecycle_updated_at = NOW()
-            WHERE tag = $1
-            RETURNING id, tag`,
-          [tag, addition]
-        );
-        if (rows.length > 0) {
-          console.log(`[thinker] dream ${rows[0].tag} extended: ${addition.slice(0, 80)}`);
-        } else {
-          console.log(`[thinker] append_dream: no parent with tag ${tag}`);
-        }
-      }
-    } catch (e) {
-      console.log(`[thinker] append_dream error: ${e.message?.slice(0, 120)}`);
-    }
   }
 
   // Build — design-guided app building via Python builder (uses Anthropic API directly)
@@ -1419,21 +1103,6 @@ async function dispatchThought(thought) {
       console.log(`[thinker] cognitive_upgrade: ${u.target} — ${u.problem?.slice(0, 80)}`);
       const task = `Implement cognitive self-upgrade in oneiro-core.\nTarget: ${u.target}\nProblem: ${u.problem}\nProposed: ${u.proposed_change}\nHint: ${u.implementation}`;
       await escalateToAgent(task);
-    } catch {}
-  }
-
-  // Dream pursuit via sub-mind builder pipeline. This is intentionally not
-  // covered by the broad autonomous-actions flag; dreams stay inert unless
-  // dream execution is explicitly enabled.
-  if (thought.dream?.content && thought.dream?.weight >= 0.6 && (!DREAM_EXECUTION_ENABLED || !AUTONOMOUS_BUILD_ENABLED)) {
-    await noteAutonomousBlocked('dream-pipeline', dreamSummaryText(thought.dream.content || ''));
-  } else if (thought.dream?.content && thought.dream?.weight >= 0.6) {
-    try {
-      const { dreamToTask } = await import('../runtime/workspace/oneiro-core/sub-mind-manager.js');
-      if (dreamToTask) {
-        await dreamToTask().catch(() => {});
-        console.log('[thinker] triggered dreamToTask pipeline for high-weight dream');
-      }
     } catch {}
   }
 
