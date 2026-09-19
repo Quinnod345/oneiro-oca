@@ -44,6 +44,17 @@ test('the reasoning effort is stated explicitly, since the user config is ignore
   assert.ok(!buildCodexArgs({}).some(a => a.includes('model_reasoning_effort')));
 });
 
+test('every Codex run is offered Aside as read-only MCP tools, auto-approved, and survives a resume', () => {
+  const args = buildCodexArgs({ model: 'gpt-6-astra' });
+  const i = args.indexOf('mcp_servers.aside.command=' + JSON.stringify(process.execPath));
+  assert.ok(i > 0, args.join(' ')); assert.equal(args[i - 1], '-c');
+  assert.ok(args.some(a => /^mcp_servers\.aside\.args=\["\/.*aside-mcp\.js"\]$/.test(a)));
+  for (const t of ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs']) assert.ok(args.includes(`mcp_servers.aside.tools.${t}.approval_mode="approve"`), t);
+  assert.ok(!buildCodexArgs({ aside: false }).some(a => a.includes('mcp_servers.aside')));
+  const resumed = buildCodexArgs({ threadId: '11111111-2222-3333-4444-555555555555', persistent: true, sandbox: 'workspace-write' });
+  assert.equal(resumed[1], 'resume'); assert.ok(resumed.some(a => a.startsWith('mcp_servers.aside.command=')));
+});
+
 test('Codex JSONL parser extracts assistant text and usage', () => {
   assert.deepEqual(
     parseCodexEvent('{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}'),

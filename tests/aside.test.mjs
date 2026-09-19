@@ -69,3 +69,21 @@ test('no live module opens, drives, or reads a page through anything but Aside; 
   for (const f of files) { const src = await readFile(join(root, f), 'utf8'); if (/motor\/skills\/|hot-loader/.test(src) && f !== 'motor/hot-loader.js') importers.push(f); }
   assert.deepEqual(importers, [], `motor/skills must stay unloaded: ${importers.join(', ')}`);
 });
+
+test('the MCP server speaks JSON-RPC over stdio, lists only read tools, and answers a call through the adapter', async () => {
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env, OCA_ASIDE_CLI: '/nowhere/aside' } });
+  let out = ''; child.stdout.on('data', d => { out += d; });
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05' } }) + '\n');
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) + '\n');
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'aside_read', arguments: { url: 'https://example.com' } } }) + '\n');
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'aside_click', arguments: {} } }) + '\n');
+  child.stdin.end();
+  await new Promise(r => child.on('close', r));
+  const msgs = out.trim().split('\n').map(l => JSON.parse(l));
+  assert.equal(msgs.find(m => m.id === 1).result.serverInfo.name, 'aside');
+  assert.deepEqual(msgs.find(m => m.id === 2).result.tools.map(t => t.name), ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs'], 'read tools only');
+  const read = msgs.find(m => m.id === 3).result;
+  assert.equal(read.isError, true); assert.match(read.content[0].text, /no other browser/, 'no Aside installed: no browser, not another one');
+  assert.match(msgs.find(m => m.id === 4).error.message, /unknown tool/);
+});
