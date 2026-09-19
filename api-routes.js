@@ -1545,6 +1545,10 @@ ocaRouter.post('/oca/inbox/rate', async (req, res) => {
 ocaRouter.post('/oca/inbox/progress', async (req, res) => {
   try { res.json(await inbox.progress(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
 });
+// Body: { on: true|false } — whether the engine keeps an agent working on this want while it waits on evidence.
+ocaRouter.post('/oca/inbox/want/:id/continuous', async (req, res) => {
+  try { res.json(await inbox.continuous({ chainId: req.params.id, on: req.body?.on === true })); } catch (e) { res.status(400).json({ error: e.message }); }
+});
 // Body: { description, doneWhen?, priority?, topic? } by hand — or a confirmed draft:
 // { draftId, description, doneWhen, priority, stakes, newEntities, evidenceIds, observations, draftVerdict? }
 ocaRouter.post('/oca/inbox/want', async (req, res) => {

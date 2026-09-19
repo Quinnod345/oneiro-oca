@@ -75,6 +75,7 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return rows.map(row => { const w = row.state.want, r = row.state.result || {};
       return { kind: 'want', chainId: row.id, description: text(w.description, 400), doneWhen: text(w.doneWhen, 300), progress: w.progress || 0,
         status: row.status, strategy: w.strategy, origin: row.state.origin?.kind || 'explicit', updatedAt: row.updated_at,
+        continuous: row.state.continuous === true, continuity: row.state.continuity || null, researchActive: row.state.researchActive === true,
         conclusion: text(r.conclusion, 400), missing: (r.missingEvidence || []).slice(0, 3).map(m => text(m, 200)), receipts: (w.receipts || []).length }; });
   }
 
@@ -146,12 +147,19 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
   // rules — evidence must be what it found, new stakes are the person's rating, the draft id is the request id).
   async function want(body = {}) {
     if (body.draftId) { if (!drafts) throw new Error('drafting is not available'); return drafts.confirm(body); }
-    const { description, doneWhen, priority = 0.7, topic = '', by = 'quinn', clientRequestId = null } = body;
+    const { description, doneWhen, priority = 0.7, topic = '', by = 'quinn', clientRequestId = null, continuous = true } = body;
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what you want');
     return queue.enqueue({ seed: description.trim(), doneWhen: typeof doneWhen === 'string' && doneWhen.trim() ? doneWhen.trim() : undefined,
-      priority: Number.isFinite(Number(priority)) ? Math.max(0.1, Math.min(1, Number(priority))) : 0.7, topic: text(topic, 160), learning: false, clientRequestId },
+      priority: Number.isFinite(Number(priority)) ? Math.max(0.1, Math.min(1, Number(priority))) : 0.7, topic: text(topic, 160), learning: false, clientRequestId, continuous: continuous !== false },
       { origin: { kind: 'explicit', by } });
   }
+  // "There should always be an agent working on it." On: the engine keeps a research slice on the want while it
+  // waits; off: it waits for the person like any other want.
+  async function continuous({ chainId, on }) {
+    const id = Number(chainId);
+    if (!Number.isInteger(id) || id < 1) throw new Error('name the want');
+    return queue.setContinuous(id, on === true);
+  }
 
-  return { list, rate, progress, want, artifacts: async () => artifacts(await activeWants()), notes };
+  return { list, rate, progress, want, continuous, artifacts: async () => artifacts(await activeWants()), notes };
 }
