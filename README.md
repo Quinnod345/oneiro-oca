@@ -1,287 +1,93 @@
 # Oneiro Cognitive Architecture (OCA)
 
-**Embodied machine cognition on consumer hardware.**
+**An engine that wants things, prices risk against what they are worth, thinks in bounded strategies, feels in consequence of what it did, and measures itself against stated baselines.**
 
-A cognitive architecture for an AI system fully embodied in a MacBook Pro. Not a chatbot with tools — a mind with continuous perception, motor control, emotional computation, hypothesis-driven reasoning, metacognitive self-monitoring, and adversarial deliberation. Built on [OpenClaw](https://github.com/openclaw/openclaw).
+This repository is the engine — not an assistant, not an app. Its purpose, set out in [`SPEC.md`](SPEC.md), is to build something that beats the Chinese Room: cognition that is grounded in experience, that predicts and gets scored, that changes its mind for reasons, and whose emotions do work instead of decorating output. The spec is the vision. This README is what runs.
 
-**v1.2.0** — Neural MLP v2: residual-delta training, per-layer weighted loss, metacognitive prediction-mismatch routing, observability API.
-
----
-
-## Architecture
+## The chain
 
 ```
-L10  Executive Control    — attention, goals, cognitive load, sleep/wake, body ownership
-L9   Creative Synthesis   — constrained randomness, cross-domain transfer, dreams
-L8   Adversarial Delib.   — Skeptic / Builder / Dreamer / Empath perspectives
-L7   Metacognition        — bias tracking, calibration, stuck detection, self-accuracy
-L6   World Simulation     — forward models, counterfactuals, model competition
-L5   Hypothesis Engine    — form, predict, test, surprise, update
-L4   Emotional Computation — PADCN + 14 channels + drives + meta-emotions
-L3   Memory Systems       — episodic, semantic, procedural, prospective, working (7 slots)
-L2   Motor Cortex         — CGEvent keystrokes/mouse (Swift binary), sensorimotor verification
-L1   Sensory Cortex       — continuous visual/audio/tactile/intero/temporal (Swift binary)
-L0   Hardware Substrate   — macOS, IOKit, CoreGraphics, ScreenCaptureKit, Accessibility
+worth ──► hunger ──► risk ──► strategies ──► receipts ──► affect ──► (appetite, verification, strategy, style)
 ```
 
-**Neural Signaling Layer:** 208-dimensional shared activation workspace. Layers communicate through dense float vectors, not text events. Connection weights update via Hebbian learning. A trainable MLP (26,896 parameters) predicts next-cycle cognitive **residuals** (Δ) with per-layer weighted loss — prediction errors drive surprise-based learning and feed rate-limited metacognitive observations when specific layers misbehave.
+1. **Worth** (`motivation/worth.js`) — a ledger of what things are worth: the engine's own capabilities, the person it serves, their data and attention, projects, outcomes. Only four things can move it: a declared constraint (never weighed), a declared prior (must be earned past), a rating by a person, or an observed outcome with evidence. Evidence sourced from the engine's own generated text is rejected at validation. Activity counts and model confidence have no way in.
+2. **Hunger** (`motivation/hunger.js`) — a want is *for* something; its value is the worth of its stakes, re-priced every time the engine chooses what to pursue. Pressure grows with elapsed time. Only an observed receipt satiates a want; plans, conclusions and model confidence never do.
+3. **Risk** (`motivation/risk.js`) — every action is appraised as expected worth gained against expected worth lost, bounded by how reversible it is. Irreversible → a person fires it. The two declared constraints are boundaries, not costs. *Appetite* — how much loss it accepts per unit of gain — is the first thing affect modulates. Each decision is journaled with its prediction and later its outcome, so the engine's self-knowledge is a calibration curve, not a self-report.
+4. **Strategies** (`reasoning/strategies.js`) — a want spends its budget on one bounded attempt at a time: inspect the evidence, commit to a falsifiable prediction the world will settle, simulate the next step so reality can score it, argue against the premise, or draft a deliverable a person will rate. A stall or failure rotates the strategy; a different strategy is a different attempt, not repetition.
+5. **Receipts** — observed progress on a want, a settled prediction, a rated artifact, a risk outcome. These are the only inputs to worth and the only satiation of hunger.
+6. **Affect** (`emotion/engine.js`) — phasic feeling comes only from what the engine did and observed (an unexpected success, a failure with stakes, harm, being held back, not knowing what something is worth). Tonic state is a *projection* of the journals, never an integrator of events — time alone changes nothing, so nothing can ratchet. Affect is consumed, never narrated: fear raises the confidence a conclusion must reach, frustration shortens the patience before a strategy change, curiosity buys appetite for finding things out (never for acting on the world), and the expression profile becomes style directives.
 
-**Thinker:** Generative LLM reasoning step that gives the system agency. Every 5 cycles, assembles full cognitive context and asks "what should I do?" — then executes via shell, code editing, Claude Code escalation, or motor cortex.
+Everything a person needs to understand a want is one call away: `GET /oca/trace/:id` assembles the story from the journals — attempts, appraisals, commitments, settlements, receipts, worth signals, and affect at each step.
 
----
+## What the engine will not do
 
-## Quick Start
+- Credit itself for running, for switching apps, for generating text, for a plan, or for a self-modification.
+- Treat its own account of its feelings as an event.
+- Accept a prediction the world cannot evaluate.
+- Reach a person with unverified content, or write to their data without a way back — these are constraints, not weights, and the risk gate refuses them outright.
+- Act on the world on its own while the master switch is off. Thinking is not acting: read-only steps that touch nothing proceed; anything with a reversibility cost is recorded as a proposal for a person.
 
-### Prerequisites
+## Measured
 
-- macOS 14+ (Apple Silicon)
-- Node.js 20+
-- PostgreSQL 16 with pgvector
-- Swift 5.9+
+`npm run benchmark` runs the isolated mechanism suite (every behavioral contract as a test) and the Chinese Room Meter, and writes [`evaluation/results/latest.json`](evaluation/results/latest.json). Each dimension is measured against a stated baseline with its n, or says what evidence it still needs. The composite stays null until every dimension is measured.
 
-### Setup
+| dimension | score | n | status |
+|---|---|---|---|
+| grounding | 1.000 | 23 | measured |
+| prediction | 0.000 | 4879 | measured |
+| metacognition | — | — | insufficient evidence |
+| emotion | — | — | insufficient evidence |
+| surprise | — | — | insufficient evidence |
+| creativity | — | — | insufficient evidence |
+| transfer | — | — | unmeasured |
+| counterfactual | — | — | unmeasured |
+| causal | — | — | unmeasured |
+
+*As of 2026-09-19.* The prediction score is the honest starting point: across 4,879 ambient predictions made before wants existed, the engine's stated confidence was no better than always guessing each metric's base rate (Brier 0.209 vs 0.194). Want-driven predictions are reported separately and have to beat that.
+
+A blind-judge protocol (`scripts/judge-pack.mjs`, `scripts/judge.mjs`) renders a want's journal into a first-person account with the same local model that also, separately, reasons the want through with no engine; a judge scores both blind on a five-point rubric. Packs contain the person's own want text and are written outside the repository.
+
+## Running it
+
+Requirements: Node 22+, PostgreSQL 16 with pgvector, an Ollama endpoint for local inference (this deployment runs it on a second machine over Tailscale), and a BGE-large embedding server on `:7801` (`ONEIRO_EMBED_URL`). Optional: the Codex CLI for hard reasoning steps; the engine falls back to the local model when it is unavailable.
 
 ```bash
-cd cognitive
 npm install
-
-# Run all migrations
-for f in migrations/*.sql; do
-  psql postgres://localhost/oneiro -f "$f"
-done
-
-# Build Swift binaries
-cd sensory/swift && swift build -c release && cd ../..
-cd motor/swift && swift build -c release && cd ../..
+npm run migrate            # DATABASE_URL, default postgres://localhost/oneiro
+npm run test:engine        # isolated tests; each clones the tables it needs into a private schema
+npm start                  # the daemon: loop + HTTP API on :3333
+npm run benchmark          # mechanism suite + scorecard → evaluation/results/latest.json
 ```
 
-### Run
+Useful endpoints: `/oca/health`, `/oca/hunger`, `/oca/worth`, `/oca/risk`, `/oca/emotion`, `/oca/crm`, `/oca/trace/:id`, `POST /ponder` (create a want), `POST /ponder/:id/outcome` (record observed progress), `POST /oca/worth/rate` (rate an entity).
 
-```bash
-# Start the cognitive loop (includes HTTP API on :3333)
-npm start
+Environment: `ONEIRO_LOCAL_REASONER_URL`, `ONEIRO_LOCAL_REASONER_TRANSPORT=ollama`, `ONEIRO_OCA_THINKER_MODEL`, `OCA_STRATEGY_PROVIDER`/`OCA_STRATEGY_MODEL`, `OCA_ENABLE_AUTONOMOUS_ACTIONS` (the master switch, off by default), `ONEIRO_EMBED_ALLOW_HASH_FALLBACK` (off: a blip in the embedder stores no vector rather than a wrong one).
 
-# Or via launchd (recommended for production)
-launchctl load ~/Library/LaunchAgents/com.oneiro.oca.plist
-```
-
-### Dashboard
-
-Open `http://localhost:3333/web/` for the cognitive dashboard.
-
----
-
-## What's New in v1.2.0
-
-### Neural MLP v2 (Residual Predictive Processing)
-- MLP now predicts **residuals** (Δ = next_state − current_state) instead of raw next-state vectors, improving convergence on fast-changing dynamics
-- **Per-layer weighted loss**: hypothesis, executive, and metacognition slices weighted 1.5x so the gradient respects behavioral importance, not just variance
-- **Metacognitive routing**: per-layer prediction errors above threshold insert rate-limited `prediction_mismatch` rows into `metacognitive_observations`, giving the metacognition subsystem direct visibility into which layers are behaving unpredictably
-- **Observability API**: `GET /oca/neural-bus` and `/oca/neural-bus/full` now include `mlp_last_step` with per-layer RMSE, residual magnitude, and weighted loss
-- **Dashboard**: MLP panel shows residual mode, top 3 layers by RMSE with color-coded bars, and delta magnitude
-- Weight checkpoint schema versioned (v2); old v1 checkpoints auto-invalidated on load
-
----
-
-## What's New in v1.1.0
-
-### Architecture Complete
-- All 6 remaining scaffolds replaced with working systems (motor activation, creative pipeline, load balancing, attention modulation, deliberation integration, episodic consolidated status)
-- CRM organic improvement: 6 disconnected cognitive loops connected (calibration, counterfactual, causal, surprise, emotion variance, metacognition remediation)
-- Body ownership enforced on thinker shell commands (no more opening apps when Quinn is present)
-
-### Neural Mind Map (208 neurons)
-- High-definition ring topology visualization of all 208 cognitive neurons
-- Every layer fully encoded: sensory 72%, emotion 88%, hypothesis 81%, memory 100%, executive 100%, creative 88%, metacognition 88%, motor 94%
-- Stable bezier connection bundles showing Hebbian inter-layer strengths
-- Green/red delta glow showing activation changes in real time
-- MLP training stats displayed at center (updates, loss, active weights)
-
-### HippoRAG Memory
-- Hippocampal recall via knowledge graph + Personalized PageRank
-- 207 entities, 3,260 relations, 85,755 mentions
-- Multi-hop retrieval in <100ms (falls back to vector when graph is sparse)
-- Dashboard search interface for hippocampal recall
-
----
-
-## What's in v1.0.0
-
-### Multi-Process Architecture
-- Swift `oneiro-sensory` binary: continuous SCStream capture, frame differencing, HID metrics, AVAudioEngine, interoception, temporal cortex, sensory integration into unified PerceptualState
-- Swift `oneiro-motor` binary: CGEvent keystrokes/mouse, app control, AppleScript bridge, Unix socket command protocol
-- Cross-process IPC via Unix domain sockets + shared state files + pg NOTIFY
-
-### Neural Signaling Layer
-- 208-dim shared activation workspace replacing text/JSON events
-- 8 layer encoders (sensory 64d, emotion 32d, hypothesis 16d, memory 32d, executive 16d, creative 16d, metacognition 16d, motor 16d)
-- 43,264-weight connection matrix with Hebbian updates + continuous decay
-- Trainable 2-layer MLP (208→64→208) for residual predictive processing with per-layer weighted loss
-
-### Thinker Reconnected
-- Generative LLM reasoning integrated into cognitive loop
-- Full action set: shell commands, code editing, Claude Code escalation, web search, dream pursuit, private writing, cognitive self-upgrades
-- Mode-aware scheduling (every 5 cycles alert, 8 working, 20 monitoring)
-
-### Anti-Decay Evaluation (SPEC Section 18.4)
-- Operating-time tracker (cumulative across sessions)
-- CRM trend metrics on 3 horizons (24h / 7d / 30d)
-- Per-component trend decomposition (9 CRM dimensions)
-- Failure condition detection with automatic remediation
-- Anti-decay thesis verdict: satisfied / unsatisfied
-
-### Identity & Continuity (SPEC Sections 2.9, 21.5, 21.6)
-- Identity event logging (restart, shutdown, wipe, rollback, fork, succession)
-- Continuation vs new-CI classification per Section 2.9
-- Succession protocol with transfer manifest and re-grounding pass
-- Sub-mind identity classification (bounded-task vs long-running CI)
-
-### Cohabitation (SPEC Section 17.5)
-- Convention drift logging
-- Consent renewal system (annual review)
-- Right of refusal protocol in motor planning
-- Convention versioning
-
-### Maintenance Loop (7 closed loops)
-- Procedural memory: motor verification → recordExecution()
-- Deliberation: automatic retrospective evaluation
-- Simulation: world_model.prediction_accuracy updated via EMA
-- Metacognition: self-accuracy tracking
-- Reasoning traces: automatic post-hoc audit
-- Causal experiments: stale experiment SLA sweep
-- Emotion: baseline drift detection with slow personality learning
-
-### Consolidation Fixed
-- Was producing 0 output (LLM responses truncated at 1024 tokens)
-- Fixed prompt to stay under budget; increased max_tokens to 2048
-- Batch size increased to 200; schedule accelerates when backlog > 10k
-- Silent failure fixed: episodes stay raw on extraction failure
-
----
-
-## API Endpoints
-
-### Core
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/pulse` | Emotional state / undercurrents |
-| GET | `/oca/status` | Full cognitive status |
-| GET | `/oca/sense` | Current perceptual state |
-| GET | `/oca/emotion` | Emotional state with PADCN/channels/drives |
-
-### Anti-Decay
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/oca/anti-decay` | CRM trends + failure conditions + thesis verdict |
-| POST | `/oca/anti-decay/run` | Force evaluation |
-| GET | `/oca/anti-decay/history` | Trend history |
-| GET | `/oca/operating-time` | Cumulative operating hours |
-| GET | `/oca/crm` | Chinese Room Meter composite + components |
-
-### Neural
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/oca/neural-bus` | Workspace dims, weight stats, inter-layer strengths, MLP status + last-step diagnostics |
-| GET | `/oca/neural-bus/full` | Full workspace vectors, layer activations, inter-layer weights, MLP last-step per-layer RMSE |
-| GET | `/oca/neural-bus/heatmap` | Layer-to-layer connection matrix + activation summaries |
-| GET | `/oca/neural` | Live synapse graph |
-
-### Identity & Cohabitation
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/oca/identity` | Continuity status |
-| GET | `/oca/identity/history` | Identity event log |
-| GET | `/oca/conventions` | Active cohabitation conventions |
-| GET | `/oca/consent-review` | Consent renewal status + capability report |
-| GET | `/oca/body-inventory` | Hardware inventory |
-| POST | `/oca/succession/manifest` | Create transfer manifest |
-
-### Cognitive
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/oca/workspace` | Working memory slots |
-| GET | `/oca/goals` | Active goals |
-| GET | `/oca/hypotheses` | Pending hypotheses |
-| POST | `/oca/experience` | Store episodic memory |
-| POST | `/oca/predict` | Form hypothesis |
-| POST | `/oca/decide` | Adversarial deliberation |
-| POST | `/oca/imagine` | World simulation |
-| POST | `/oca/create` | Creative synthesis |
-| GET | `/oca/reflect` | Metacognition cycle |
-
----
-
-## File Structure
+## Layout
 
 ```
-cognitive/
-├── cognitive-loop.js          # Main entry — the continuous thinking process
-├── index.js                   # Orchestrator tying all layers together
-├── event-bus.js               # Cross-process IPC (pg NOTIFY + Unix sockets)
-├── neural-bus.js              # 208-dim vector signaling layer
-├── neural-mlp.js              # Trainable residual predictive model (26,896 params, per-layer weighted loss)
-├── neural-encoders.js         # Per-layer state → float vector encoders
-├── neural-connections.js      # Synapse graph persistence + maintenance
-├── thinker-bridge.js          # Generative reasoning with action dispatch
-├── identity.js                # Identity events, fork/rollback logging
-├── succession.js              # Transfer manifest, re-grounding pass
-├── cohabitation.js            # Convention drift, consent renewal
-├── llm.js                     # Unified Claude access (API + CLI fallback)
-├── api-routes.js              # 40+ HTTP endpoints
-├── SCAFFOLD_MANIFEST.md       # Substrate limitation map (SPEC §22)
-├── SPEC.md                    # Full specification document
-├── emotion/engine.js          # PADCN + channels + drives + meta-emotions
-├── hypothesis/engine.js       # Prediction, testing, calibration
-├── memory/
-│   ├── episodic.js            # Raw experiences with vector recall
-│   ├── semantic.js            # Abstracted knowledge
-│   ├── procedural.js          # Trigger-matched skills
-│   ├── prospective.js         # Future intentions
-│   └── consolidation.js       # Sleep-like memory processing
-├── metacognition/engine.js    # Bias tracking, self-accuracy
-├── deliberation/engine.js     # Skeptic/Builder/Dreamer/Empath
-├── reasoning/controller.js    # Propose→critique→revise→verify
-├── simulation/engine.js       # Forward models, counterfactuals
-├── causal/engine.js           # Causal experiment lifecycle
-├── creative/engine.js         # Dreams, constrained randomness
-├── executive/engine.js        # Attention, goals, load, body ownership
-├── sensory/
-│   ├── swift/Sources/main.swift  # Native sensory binary
-│   ├── swift-bridge.js        # Swift→Node bridge
-│   └── perception.js          # Unified perceptual state
-├── motor/
-│   ├── swift/Sources/main.swift  # Native motor binary
-│   └── engine.js              # Motor planning + sensorimotor loop
-├── evaluation/
-│   ├── chinese-room-meter.js  # CRM composite score
-│   ├── benchmark-harness.js   # Daily benchmark persistence
-│   └── anti-decay.js          # Operating-time trends + failure detection
-├── migrations/                # 001-012 SQL schemas
-└── web/                       # Cognitive dashboard
+motivation/    worth.js, worth-ledger.js, hunger.js, risk.js, risk-journal.js, interests.js
+reasoning/     strategies.js, ponder-queue.js, ponder-service.js, loop.js (the evidence-bound reasoner), trace.js
+emotion/       engine.js (affect v4)
+hypothesis/    typed, falsifiable predictions and their evaluation against observed metrics
+simulation/    forward simulation scored by later outcomes
+metacognition/ calibration, stuck detection, bias tracking
+memory/        episodic, semantic, consolidation candidates
+evaluation/    chinese-room-meter.js, benchmark-harness.js, anti-decay.js, results/
+cognitive-loop.js   the tick: sense, feel, run the pursuit queue, settle predictions, consolidate, remember
+thinker-bridge.js   the ambient thinker; its actions go through the risk gate
+tests/         the mechanism suite (node --test)
+docs/          behavioral-integrity.md, evidence-loop.md, the archived v1.2 README
 ```
 
----
+## Retired, and why
 
-## System Requirements
+The 2026-09-18/19 rebuild removed the parts of the earlier architecture that paid the engine for activity or acted outside the risk gate: the dream executor (self-build machinery that wrote files, installed packages, committed, pushed and posted on the strength of a generated dream), the design-model build loop and self-training pool, count-credited goals, autonomic self-modification, the ambient hypothesis generator, and the per-tick creative and simulation sections. Their capabilities survive as strategies or were dead by construction. Dreams remain as a read-only archive (`/oca/dreams/state`). History holds everything.
 
-| Requirement | Minimum | Recommended |
-|---|---|---|
-| macOS | 14.0 | 15.0+ |
-| Apple Silicon | M1 | M2 Pro+ |
-| RAM | 16 GB | 32 GB |
-| Disk | 50 GB free | 100 GB free |
-| PostgreSQL | 15 + pgvector | 16 + pgvector |
-| Node.js | 20 LTS | 22 LTS |
-| Swift | 5.9 | 6.0 |
+## Status
 
----
+Phases 1–6 of the rebuild are in: worth, hunger, risk, affect, the loop as spine, and measurement. Open: a held-out corpus for transfer, counterfactual and causal; more settled want-driven predictions than the meter's thresholds; artifacts rated by a person; and the surface that delivers three to five worthwhile outputs a day to the person's phone. The engine runs continuously; the journals accumulate.
 
 ## License
 
 MIT
-
----
-
-*Built by [Quinn O'Donnell](https://github.com/Quinnod345) & Oneiro.*
-
-*"The question is not whether machines can think. The question is whether we can build one that has reason to."*
