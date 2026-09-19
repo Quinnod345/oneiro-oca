@@ -59,6 +59,8 @@ npm start                  # the daemon: loop + HTTP API on :3333
 npm run benchmark          # mechanism suite + scorecard → evaluation/results/latest.json
 ```
 
+**Live panel:** `http://localhost:3333/web/engine.html` — every aspect at once (health, wants, worth, risk, affect, strategies and commitments, thinker, per-want trace, the meter), polling every 5 s. It is also where a person feeds the engine: rate an entity, record an observed receipt on a want.
+
 Useful endpoints: `/oca/health`, `/oca/hunger`, `/oca/worth`, `/oca/risk`, `/oca/emotion`, `/oca/crm`, `/oca/trace/:id`, `POST /ponder` (create a want), `POST /ponder/:id/outcome` (record observed progress), `POST /oca/worth/rate` (rate an entity).
 
 Environment: `ONEIRO_LOCAL_REASONER_URL`, `ONEIRO_LOCAL_REASONER_TRANSPORT=ollama`, `ONEIRO_OCA_THINKER_MODEL`, `OCA_STRATEGY_PROVIDER`/`OCA_STRATEGY_MODEL`, `OCA_ENABLE_AUTONOMOUS_ACTIONS` (the master switch, off by default), `ONEIRO_EMBED_ALLOW_HASH_FALLBACK` (off: a blip in the embedder stores no vector rather than a wrong one).
