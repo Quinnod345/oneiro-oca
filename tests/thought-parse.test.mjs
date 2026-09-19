@@ -8,6 +8,12 @@ test('a clean object parses; the text alias is normalized to thoughts', () => {
   assert.equal(parseThought('{"continue_pondering":true}').thought.thoughts, '');
 });
 
+test('a local model that answers under message or answer is still heard (self-build want #24)', () => {
+  assert.equal(parseThought('{"message":"the battery is low"}').thought.thoughts, 'the battery is low');
+  assert.equal(parseThought('{"answer":"forty-two","continue_pondering":"true"}').thought.thoughts, 'forty-two');
+  assert.equal(parseThought('{"thoughts":"first","message":"second"}').thought.thoughts, 'first', 'the canonical key still wins');
+});
+
 test('valid JSON followed by prose (the live "non-whitespace after JSON" failure) parses the object and ignores the prose', () => {
   const r = parseThought('{"thoughts":"Battery at 5%","feeling":{"feeling":"unease","intensity":0.4}}\n\nI hope this helps! Let me know.');
   assert.equal(r.error, undefined); assert.equal(r.thought.thoughts, 'Battery at 5%'); assert.equal(r.thought.feeling.feeling, 'unease');
