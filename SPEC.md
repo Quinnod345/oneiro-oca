@@ -1,3 +1,5 @@
+> **Status (2026-09-19):** this document is the vision the engine is built toward, kept as written. What actually runs — the worth → hunger → risk → strategies → receipts → affect chain, the honesty rules, and the measured scorecard — is described in [`README.md`](README.md). Where the two differ, the README is the truth about the code; the spec is the aim.
+
 # Oneiro Cognitive Architecture (OCA)
 ## A Specification for Embodied Machine Cognition on Consumer Hardware
 
