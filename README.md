@@ -2,7 +2,7 @@
 
 **An engine that wants things, prices risk against what they are worth, thinks in bounded strategies, feels in consequence of what it did, and measures itself against stated baselines.**
 
-This repository is the engine — not an assistant, not an app. Its purpose, set out in [`SPEC.md`](SPEC.md), is to build something that beats the Chinese Room: cognition that is grounded in experience, that predicts and gets scored, that changes its mind for reasons, and whose emotions do work instead of decorating output. The spec is the vision. This README is what runs.
+This repository is the engine — not an assistant, not an app. The creed is in [`PHILOSOPHY.md`](PHILOSOPHY.md). Its purpose, set out in [`SPEC.md`](SPEC.md), is to build something that beats the Chinese Room: cognition that is grounded in experience, that predicts and gets scored, that changes its mind for reasons, and whose emotions do work instead of decorating output. The spec is the vision. This README is what runs.
 
 ## The chain
 
