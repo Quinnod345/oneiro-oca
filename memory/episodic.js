@@ -50,7 +50,11 @@ export async function store({
   surpriseMagnitude = 0,
   importanceScore = 0.5
 } = {}) {
-  const embedding = await getEmbedding(content);
+  // Store the episode even when the embedder is down: a row without a vector can be re-embedded later
+  // (scripts/reembed-all.js); a row with a hash vector in the BGE space cannot be told apart.
+  let embedding = null;
+  try { embedding = await getEmbedding(content); }
+  catch (e) { console.warn(`[episodic] stored without embedding: ${String(e.message).slice(0, 120)}`); }
   
   const { rows } = await pool.query(
     `INSERT INTO episodic_memory 
@@ -63,7 +67,7 @@ export async function store({
     [eventType, content, activeApp, activeWindow, userPresence, userActivity,
      visualHash, JSON.stringify(audioState), JSON.stringify(hidMetrics), JSON.stringify(interoceptive),
      participants, JSON.stringify(emotionalState), emotionalValence, emotionalArousal,
-     prediction, actualOutcome, surpriseMagnitude, importanceScore, JSON.stringify(embedding)]
+     prediction, actualOutcome, surpriseMagnitude, importanceScore, embedding ? JSON.stringify(embedding) : null]
   );
   
   await emit('memory_store', 'episodic_memory', {

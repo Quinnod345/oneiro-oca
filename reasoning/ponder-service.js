@@ -6,21 +6,58 @@ import { createInterestEngine } from '../motivation/interest-engine.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
 import { createUserControls, createControlledPonderRunner } from '../user-controls.js';
+import llm from '../llm.js';
+import hypothesis from '../hypothesis/engine.js';
+import { simulate, evaluateSimulation } from '../simulation/engine.js';
+import { on } from '../event-bus.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 export const userControls = createUserControls(pool);
 // Same journal the orchestrator seeds; wants are priced from it and receipts feed it.
 export const worthLedger = createWorthLedger({ pool, emit });
-export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect: emotion, reason: (goal, options) => reason(goal, { ...options,
-  provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }) });
+// Strategies think locally by default (WORK's Ollama over Tailscale); the pursuit reasoner may use the
+// Codex subscription for hard steps. Artifacts land in the engine's own work directory, never in Quinn's data.
+const WORK_ROOT = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work';
+async function writeArtifact(chainId, { title, body, forWhat, judge, attempt }) {
+  const dir = join(WORK_ROOT, String(chainId), 'artifacts');
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  const path = join(dir, `strategy-${attempt}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'artifact'}.md`);
+  await writeFile(path, `# ${title}
+
+_For:_ ${forWhat}
+
+_Judge by:_ ${judge}
+
+${body}
+`, { mode: 0o600 });
+  return { path };
+}
+const strategyDeps = { llm, hypothesis, simulate, evaluateSimulation, writeArtifact,
+  provider: process.env.OCA_STRATEGY_PROVIDER || 'local', model: process.env.OCA_STRATEGY_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen-agent' };
+// The risk journal is created below; the queue receives it through this indirection.
+const riskRef = { current: null };
+export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect: emotion, strategies: strategyDeps,
+  risk: { decide: (...a) => riskRef.current.decide(...a), observe: (...a) => riskRef.current.observe(...a) },
+  reason: (goal, options) => reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }) });
 // Risk: every proposed action is appraised against worth, journaled, and calibrated on what happened.
 // Appetite reads the live affect state; the master switch is the existing autonomous-actions flag.
 const envFlag = name => ['1', 'true', 'yes', 'on'].includes(String(process.env[name] || '').trim().toLowerCase());
 export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: emotion,
   controls: () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS') }),
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
+riskRef.current = riskJournal;
+
+// A prediction the engine committed to for a want, settled by the world, becomes evidence on that want.
+on('hypothesis_tested', async ev => {
+  try {
+    const settled = await ponderQueue.settlePrediction(ev?.payload || ev || {});
+    if (settled?.added) console.log(`[oca] prediction #${(ev?.payload || ev).id} settled ${settled.confirmed ? 'held' : 'failed'} → evidence on want #${settled.chain_id}`);
+  } catch (e) { console.warn('[oca] prediction settlement:', e.message); }
+});
 
 // Legacy wants are priced once, on first use, so nothing the loop selects is unpriced by accident.
 let adoption = null;
-export const adoptLegacyWants = () => adoption ||= ponderQueue.adoptLegacyWants().then(r => { if (r.adopted) console.log(`[oca] adopted ${r.adopted} legacy want(s) into the worth ledger`); return r; })
+export const adoptLegacyWants = () => adoption ||= ponderQueue.adoptLegacyWants().then(r => { if (r.adopted || r.reopened) console.log(`[oca] adopted ${r.adopted} legacy want(s) into the worth ledger; reopened ${r.reopened} stalled for strategy rotation`); return r; })
   .catch(e => { console.warn('[oca] legacy want adoption:', e.message); adoption = null; return { adopted: 0, error: e.message }; });
 
 // Tonic affect is a projection of the journals. Refreshed with hunger, at most once a minute.

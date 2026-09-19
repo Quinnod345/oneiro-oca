@@ -102,7 +102,10 @@ export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETI
   else if (expectedLoss <= appetite * expectedGain) { decision = 'proceed'; reasons.push(`Expected loss ${expectedLoss.toFixed(3)} is within appetite ${appetite.toFixed(2)} × expected gain ${expectedGain.toFixed(3)}.`); }
   else { decision = 'prepare_artifact'; reasons.push(`Expected loss ${expectedLoss.toFixed(3)} exceeds appetite ${appetite.toFixed(2)} × expected gain ${expectedGain.toFixed(3)}; a person decides.`); }
   const autonomous = decision === 'proceed';
-  if (autonomous && proposal.firedBy === 'engine' && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
+  // Thinking is not acting: a read-only step that touches nothing cannot affect the world, so the
+  // master switch governs only actions with any reversibility cost or any exposure.
+  const touchesWorld = REVERSIBILITY[proposal.reversibility] > 0 || proposal.touches.length > 0 || proposal.recipient !== null;
+  if (autonomous && proposal.firedBy === 'engine' && touchesWorld && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
   return { decision, autonomousWouldProceed: autonomous, reasons, violations,
     expected: { gain: expectedGain, loss: expectedLoss, pSuccess, pHarm, harmFactor, appetite, value: gain.value, valueProvenance: gain.provenance, unpriced: gain.unpriced },
     exposure, capability: proposal.capability, reversibility: proposal.reversibility };

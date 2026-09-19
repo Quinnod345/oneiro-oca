@@ -17,6 +17,7 @@ const OPENAI_API_KEY = getProviderCredential('OPENAI_API_KEY');
 // Model, transport and residency are explicit deployment choices. Observation
 // remains deterministic; keeping weights loaded does not trigger generation.
 const CHAT_URL   = process.env.ONEIRO_LOCAL_REASONER_URL || 'http://127.0.0.1:11434';
+const ALLOW_HASH_FALLBACK = ['1', 'true', 'yes', 'on'].includes(String(process.env.ONEIRO_EMBED_ALLOW_HASH_FALLBACK || '').toLowerCase());
 const CHAT_KEY   = process.env.ONEIRO_LOCAL_REASONER_KEY || '';
 const CHAT_MODEL = process.env.ONEIRO_OCA_THINKER_MODEL || process.env.ONEIRO_LOCAL_REASONER_MODEL || 'qwen2.5:0.5b';
 const KEEP_ALIVE = process.env.ONEIRO_OCA_THINKER_KEEP_ALIVE || '2m';
@@ -157,12 +158,20 @@ async function createEmbedding({ input, model, dimensions } = {}) {
     }
   }
 
-  try {
-    return await postJson(EMBED_URL, { 'Content-Type': 'application/json' }, { input });
-  } catch (e) {
-    warnHashFallback(`local embed server failed: ${e.message}`);
+  // A hash vector in the BGE space is a corrupt row, not a fallback: retry the transient, then fail so the
+  // caller stores no vector. The lexical hash stays available only when explicitly requested.
+  let lastError = null;
+  for (const wait of [0, 500, 2000]) {
+    if (wait) await new Promise(r => setTimeout(r, wait));
+    try {
+      return await postJson(EMBED_URL, { 'Content-Type': 'application/json' }, { input });
+    } catch (e) { lastError = e; }
+  }
+  if (ALLOW_HASH_FALLBACK) {
+    warnHashFallback(`local embed server failed: ${lastError?.message}`);
     return hashEmbeddingResponse(input);
   }
+  throw new Error(`local embed server unavailable after retries: ${lastError?.message || 'unknown error'}`);
 }
 
 export const openai = {
