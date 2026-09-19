@@ -1444,6 +1444,27 @@ ocaRouter.get('/oca/logs/summary', async (req, res) => {
   }
 });
 
+// ── HEALTH ── what is actually up: database, embedder, inference backend (with circuit state), queue, daemon.
+ocaRouter.get('/oca/health', async (_req, res) => {
+  const out = { at: new Date().toISOString(), pid: process.pid, uptimeSeconds: Math.round(process.uptime()) };
+  try { await pool.query('SELECT 1'); out.database = { ok: true }; } catch (e) { out.database = { ok: false, error: e.message }; }
+  try {
+    const embedBase = (process.env.ONEIRO_EMBED_URL || 'http://127.0.0.1:7801/v1/embeddings').replace(/\/v1\/embeddings$/, '');
+    const r = await fetch(`${embedBase}/health`, { signal: AbortSignal.timeout(3000) });
+    out.embedder = r.ok ? { ok: true, ...(await r.json().catch(() => ({}))) } : { ok: false, status: r.status };
+  } catch (e) { out.embedder = { ok: false, error: e.message }; }
+  try { const { inferenceHealth } = await import('./llm.js'); out.inference = inferenceHealth(); } catch (e) { out.inference = { error: e.message }; }
+  try {
+    const base = (process.env.ONEIRO_LOCAL_REASONER_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
+    const r = await fetch(`${base}/api/version`, { signal: AbortSignal.timeout(4000) });
+    out.inference = { ...(out.inference || {}), reachable: r.ok, version: r.ok ? (await r.json()).version : null };
+  } catch (e) { out.inference = { ...(out.inference || {}), reachable: false, probeError: e.message }; }
+  try { const controls = await userControls.get(); const h = await ponderQueue.hunger(); out.queue = { paused: controls.queuePaused === true, activeWants: h.wants.length, pressure: h.pressure }; }
+  catch (e) { out.queue = { error: e.message }; }
+  out.ok = out.database.ok && out.inference?.reachable !== false;
+  res.status(out.ok ? 200 : 503).json(out);
+});
+
 // ── TRACE ── the story of a want from the journals: attempts, appraisals, commitments, settlements, affect.
 const trace = createTrace({ pool });
 ocaRouter.get('/oca/trace/:chainId', async (req, res) => {
