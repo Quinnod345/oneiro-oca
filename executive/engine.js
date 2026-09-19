@@ -108,9 +108,8 @@ export async function updateGoalProgress(goalId, progress, status = null) {
   }
 
   if (progress >= 1.0) {
+    // Legacy goals table: completion is a record, not an observed success (affect comes through receipts).
     updates.push("status = 'completed'");
-    const { rows: [goal] } = await pool.query('SELECT emotional_investment FROM goals WHERE id = $1', [goalId]);
-    if (goal) emotion.processSuccess(goal.emotional_investment);
   }
 
   await pool.query(`UPDATE goals SET ${updates.join(', ')} WHERE id = $2`, params);

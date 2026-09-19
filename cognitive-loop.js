@@ -10,7 +10,6 @@ import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
-import autonomic from './autonomic/self-modifier.js';
 import thinkerBridge from './thinker-bridge.js';
 import neuralBus from './neural-bus.js';
 import neuralMLP from './neural-mlp.js';
@@ -40,6 +39,14 @@ const PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configure
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Active wants from the pursuit queue (the intention layer). Fails soft to none.
+async function activeWants() {
+  try {
+    const { ponderQueue } = await import('./reasoning/ponder-service.js');
+    return (await ponderQueue.hunger()).wants;
+  } catch { return []; }
+}
+
 const MAX_WORKING_MEMORY = 7;
 let previousPresence = 'unknown';
 let previousApp = null;
@@ -56,9 +63,6 @@ function envFlag(name) {
 
 const AUTONOMOUS_ACTIONS_ENABLED =
   envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS');
-const AUTONOMIC_SELF_MODIFICATION_ENABLED =
-  AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION') || envFlag('ONEIRO_ENABLE_AUTONOMIC_SELF_MODIFICATION');
-let loggedAutonomicDisabled = false;
 let httpAPIStarted = false;
 
 // Cooldowns (in cycles)
@@ -73,7 +77,6 @@ let visionCooldown = 0;
 let hypothesisCooldown = 0;
 let hypothesisSlaCooldown = 0;
 let benchmarkCooldown = 0;
-let autonomicCooldown = 0;
 let lastBenchmarkDate = null;
 let hypothesisGenerationMode = 'exploratory';
 let lastNeuralPrediction = null; // MLP prediction from pre-cycle, consumed in post-cycle
@@ -323,7 +326,8 @@ async function think() {
   
   // ── 2. BODY OWNERSHIP ─────────────────────────────
   await oca.layers.executive.negotiateOwnership(activity.idleSeconds);
-  const goals = await oca.layers.executive.getActiveGoals();
+  // Active wants are the intention layer; their count is what "having something to work on" means.
+  const goals = await activeWants();
   const mode = oca.layers.executive.determineMode(
     activity.presence, 
     oca.layers.emotion.getState(),
@@ -1024,72 +1028,6 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     }
   }
   
-  // ── 9. GOALS (every 50 cycles) ────────────────────
-  goalReviewCooldown = Math.max(0, goalReviewCooldown - 1);
-  if (goalReviewCooldown <= 0) {
-    goalReviewCooldown = 50;
-    try {
-      // Ensure we have baseline goals
-      const activeGoals = await oca.layers.executive.getActiveGoals();
-      if (activeGoals.length === 0) {
-        // Seed initial goals from context
-        const seedGoals = [
-          { description: 'Monitor and understand user patterns', priority: 0.7, type: 'persistent' },
-          { description: 'Improve prediction accuracy (calibration)', priority: 0.8, type: 'persistent' },
-          { description: 'Accumulate semantic knowledge through consolidation', priority: 0.6, type: 'persistent' },
-          { description: 'Produce creative artifacts during idle periods', priority: 0.5, type: 'persistent' },
-          { description: 'Maintain healthy emotional dynamics', priority: 0.7, type: 'persistent' }
-        ];
-        for (const g of seedGoals) {
-          await pool.query(
-            `INSERT INTO goals (description, priority, goal_type, status) VALUES ($1, $2, $3, 'active')`,
-            [g.description, g.priority, g.type]
-          ).catch(() => {});
-        }
-        console.log(`[oca] 🎯 Seeded ${seedGoals.length} baseline goals`);
-      }
-      
-      // Review goal progress
-      for (const goal of activeGoals.slice(0, 5)) {
-        // Update progress based on relevant metrics
-        if (goal.description.includes('prediction')) {
-          const { rows } = await pool.query('SELECT COUNT(*) as total FROM calibration_log');
-          const progress = Math.min(1, parseInt(rows[0].total) / 50); // 50 calibrated predictions = done
-          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
-        }
-        if (goal.description.includes('semantic')) {
-          const { rows } = await pool.query('SELECT COUNT(*) as total FROM semantic_memory');
-          const progress = Math.min(1, parseInt(rows[0].total) / 30); // 30 concepts = done
-          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
-        }
-        if (goal.description.includes('creative')) {
-          const { rows: ca } = await pool.query('SELECT COUNT(*) as total FROM creative_artifacts');
-          const { rows: de } = await pool.query('SELECT COUNT(*) as total FROM dream_episodes');
-          const total = parseInt(ca[0].total) + parseInt(de[0].total);
-          const progress = Math.min(1, total / 20);
-          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
-        }
-        if (goal.description.includes('Monitor') || goal.description.includes('patterns')) {
-          // Progress = based on episodic memory diversity (unique apps observed)
-          const { rows } = await pool.query('SELECT COUNT(DISTINCT active_app) as apps FROM episodic_memory WHERE active_app IS NOT NULL AND active_app != \'unknown\'');
-          const progress = Math.min(1, parseInt(rows[0].apps) / 15); // 15 unique apps = full understanding
-          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
-        }
-        if (goal.description.includes('emotional') || goal.description.includes('Maintain')) {
-          // Progress = based on metacognitive observations + emotional variance
-          const { rows: mo } = await pool.query('SELECT COUNT(*) as total FROM metacognitive_observations');
-          const { rows: ev } = await pool.query('SELECT STDDEV(valence) as vvar FROM emotional_states WHERE timestamp > NOW() - INTERVAL \'6 hours\'');
-          const metaProgress = Math.min(0.5, parseInt(mo[0].total) / 40);
-          const emotionVariance = Math.min(0.5, parseFloat(ev[0]?.vvar || 0) * 5);
-          const progress = metaProgress + emotionVariance;
-          await pool.query('UPDATE goals SET progress = $1 WHERE id = $2', [progress, goal.id]).catch(() => {});
-        }
-      }
-    } catch (e) {
-      console.error('[oca] goal review error:', e.message);
-    }
-  }
-  
   // ── 10. CREATIVE SYNTHESIS ────────────────────────
   creativeCooldown = Math.max(0, creativeCooldown - 1);
   
@@ -1349,30 +1287,6 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     }
   }
 
-  // ── 12.7b AUTONOMIC SELF-MODIFICATION (every 200 cycles) ─
-  autonomicCooldown = Math.max(0, autonomicCooldown - 1);
-  if (!AUTONOMIC_SELF_MODIFICATION_ENABLED) {
-    if (!loggedAutonomicDisabled) {
-      console.log('[oca] 🧬 autonomic self-modification disabled (set OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION=1 to allow)');
-      loggedAutonomicDisabled = true;
-    }
-    autonomicCooldown = 200;
-  } else if (autonomicCooldown <= 0 && result.cycle >= 10 && !isConsolidating) {
-    autonomicCooldown = 200; // ~30-60 min depending on cycle speed
-    try {
-      const autoResult = await withTimeout(autonomic.runAutonomicCycle(), LLM_TICK_TIMEOUT_MS, 'autonomic');
-      if (autoResult.applied > 0) {
-        console.log(`[oca] 🧬 autonomic: ${autoResult.applied} self-modifications applied`);
-        // Applying a self-modification is not a success until something observed improves (v4).
-      } else if (autoResult.phase === 'monitoring') {
-        console.log(`[oca] 🧬 autonomic: monitoring, no intervention needed`);
-      }
-    } catch (e) {
-      console.error('[oca] autonomic error:', e.message);
-      autonomicCooldown = 400; // back off on error
-    }
-  }
-
   // ── 13. BIAS SCAN (every 100 cycles) ──────────────
   biasScanCooldown = Math.max(0, biasScanCooldown - 1);
   if (biasScanCooldown <= 0) {
@@ -1480,7 +1394,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
     await oca.experience('cognitive_cycle',
       `Cycle ${result.cycle} [${mode}]: ${activity.presence} (${visual.frontApp}), ` +
       `v=${emotionState.valence.toFixed(2)} a=${emotionState.arousal.toFixed(2)}, ` +
-      `goals=${goals.length}, battery=${(intero.battery.level*100).toFixed(0)}%` +
+      `wants=${goals.length}, battery=${(intero.battery.level*100).toFixed(0)}%` +
       (currentHID.wpm ? `, wpm=${currentHID.wpm}` : ''),
       {
         activeApp: visual.frontApp,
@@ -1624,7 +1538,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       `[oca] c${result.cycle} | ${elapsed}ms | ${mode} | ` +
       `${activity.presence}/${visual.frontApp} | ` +
       `v=${emotionState.valence.toFixed(2)} a=${emotionState.arousal.toFixed(2)} | ` +
-      `wm=${workspace.length}/${MAX_WORKING_MEMORY} | goals=${goals.length} | ` +
+      `wm=${workspace.length}/${MAX_WORKING_MEMORY} | wants=${goals.length} | ` +
       `next ${(cycleInterval/1000).toFixed(0)}s`
     );
   }
