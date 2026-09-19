@@ -133,11 +133,11 @@ test('SQL lifecycle: idempotent seed, journal-projected state, replay safety, pr
   let now = 10 * DAY;
   const events = [];
   const ledger = createWorthLedger({ pool, clock: () => now, emit: async (type, layer, payload) => { events.push({ type, layer, payload }); } });
-  assert.deepEqual(await ledger.seed(), { inserted: 10, total: 10 });
-  assert.deepEqual(await ledger.seed(), { inserted: 0, total: 10 });
+  assert.deepEqual(await ledger.seed(), { inserted: 11, total: 11 });
+  assert.deepEqual(await ledger.seed(), { inserted: 0, total: 11 });
   const quinn = await ledger.get('person:quinn');
   assert.equal(quinn.constraint, true); assert.equal(quinn.provenance, 'constraint');
-  assert.equal(events.length, 10, 'each seed signal is announced once; the replayed seed announced nothing');
+  assert.equal(events.length, 11, 'each seed signal is announced once; the replayed seed announced nothing');
   events.length = 0;
 
   const first = await ledger.record({ id: 'rate-1', entityKey: 'project:demo', kind: 'rated', rating: 1, by: 'quinn', about: 'output:42' });
@@ -152,14 +152,14 @@ test('SQL lifecycle: idempotent seed, journal-projected state, replay safety, pr
   await assert.rejects(ledger.record({ id: 'obs-bad', entityKey: 'project:demo', kind: 'observed', outcome: 'used',
     evidence: [{ id: 'g', source: 'generated summary', observation: 'x' }] }), /cannot ground/);
   const { rows: [{ total }] } = await pool.query('SELECT COUNT(*)::int AS total FROM worth_signals');
-  assert.equal(total, 11, 'rejected signals leave no journal rows');
+  assert.equal(total, 12, 'rejected signals leave no journal rows');
 
   const priced = await ledger.price([{ entityKey: 'project:demo', share: 1 }, { entityKey: 'person:quinn', share: 1 }]);
   assert.equal(priced.provenance, 'rated'); assert.ok(priced.value > 0.6);
   assert.equal(priced.stakes.find(s => s.entityKey === 'person:quinn').constraint, true);
 
   const listed = await ledger.list();
-  assert.equal(listed.entities.length, 9);
+  assert.equal(listed.entities.length, 10);
   assert.equal(listed.entities[0].constraint, true, 'constraints list first');
   assert.equal((await ledger.list({ kind: 'self' })).entities.length, 5);
 

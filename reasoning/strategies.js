@@ -123,24 +123,36 @@ export const STRATEGIES = [
           prompt: wantContext(ctx) });
       } catch (e) { return { status: 'failed', error: `artifact unavailable: ${text(e.message, 160)}` }; }
       if (!text(a.title) || text(a.body).length < 40) return { status: 'stalled', stopReason: 'no_usable_artifact' };
-      const written = await ctx.deps.writeArtifact(ctx.chain.chain_id, { title: text(a.title, 120), body: String(a.body).slice(0, 20000), forWhat: text(a.what_it_is_for, 300), judge: text(a.how_to_judge_it, 300), attempt: ctx.state.attempts });
+      const seq = ctx.state.claimSeq ?? ctx.state.attempts;
+      const written = await ctx.deps.writeArtifact(ctx.chain.chain_id, { title: text(a.title, 120), body: String(a.body).slice(0, 20000), forWhat: text(a.what_it_is_for, 300), judge: text(a.how_to_judge_it, 300), attempt: seq });
       return { status: 'needs_evidence', conclusion: `Artifact delivered: ${text(a.title, 120)} (${written.path})`,
         missingEvidence: [`A person's rating of the artifact "${text(a.title, 80)}" (usefulness in [0,1])`],
-        evidence: [{ id: `artifact-${ctx.chain.chain_id}-${ctx.state.attempts}`, source: 'artifact delivered by the engine (unrated; generated)', observation: `${text(a.title, 120)} — ${text(a.what_it_is_for, 200)}; judge by: ${text(a.how_to_judge_it, 200)}; at ${written.path}` }],
+        evidence: [{ id: `artifact-${ctx.chain.chain_id}-${seq}`, source: 'artifact delivered by the engine (unrated; generated)', observation: `${text(a.title, 120)} — ${text(a.what_it_is_for, 200)}; judge by: ${text(a.how_to_judge_it, 200)}; at ${written.path}` }],
         commitment: { kind: 'artifact', path: written.path, title: text(a.title, 120) } };
     },
   },
 ];
 
-// The strategy a want is on, skipping ones the runtime cannot provide. Rotation order is fixed.
-export function strategyFor(want, deps = {}) {
-  const start = Math.max(0, want?.strategy || 0);
-  for (let i = 0; i < STRATEGIES.length; i++) {
-    const s = STRATEGIES[(start + i) % STRATEGIES.length];
-    if (s.available(deps)) return s;
-  }
-  return STRATEGIES[0];
+// A want about the engine itself, pursued in the self-build phase: change the code on a branch, prove it
+// with the tests, publish the branch. Only eligible for self-originated wants while the phase is active.
+STRATEGIES.unshift({
+  name: 'improve_myself', kind: 'self_build', actionKind: 'edit_own_code', reversibility: 'undo',
+  available: deps => !!deps.selfBuild,
+  applies: (state, deps) => state?.origin?.kind === 'self' && deps.selfBuild?.isActive?.() === true,
+  describe: () => 'Change my own code on a branch in a private worktree, prove it with my tests, and publish the branch.',
+  async run(ctx) { return ctx.deps.selfBuild.build(ctx); },
+});
+
+// The strategy a want is on, over the strategies the runtime can provide and that apply to this want.
+// Rotation order is fixed; the index counts only eligible strategies so rotation never skips a beat.
+export function eligibleStrategies(deps = {}, state = null) {
+  return STRATEGIES.filter(s => s.available(deps) && (!s.applies || s.applies(state, deps)));
+}
+export function strategyFor(want, deps = {}, state = null) {
+  const list = eligibleStrategies(deps, state);
+  if (!list.length) return STRATEGIES.find(s => s.name === 'inspect_missing_evidence');
+  return list[Math.max(0, want?.strategy || 0) % list.length];
 }
 
-export function strategyNames() { return STRATEGIES.map(s => s.name); }
+export function strategyNames() { return STRATEGIES.filter(s => s.name !== 'improve_myself').map(s => s.name); }
 export { normalizeEvidence };

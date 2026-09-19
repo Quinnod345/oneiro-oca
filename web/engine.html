@@ -185,6 +185,16 @@ details.form .body{display:grid;gap:8px}
     <div class="col">
       <section class="card"><h2>Risk <span class="meta" id="risk-meta"></span></h2><div class="body" id="risk"><div class="empty">—</div></div></section>
       <section class="card"><h2>Affect <span class="meta" id="aff-meta"></span></h2><div class="body" id="affect"><div class="empty">—</div></div></section>
+      <section class="card"><h2>Self-build <span class="meta" id="sb-meta"></span></h2><div class="body" id="selfbuild"><div class="empty">—</div></div>
+        <details class="form" id="sb-want-form"><summary>Give it a want about itself</summary>
+          <div class="body">
+            <input id="sb-seed" placeholder="what should be different about the engine (a defect, a gap, a capability)">
+            <input id="sb-done" placeholder="done when… (default: merged to main and its tests pass)">
+            <textarea id="sb-obs" rows="2" placeholder="what you observed that shows it (a fact; becomes evidence on the want)"></textarea>
+            <div style="display:flex;gap:8px;justify-content:flex-end"><button id="sb-send" class="primary">Hand it the want</button></div>
+          </div>
+        </details>
+      </section>
       <section class="card"><h2>Thinker <span class="meta" id="th-meta"></span></h2><div class="body" id="thinker"><div class="empty">—</div></div></section>
     </div>
     <div class="col">
@@ -312,6 +322,30 @@ async function affect(){
   }catch(e){$('#affect').innerHTML=`<div class="err">${esc(e.message)}</div>`}
 }
 
+/* ── self-build ── */
+async function selfBuild(){
+  try{
+    const d=await j('/oca/self-build');const p=d.phase,perm=d.permission;
+    $('#sb-meta').innerHTML=`${p.active?`<span style="color:var(--amber)">in phase</span> · ${ago(p.since)} · ${p.builds} built`:'out of phase'} · <button id="sb-perm" title="a person permits the phase; the engine enters and leaves it">${perm.enabled?'permitted ✓':'not permitted'}</button>`;
+    $('#sb-perm').onclick=async()=>{try{await j('/oca/ui/controls',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({selfBuild:!perm.enabled})});toast(`self-build ${perm.enabled?'no longer':'now'} permitted`);selfBuild()}catch(e){toast(e.message,true)}};
+    const wants=(d.selfWants||[]).map(w=>`<div class="dec"><span class="num" style="color:var(--amber)">${f2(w.pressure)}</span><span class="what" title="${esc(w.description)}">#${w.chain_id} ${esc(w.description)}</span><span class="ev">${esc(w.status)} · ${esc(w.strategy)}</span></div>`).join('');
+    const recent=(d.recent||[]).slice(0,6).map(e=>{const pl=e.payload||{};const what=e.kind==='build'?(pl.pushed?`pushed <span class="mono">${esc(pl.branch)}</span> · tests ${pl.tests?.after??'?'}`:`failed: ${esc(pl.failed||pl.code||'')}`):e.kind==='enter'?esc(pl.reason):e.kind==='exit'?esc(pl.reason):e.kind==='want'?`want: ${esc(pl.defect||'')}`:e.kind==='refused'?`refused: ${esc((pl.forbidden||[]).join(', '))}`:esc(JSON.stringify(pl)).slice(0,120);
+      return`<div class="dec"><span class="chip ${e.kind==='build'&&pl.pushed?'proceed':e.kind==='refused'||(e.kind==='build'&&!pl.pushed)?'refuse':''}">${esc(e.kind)}</span><span class="what">${what}</span><span class="ev">${ago(e.created_at)}</span></div>`}).join('');
+    $('#selfbuild').innerHTML=`${p.active?`<div class="held" style="border-color:var(--amber)">In the self-build phase since ${hhmm(p.since)}: ${esc(p.reason)}. ${p.failures?`${p.failures} consecutive failure${p.failures>1?'s':''}. `:''}Auto-merge ${perm.autoMerge?'on':'off'} — branches await your merge.</div>`:''}
+      ${wants||'<div class="faint" style="font-size:12px">no wants about itself right now</div>'}${recent?`<div style="margin-top:8px">${recent}</div>`:''}
+      <div class="faint" style="font-size:10.5px;margin-top:8px;font-family:var(--mono)">constitution (untouchable): ${d.constitution.join(' · ')}</div>`;
+  }catch(e){$('#selfbuild').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+$('#sb-send').onclick=async()=>{
+  const seed=$('#sb-seed').value.trim(),obs=$('#sb-obs').value.trim(),doneWhen=$('#sb-done').value.trim();
+  if(!seed)return toast('say what should be different',true);
+  const body={seed,...(doneWhen?{doneWhen}:{}),evidence:obs?[{id:`person-${Date.now().toString(36)}`,source:'a person, observing the engine',observation:obs}]:[]};
+  $('#sb-send').disabled=true;
+  try{const r=await j('/oca/self-build/want',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(`self-want #${r.chain_id} created`);$('#sb-seed').value='';$('#sb-obs').value='';$('#sb-want-form').open=false;selfBuild();wants()}
+  catch(e){toast(e.message,true)}
+  $('#sb-send').disabled=false;
+};
+
 /* ── thinker ── */
 async function thinker(){
   try{
@@ -380,12 +414,12 @@ async function hungerCell(){try{const d=await j('/oca/hunger');const w=d.wants||
 
 /* ── schedule ── */
 try{const th=localStorage.getItem('oca.engine.theme');if(th)document.documentElement.dataset.theme=th}catch{}
-const fast=()=>{health();wants();risk();affect();thinker();hungerCell()};
+const fast=()=>{health();wants();risk();affect();thinker();hungerCell();selfBuild()};
 const slow=()=>{worth();crm();trace()};
 fast();slow();
 setInterval(fast,5000);setInterval(slow,20000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){fast();slow()}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#receipt').open=false}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#receipt').open=false;$('#sb-want-form').open=false}});
 </script>
 </body>
 </html>

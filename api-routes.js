@@ -1,5 +1,5 @@
 import { createPursuitWork } from './reasoning/pursuit-work.js';
-import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal } from './reasoning/ponder-service.js';
+import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal, selfBuild } from './reasoning/ponder-service.js';
 import { createPonderRouter } from './reasoning/ponder-router.js';
 import { createUserWorkspace } from './user-workspace.js';
 import { createUserOperations } from './user-operations.js';
@@ -1463,6 +1463,32 @@ ocaRouter.get('/oca/health', async (_req, res) => {
   catch (e) { out.queue = { error: e.message }; }
   out.ok = out.database.ok && out.inference?.reachable !== false;
   res.status(out.ok ? 200 : 503).json(out);
+});
+
+// ── SELF-BUILD ── the engine's wants about itself. A person permits the phase (PATCH /oca/ui/controls
+// {selfBuild:true}); the engine enters and leaves it on its own; a person can force either.
+ocaRouter.get('/oca/self-build', async (_req, res) => {
+  try { res.json(await selfBuild.status()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ocaRouter.post('/oca/self-build/enter', async (req, res) => {
+  try { if (!(await selfBuild.permitted()).enabled) return res.status(409).json({ error: 'Self-build is not permitted; set the selfBuild control first.' });
+    res.json(await selfBuild.enter(`person: ${String(req.body?.reason || 'requested').slice(0, 200)}`)); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+ocaRouter.post('/oca/self-build/exit', async (req, res) => {
+  try { res.json(await selfBuild.exit(`person: ${String(req.body?.reason || 'requested').slice(0, 200)}`)); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+ocaRouter.post('/oca/self-build/introspect', async (_req, res) => {
+  try { res.json(await selfBuild.introspect()); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// A person hands the engine a want about itself. Body: { seed, doneWhen?, evidence?: [{id, source, observation}] }
+ocaRouter.post('/oca/self-build/want', async (req, res) => {
+  try {
+    const { seed, doneWhen, evidence = [], priority = 0.7 } = req.body || {};
+    const chain = await ponderQueue.enqueue({ seed, doneWhen: doneWhen || 'The change is merged to main and its tests pass in isolation.', topic: 'OCA engine', learning: false, priority, evidence,
+      stakes: [{ entityKey: 'project:oca-engine', share: 2 }] }, { origin: { kind: 'self', source: 'person', by: 'quinn', fingerprint: `person:${Date.now().toString(36)}` } });
+    selfBuild.tick({ force: true }).catch(() => {});   // a person handing it a want is a reason to look now
+    res.status(202).json(chain);
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // ── TRACE ── the story of a want from the journals: attempts, appraisals, commitments, settlements, affect.
