@@ -5,13 +5,18 @@ import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence, currentEvidence } from './loop.js';
 import { defaultTimeBudgetSeconds } from './budget.js';
 import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from '../motivation/hunger.js';
+import { strategyFor, budgetFor, STRATEGIES } from './strategies.js';
+const STRATEGY_COUNT = STRATEGIES.length;
 
 const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 // `worth` is the ledger (optional). Without it, wants keep their explicit priority as value.
 // `affect` (optional) is the emotion engine: frustration shortens strategy patience, fear raises the
 // confidence a conclusion must reach, and observed progress on a want is felt.
-export function createPonderQueue({ pool, reason, clock = Date.now, worth = null, affect = null }) {
+// `strategies` are the runtime dependencies strategies may use (llm, hypothesis, simulate, writeArtifact, provider,
+// model); `risk` is the risk journal that appraises each attempt. Without them only the reasoner strategy is available.
+export function createPonderQueue({ pool, reason, clock = Date.now, worth = null, affect = null, strategies = {}, risk = null }) {
+  const strategyDeps = { reason, ...strategies };
   const patience = () => { try { return affect?.strategyPatience?.() ?? 3; } catch { return 3; } };
   const snapshot = row => row ? { chain_id: row.id, seed: row.seed, status: row.status, depth: row.depth,
     updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock(), { patience: patience() }) } : null;
@@ -111,21 +116,42 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         if (!parent || parent.want.status !== 'active') { await cancel(row.id); continue; }
       }
       const lease = randomUUID();
-      let state = { ...row.ponder_state, lease, leaseUntil: clock() + 240000, attempts: row.ponder_state.attempts + 1 };
+      // `attempts` counts claims since the evidence last changed (deadline retries are capped on it in SQL);
+      // `unfinishedClaims` counts claims that never saved a result — the crash loop guard.
+      let state = { ...row.ponder_state, lease, leaseUntil: clock() + 240000, attempts: row.ponder_state.attempts + 1,
+        unfinishedClaims: (row.ponder_state.unfinishedClaims || 0) + 1 };
       const claimed = await pool.query(
         `UPDATE thought_chains SET status = 'running', ponder_state = $1::jsonb, updated_at = NOW()
          WHERE id = $2 AND ponder_state = $3::jsonb AND
          (status = 'pondering' OR status = 'budget' OR (status = 'running' AND (ponder_state->>'leaseUntil')::float8 < $4)) RETURNING id`,
         [JSON.stringify(state), row.id, JSON.stringify(row.stored_state || row.ponder_state), clock()]);
       if (!claimed.rowCount) continue;
-      if (state.attempts > 3) {
+      if (state.unfinishedClaims > 3) {
         state.result = { status: 'failed', error: 'Crash/retry budget exhausted; inspect the chain before resuming.' };
-        await save(row.id, lease, state, 'failed'); return get(row.id);
+        await save(row.id, lease, { ...state, unfinishedClaims: 0 }, 'failed'); return get(row.id);
       }
       try {
         const motivation = appetite(state.want, clock(), { patience: pat });
         let minConfidence = 0.55;
         try { minConfidence = affect?.verificationThreshold?.(0.55) ?? 0.55; } catch {}
+        // Which strategy this attempt spends its budget on, and whether the engine may run it.
+        const strategy = strategyFor(state.want, strategyDeps);
+        const budget = budgetFor(motivation, { timeBudgetSeconds: state.timeBudgetSeconds, maxPasses: state.maxPasses });
+        let gate = null;
+        if (risk) {
+          try {
+            gate = await risk.decide({ id: `strategy:${row.id}:${state.attempts}:${strategy.name}`, chainId: row.id, kind: strategy.actionKind, firedBy: 'engine',
+              description: `${strategy.name} for want #${row.id}: ${strategy.describe(state.want)}`, serves: state.want.stakes || [], touches: [], reversibility: strategy.reversibility });
+          } catch (e) { console.warn('[ponder] strategy appraisal unavailable:', e.message); }
+        }
+        if (gate && gate.decision !== 'proceed') {
+          // Not allowed this time: rotate to the next strategy without counting a failure, keep the row pending.
+          state = { ...state, want: recordAttempt(state.want, { result: 'blocked', now: clock() }), attempts: state.attempts - 1, unfinishedClaims: 0,
+            lastStrategy: { name: strategy.name, decision: gate.decision, reasons: gate.reasons, at: clock() } };
+          await save(row.id, lease, { ...state, lease: null, leaseUntil: 0 }, 'pondering');
+          console.log(`[ponder] ${gate.decision} ${strategy.name} for want #${row.id}; rotating`);
+          return get(row.id);
+        }
         // Keep motivational context inside the reasoner's 24k contract even for large requests.
         const { description: _description, doneWhen, ...pressure } = motivation;
         const prior = state.result ? { conclusion: String(state.result.conclusion || '').slice(0, 1000),
@@ -137,13 +163,28 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
           omitted: Math.max(0, current.length - selectedEvidence.length) };
         const coverageNote = coverage.omitted ? `Evidence coverage: only the newest ${coverage.reviewed} of ${coverage.current} current observations are in this review. Older observations remain in the saved pursuit; do not imply exhaustive review. Research work can inspect the complete pursuit.json.\n` : '';
         const taskContext = coverageNote + state.context.slice(0, Math.max(0, 24000 - header.length - coverageNote.length));
-        const result = await reason(row.seed, { context: header + taskContext, minConfidence,
-          evidence: selectedEvidence, maxPasses: state.maxPasses, timeBudgetSeconds: state.timeBudgetSeconds,
+        const reasonOptions = { context: header + taskContext, minConfidence,
+          evidence: selectedEvidence, maxPasses: budget.maxPasses, timeBudgetSeconds: budget.timeBudgetSeconds,
           checkpoint: state.checkpoint,
-          onCheckpoint: async checkpoint => { state = { ...state, checkpoint }; await save(row.id, lease, state); } });
-        state = { ...state, result: { ...result, evidenceCoverage: coverage, contextTruncated: taskContext.length < state.context.length }, checkpoint: result.checkpoint,
-          want: recordAttempt(state.want, { result: result.status, now: clock() }) };
-        const status = ({ converged: 'ready', needs_evidence: 'awaiting_evidence', stalled: 'stalled', budget: 'budget', failed: 'failed' })[result.status] || 'failed';
+          onCheckpoint: async checkpoint => { state = { ...state, checkpoint }; await save(row.id, lease, state); } };
+        const result = await strategy.run({ chain: { chain_id: row.id, seed: row.seed }, want: state.want, motivation, state, evidence: current,
+          budget, reasonOptions, deps: strategyDeps, clock });
+        // Observations a strategy produced join the want's evidence (never rewriting an existing id).
+        let evidence = state.evidence;
+        for (const e of normalizeEvidence(result.evidence || [])) if (!evidence.some(x => x.id === e.id)) evidence = [...evidence, e];
+        const commitments = result.commitment ? [...(state.commitments || []), { ...result.commitment, strategy: strategy.name, attempt: state.attempts, at: clock() }] : state.commitments;
+        state = { ...state, evidence, commitments, result: { ...result, strategy: strategy.name, budget, evidenceCoverage: coverage, contextTruncated: taskContext.length < state.context.length },
+          checkpoint: result.checkpoint ?? null, lastStrategy: { name: strategy.name, decision: 'proceed', status: result.status, at: clock() },
+          want: recordAttempt(state.want, { result: result.status === 'budget' && result.stopReason === 'deadline' && result.checkpoint?.draft ? 'interrupted' : result.status, now: clock() }) };
+        if (gate) risk.observe(gate.id, { result: ['stalled', 'budget', 'failed'].includes(result.status) ? 'failure' : 'success',
+          evidence: [{ id: `${gate.id}:run`, source: 'ponder runtime status', observation: `${strategy.name} ended ${result.status}${result.stopReason ? ` (${result.stopReason})` : ''}${result.error ? `: ${String(result.error).slice(0, 200)}` : ''}` }] }).catch(() => {});
+        let status = ({ converged: 'ready', needs_evidence: 'awaiting_evidence', stalled: 'stalled', budget: 'budget', failed: 'failed' })[result.status] || 'failed';
+        // A stall rotates the strategy, and a different strategy is a different attempt, not repetition:
+        // the want stays claimable until every strategy has stalled on the same evidence.
+        const rotating = ['stalled', 'failed'].includes(result.status);   // budget keeps its retry contract
+        const stallStreak = rotating ? (state.stallStreak || 0) + 1 : ['needs_evidence', 'converged'].includes(result.status) ? 0 : (state.stallStreak || 0);
+        state = { ...state, stallStreak, unfinishedClaims: 0 };
+        if (rotating && stallStreak < STRATEGY_COUNT) status = 'pondering';
         await save(row.id, lease, state, status);
         // The reasoner ran and did not get there: an observed failure of the engine's own pondering.
         // Converging is not a success (a plan satiates nothing); a transport failure is not a failure of thought.
@@ -155,7 +196,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         return get(row.id);
       } catch (e) {
         if (e.code === 'LEASE_LOST') return get(row.id);
-        state = { ...state, result: { status: 'failed', error: e.message },
+        state = { ...state, unfinishedClaims: 0, result: { status: 'failed', error: e.message },
           want: recordAttempt(state.want, { result: 'failed', now: clock() }) };
         await save(row.id, lease, state, 'failed');
         return get(row.id);
@@ -202,13 +243,14 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       }
       if (merged.length === s.evidence.length) return { status: row.status, state: s };
       currentEvidence(merged, { maxItems: Infinity });
-      return { status: 'pondering', state: { ...s, evidence: merged, checkpoint: null, attempts: 0,
+      return { status: 'pondering', state: { ...s, evidence: merged, checkpoint: null, attempts: 0, stallStreak: 0,
         priorRuns: [...s.priorRuns, { checkpoint: s.checkpoint, result: s.result, at: clock() }] } };
     }, { guard });
   }
   async function retry(id) {
     return mutate(id, row => {
       const s = row.ponder_state;
+      if (row.status === 'pondering') return { status: row.status, state: s };   // already queued (a rotation kept it claimable)
       if (!['failed', 'budget'].includes(row.status)) throw new Error('only an interrupted or failed attempt can retry unchanged evidence');
       if (s.attempts >= 3 || (s.checkpoint?.passes?.length || 0) >= s.maxPasses) throw new Error('attempt/pass budget exhausted; supply new evidence or rescope');
       return { status: 'pondering', state: s };
@@ -222,6 +264,16 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       return { status: want.status === 'sated' ? 'resolved' : row.status === 'resolved' ? 'ready' : row.status, state: { ...row.ponder_state, want } };
     });
     const saved = chain.want.receipts.find(r => r.receiptId === receipt.receiptId);
+    // A real outcome scores the predictions the engine committed to for this want (A7: prediction vs baseline).
+    if (saved && !before.want.receipts.some(r => r.receiptId === saved.receiptId) && strategyDeps.evaluateSimulation) {
+      for (const c of (chain.commitments || []).filter(c => c.kind === 'simulation' && !c.scoredBy)) {
+        try {
+          const score = await strategyDeps.evaluateSimulation(c.id, saved.evidence.map(e => e.observation).join(' | ').slice(0, 2000));
+          await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`,
+            [id, JSON.stringify((chain.commitments || []).map(x => x === c ? { ...x, scoredBy: saved.receiptId, accuracy: score?.accuracy ?? null } : x))]);
+        } catch (e) { console.warn('[ponder] simulation scoring:', e.message); }
+      }
+    }
     if (saved && !before.want.receipts.some(r => r.receiptId === saved.receiptId)) {
       try { affect?.feelProgress?.({ value: chain.want.value, progressDelta: Math.max(0, saved.progress - (before.want.progress || 0)),
         sated: chain.want.status === 'sated', usefulness: Number.isFinite(saved.usefulness) ? saved.usefulness : null }); } catch {}
@@ -247,6 +299,25 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
   async function cancel(id) {
     return mutate(id, row => ({ status: 'cancelled', state: { ...row.ponder_state, lease: randomUUID(), want: { ...row.ponder_state.want, status: 'cancelled' } } }), { allowRunning: true });
   }
+  // A committed prediction was settled by an observation: the result is evidence on the want, and the
+  // commitment is marked so it cannot feed twice. Unverifiable evaluations add nothing.
+  async function settlePrediction({ id, status, confirmed, evaluation, modelUpdate }) {
+    const { rows } = await pool.query(`SELECT id, ponder_state FROM thought_chains WHERE ponder_state IS NOT NULL
+      AND ponder_state #>> '{want,status}' = 'active' AND ponder_state -> 'commitments' @> $1::jsonb LIMIT 1`,
+      [JSON.stringify([{ kind: 'hypothesis', id: Number(id) }])]);
+    const row = rows[0]; if (!row) return null;
+    const commitment = (row.ponder_state.commitments || []).find(c => c.kind === 'hypothesis' && Number(c.id) === Number(id));
+    if (!commitment || commitment.settled) return null;
+    const settled = (row.ponder_state.commitments || []).map(c => c === commitment ? { ...c, settled: status, confirmed, at: clock() } : c);
+    await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`, [row.id, JSON.stringify(settled)]);
+    if (!evaluation?.verifiable) return { chain_id: row.id, added: false, status };
+    const observation = `Prediction #${id} ${confirmed ? 'held' : 'failed'}: ${String(evaluation.reason || modelUpdate || '').slice(0, 600)}`;
+    try {
+      await addEvidence(row.id, [{ id: `prediction-${id}`, source: 'structured hypothesis evaluation against an observed metric', observation }]);
+      return { chain_id: row.id, added: true, confirmed };
+    } catch (e) { return { chain_id: row.id, added: false, error: e.message }; }
+  }
+
   // Wants saved before stakes existed get an outcome entity so they can be priced. An explicit request
   // was a grounded rating by the person who asked; a child inherits its parent's stakes. Idempotent.
   async function adoptLegacyWants() {
@@ -273,7 +344,11 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         WHERE id = $1 AND ponder_state #> '{want,stakes}' IS NULL`, [row.id, JSON.stringify(want)]);
       adopted += rowCount;
     }
-    return { adopted };
+    // Wants that stalled before strategies existed stalled on one strategy only: under rotation they are claimable.
+    const { rowCount: reopened } = await pool.query(`UPDATE thought_chains SET status = 'pondering',
+      ponder_state = ponder_state || '{"stallStreak": 1}'::jsonb, updated_at = NOW()
+      WHERE ponder_state IS NOT NULL AND status = 'stalled' AND ponder_state #>> '{want,status}' = 'active' AND ponder_state -> 'stallStreak' IS NULL`);
+    return { adopted, reopened };
   }
   async function hunger() {
     const { rows } = await pool.query(`SELECT * FROM thought_chains WHERE ponder_state IS NOT NULL
@@ -282,5 +357,5 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     return { wants, pressure: wants[0]?.hunger.pressure || 0, selected: wants[0]?.chain_id || null,
       pricing: worth ? 'live_from_worth_ledger' : 'explicit_priority' };
   }
-  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger, adoptLegacyWants };
+  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger, adoptLegacyWants, settlePrediction };
 }

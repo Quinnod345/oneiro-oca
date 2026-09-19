@@ -191,8 +191,10 @@ test('legacy wants are adopted once: an explicit one is rated by its requester, 
   assert.equal(parent.want.stakes, undefined);
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth });
   assert.equal((await queue.hunger()).wants.every(w => w.hunger.unpriced), true, 'unpriced until adopted');
-  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 2 });
-  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 0 });
+  await pool.query(`UPDATE thought_chains SET status = 'stalled' WHERE id = $1`, [child.chain_id]);   // a pre-rotation stall
+  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 2, reopened: 1 });
+  assert.deepEqual(await queue.adoptLegacyWants(), { adopted: 0, reopened: 0 });
+  assert.equal((await queue.get(child.chain_id)).status, 'pondering', 'a legacy stall is claimable under rotation');
   const p = await queue.get(parent.chain_id), c = await queue.get(child.chain_id);
   assert.equal(p.want.outcomeKey, `outcome:ponder-legacy-${parent.chain_id}`);
   assert.deepEqual(p.want.stakes.map(s => s.entityKey), [p.want.outcomeKey, 'project:legacy-topic']);

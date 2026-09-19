@@ -29,6 +29,10 @@ test('the retired dream and design-build machinery is gone from the runtime grap
     assert.ok(!/design-model\/|design\/emotion-bridge|self_train|deriveTargetProject|thought\.build\b/.test(src), `${file} carries no design-build machinery`);
     assert.ok(!/autonomic\/self-modifier|runAutonomicCycle|UPDATE goals SET progress|processSuccess\((goal|'executive'|'self_train)/.test(src), `${file} neither self-modifies nor credits goals by count`);
   }
+  const loop = await readFile(new URL('../cognitive-loop.js', import.meta.url), 'utf8');
+  assert.ok(!/GENERATIVE HYPOTHESIS ENGINE|addFallbackHypotheses|CREATIVE SYNTHESIS|WORLD SIMULATION|oca\.create\(|oca\.imagine\(/.test(loop), 'the tick no longer generates hypotheses, creative artifacts or simulations on its own; strategies do');
+  assert.ok(/SETTLE PREDICTIONS/.test(loop) && /hypothesis\.test\(/.test(loop), 'the tick still settles predictions against the world');
+  assert.ok(/runPendingPonder\(\)/.test(loop), 'the pursuit queue runs in the tick');
   await assert.rejects(import('../autonomic/self-modifier.js'), 'the self-modifier module is gone');
   const thinker = await readFile(new URL('../thinker-bridge.js', import.meta.url), 'utf8');
   assert.ok(!/"dream": \{|"append_dream"/.test(thinker), 'the thinker prompt no longer offers dream fields');

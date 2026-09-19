@@ -4,6 +4,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence } from '../reasoning/loop.js';
 import { priceWant, parseEntityKey } from './worth.js';
 const clamp = n => Math.max(0, Math.min(1, n));
+// Rotation order of the strategies a want spends its budget on (reasoning/strategies.js owns the runners).
+export const STRATEGY_NAMES = ['inspect_missing_evidence', 'test_a_prediction', 'imagine_before_acting', 'argue_the_premise', 'propose_an_artifact'];
 
 // A want is for something. Its value is the worth of what it is for, priced from the ledger;
 // `value` alone is the legacy explicit priority and stays the fallback when no ledger is wired.
@@ -42,20 +44,22 @@ export function appetite(want, now = Date.now(), { patience = 3 } = {}) {
   const ageHours = Math.max(0, now - want.lastProgressAt) / 3600000;
   const persistence = 1 - Math.exp(-ageHours / 8);
   const frustration = clamp((want.failedAttempts || 0) / Math.max(1, patience));
-  const strategies = ['inspect_missing_evidence', 'test_an_alternative', 'reduce_to_smallest_falsifiable_step'];
   return { pressure: clamp(want.value * gap * (0.65 + 0.35 * persistence)), gap,
     frustration, mode: frustration >= 2 / 3 ? 'change_strategy' : 'pursue',
-    strategy: strategies[(want.strategy || 0) % strategies.length],
+    strategy: STRATEGY_NAMES[(want.strategy || 0) % STRATEGY_NAMES.length], strategyIndex: want.strategy || 0,
     // A want with no stakes at all has never been priced; a want with stakes reports what pricing found.
     value: want.value, valueProvenance: want.pricing?.provenance || 'priority', unpriced: want.stakes ? want.pricing?.unpriced === true : true,
     description: want.description, doneWhen: want.doneWhen };
 }
 export function recordAttempt(want, { result, now = Date.now() }) {
   // A plan, thought, successful model response, or quiet pass does NOT feed hunger.
-  const stalled = ['stalled', 'failed', 'budget'].includes(result);
+  // A strategy the engine was not allowed to run rotates to the next one but is not a failure.
+  if (result === 'blocked') return { ...want, strategy: want.strategy + 1, lastAttemptAt: now };
+  // An attempt cut off by its deadline with resumable work counts as a failure but stays on its strategy.
+  const stalled = ['stalled', 'failed', 'budget', 'interrupted'].includes(result);
   return { ...want, attempts: want.attempts + 1,
     failedAttempts: want.failedAttempts + (stalled ? 1 : 0),
-    strategy: want.strategy + (stalled ? 1 : 0), lastAttemptAt: now };
+    strategy: want.strategy + (stalled && result !== 'interrupted' ? 1 : 0), lastAttemptAt: now };
 }
 export function recordOutcome(want, { receiptId, progress, evidence, criterionMet = false, usefulness = null, now = Date.now() }) {
   if (want.status === 'cancelled') throw new Error('cancelled wants do not accept outcomes');
