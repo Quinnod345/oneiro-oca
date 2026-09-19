@@ -191,6 +191,13 @@ test('a build: worktree on a branch, coder edits, constitution refused, tests mu
     assert.equal(gate.decision, 'proceed'); assert.equal(gate.outcome.result, 'success'); assert.equal(gate.capability, 'act_reversible');
     assert.equal((await fx.g(['worktree', 'list'])).stdout.split('\n').filter(Boolean).length, 1, 'worktree cleaned up');
 
+    // 3c. a published branch awaits a person: re-entering the phase does not rebuild it, and the strategy no longer applies
+    await sb.exit('test'); await sb.enter('test again');
+    const parked = await queue.get(chain.chain_id);
+    assert.equal(parked.status, 'awaiting_evidence', 'the built want is left waiting for the merge');
+    assert.equal(eligibleStrategies({ llm, selfBuild: sb }, parked).some(s => s.name === 'improve_myself'), false);
+    await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', '[]'::jsonb) WHERE id = $1`, [chain.chain_id]);
+
     // 4. permission withdrawn mid-phase: the same strategy is held, not run
     await controls.update({ selfBuild: false });
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '0') WHERE id = $1`, [chain.chain_id]);
