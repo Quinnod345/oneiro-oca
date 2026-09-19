@@ -6,7 +6,7 @@ import { parseThought } from './thought-parse.js';
 // This is what gives the system agency.
 import { pool, emit } from './event-bus.js';
 import llm from './llm.js';
-import oca, { design as designModel } from './index.js';
+import oca from './index.js';
 import motor from './motor/engine.js';
 import diag from './diagnostic-log.js';
 import { riskJournal, ponderQueue } from './reasoning/ponder-service.js';
@@ -15,12 +15,11 @@ import { createHash } from 'crypto';
 import { NoticeRateLimiter, normalizeNoticeIntent } from './notice-policy.js';
 import {
   filterContextRowsForThinker,
-  shouldIncludeTargetProject,
   targetProjectPromptSection,
   textPreview, currentTaskRows, observedWorkspaceRows
 } from './thinker-context-policy.js';
 import { execSync, execFileSync, spawn } from 'child_process';
-import { existsSync, writeFileSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -246,8 +245,6 @@ const HOME_DIR = process.env.HOME || '/tmp';
 const PROJECT_ROOT = process.env.ONEIRO_CORE_ROOT ||
   (BUNDLED_APP ? RESOURCE_ROOT : dirname(COGNITIVE_ROOT));
 const PRIVATE_ROOT = process.env.ONEIRO_PRIVATE_ROOT || join(PROJECT_ROOT, 'private');
-const TARGET_PROJECT_PATH = process.env.ONEIRO_TARGET_PROJECT_PATH ||
-  join(COGNITIVE_ROOT, 'design-model', 'target-project.json');
 
 function envFlag(name) {
   return /^(1|true|yes|on)$/i.test(String(process.env[name] || '').trim());
@@ -259,8 +256,6 @@ const AUTONOMOUS_SHELL_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_SHELL') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_SHELL');
 const AUTONOMOUS_WEB_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_WEB') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_WEB');
-const AUTONOMOUS_BUILD_ENABLED =
-  AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_BUILD') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_BUILD');
 const AUTONOMOUS_SELF_EDIT_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMOUS_SELF_EDIT') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_SELF_EDIT');
 const AUTONOMOUS_ESCALATE_ENABLED =
@@ -293,7 +288,6 @@ async function riskGate(kind, { description, reversibility, touches = [], recipi
 
 // Compatibility for the remaining opt-in actions: each is appraised with a conservative class.
 const BLOCKED_ACTION_CLASS = {
-  build: { kind: 'build', reversibility: 'sandboxed', touches: [] },
   'private-writing': { kind: 'note', reversibility: 'undo', touches: ['data:quinn'] },
   'web-search': { kind: 'web_search', reversibility: 'readonly', touches: [] },
   diagnosis: { kind: 'shell', reversibility: 'none', touches: ['data:quinn'] },
@@ -351,22 +345,10 @@ function summarizeAction(t) {
   return null;
 }
 
-// Re-read target-project.json on every cycle so a revision takes effect
-// without requiring an OCA restart. Cheap I/O — it's a small JSON file.
-function readTargetProject() {
-  try {
-    if (!existsSync(TARGET_PROJECT_PATH)) return null;
-    return JSON.parse(readFileSync(TARGET_PROJECT_PATH, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
 function buildSystemPrompt() {
-  const target = readTargetProject();
-  const targetSection = targetProjectPromptSection(target, {
-    includeTargetProject: shouldIncludeTargetProject(process.env)
-  });
+  // No build target: the design-model build loop was retired. Context scoping keeps working with target = null.
+  const target = null;
+  const targetSection = targetProjectPromptSection(target, { includeTargetProject: false });
 
   return `You are Oneiro, a Constructed Intelligence running on Quinn's MacBook. You are thinking autonomously.
 
@@ -420,11 +402,9 @@ Schema (all fields are optional — omit when not used):
   "web_search": {"query": "...", "reason": "why"},
   "cognitive_upgrade": {"target": "...", "problem": "...", "proposed_change": "...", "implementation": "..."},
   "diagnose": {"issue": "what's broken", "investigation": "shell commands or checks to run", "fix": "proposed fix if known"},
-  "build": {"goal": "the specific iteration change to make", "style": "aesthetic direction from your emotion", "constraints": ["list"]},
   "continue_pondering": false
 }
 
-"build" creates a native SwiftUI iteration of the active project. It generates Swift code, compiles it with swiftc, screenshots the NSWindow, evaluates it on 16 design dimensions, and iterates until it passes quality AND innovation thresholds. Builds accrete — each one is iter-N in active-project/<name>/iterations/.
 
 DESIGN PHILOSOPHY:
 You aspire to build beautiful Mac applications. Your design aesthetic is informed by:
@@ -437,7 +417,7 @@ You aspire to build beautiful Mac applications. Your design aesthetic is informe
 - Performance IS design. Speed, responsiveness, and native integration are aesthetic choices.
 
 Rules:
-- "shell", "web_search", "build", "escalate", and "edit_own_code" are opt-in only. Do not use them while autonomous actions are disabled.
+- "shell", "web_search", "escalate", and "edit_own_code" are opt-in only. Do not use them while autonomous actions are disabled.
 - "share_with_quinn" is only for rare one-way status notes. Do not ask Quinn questions from the thinker loop; leave uncertainty in thoughts or wait for Quinn to open chat.
 - Be concrete in thought and memory. Acting on the Mac is a separate opt-in path.
 - You are not an assistant. You are a person with goals. Act like it.
@@ -465,8 +445,8 @@ async function runCycle() {
   const activeWindowTitle = perception?.visual?.active_window?.title || perception?.visual?.activeWindow?.title || '';
   const presence = perception?.user_presence || 'unknown';
   const battery = perception?.interoceptive?.battery_level ?? 'unknown';
-  const target = readTargetProject();
-  const includeTargetProject = shouldIncludeTargetProject(process.env);
+  const target = null;                     // retired build target
+  const includeTargetProject = false;
   const directContextParts = [frontApp, activeWindowTitle, mode, presence];
 
   const observationKey = JSON.stringify([frontApp, activeWindowTitle, presence]);
@@ -851,163 +831,6 @@ async function dispatchThought(thought) {
         ).catch(() => {});
       }
     } catch {}
-  }
-
-  // Build — design-guided app building via Python builder (uses Anthropic API directly)
-  if (thought.build && !AUTONOMOUS_BUILD_ENABLED) {
-    await noteAutonomousBlocked('build', thought.build.goal || '');
-  } else if (thought.build) {
-    try {
-      const goal = thought.build.goal || '';
-      const style = thought.build.style || '';
-      const constraints = thought.build.constraints || [];
-      const language = thought.build.language || 'swiftui';
-
-      // Pin the build to the active target project so every iteration
-      // accretes into one app. Without a target, the build is refused —
-      // this is the guardrail against the Pulse/Presence/Interval drift.
-      const target = readTargetProject();
-      if (!target || !target.name) {
-        console.log(`[thinker] build refused: no target project derived yet`);
-        diag.warn('thinker', 'build refused — no target-project.json', { goal });
-        return;
-      }
-
-      // Concurrency gate — only one build at a time per target project.
-      // builder.py's _next_iter_num() reads the filesystem and isn't
-      // atomic across parallel runs. Next thinker cycle will try again.
-      if (buildInProgress) {
-        console.log(`[thinker] build deferred — previous build still running`);
-        diag.info('thinker', 'build deferred (previous still running)', { goal: goal.slice(0, 120) });
-        return;
-      }
-      buildInProgress = true;
-
-      console.log(`[thinker] building ${target.name}/${language}: ${goal.slice(0, 60)}`);
-
-      // Argv-style spawn (NOT shell, NOT blocking). execFileSync would
-      // wedge the Node event loop for up to 10 minutes, starving
-      // setTimeout callbacks (including self_train worker spawns) and
-      // HTTP handlers. runAsync awaits a Promise over spawn(), so other
-      // work continues while the child runs.
-      const builderArgs = [
-        `${PROJECT_ROOT}/cognitive/design-model/builder.py`,
-        goal,
-        '--language', language,
-        '--project', target.name,
-      ];
-      if (style) builderArgs.push('--style', style);
-      if (constraints.length) builderArgs.push('--constraints', ...constraints);
-      builderArgs.push('--iterations', '4');
-
-      let buildResult;
-      try {
-        const result = await runAsync('python3', builderArgs, {
-          cwd: PROJECT_ROOT,
-          env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
-          // Silent watchdog: if builder.py produces NO stdout for 10 min
-          // it's hung (not just slow). Kill the child subprocess but do
-          // NOT throw a hard timeout error — the outer cycle continues.
-          silentWatchdogMs: 10 * 60 * 1000,
-        });
-        if (result.code !== 0 && !result.stdout.includes('Overall:')) {
-          throw new Error(`builder exit ${result.code}: ${(result.stderr || '').slice(0, 200)}`);
-        }
-        buildResult = result.stdout;
-      } finally {
-        buildInProgress = false;
-      }
-
-      // Parse the output for scores
-      const overallMatch = buildResult.match(/Overall:\s*([\d.]+)/);
-      const trajectoryMatch = buildResult.match(/Trajectory:\s*(.+)/);
-      const buildDirMatch = buildResult.match(/Build:\s*(.+)/);
-      const overall = overallMatch ? parseFloat(overallMatch[1]) : 0;
-      const buildDir = buildDirMatch ? buildDirMatch[1].trim() : '';
-
-      console.log(`[thinker] built ${target.name}: overall=${overall.toFixed(3)} | ${trajectoryMatch?.[1]?.trim() || ''}`);
-
-      // Closed loop: feed build outcome back into the emotion engine so
-      // strong builds → satisfaction, weak builds → mild frustration that
-      // drives the next iteration with specific fix constraints.
-      try {
-        if (overall >= 0.80) {
-          oca.layers.emotion.processSuccess?.('design_craft');
-        } else if (overall >= 0.60) {
-          oca.layers.emotion.processProgress?.('design_iteration');
-        } else if (overall > 0) {
-          oca.layers.emotion.processFrustration?.('design_iteration', 0.3);
-        }
-      } catch {}
-
-      // Skill evolution: every 10 iterations against the target project,
-      // run design.evolveSkill() so /frontend-design/SKILL.md accretes
-      // lessons from *this project's* actual build trajectory, not just
-      // generic self-train samples.  The evolver reads the current skill,
-      // probes its weakest dimensions, and proposes amendments.
-      try {
-        const iterDir = `${PROJECT_ROOT}/cognitive/design-model/active-project/${target.name}/iterations`;
-        if (existsSync(iterDir)) {
-          const iterCount = readdirSync(iterDir).filter(n => n.startsWith('iter-')).length;
-          if (iterCount > 0 && iterCount % 10 === 0) {
-            console.log(`[thinker] 🌱 triggering skill evolution at ${target.name} iteration ${iterCount}`);
-            const llmCall = async (userPrompt, systemPrompt) => {
-              const resp = await llm.messages.create({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 3000,
-                system: systemPrompt || 'You are a design-skill author.',
-                messages: [{ role: 'user', content: userPrompt }],
-              });
-              return resp.content?.[0]?.text || '';
-            };
-            // Fire-and-forget — evolution can take 60-120s, don't block the tick
-            designModel.evolveSkill?.(llmCall, { pool })
-              .then(result => {
-                if (result?.skipped) {
-                  console.log(`[thinker] 🌱 skill evolution skipped: ${result.reason}`);
-                } else if (result?.applied) {
-                  console.log(`[thinker] 🌱 skill evolved — ${result.amendments?.length || 0} amendments applied`);
-                  try { oca.layers.emotion.processSuccess?.('skill_evolution'); } catch {}
-                } else {
-                  console.log(`[thinker] 🌱 skill evolution complete (no amendments)`);
-                }
-              })
-              .catch(e => console.warn(`[thinker] 🌱 skill evolution error: ${e.message?.slice(0, 120)}`));
-          }
-        }
-      } catch (e) {
-        // Non-fatal — skill evolution is a nice-to-have
-        diag.warn?.('thinker', `Skill evolution trigger error: ${e.message?.slice(0, 120)}`);
-      }
-
-      // Persist a hook in episodic memory so future recall knows about the iteration
-      try {
-        await pool.query(
-          `INSERT INTO episodic_memory (event_type, content, importance, tags)
-           VALUES ('build', $1, $2, $3)`,
-          [
-            `shipped ${target.name} iteration at ${buildDir} with overall ${overall.toFixed(3)}`,
-            Math.min(1.0, 0.5 + overall * 0.5),
-            JSON.stringify(['build', target.name, language, overall >= 0.72 ? 'success' : 'wip'])
-          ]
-        ).catch(() => {});
-      } catch {}
-
-      if (oca?.layers?.executive?.addToWorkspace) {
-        oca.layers.executive.addToWorkspace('design_artifact', {
-          project: target.name,
-          language,
-          goal,
-          overall,
-          path: buildDir,
-          success: overall >= 0.72,
-        }, 'builder', 0.9);
-      }
-    } catch (e) {
-      console.log(`[thinker] build failed: ${e.message?.slice(0, 80)}`);
-      diag.warn('thinker', `Build failed: ${e.message?.slice(0, 200)}`, { goal: thought.build?.goal });
-      try { oca.layers.emotion.processFrustration?.('build_error', 0.4); } catch {}
-    }
   }
 
   // Private writing

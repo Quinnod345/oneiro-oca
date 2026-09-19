@@ -4,7 +4,7 @@ import { runPendingPonder } from './reasoning/ponder-service.js';
 // Main OCA entry: grounded, hypothesis-driven cognition + HTTP API on :3333
 // Also bootstraps the HTTP API (port 3333) — this IS the sole primary process.
 import { pool, emit, on } from './event-bus.js';
-import oca, { design as designModel } from './index.js';
+import oca from './index.js';
 import prospective from './memory/prospective.js';
 import swiftSensory from './sensory/swift-bridge.js';
 import sensory from './sensory/perception.js';
@@ -58,8 +58,6 @@ const AUTONOMOUS_ACTIONS_ENABLED =
   envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS');
 const AUTONOMIC_SELF_MODIFICATION_ENABLED =
   AUTONOMOUS_ACTIONS_ENABLED || envFlag('OCA_ENABLE_AUTONOMIC_SELF_MODIFICATION') || envFlag('ONEIRO_ENABLE_AUTONOMIC_SELF_MODIFICATION');
-const DESIGN_SERVER_ENABLED =
-  envFlag('OCA_ENABLE_DESIGN_SERVER') || envFlag('ONEIRO_ENABLE_DESIGN_SERVER');
 let loggedAutonomicDisabled = false;
 let httpAPIStarted = false;
 
@@ -1694,258 +1692,6 @@ function startConsolidationSchedule() {
 }
 
 // ═══════════════════════════════════════════════════
-// SELF-TRAIN DAEMON POOL (parallel workers)
-//
-// Runs N parallel `self_train.py --forever --worker-id K --num-workers N`
-// subprocesses. Each worker independently generates samples via the
-// Anthropic API; cycle numbers are claimed atomically via a file lock
-// on self-train-state.json, and retrain runs under a non-blocking
-// try-lock so only one worker retrains at a time (others skip without
-// blocking).
-//
-// Default pool size: 2 workers.  On an M4 Max with typical API quotas
-// this roughly doubles the sample-production rate over a single worker
-// without blowing rate limits.  Override via OCA_SELF_TRAIN_WORKERS
-// env var.
-//
-// Alert-mode pausing: when Quinn is at the keyboard (mode=alert), all
-// workers get SIGSTOP so the gateway isn't contended; SIGCONT on idle.
-// Each worker has its own exp-backoff restart state; crashes in one
-// don't take down the others.
-// ═══════════════════════════════════════════════════
-
-const SELF_TRAIN_RESTART_BASE_MS = 10_000;   // 10s base delay on crash
-const SELF_TRAIN_RESTART_MAX_MS = 10 * 60_000; // cap at 10 min
-const SELF_TRAIN_ALERT_POLL_MS = 30_000;     // re-check mode every 30s while paused
-const SELF_TRAIN_NUM_WORKERS = Math.max(
-  1,
-  Math.min(4, parseInt(process.env.OCA_SELF_TRAIN_WORKERS || '2', 10))
-);
-
-// Pool state — one entry per worker slot
-const selfTrainWorkers = Array.from({ length: SELF_TRAIN_NUM_WORKERS }, (_, id) => ({
-  id,
-  process: null,
-  paused: false,
-  restartAttempt: 0,
-  lastStart: 0,
-}));
-let selfTrainDesired = false;             // pool intent — should workers be running?
-let selfTrainMilestoneCycle = 0;          // log every 50 global cycles
-
-function parseSelfTrainLine(line) {
-  // Accept both worker-prefixed and unprefixed lines:
-  //   "[W0/2] [self-train] cycle 6820: swiftui brief score=0.520"
-  //   "[self-train] cycle 6820: swiftui brief score=0.520"
-  const m = line.match(/\[self-train\]\s+cycle\s+(\d+):\s+(\w+)\s+(\S+)\s+score=([\d.]+)/);
-  if (!m) return null;
-  return {
-    cycle: parseInt(m[1], 10),
-    language: m[2],
-    kind: m[3],
-    score: parseFloat(m[4]),
-  };
-}
-
-async function spawnSelfTrainWorker(worker) {
-  const { spawn } = await import('child_process');
-  const selfTrainScript = join(__dirname, 'design-model', 'self_train.py');
-  const args = [
-    selfTrainScript,
-    '--forever',
-    '--worker-id', String(worker.id),
-    '--num-workers', String(SELF_TRAIN_NUM_WORKERS),
-  ];
-  const child = spawn('python3', args, {
-    cwd: join(__dirname, 'design-model'),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONDONTWRITEBYTECODE: '1' },
-    detached: false, // stay in our process group so SIGTERM propagates
-  });
-
-  worker.process = child;
-  worker.lastStart = Date.now();
-  worker.paused = false;
-  console.log(`[oca] 🎨 self-train W${worker.id}/${SELF_TRAIN_NUM_WORKERS} started pid=${child.pid}`);
-
-  const tag = SELF_TRAIN_NUM_WORKERS > 1 ? `W${worker.id} ` : '';
-
-  const handleLine = (stream) => (buf) => {
-    const text = buf.toString();
-    for (const raw of text.split('\n')) {
-      const line = raw.trimEnd();
-      if (!line) continue;
-      // Structured emission → rich log + emotion feedback
-      const parsed = parseSelfTrainLine(line);
-      if (parsed) {
-        console.log(
-          `[oca] 🎨 ${tag}self-train #${parsed.cycle} ${parsed.language}/${parsed.kind} → ${parsed.score.toFixed(3)}`
-        );
-        // Emotion feedback on strong samples
-        if (parsed.score >= 0.8) {
-          try { oca.layers.emotion.processSuccess?.('self_train_strong'); } catch {}
-        }
-        // Milestone log every 50 global cycles (shared across workers)
-        if (parsed.cycle >= selfTrainMilestoneCycle + 50) {
-          selfTrainMilestoneCycle = parsed.cycle;
-          console.log(`[oca] 🎨 self-train milestone: ${parsed.cycle} total cycles`);
-        }
-      } else if (line.startsWith('[retrain]') || /val_loss/.test(line) ||
-                 /\[refs\] (auto-injected|✨)/.test(line)) {
-        console.log(`[oca] 🎨 ${tag}self-train ${line}`);
-      } else if (stream === 'stderr' && line.length > 0) {
-        // Suppress noisy warnings but keep real errors
-        if (!/DeprecationWarning|FutureWarning|UserWarning/.test(line)) {
-          console.log(`[oca] 🎨 ${tag}self-train stderr: ${line.slice(0, 200)}`);
-        }
-      }
-      // Silently drop other stdout (tqdm bars, progress lines, etc.)
-    }
-  };
-
-  child.stdout.on('data', handleLine('stdout'));
-  child.stderr.on('data', handleLine('stderr'));
-
-  child.on('exit', (code, signal) => {
-    const ageMs = Date.now() - worker.lastStart;
-    console.log(
-      `[oca] 🎨 self-train W${worker.id} exited code=${code} signal=${signal} after ${Math.round(ageMs / 1000)}s`
-    );
-    worker.process = null;
-    worker.paused = false;
-
-    // Reset backoff if it ran successfully for > 2 min (healthy exit)
-    if (ageMs > 120_000) worker.restartAttempt = 0;
-
-    if (!selfTrainDesired) return; // intentional shutdown
-
-    // Exponential backoff on repeated failures
-    const delay = Math.min(
-      SELF_TRAIN_RESTART_BASE_MS * Math.pow(2, worker.restartAttempt),
-      SELF_TRAIN_RESTART_MAX_MS
-    );
-    worker.restartAttempt++;
-    console.log(`[oca] 🎨 self-train W${worker.id} restart scheduled in ${Math.round(delay / 1000)}s (attempt ${worker.restartAttempt})`);
-    setTimeout(() => {
-      if (selfTrainDesired && !worker.process) {
-        spawnSelfTrainWorker(worker).catch(e =>
-          console.error(`[oca] 🎨 self-train W${worker.id} respawn error:`, e.message)
-        );
-      }
-    }, delay);
-  });
-
-  child.on('error', (err) => {
-    console.error(`[oca] 🎨 self-train W${worker.id} spawn error:`, err.message);
-  });
-}
-
-function startSelfTrainSchedule() {
-  const requested = String(process.env.OCA_ENABLE_SELF_TRAIN || '').trim().toLowerCase();
-  const enabled = ['1', 'true', 'yes', 'on'].includes(requested);
-  if (!enabled) {
-    console.log('[oca] 🎨 self-train disabled (set OCA_ENABLE_SELF_TRAIN=1 to enable cloud Opus design training)');
-    return;
-  }
-
-  selfTrainDesired = true;
-
-  // Alert-mode pausing is now OPT-IN via OCA_SELF_TRAIN_PAUSE_ON_ALERT=1.
-  // The original intent was to prevent gateway contention with the
-  // thinker while Quinn was at the keyboard, but in practice the user
-  // wants to see the flywheel running when they're watching the
-  // dashboard, and rate-limiting/backoff inside llm.js + Anthropic's
-  // own rate limits are the real backstop against contention.  Default
-  // is "workers run always", pause only if explicitly opted in.
-  const PAUSE_ON_ALERT = process.env.OCA_SELF_TRAIN_PAUSE_ON_ALERT === '1';
-
-  const modeMonitor = () => {
-    if (!selfTrainDesired) return;
-    if (!PAUSE_ON_ALERT) {
-      // Just ensure any paused workers get resumed (e.g. after a manual
-      // SIGSTOP or a leftover state from an earlier process).
-      for (const worker of selfTrainWorkers) {
-        if (worker.process && worker.paused) {
-          try {
-            process.kill(worker.process.pid, 'SIGCONT');
-            worker.paused = false;
-          } catch {}
-        }
-      }
-      setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
-      return;
-    }
-
-    const mode = oca.layers.executive.determineMode?.(
-      previousPresence,
-      oca.layers.emotion.getState(),
-      0
-    );
-    const shouldPause = mode === 'alert';
-
-    for (const worker of selfTrainWorkers) {
-      if (!worker.process) continue;
-      if (shouldPause && !worker.paused) {
-        try {
-          process.kill(worker.process.pid, 'SIGSTOP');
-          worker.paused = true;
-        } catch (e) {
-          console.warn(`[oca] 🎨 self-train W${worker.id} SIGSTOP failed:`, e.message);
-        }
-      } else if (!shouldPause && worker.paused) {
-        try {
-          process.kill(worker.process.pid, 'SIGCONT');
-          worker.paused = false;
-        } catch (e) {
-          console.warn(`[oca] 🎨 self-train W${worker.id} SIGCONT failed:`, e.message);
-        }
-      }
-    }
-
-    setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
-  };
-
-  // First spawn after initial delay so consolidation + init settle.
-  // Sequential sequential-await pattern (instead of N parallel setTimeouts)
-  // so W0 spawning can't starve W1's spawn via event-loop weirdness.  Each
-  // worker's spawn is awaited independently — a failure in one doesn't
-  // block the next.  The 3s inter-worker delay is a micro-stagger so they
-  // don't all hit the API at the same millisecond.
-  setTimeout(async () => {
-    for (let i = 0; i < SELF_TRAIN_NUM_WORKERS; i++) {
-      const worker = selfTrainWorkers[i];
-      try {
-        await spawnSelfTrainWorker(worker);
-      } catch (e) {
-        console.error(`[oca] 🎨 self-train W${worker.id} initial spawn error:`, e.message);
-      }
-      if (i < SELF_TRAIN_NUM_WORKERS - 1) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-    }
-    setTimeout(modeMonitor, SELF_TRAIN_ALERT_POLL_MS);
-  }, 90_000);
-
-  console.log(
-    `[oca] 🎨 self-train schedule armed (${SELF_TRAIN_NUM_WORKERS} workers boot in 90s, sequential-await with 3s stagger)`
-  );
-}
-
-// Called from gracefulShutdown so all subprocesses die cleanly with us.
-function stopSelfTrain() {
-  selfTrainDesired = false;
-  for (const worker of selfTrainWorkers) {
-    if (!worker.process) continue;
-    try {
-      if (worker.paused) {
-        try { process.kill(worker.process.pid, 'SIGCONT'); } catch {}
-      }
-      process.kill(worker.process.pid, 'SIGTERM');
-    } catch {}
-  }
-}
-
-// ═══════════════════════════════════════════════════
 // STARTUP
 // ═══════════════════════════════════════════════════
 
@@ -2075,52 +1821,6 @@ async function start() {
   // Start consolidation on its own independent timer
   startConsolidationSchedule();
 
-  // The design-model inference server is a developer/self-training subsystem.
-  // Product builds keep it off unless explicitly enabled because it can start
-  // Python workers and assume repo-local training assets.
-  if (DESIGN_SERVER_ENABLED) {
-    try {
-      const serverResult = await designModel.initServer();
-      if (serverResult?.status === 'started') {
-        console.log('[oca] 🎨 design inference server started');
-      } else if (serverResult?.status === 'already_running') {
-        console.log('[oca] 🎨 design inference server already running');
-      } else if (serverResult?.status === 'failed') {
-        console.warn(`[oca] 🎨 design server failed to start: ${serverResult.error?.slice(0, 120)} - flywheel will use JS MLP fallback`);
-      }
-    } catch (e) {
-      console.warn('[oca] 🎨 design server init error:', e.message);
-    }
-  } else {
-    console.log('[oca] 🎨 design inference server disabled; using app-safe design fallback');
-  }
-
-  // Derive the singular target project if we don't already have one.
-  // This closes the "emotion → design direction → specific app" loop at
-  // boot: instead of a hardcoded target, OCA picks based on its own
-  // undercurrents.  Subsequent boots load the existing target (no redo).
-  try {
-    const targetPath = join(__dirname, 'design-model', 'target-project.json');
-    if (!existsSync(targetPath)) {
-      console.log('[oca] 🎯 no target project — deriving from undercurrents...');
-      const { deriveTargetProject } = await import('./design-model/target-derivation.js');
-      const { default: llmMod } = await import('./llm.js');
-      const target = await deriveTargetProject({ oca, llm: llmMod, pool });
-      console.log(`[oca] 🎯 target project derived: ${target.display_name} (${target.name}) — ${target.thesis?.slice(0, 80) || ''}`);
-    } else {
-      try {
-        const existing = JSON.parse(readFileSync(targetPath, 'utf-8'));
-        console.log(`[oca] 🎯 target project loaded: ${existing.display_name} (${existing.name})`);
-      } catch {}
-    }
-  } catch (e) {
-    console.warn('[oca] 🎯 target project derivation failed:', e.message);
-  }
-
-  // Optional self_train.py daemon — cloud Opus design training is opt-in
-  // so the bundled Mac app remains local-first by default.
-  startSelfTrainSchedule();
-
   console.log('[oca] cognitive loop starting...');
 
   const loop = async () => {
@@ -2173,7 +1873,6 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 async function gracefulShutdown(signal) {
-  try { stopSelfTrain(); } catch {}
   try { neuralMLP.save(); } catch {}
   try {
     await pool.query(

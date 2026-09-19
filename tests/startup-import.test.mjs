@@ -22,10 +22,11 @@ test('cognitive-loop.js and its graph load without a missing module or syntax er
   assert.notEqual(code, 3, stderr.split('\n').find(l => l.includes('IMPORT FAILED')) || stderr.slice(-400));
 });
 
-test('the retired dream machinery is gone from the runtime graph', async () => {
-  for (const file of ['cognitive-loop.js', 'thinker-bridge.js', 'api-routes.js', 'autonomic/self-modifier.js']) {
+test('the retired dream and design-build machinery is gone from the runtime graph', async () => {
+  for (const file of ['cognitive-loop.js', 'thinker-bridge.js', 'api-routes.js', 'autonomic/self-modifier.js', 'index.js']) {
     const src = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
     assert.ok(!/dream-executor|dream-policy|INSERT INTO dreams|UPDATE dreams/.test(src), `${file} neither imports the executor nor writes dreams`);
+    assert.ok(!/design-model\/|design\/emotion-bridge|self_train|deriveTargetProject|thought\.build\b/.test(src), `${file} carries no design-build machinery`);
   }
   const thinker = await readFile(new URL('../thinker-bridge.js', import.meta.url), 'utf8');
   assert.ok(!/"dream": \{|"append_dream"/.test(thinker), 'the thinker prompt no longer offers dream fields');
