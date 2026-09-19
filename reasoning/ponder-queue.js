@@ -9,9 +9,12 @@ import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from 
 const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 // `worth` is the ledger (optional). Without it, wants keep their explicit priority as value.
-export function createPonderQueue({ pool, reason, clock = Date.now, worth = null }) {
+// `affect` (optional) is the emotion engine: frustration shortens strategy patience, fear raises the
+// confidence a conclusion must reach, and observed progress on a want is felt.
+export function createPonderQueue({ pool, reason, clock = Date.now, worth = null, affect = null }) {
+  const patience = () => { try { return affect?.strategyPatience?.() ?? 3; } catch { return 3; } };
   const snapshot = row => row ? { chain_id: row.id, seed: row.seed, status: row.status, depth: row.depth,
-    updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock()) } : null;
+    updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock(), { patience: patience() }) } : null;
   // Live pricing: one ledger read for every stake named by the given rows, then a pure re-price.
   async function reprice(rows) {
     if (!worth) return rows;
@@ -99,8 +102,9 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
        AND ($2::int IS NULL OR id = $2)
        ORDER BY (COALESCE(ponder_state #>> '{origin,kind}', 'explicit') = 'interest'), priority DESC, created_at ASC LIMIT 100`, [clock(), id]);
     const priced = await reprice(rows);
+    const pat = patience();
     priced.sort((a, b) => Number(a.ponder_state.origin?.kind === 'interest') - Number(b.ponder_state.origin?.kind === 'interest')
-      || appetite(b.ponder_state.want, clock()).pressure - appetite(a.ponder_state.want, clock()).pressure || a.id - b.id);
+      || appetite(b.ponder_state.want, clock(), { patience: pat }).pressure - appetite(a.ponder_state.want, clock(), { patience: pat }).pressure || a.id - b.id);
     for (const row of priced) {
       if (row.ponder_state.origin?.kind === 'interest') {
         const parent = await get(row.ponder_state.origin.parentChainId);
@@ -119,7 +123,9 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         await save(row.id, lease, state, 'failed'); return get(row.id);
       }
       try {
-        const motivation = appetite(state.want, clock());
+        const motivation = appetite(state.want, clock(), { patience: pat });
+        let minConfidence = 0.55;
+        try { minConfidence = affect?.verificationThreshold?.(0.55) ?? 0.55; } catch {}
         // Keep motivational context inside the reasoner's 24k contract even for large requests.
         const { description: _description, doneWhen, ...pressure } = motivation;
         const prior = state.result ? { conclusion: String(state.result.conclusion || '').slice(0, 1000),
@@ -131,7 +137,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
           omitted: Math.max(0, current.length - selectedEvidence.length) };
         const coverageNote = coverage.omitted ? `Evidence coverage: only the newest ${coverage.reviewed} of ${coverage.current} current observations are in this review. Older observations remain in the saved pursuit; do not imply exhaustive review. Research work can inspect the complete pursuit.json.\n` : '';
         const taskContext = coverageNote + state.context.slice(0, Math.max(0, 24000 - header.length - coverageNote.length));
-        const result = await reason(row.seed, { context: header + taskContext,
+        const result = await reason(row.seed, { context: header + taskContext, minConfidence,
           evidence: selectedEvidence, maxPasses: state.maxPasses, timeBudgetSeconds: state.timeBudgetSeconds,
           checkpoint: state.checkpoint,
           onCheckpoint: async checkpoint => { state = { ...state, checkpoint }; await save(row.id, lease, state); } });
@@ -209,11 +215,17 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     });
   }
   async function outcome(id, receipt) {
+    const before = await get(id);
+    if (!before) throw new Error('ponder chain not found');
     const chain = await mutate(id, row => {
       const want = recordOutcome(row.ponder_state.want, { ...receipt, now: clock() });
       return { status: want.status === 'sated' ? 'resolved' : row.status === 'resolved' ? 'ready' : row.status, state: { ...row.ponder_state, want } };
     });
     const saved = chain.want.receipts.find(r => r.receiptId === receipt.receiptId);
+    if (saved && !before.want.receipts.some(r => r.receiptId === saved.receiptId)) {
+      try { affect?.feelProgress?.({ value: chain.want.value, progressDelta: Math.max(0, saved.progress - (before.want.progress || 0)),
+        sated: chain.want.status === 'sated', usefulness: Number.isFinite(saved.usefulness) ? saved.usefulness : null }); } catch {}
+    }
     if (worth && saved && chain.want.stakes) {
       // Progress feeds hunger. Observed usefulness feeds worth: of the outcome, of what it was for,
       // and of the engine's own pondering. Idempotent per receipt and entity.

@@ -78,7 +78,8 @@ test('success and failure change affect differently; novelty alone cannot satiat
   reset(Date.now()); emotion.processSuccess(.8); const success=emotion.default.getState();
   reset(Date.now()); emotion.processFailure(10,.8); const failure=emotion.default.getState();
   assert.ok(success.valence>failure.valence); assert.ok(failure.frustration>success.frustration);
-  assert.ok(success._self_model.self_efficacy>failure._self_model.self_efficacy);
+  // v4: self-efficacy is a projection of calibrated observed outcomes (emotion.ground), never a counter of events.
+  assert.equal(success._self_model.self_efficacy,failure._self_model.self_efficacy,'events do not move identity; grounding does');
 });
 test('the complete affect state is durably restored without replay or satisfaction drift', async t => {
   let now=10000; t.mock.method(Date,'now',()=>now); reset(now);

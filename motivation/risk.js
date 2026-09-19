@@ -78,7 +78,11 @@ function constraintCheck(proposal, lookup) {
 
 // The appraisal. `lookup(entityKey)` returns ledger state or null. `controls.autonomousActions`
 // false is the master switch: nothing proceeds on its own, but the decision is still reasoned and recorded.
-export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETITE, controls = { autonomousActions: false } } = {}) {
+export const INFORMATION_KINDS = ['read', 'web_search', 'research_slice'];
+
+export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETITE, controls = { autonomousActions: false }, informationBonus = 0 } = {}) {
+  // Curiosity buys appetite for finding things out, not for acting on the world.
+  if (INFORMATION_KINDS.includes(proposal.kind)) appetite = clamp(appetite + clamp(informationBonus), 0.05, 0.95);
   const gain = priceWant(proposal.serves, lookup);
   const self = lookup(`self:${proposal.capability}`);
   const pSuccess = proposal.pSuccess ?? (self ? self.worth : 0.5);

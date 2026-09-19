@@ -6,7 +6,8 @@ import { createProposal, appraise, appetiteFrom, calibrate } from './risk.js';
 const row = r => r ? { id: r.id, chainId: r.chain_id, capability: r.capability, decision: r.decision, proposal: r.proposal,
   ...r.appraisal, outcome: r.outcome, createdAt: r.created_at, resolvedAt: r.resolved_at } : null;
 
-export function createRiskJournal({ pool, worth = null, clock = Date.now, controls = null, affect = null }) {
+export function createRiskJournal({ pool, worth = null, clock = Date.now, controls = null, affect = null, feel = null }) {
+  const feelSafe = (fn) => { if (!feel) return; try { fn(feel); } catch {} };
   async function lookupFor(proposal) {
     const keys = [...new Set([...proposal.serves, ...proposal.touches].map(s => s.entityKey).concat(proposal.recipient ? [proposal.recipient] : [], [`self:${proposal.capability}`]))];
     if (!worth || !keys.length) return () => null;
@@ -34,11 +35,15 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
     }
     const [lookup, { appetite }, ctl] = [await lookupFor(proposal), await currentAppetite(),
       controlsOverride ? { autonomousActions: controlsOverride.autonomousActions === true } : await currentControls()];
-    const appraisal = appraise(proposal, { lookup, appetite, controls: ctl });
+    let informationBonus = 0;
+    feelSafe(f => { informationBonus = f.informationAppetiteBonus?.() || 0; });
+    const appraisal = appraise(proposal, { lookup, appetite, controls: ctl, informationBonus });
     const { rows } = await pool.query(`INSERT INTO risk_decisions (id, chain_id, capability, decision, proposal, appraisal, created_at)
       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7) ON CONFLICT (id) DO NOTHING RETURNING *`,
       [id, chainId, proposal.capability, appraisal.decision, JSON.stringify(proposal), JSON.stringify(appraisal), new Date(clock())]);
     if (!rows[0]) return decide({ id, chainId, ...input }, { controls: controlsOverride });
+    // Being held back from something worth doing, or not knowing its worth, is felt.
+    feelSafe(f => f.feelBlocked?.({ decision: appraisal.decision, expectedGain: appraisal.expected.gain }));
     return { ...row(rows[0]), duplicate: false };
   }
 
@@ -54,6 +59,7 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
       return { ...row(prior[0]), duplicate: true, worthSignals: [] };
     }
     const decision = row(rows[0]);
+    feelSafe(f => f.feelOutcome?.({ result, expectedGain: decision.expected?.gain, expectedLoss: decision.expected?.loss, pSuccess: decision.expected?.pSuccess }));
     const worthSignals = [];
     if (worth && result !== 'not_attempted') {
       const record = async input => { try { const r = await worth.record(input); worthSignals.push({ id: r.signal.id, duplicate: r.duplicate }); }
