@@ -210,7 +210,7 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
       await stat(join(dir, 'node_modules')).catch(() => symlink(join(repoDir, 'node_modules'), join(dir, 'node_modules'), 'dir').catch(() => {}));
       const before = await baselineTests(dir);
       if (!before.tests) return fail('no tests were discovered; a change proven by zero tests is proven by nothing', 'no_tests');
-      if (before.fail) return fail(`baseline tests already failing on main (${before.fail}); a person should look first`, 'baseline_red');
+      if (before.fail) return fail(`baseline tests already failing on main (${before.fail}: ${before.failing.slice(0, 4).join('; ')}); a person should look first`, 'baseline_red');
       const brief = await writeBrief(dir, ctx, evidence);
       let coded;
       const codexOk = !!runner && !(await codexBackedOff());
@@ -221,7 +221,8 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
       }
       result.coder = coded.coder; result.summary = coded.report.summary;
       await rm(join(dir, 'SELF-BUILD.md'), { force: true });
-      const changed = (await git(['status', '--porcelain'], dir)).stdout.split('\n').filter(Boolean).map(l => l.slice(3).trim());
+      // The shared node_modules symlink is not a change (a symlink is not matched by the `node_modules/` ignore rule).
+      const changed = (await git(['status', '--porcelain'], dir)).stdout.split('\n').filter(Boolean).map(l => l.slice(3).trim()).filter(f => f !== 'node_modules' && !f.startsWith('node_modules/'));
       if (!changed.length) return fail('the coder changed nothing', 'no_change');
       const forbidden = changed.filter(isConstitutional);
       if (forbidden.length) { await journal('refused', chainId, { branch, forbidden }); return fail(`touched the constitution: ${forbidden.join(', ')}`, 'constitution'); }
@@ -231,7 +232,7 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
       const lost = [...before.passing].filter(n => !after.passing.has(n));
       if (after.fail || lost.length) return fail(`tests: ${after.pass}/${after.tests} passing, ${after.fail} failing${lost.length ? `; ${lost.length} previously passing test(s) no longer pass: ${lost.slice(0, 3).join('; ')}` : ''}${after.firstError ? ` — ${after.firstError}` : ''}`, 'tests_red');
       result.tests = { before: before.pass, after: after.pass, added: after.pass - before.pass };
-      await git(['add', '-A'], dir);
+      await git(['add', '-A', '--', '.', ':!node_modules'], dir);
       const message = `self-build: ${text(coded.report.summary, 72) || slug(ctx.want.description)}\n\nWant #${chainId}: ${text(ctx.want.description, 600)}\n\n${text(coded.report.summary, 1200)}\n\nTests: ${after.pass}/${after.tests} passing (${before.pass} before). Coder: ${coded.coder}.\n\nSelf-Build: want #${chainId} attempt ${attempt}\nCo-Authored-By: OCA Self-Build <oca@oneiro.local>\n`;
       await git(['-c', 'user.name=OCA Self-Build', '-c', 'user.email=oca@oneiro.local', 'commit', '-q', '-m', message], dir);
       result.sha = (await git(['rev-parse', 'HEAD'], dir)).stdout.trim();

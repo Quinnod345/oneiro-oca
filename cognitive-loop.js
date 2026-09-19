@@ -15,9 +15,9 @@ import neuralBus from './neural-bus.js';
 import neuralMLP from './neural-mlp.js';
 import encoders from './neural-encoders.js';
 import { getUserActivity } from './sensory/fallback-reader.js';
-import { acquireProcessLock, releaseProcessLock } from '../runtime/workspace/oneiro-core/process-lock.js';
+import { acquireProcessLock, releaseProcessLock } from './process-lock.js';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import diag from './diagnostic-log.js';
 // Oneiro IPC adapter — auto-starts iff OCA_IPC_SOCKET is set in env.
@@ -90,8 +90,17 @@ let operatingTimeCumulativeMs = 0; // loaded from DB at boot
 async function startHTTPAPI() {
   if (httpAPIStarted) return;
   try {
-    const { app: apiApp } = await import('../runtime/workspace/oneiro-core/api.js');
-    apiApp.listen(PORT, () => {
+    // A deployment may mount the engine inside a larger app (OCA_API_MODULE, or the legacy sibling
+    // location); otherwise the engine serves its own routes and panel from server.js.
+    const candidates = [process.env.OCA_API_MODULE, join(__dirname, '..', 'runtime', 'workspace', 'oneiro-core', 'api.js')].filter(Boolean);
+    let api = null;
+    for (const candidate of candidates) {
+      if (!existsSync(candidate)) continue;
+      try { api = await import(pathToFileURL(candidate).href); console.log(`[oca] 🌐 API module: ${candidate}`); break; }
+      catch (e) { console.warn(`[oca] ⚠️ API module ${candidate} failed to load: ${e.message}`); }
+    }
+    if (!api) { api = await import('./server.js'); console.log('[oca] 🌐 serving the engine\'s own HTTP surface (server.js)'); }
+    api.app.listen(PORT, () => {
       console.log(`[oca] 🌐 API running on http://localhost:${PORT}`);
     });
     httpAPIStarted = true;
