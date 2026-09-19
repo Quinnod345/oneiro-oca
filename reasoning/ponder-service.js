@@ -45,10 +45,12 @@ strategyDeps.selfBuild = { build: ctx => selfBuildRef.current.build(ctx), isActi
 const riskRef = { current: null };
 // The pursuit reasoner is the hard step: it asks for Codex unless the person set local-only. Fallbacks
 // (Codex out → local, local down → Codex under auto) and their rest periods live in llm.js.
-async function pursuitReason(goal, options) {
-  if (getInferencePolicy().mode === 'local') return reason(goal, { ...options, provider: strategyDeps.provider, model: strategyDeps.model });
-  return reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || getInferencePolicy().cloudModel });
+export function draftProvider() {
+  if (getInferencePolicy().mode === 'local') return { provider: strategyDeps.provider, model: strategyDeps.model };
+  return { provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || getInferencePolicy().cloudModel };
 }
+async function pursuitReason(goal, options) { return reason(goal, { ...options, ...draftProvider() }); }
+export { strategyDeps };
 // The inference mode is a control, so it survives restarts and a change in the app takes effect at once.
 export async function syncInferencePolicy() {
   try { const c = await userControls.get(); if (c.inference) setInferencePolicy({ mode: c.inference }); } catch {}

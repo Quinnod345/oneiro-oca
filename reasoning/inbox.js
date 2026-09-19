@@ -28,7 +28,7 @@ function parseNote(md) {
   return m ? { title: m[1], meta: m[2], body: m[3].trim() } : { title: '', meta: '', body: String(md).trim() };
 }
 
-export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console }) {
+export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null }) {
   const safeName = s => /^[A-Za-z0-9._-]{1,120}$/.test(String(s)) && !String(s).includes('..');
 
   async function activeWants() {
@@ -142,10 +142,14 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return queue.outcome(id, receipt);
   }
 
-  async function want({ description, doneWhen, priority = 0.7, topic = '', by = 'quinn' }) {
+  // A want from a person: by hand, or by confirming a draft the engine wrote (then the drafter owns the
+  // rules — evidence must be what it found, new stakes are the person's rating, the draft id is the request id).
+  async function want(body = {}) {
+    if (body.draftId) { if (!drafts) throw new Error('drafting is not available'); return drafts.confirm(body); }
+    const { description, doneWhen, priority = 0.7, topic = '', by = 'quinn', clientRequestId = null } = body;
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what you want');
     return queue.enqueue({ seed: description.trim(), doneWhen: typeof doneWhen === 'string' && doneWhen.trim() ? doneWhen.trim() : undefined,
-      priority: Number.isFinite(Number(priority)) ? Math.max(0.1, Math.min(1, Number(priority))) : 0.7, topic: text(topic, 160), learning: false },
+      priority: Number.isFinite(Number(priority)) ? Math.max(0.1, Math.min(1, Number(priority))) : 0.7, topic: text(topic, 160), learning: false, clientRequestId },
       { origin: { kind: 'explicit', by } });
   }
 
