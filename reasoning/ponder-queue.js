@@ -261,7 +261,21 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     if (!before) throw new Error('ponder chain not found');
     const chain = await mutate(id, row => {
       const want = recordOutcome(row.ponder_state.want, { ...receipt, now: clock() });
-      return { status: want.status === 'sated' ? 'resolved' : row.status === 'resolved' ? 'ready' : row.status, state: { ...row.ponder_state, want } };
+      const s = row.ponder_state;
+      if (want.status === 'sated') return { status: 'resolved', state: { ...s, want } };
+      // Observed progress is new evidence about the situation: it joins the want's evidence and reopens pondering.
+      const saved = want.receipts.find(r => r.receiptId === receipt.receiptId);
+      const fresh = saved && !s.want.receipts.some(r => r.receiptId === saved.receiptId);
+      if (!fresh) return { status: row.status === 'resolved' ? 'ready' : row.status, state: { ...s, want } };
+      let evidence = s.evidence;
+      for (const e of saved.evidence) {
+        const item = { ...e, id: evidence.some(x => x.id === e.id && !isDeepStrictEqual(x, e)) ? `receipt-${saved.receiptId}-${e.id}`.slice(0, 100) : e.id };
+        if (!evidence.some(x => x.id === item.id)) evidence = [...evidence, item];
+      }
+      // A correction to a resolved want leaves its reviewable answer standing ('ready'); anything still open reponders.
+      if (row.status === 'resolved') return { status: 'ready', state: { ...s, want, evidence } };
+      return { status: 'pondering', state: { ...s, want, evidence, checkpoint: null, attempts: 0, stallStreak: 0,
+        priorRuns: [...s.priorRuns, { checkpoint: s.checkpoint, result: s.result, at: clock() }] } };
     });
     const saved = chain.want.receipts.find(r => r.receiptId === receipt.receiptId);
     // A real outcome scores the predictions the engine committed to for this want (A7: prediction vs baseline).

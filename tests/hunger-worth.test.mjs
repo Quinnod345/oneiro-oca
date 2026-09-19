@@ -132,6 +132,19 @@ test('usefulness feeds worth of the outcome, the project and self:ponder; progre
   assert.deepEqual(sated.worthSignals.map(s => s.id), [`receipt:${chain.chain_id}:r-done:sated:self:ponder`], 'satiation is a track-record success for the engine only');
 }));
 
+test('observed progress reopens an open want with the receipt as evidence; a correction to a resolved want stays reviewable', async () => database(async pool => {
+  const queue = createPonderQueue({ pool, reason: blocked });
+  const chain = await queue.enqueue({ seed: 'Ship it', evidence });
+  await queue.runNext(chain.chain_id);
+  assert.equal((await queue.get(chain.chain_id)).status, 'awaiting_evidence');
+  const moved = await queue.outcome(chain.chain_id, { receiptId: 'r-1', progress: 0.5, evidence: outcomeEvidence });
+  assert.equal(moved.status, 'pondering', 'progress is new evidence');
+  assert.ok(moved.evidence.some(e => e.id === 'quinn-reply-1'), 'the receipt evidence is available to the reasoner');
+  assert.equal(moved.stallStreak, 0);
+  const replay = await queue.outcome(chain.chain_id, { receiptId: 'r-1', progress: 0.5, evidence: outcomeEvidence });
+  assert.equal(replay.evidence.filter(e => e.id === 'quinn-reply-1').length, 1, 'replay adds nothing');
+}));
+
 test('a receipt whose evidence is generated text still satiates hunger but cannot ground worth', async () => database(async pool => {
   const worth = createWorthLedger({ pool });
   await worth.seed();

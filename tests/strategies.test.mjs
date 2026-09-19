@@ -40,6 +40,14 @@ test('frustration rotates the strategy; a blocked strategy rotates without count
   assert.equal(appetite(w).strategy, 'imagine_before_acting');
 });
 
+test('a prediction the world cannot evaluate is not a prediction: numeric metrics need numeric operators and values', async () => {
+  const llm = { messages: { create: async () => ({ content: [{ text: JSON.stringify({ claim: 'x', metric: 'want_progress', operator: 'contains', value: '>0.75', deadline_minutes: 60, confidence: 0.6, why_it_matters: 'y' }) }] }) } };
+  const s = STRATEGIES.find(x => x.name === 'test_a_prediction');
+  const ctx = { deps: { llm, hypothesis: { form: async () => ({ id: 1 }) }, provider: 't', model: 'm' }, budget: { timeBudgetSeconds: 10 }, chain: { chain_id: 1 }, want: { description: 'w', doneWhen: 'd' }, state: {}, evidence: [], clock: Date.now };
+  const r = await s.run(ctx);
+  assert.equal(r.status, 'stalled'); assert.equal(r.stopReason, 'unverifiable_prediction_shape');
+});
+
 test('budget scales with pressure and stays within the reasoner contract', () => {
   assert.deepEqual(budgetFor({ pressure: 0 }, { timeBudgetSeconds: 60, maxPasses: 3 }), { timeBudgetSeconds: 30, maxPasses: 3 });
   assert.deepEqual(budgetFor({ pressure: 1 }, { timeBudgetSeconds: 60, maxPasses: 3 }), { timeBudgetSeconds: 90, maxPasses: 3 });

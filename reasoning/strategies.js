@@ -10,6 +10,7 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const text = (v, max = 400) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const SENSOR_METRICS = ['battery_pct', 'charging', 'front_app', 'presence', 'idle_seconds', 'hour', 'typing_wpm', 'cpu_raw', 'memory_pressure_pct', 'thermal', 'app_switches_15min'];
 export const PREDICTION_METRICS = [...SENSOR_METRICS, 'want_progress'];
+export const NUMERIC_METRICS = ['battery_pct', 'idle_seconds', 'hour', 'typing_wpm', 'cpu_raw', 'memory_pressure_pct', 'app_switches_15min', 'want_progress'];
 
 export const predictionSchema = {
   type: 'object', additionalProperties: false,
@@ -60,11 +61,17 @@ export const STRATEGIES = [
       try {
         p = await generateJson(ctx, { schema: predictionSchema,
           system: `You form one falsifiable prediction that would move this want forward if it held. Metrics you may use: ${PREDICTION_METRICS.join(', ')}. ` +
+            `Numeric metrics (${NUMERIC_METRICS.join(', ')}) take gt/gte/lt/lte with a number; the others take eq/neq/contains with a string. ` +
             `"want_progress" is this want's observed progress in [0,1]. Use a short deadline (5-1440 minutes) and honest confidence in [0.05,0.95]. Say why it matters to the want. Respond with JSON only.`,
           prompt: wantContext(ctx) });
       } catch (e) { return { status: 'failed', error: `prediction unavailable: ${text(e.message, 160)}` }; }
       const minutes = clamp(Number(p.deadline_minutes) || 60, 5, 1440), confidence = clamp(Number(p.confidence) || 0.5, 0.05, 0.95);
       if (!PREDICTION_METRICS.includes(p.metric) || !text(p.claim)) return { status: 'stalled', stopReason: 'no_usable_prediction' };
+      // A prediction that cannot be evaluated is not a prediction: numeric metrics take numeric operators and values.
+      const numeric = NUMERIC_METRICS.includes(p.metric);
+      if (numeric && (!['gt', 'gte', 'lt', 'lte'].includes(p.operator) || !Number.isFinite(Number(p.value)))) return { status: 'stalled', stopReason: 'unverifiable_prediction_shape' };
+      if (!numeric && !['eq', 'neq', 'contains'].includes(p.operator)) return { status: 'stalled', stopReason: 'unverifiable_prediction_shape' };
+      if (numeric) p.value = Number(p.value);
       const deadline = new Date(ctx.clock() + minutes * 60000).toISOString();
       const formed = await ctx.deps.hypothesis.form('pursuit', text(p.claim, 500), `${p.metric} ${p.operator} ${JSON.stringify(p.value)} by ${deadline}`, {
         testType: 'structured', confidence, deadline,
