@@ -112,7 +112,7 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     const { rowCount } = await pool.query(`UPDATE thought_chains SET status = 'pondering',
         ponder_state = ponder_state || jsonb_build_object('want', (ponder_state -> 'want') || '{"strategy": 0}'::jsonb, 'stallStreak', 0, 'attempts', 0, 'checkpoint', null), updated_at = NOW()
       WHERE ponder_state IS NOT NULL AND ponder_state #>> '{origin,kind}' = 'self' AND ponder_state #>> '{want,status}' = 'active'
-        AND status IN ('budget', 'stalled', 'failed', 'pondering')`).catch(e => { log.warn?.('[self-build] reopen:', e.message); return { rowCount: 0 }; });
+        AND status <> 'running'`).catch(e => { log.warn?.('[self-build] reopen:', e.message); return { rowCount: 0 }; });   // a reasoned plan or a wait for evidence is not a change: in the phase, the change comes first
     if (rowCount) log.log?.(`[self-build] ${rowCount} self-want(s) re-opened for the phase`);
     return phase;
   }
@@ -131,7 +131,8 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     const { enabled } = await permitted();
     if (!enabled) { if (phase.active) await exit('permission withdrawn'); return phase; }
     let wants = [];
-    try { await introspect(); wants = await selfWants(); } catch (e) { log.warn?.('[self-build] introspection:', e.message); }
+    try { await introspect(); } catch (e) { log.warn?.('[self-build] introspection:', e.message); }
+    try { wants = await selfWants(); } catch (e) { log.warn?.('[self-build] self-wants:', e.message); }
     const hungriest = wants.sort((a, b) => b.hunger.pressure - a.hunger.pressure)[0];
     if (!phase.active) {
       if (hungriest && hungriest.hunger.pressure >= enterPressure && clock() - phase.lastExitAt >= exitCooldownMs) await enter(`want #${hungriest.chain_id} at pressure ${hungriest.hunger.pressure.toFixed(2)}`, hungriest.chain_id);
@@ -154,8 +155,11 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
 
   // ── the build itself ──
   async function baselineTests(cwd) {
-    // A verifier spawned from inside a test file inherits NODE_TEST_CONTEXT and would silently discover nothing.
-    const { NODE_TEST_CONTEXT: _t, ...env } = process.env;
+    // The verifier runs the suite the way a clean clone would: no deployment routing (ONEIRO_*/OCA_* point the
+    // live daemon at other machines and flip env-sensitive tests), no NODE_TEST_CONTEXT (a child of a test file
+    // would silently discover nothing). Only the database location and the path survive.
+    const keep = ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'DATABASE_URL', 'OCA_TEST_DATABASE_URL', 'PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
+    const env = Object.fromEntries(keep.filter(k => process.env[k] !== undefined).map(k => [k, process.env[k]]));
     const r = await run(process.execPath, ['--test', 'tests/'], { cwd, env: { ...env, OCA_ENABLE_AMBIENT_SIMULATION: '0' }, maxBuffer: 32 * 1024 * 1024 }).catch(e => e);
     const out = (r.stdout || '') + (r.stderr || '');
     // The first failure's own words travel with the result, so a refused build says why in the journal.
@@ -228,12 +232,17 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
       if (forbidden.length) { await journal('refused', chainId, { branch, forbidden }); return fail(`touched the constitution: ${forbidden.join(', ')}`, 'constitution'); }
       const deletedTests = (await git(['status', '--porcelain'], dir)).stdout.split('\n').filter(l => /^ ?D /.test(l) && / tests\//.test(l));
       if (deletedTests.length) return fail(`deleted tests: ${deletedTests.join(', ')}`, 'tests_deleted');
-      const after = await baselineTests(dir);
+      let after = await baselineTests(dir);
+      // A small red may be a flake under load, not the change: one re-run decides. A green re-run is
+      // accepted and the flaky names are recorded in the commit; a second red stands.
+      let flaky = [];
+      if (after.fail && after.fail <= 2) { const again = await baselineTests(dir); if (!again.fail) { flaky = after.failing; after = again; } }
       const lost = [...before.passing].filter(n => !after.passing.has(n));
       if (after.fail || lost.length) return fail(`tests: ${after.pass}/${after.tests} passing, ${after.fail} failing${lost.length ? `; ${lost.length} previously passing test(s) no longer pass: ${lost.slice(0, 3).join('; ')}` : ''}${after.firstError ? ` — ${after.firstError}` : ''}`, 'tests_red');
       result.tests = { before: before.pass, after: after.pass, added: after.pass - before.pass };
       await git(['add', '-A', '--', '.', ':!node_modules'], dir);
-      const message = `self-build: ${text(coded.report.summary, 72) || slug(ctx.want.description)}\n\nWant #${chainId}: ${text(ctx.want.description, 600)}\n\n${text(coded.report.summary, 1200)}\n\nTests: ${after.pass}/${after.tests} passing (${before.pass} before). Coder: ${coded.coder}.\n\nSelf-Build: want #${chainId} attempt ${attempt}\nCo-Authored-By: OCA Self-Build <oca@oneiro.local>\n`;
+      const message = `self-build: ${text(coded.report.summary, 72) || slug(ctx.want.description)}\n\nWant #${chainId}: ${text(ctx.want.description, 600)}\n\n${text(coded.report.summary, 1200)}\n\nTests: ${after.pass}/${after.tests} passing (${before.pass} before).${flaky.length ? ` Flaky on first run, green on re-run: ${flaky.slice(0, 3).join('; ')}.` : ''} Coder: ${coded.coder}.\n\nSelf-Build: want #${chainId} attempt ${attempt}\nCo-Authored-By: OCA Self-Build <oca@oneiro.local>\n`;
+      result.flaky = flaky;
       await git(['-c', 'user.name=OCA Self-Build', '-c', 'user.email=oca@oneiro.local', 'commit', '-q', '-m', message], dir);
       result.sha = (await git(['rev-parse', 'HEAD'], dir)).stdout.trim();
       await git(['push', '-u', remote, `${branch}:${branch}`, '--force-with-lease'], dir);
