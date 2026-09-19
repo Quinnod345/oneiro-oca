@@ -10,6 +10,8 @@ import llm from '../llm.js';
 import hypothesis from '../hypothesis/engine.js';
 import { simulate, evaluateSimulation } from '../simulation/engine.js';
 import { on } from '../event-bus.js';
+import { createSelfBuild } from './self-build.js';
+import { runCodex, codexAvailable } from '../codex-cli.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 export const userControls = createUserControls(pool);
@@ -34,6 +36,9 @@ ${body}
 }
 const strategyDeps = { llm, hypothesis, simulate, evaluateSimulation, writeArtifact,
   provider: process.env.OCA_STRATEGY_PROVIDER || 'local', model: process.env.OCA_STRATEGY_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen-agent' };
+// The self-build phase: the engine's wants about itself. Codex when available, the local model otherwise.
+const selfBuildRef = { current: null };
+strategyDeps.selfBuild = { build: ctx => selfBuildRef.current.build(ctx), isActive: () => selfBuildRef.current?.isActive() === true, permitted: () => selfBuildRef.current.permitted() };
 // The risk journal is created below; the queue receives it through this indirection.
 const riskRef = { current: null };
 // The pursuit reasoner prefers the Codex subscription for hard steps; when Codex is unavailable (usage limit,
@@ -62,6 +67,9 @@ export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: e
   controls: () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS') }),
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 riskRef.current = riskJournal;
+export const selfBuild = createSelfBuild({ pool, queue: ponderQueue, worth: worthLedger, risk: riskJournal, controls: userControls,
+  runner: codexAvailable() ? runCodex : null, llm, provider: strategyDeps.provider, model: strategyDeps.model });
+selfBuildRef.current = selfBuild;
 
 // A prediction the engine committed to for a want, settled by the world, becomes evidence on that want.
 on('hypothesis_tested', async ev => {
@@ -117,6 +125,7 @@ async function syncInterests() {
 }
 export async function refreshHunger() {
   await adoptLegacyWants();
+  await selfBuild.tick().catch(e => console.warn('[self-build] tick:', e.message));
   await refreshGrounding();
   const state = await ponderQueue.hunger();
   const selected = state.wants.find(w => w.chain_id === state.selected);

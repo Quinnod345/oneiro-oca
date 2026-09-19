@@ -122,6 +122,7 @@ export function seedSignals(now = Date.now()) {
     createSignal({ id: 'seed:data:quinn:no-loss', entityKey: 'data:quinn', kind: 'constraint', at,
       rule: 'never_lose_or_delete_data_without_a_way_back', reason: 'Data loss is unforgivable; every write must be reversible or approved.' }),
     createSignal({ id: 'seed:attention:quinn:prior', entityKey: 'attention:quinn', kind: 'prior', at, worth: 0.85, weight: 3, reason: 'Interrupting costs something scarce; three to five worthwhile outputs a day.' }),
+    createSignal({ id: 'seed:project:oca-engine:prior', entityKey: 'project:oca-engine', kind: 'prior', at, worth: 0.7, weight: 2, reason: "The engine's own integrity and capability: what its self-wants are for. A person's rating governs." }),
     ...['hypothesize', 'ponder', 'act_reversible', 'act_irreversible', 'message'].map(capability =>
       createSignal({ id: `seed:self:${capability}:prior`, entityKey: `self:${capability}`, kind: 'prior', at, worth: 0.5, weight: 1, reason: 'Self-worth is a track record; it starts uninformative and must be earned.' })),
   ].map(s => ({ ...s, seededAt: now }));

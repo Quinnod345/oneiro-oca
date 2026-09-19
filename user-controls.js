@@ -8,7 +8,7 @@ export function createUserControls(pool) {
   async function update(patch) {
     if (!patch || Array.isArray(patch) || typeof patch !== 'object' || !Object.keys(patch).length) throw new Error('Choose a control to update');
     for (const [key, value] of Object.entries(patch)) {
-      if (!['queuePaused', 'interestDiscovery'].includes(key) || typeof value !== 'boolean') throw new Error('Unknown control or invalid value');
+      if (!['queuePaused', 'interestDiscovery', 'selfBuild', 'selfBuildAutoMerge'].includes(key) || typeof value !== 'boolean') throw new Error('Unknown control or invalid value');
     }
     await pool.query('UPDATE oca_user_controls SET settings = settings || $1::jsonb, updated_at = now() WHERE id = true', [JSON.stringify(patch)]);
     return get();

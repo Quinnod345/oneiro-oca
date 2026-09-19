@@ -179,7 +179,8 @@ test('with the switch on, the artifact strategy writes into the work directory a
   const writeArtifact = async (chainId, a) => { const path = join(workDir, `${chainId}-${a.attempt}.md`); await (await import('node:fs/promises')).writeFile(path, `# ${a.title}\n${a.body}`); return { path }; };
   const queue = createPonderQueue({ pool, reason: stalled, clock: () => now, worth, risk, strategies: { llm: fakeLlm([]), writeArtifact, provider: 'test', model: 'fake' } });
   const chain = await queue.enqueue({ seed: 'Get the build green', topic: 'Build', evidence });
-  await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '4') WHERE id = $1`, [chain.chain_id]);
+  // With only the reasoner, argue and artifact available, the index counts those three: artifact is 2.
+  await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '2') WHERE id = $1`, [chain.chain_id]);
   const c = await queue.runNext(chain.chain_id);
   assert.equal(c.lastStrategy.name, 'propose_an_artifact'); assert.equal(c.status, 'awaiting_evidence');
   const delivered = c.evidence.find(e => e.id.startsWith('artifact-'));

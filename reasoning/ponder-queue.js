@@ -5,8 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence, currentEvidence } from './loop.js';
 import { defaultTimeBudgetSeconds } from './budget.js';
 import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from '../motivation/hunger.js';
-import { strategyFor, budgetFor, STRATEGIES } from './strategies.js';
-const STRATEGY_COUNT = STRATEGIES.length;
+import { strategyFor, budgetFor, eligibleStrategies } from './strategies.js';
 
 const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
@@ -18,8 +17,9 @@ const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'
 export function createPonderQueue({ pool, reason, clock = Date.now, worth = null, affect = null, strategies = {}, risk = null }) {
   const strategyDeps = { reason, ...strategies };
   const patience = () => { try { return affect?.strategyPatience?.() ?? 3; } catch { return 3; } };
+  const rotationFor = state => eligibleStrategies(strategyDeps, state).map(s => s.name);
   const snapshot = row => row ? { chain_id: row.id, seed: row.seed, status: row.status, depth: row.depth,
-    updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock(), { patience: patience() }) } : null;
+    updated_at: row.updated_at, ...row.ponder_state, hunger: appetite(row.ponder_state?.want, clock(), { patience: patience(), strategies: rotationFor(row.ponder_state) }) } : null;
   // Live pricing: one ledger read for every stake named by the given rows, then a pure re-price.
   async function reprice(rows) {
     if (!worth) return rows;
@@ -118,8 +118,10 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       const lease = randomUUID();
       // `attempts` counts claims since the evidence last changed (deadline retries are capped on it in SQL);
       // `unfinishedClaims` counts claims that never saved a result — the crash loop guard.
+      // `claimSeq` never rewinds (a held attempt rolls `attempts` back), so every appraisal and every
+      // artifact of this chain gets a fresh identity and a held strategy is re-appraised next time.
       let state = { ...row.ponder_state, lease, leaseUntil: clock() + 240000, attempts: row.ponder_state.attempts + 1,
-        unfinishedClaims: (row.ponder_state.unfinishedClaims || 0) + 1 };
+        claimSeq: (row.ponder_state.claimSeq || 0) + 1, unfinishedClaims: (row.ponder_state.unfinishedClaims || 0) + 1 };
       const claimed = await pool.query(
         `UPDATE thought_chains SET status = 'running', ponder_state = $1::jsonb, updated_at = NOW()
          WHERE id = $2 AND ponder_state = $3::jsonb AND
@@ -131,17 +133,22 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         await save(row.id, lease, { ...state, unfinishedClaims: 0 }, 'failed'); return get(row.id);
       }
       try {
-        const motivation = appetite(state.want, clock(), { patience: pat });
+        const motivation = appetite(state.want, clock(), { patience: pat, strategies: rotationFor(state) });
         let minConfidence = 0.55;
         try { minConfidence = affect?.verificationThreshold?.(0.55) ?? 0.55; } catch {}
         // Which strategy this attempt spends its budget on, and whether the engine may run it.
-        const strategy = strategyFor(state.want, strategyDeps);
+        const strategy = strategyFor(state.want, strategyDeps, state);
         const budget = budgetFor(motivation, { timeBudgetSeconds: state.timeBudgetSeconds, maxPasses: state.maxPasses });
         let gate = null;
         if (risk) {
           try {
-            gate = await risk.decide({ id: `strategy:${row.id}:${state.attempts}:${strategy.name}`, chainId: row.id, kind: strategy.actionKind, firedBy: 'engine',
-              description: `${strategy.name} for want #${row.id}: ${strategy.describe(state.want)}`, serves: state.want.stakes || [], touches: [], reversibility: strategy.reversibility });
+            // A self-build edit touches the engine's own project; the person's phase permission is its switch.
+            const selfBuild = strategy.kind === 'self_build';
+            const permitted = selfBuild ? (await strategyDeps.selfBuild.permitted()).enabled : undefined;
+            gate = await risk.decide({ id: `strategy:${row.id}:${state.claimSeq}:${strategy.name}`, chainId: row.id, kind: strategy.actionKind, firedBy: 'engine',
+              description: `${strategy.name} for want #${row.id}: ${strategy.describe(state.want)}`, serves: state.want.stakes || [],
+              touches: selfBuild ? ['project:oca-engine'] : [], reversibility: strategy.reversibility },
+              selfBuild ? { controls: { autonomousActions: permitted } } : {});
           } catch (e) { console.warn('[ponder] strategy appraisal unavailable:', e.message); }
         }
         if (gate && gate.decision !== 'proceed') {
@@ -184,7 +191,8 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         const rotating = ['stalled', 'failed'].includes(result.status);   // budget keeps its retry contract
         const stallStreak = rotating ? (state.stallStreak || 0) + 1 : ['needs_evidence', 'converged'].includes(result.status) ? 0 : (state.stallStreak || 0);
         state = { ...state, stallStreak, unfinishedClaims: 0 };
-        if (rotating && stallStreak < STRATEGY_COUNT) status = 'pondering';
+        // A full rotation is one attempt per strategy this want can use; only then does it wait for evidence.
+        if (rotating && stallStreak < eligibleStrategies(strategyDeps, state).length) status = 'pondering';
         await save(row.id, lease, state, status);
         // The reasoner ran and did not get there: an observed failure of the engine's own pondering.
         // Converging is not a success (a plan satiates nothing); a transport failure is not a failure of thought.

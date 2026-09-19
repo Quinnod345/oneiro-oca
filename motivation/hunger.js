@@ -36,7 +36,9 @@ export function repriceWant(want, lookup, now = Date.now()) {
   return { ...want, value: priced.value, pricing };
 }
 // `patience` is how many failed attempts are tolerated before the strategy changes; affect lowers it.
-export function appetite(want, now = Date.now(), { patience = 3 } = {}) {
+// `strategies` is the rotation this want actually has (the queue knows which are eligible); the name
+// reported here is the one that will run next.
+export function appetite(want, now = Date.now(), { patience = 3, strategies = STRATEGY_NAMES } = {}) {
   if (!want || want.status === 'sated' || want.status === 'cancelled') {
     return { pressure: 0, frustration: 0, mode: want?.status || 'idle', strategy: null };
   }
@@ -46,7 +48,7 @@ export function appetite(want, now = Date.now(), { patience = 3 } = {}) {
   const frustration = clamp((want.failedAttempts || 0) / Math.max(1, patience));
   return { pressure: clamp(want.value * gap * (0.65 + 0.35 * persistence)), gap,
     frustration, mode: frustration >= 2 / 3 ? 'change_strategy' : 'pursue',
-    strategy: STRATEGY_NAMES[(want.strategy || 0) % STRATEGY_NAMES.length], strategyIndex: want.strategy || 0,
+    strategy: strategies.length ? strategies[(want.strategy || 0) % strategies.length] : null, strategyIndex: want.strategy || 0,
     // A want with no stakes at all has never been priced; a want with stakes reports what pricing found.
     value: want.value, valueProvenance: want.pricing?.provenance || 'priority', unpriced: want.stakes ? want.pricing?.unpriced === true : true,
     description: want.description, doneWhen: want.doneWhen };
