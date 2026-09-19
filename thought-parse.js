@@ -1,6 +1,6 @@
 // Parsing a thought is a runtime concern, not a model concern: the first balanced JSON object
 // in the text, trailing prose ignored, fields normalized to the shapes downstream expects.
-const TEXT_ALIASES = ['thoughts', 'thought', 'text', 'reflection', 'body', 'content'];
+const TEXT_ALIASES = ['thoughts', 'thought', 'text', 'reflection', 'body', 'content', 'message', 'answer'];
 
 export function extractFirstJsonObject(text) {
   const s = String(text ?? '').replace(/```json\s*/gi, '').replace(/```\s*/g, '');
