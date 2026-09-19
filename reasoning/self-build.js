@@ -71,6 +71,9 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     const defects = new Map();
     for (const f of fails) {
       const observation = f.outcome?.evidence?.[0]?.observation || f.outcome?.note || '';
+      // A self-build's own refusal (a red suite, a constitution check) is not a defect to build a want about:
+      // wanting to fix the failure to fix would recurse without end.
+      if (/^improve_myself ended/.test(observation) || String(f.id).endsWith(':improve_myself')) continue;
       if (classifyFriction(observation) !== 'defect') continue;
       const key = text(observation.replace(/#?\d+/g, '#'), 160);
       const d = defects.get(key) || { key, capability: f.capability, count: 0, examples: [] };
