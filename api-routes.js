@@ -16,6 +16,7 @@ import benchmarkHarness from './evaluation/benchmark-harness.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import { thinkerTelemetry } from './thinker-bridge.js';
 import { registerMobileCompanionRoutes } from './mobile-companion.js';
+import { createInbox } from './reasoning/inbox.js';
 
 export const ocaRouter = Router();
 const userWorkspace = createUserWorkspace({ pool, queue: ponderQueue, runPending: runPendingPonder,
@@ -1493,6 +1494,25 @@ ocaRouter.post('/oca/self-build/want', async (req, res) => {
 
 // ── TRACE ── the story of a want from the journals: attempts, appraisals, commitments, settlements, affect.
 const trace = createTrace({ pool });
+// ── INBOX ── what the engine has for a person, and what a person gives back. The phone lives here.
+const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work' });
+ocaRouter.get('/oca/inbox', async (_req, res) => {
+  try { res.json(await inbox.list()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Body: { kind: 'artifact'|'note'|'entity', id | entityKey, usefulness (useless|meh|useful|great|[0,1]) | rating (-1|0|1), note?, by? }
+ocaRouter.post('/oca/inbox/rate', async (req, res) => {
+  try { res.json(await inbox.rate(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Body: { chainId, progress [0,1], criterionMet?, observation, usefulness? }
+ocaRouter.post('/oca/inbox/progress', async (req, res) => {
+  try { res.json(await inbox.progress(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Body: { description, doneWhen?, priority?, topic? }
+ocaRouter.post('/oca/inbox/want', async (req, res) => {
+  try { const chain = await inbox.want(req.body || {}); runPendingPonder(chain.chain_id).catch(() => {}); res.status(202).json(chain); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 ocaRouter.get('/oca/trace/:chainId', async (req, res) => {
   try { const t = await trace.forChain(Number(req.params.chainId)); res.status(t ? 200 : 404).json(t || { error: 'no such want' }); }
   catch (e) { res.status(500).json({ error: e.message }); }

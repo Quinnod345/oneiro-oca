@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm, readFile as readText } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { STRATEGIES, strategyFor, budgetFor, strategyNames } from '../reasoning/strategies.js';
+import { STRATEGIES, strategyFor, budgetFor, strategyNames, PREDICTION_METRICS, NUMERIC_METRICS, predictionSchema } from '../reasoning/strategies.js';
 import { createWant, recordAttempt, appetite, STRATEGY_NAMES } from '../motivation/hunger.js';
 import { createProposal, appraise } from '../motivation/risk.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
@@ -41,11 +41,14 @@ test('frustration rotates the strategy; a blocked strategy rotates without count
 });
 
 test('a prediction the world cannot evaluate is not a prediction: numeric metrics need numeric operators and values', async () => {
-  const llm = { messages: { create: async () => ({ content: [{ text: JSON.stringify({ claim: 'x', metric: 'want_progress', operator: 'contains', value: '>0.75', deadline_minutes: 60, confidence: 0.6, why_it_matters: 'y' }) }] }) } };
+  const llm = { messages: { create: async () => ({ content: [{ text: JSON.stringify({ claim: 'x', metric: 'idle_seconds', operator: 'contains', value: '>75', deadline_minutes: 60, confidence: 0.6, why_it_matters: 'y' }) }] }) } };
   const s = STRATEGIES.find(x => x.name === 'test_a_prediction');
   const ctx = { deps: { llm, hypothesis: { form: async () => ({ id: 1 }) }, provider: 't', model: 'm' }, budget: { timeBudgetSeconds: 10 }, chain: { chain_id: 1 }, want: { description: 'w', doneWhen: 'd' }, state: {}, evidence: [], clock: Date.now };
   const r = await s.run(ctx);
   assert.equal(r.status, 'stalled'); assert.equal(r.stopReason, 'unverifiable_prediction_shape');
+  // and a prediction about the want's own progress is not about the world: the schema does not offer it
+  assert.ok(!PREDICTION_METRICS.includes('want_progress')); assert.ok(!NUMERIC_METRICS.includes('want_progress'));
+  assert.ok(!predictionSchema.properties.metric.enum.includes('want_progress'));
 });
 
 test('budget scales with pressure and stays within the reasoner contract', () => {
@@ -55,13 +58,15 @@ test('budget scales with pressure and stays within the reasoner contract', () =>
   assert.equal(budgetFor({ pressure: 0 }, { timeBudgetSeconds: 10 }).timeBudgetSeconds, 10);
 });
 
-test('thinking is not acting: a read-only engine step proceeds with the master switch off; a sandboxed artifact does not', () => {
+test('thinking is not acting: a read-only engine step and a draft in its own sandbox proceed with the master switch off; exposure does not', () => {
   const lookup = () => null;
   const think = createProposal({ kind: 'read', description: 'reason about the want', serves: ['project:demo'], reversibility: 'readonly' });
   assert.equal(appraise(think, { lookup, controls: { autonomousActions: false } }).decision, 'proceed');
   const draft = createProposal({ kind: 'edit_file', description: 'draft an artifact in the work dir', serves: ['project:demo'], reversibility: 'sandboxed' });
-  assert.equal(appraise(draft, { lookup, controls: { autonomousActions: false } }).decision, 'prepare_artifact');
+  assert.equal(appraise(draft, { lookup, controls: { autonomousActions: false } }).decision, 'proceed', 'the engine\'s own work directory is not the world');
   assert.equal(appraise(draft, { lookup, controls: { autonomousActions: true } }).decision, 'proceed');
+  const edit = createProposal({ kind: 'edit_file', description: 'edit a file with undo', serves: ['project:demo'], reversibility: 'undo' });
+  assert.equal(appraise(edit, { lookup, controls: { autonomousActions: false } }).decision, 'prepare_artifact', 'a real reversibility cost waits for the switch');
   const touching = createProposal({ kind: 'read', description: 'read Quinn\'s notes', serves: ['project:demo'], touches: ['data:quinn'], reversibility: 'readonly' });
   assert.equal(appraise(touching, { lookup, controls: { autonomousActions: false } }).decision, 'prepare_artifact', 'exposure keeps the switch in force');
 });
@@ -92,7 +97,7 @@ function fakeLlm(log) {
   return { messages: { create: async (params, options) => {
     log.push({ schema: options?.responseSchema, system: params.system });
     const s = options?.responseSchema;
-    if (s?.properties?.metric) return { content: [{ text: JSON.stringify({ claim: 'Progress will pass a third within the hour', metric: 'want_progress', operator: 'gte', value: 0.34, deadline_minutes: 60, confidence: 0.6, why_it_matters: 'It shows the first step landed.' }) }] };
+    if (s?.properties?.metric) return { content: [{ text: JSON.stringify({ claim: 'Typing will pick up within the hour', metric: 'typing_wpm', operator: 'gte', value: 34, deadline_minutes: 60, confidence: 0.6, why_it_matters: 'It shows the person is back at the build.' }) }] };
     if (s?.properties?.title) return { content: [{ text: JSON.stringify({ title: 'Build target checklist', body: 'Step one: pin the failing target. Step two: run its tests alone. Step three: compare the two configs line by line.', what_it_is_for: 'Getting the build green', how_to_judge_it: 'Did following it fix the build?' }) }] };
     return { content: [{ text: '{}' }] };
   } } };
@@ -123,7 +128,7 @@ test('rotation changes what runs: each strategy spends one attempt, produces a c
   // 2. test_a_prediction — a typed commitment about the want
   c = await queue.runNext(chain.chain_id);
   assert.equal(c.lastStrategy.name, 'test_a_prediction'); assert.equal(c.status, 'awaiting_evidence');
-  assert.equal(formed.length, 1); assert.equal(formed[0].opts.sourceData.evaluation.metric, 'want_progress'); assert.equal(formed[0].opts.sourceData.want_chain_id, chain.chain_id);
+  assert.equal(formed.length, 1); assert.equal(formed[0].opts.sourceData.evaluation.metric, 'typing_wpm'); assert.equal(formed[0].opts.sourceData.want_chain_id, chain.chain_id);
   assert.deepEqual(c.commitments.map(x => x.kind), ['hypothesis']);
   assert.match(c.result.conclusion, /Prediction #41/);
   // awaiting_evidence is not a failure: the strategy index stays, so give it evidence to move on
@@ -143,16 +148,25 @@ test('rotation changes what runs: each strategy spends one attempt, produces a c
   assert.equal(c.lastStrategy.name, 'argue_the_premise'); assert.match(ran.at(-1), /^Assume this cannot be satisfied/);
   assert.equal(c.result.status, 'stalled', 'the stub reasoner stalls, which rotates on its own');
   assert.equal(c.want.strategy, 4); assert.equal(c.status, 'pondering');
-  // 5. propose_an_artifact — sandboxed, engine-fired, switch off → blocked, rotated, not a failure
-  const before = await queue.get(chain.chain_id);
+  // 5. propose_an_artifact — sandboxed, engine-fired, switch off → still proceeds: a draft in its own work directory is not the world
   c = await queue.runNext(chain.chain_id);
-  assert.equal(c.lastStrategy.name, 'propose_an_artifact'); assert.equal(c.lastStrategy.decision, 'prepare_artifact');
-  assert.equal(c.want.failedAttempts, before.want.failedAttempts); assert.equal(c.want.strategy, 5); assert.equal(c.status, 'pondering');
-  assert.ok(felt.some(f => f[0] === 'blocked' && f[1] === 'prepare_artifact'), 'being held back is felt');
+  assert.equal(c.lastStrategy.name, 'propose_an_artifact'); assert.equal(c.lastStrategy.decision, 'proceed');
+  assert.equal(c.status, 'awaiting_evidence', 'delivered; only a person\'s rating moves the want');
+  assert.deepEqual(c.commitments.map(x => x.kind), ['hypothesis', 'simulation', 'artifact']);
+  assert.ok(c.evidence.some(e => e.id.startsWith('artifact-') && /generated/.test(e.source)), 'the delivery is evidence marked generated and unrated');
   const journal = await risk.recent({ chainId: chain.chain_id });
   assert.equal(journal.length, 5, 'every attempt is a risk decision');
-  assert.deepEqual(journal.map(d => d.decision).sort(), ['prepare_artifact', 'proceed', 'proceed', 'proceed', 'proceed']);
-  assert.ok(journal.filter(d => d.outcome).length >= 3, 'run strategies carry their outcome');
+  assert.deepEqual(journal.map(d => d.decision).sort(), ['proceed', 'proceed', 'proceed', 'proceed', 'proceed']);
+  assert.ok(journal.filter(d => d.outcome).length >= 4, 'run strategies carry their outcome');
+  // self-knowledge that learns: the expectation for a strategy is its own record, shrunk toward the capability's worth
+  const rec = await risk.trackRecord({ strategy: 'inspect_missing_evidence', capability: 'act_reversible' });
+  assert.equal(rec.n, 1); assert.equal(rec.wins, 0, 'the stub reasoner stalled: a failure on the record');
+  assert.ok(rec.pSuccess < rec.prior, `${rec.pSuccess} should sit below the prior ${rec.prior}`);
+  const fresh = await risk.trackRecord({ strategy: 'never_ran', capability: 'act_reversible' });
+  assert.equal(fresh.n, 0); assert.equal(fresh.pSuccess, fresh.prior, 'no record: the capability\'s worth is the expectation');
+  assert.ok(journal.every(d => Number.isFinite(d.proposal.pSuccess)), 'every strategy appraisal carried its record as the expectation');
+  await assert.rejects(risk.trackRecord({ strategy: 'x; drop', capability: 'act_reversible' }));
+  void felt;
   await rm(workDir, { recursive: true, force: true });
 }));
 

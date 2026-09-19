@@ -35,7 +35,9 @@ ${body}
   return { path };
 }
 const strategyDeps = { llm, hypothesis, simulate, evaluateSimulation, writeArtifact,
-  provider: process.env.OCA_STRATEGY_PROVIDER || 'local', model: process.env.OCA_STRATEGY_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen-agent' };
+  provider: process.env.OCA_STRATEGY_PROVIDER || 'local', model: process.env.OCA_STRATEGY_MODEL || process.env.ONEIRO_OCA_THINKER_MODEL || 'qwen-agent',
+  // A step that may run on Codex gets at least four minutes; a local-only engine keeps the want's budget.
+  callFloorSeconds: () => (getInferencePolicy().mode === 'local' ? 0 : 240) };
 // The self-build phase: the engine's wants about itself. Codex when available, the local model otherwise.
 const selfBuildRef = { current: null };
 strategyDeps.selfBuild = { build: ctx => selfBuildRef.current.build(ctx), isActive: () => selfBuildRef.current?.isActive() === true, permitted: () => selfBuildRef.current.permitted() };
@@ -52,7 +54,7 @@ export async function syncInferencePolicy() {
   try { const c = await userControls.get(); if (c.inference) setInferencePolicy({ mode: c.inference }); } catch {}
 }
 export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect: emotion, strategies: strategyDeps,
-  risk: { decide: (...a) => riskRef.current.decide(...a), observe: (...a) => riskRef.current.observe(...a) },
+  risk: { decide: (...a) => riskRef.current.decide(...a), observe: (...a) => riskRef.current.observe(...a), trackRecord: (...a) => riskRef.current.trackRecord(...a) },
   reason: pursuitReason });
 // Risk: every proposed action is appraised against worth, journaled, and calibrated on what happened.
 // Appetite reads the live affect state; the master switch is the existing autonomous-actions flag.

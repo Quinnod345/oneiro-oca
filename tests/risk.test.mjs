@@ -39,14 +39,18 @@ test('appetite is centred on the baseline for flat affect; frustration and curio
   assert.ok(appetiteFrom({ frustration: 1, curiosity: 1 }).appetite <= 0.95 && appetiteFrom({ fear: 1, energy_level: 0 }).appetite >= 0.05, 'bounded away from 0 and 1');
 });
 
-test('a sandboxed slice for a valued project proceeds; the master switch turns it into a recorded proposal', () => {
+test('a sandboxed slice for a valued project proceeds with the switch off — the engine\'s own sandbox is not the world; one that touches anything is held', () => {
   const p = createProposal({ kind: 'research_slice', description: 'inspect sources', serves: ['project:demo'], reversibility: 'sandboxed' });
   const a = appraise(p, { lookup, controls: on });
   assert.equal(a.decision, 'proceed'); assert.equal(a.expected.valueProvenance, 'rated');
   assert.equal(a.expected.pSuccess, 0.5, 'success probability is the capability track record');
   const b = appraise(p, { lookup, controls: off });
-  assert.equal(b.decision, 'prepare_artifact'); assert.equal(b.autonomousWouldProceed, true);
-  assert.match(b.reasons.at(-1), /switched off/);
+  assert.equal(b.decision, 'proceed', 'a draft in its own work directory touches nothing of the person\'s'); assert.equal(b.autonomousWouldProceed, true);
+  const touching = createProposal({ kind: 'research_slice', description: 'inspect sources', serves: ['project:demo'], touches: ['data:quinn'], reversibility: 'sandboxed' });
+  const c = appraise(touching, { lookup, controls: off });
+  assert.equal(c.decision, 'prepare_artifact'); assert.match(c.reasons.at(-1), /switched off/);
+  const undo = createProposal({ kind: 'research_slice', description: 'inspect sources', serves: ['project:demo'], reversibility: 'undo' });
+  assert.equal(appraise(undo, { lookup, controls: off }).decision, 'prepare_artifact', 'anything with a real reversibility cost still waits for the switch');
 });
 
 test('irreversible actions are prepared for a person; the data constraint refuses irreversible writes outright', () => {

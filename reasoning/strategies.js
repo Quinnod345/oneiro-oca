@@ -9,8 +9,10 @@ import { normalizeEvidence } from './loop.js';
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const text = (v, max = 400) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const SENSOR_METRICS = ['battery_pct', 'charging', 'front_app', 'presence', 'idle_seconds', 'hour', 'typing_wpm', 'cpu_raw', 'memory_pressure_pct', 'thermal', 'app_switches_15min'];
-export const PREDICTION_METRICS = [...SENSOR_METRICS, 'want_progress'];
-export const NUMERIC_METRICS = ['battery_pct', 'idle_seconds', 'hour', 'typing_wpm', 'cpu_raw', 'memory_pressure_pct', 'app_switches_15min', 'want_progress'];
+// A prediction is about the world the sensors observe — never about the want's own progress, which only a
+// person's receipt can move: predicting it is predicting the person, and settles nothing about the claim.
+export const PREDICTION_METRICS = [...SENSOR_METRICS];
+export const NUMERIC_METRICS = ['battery_pct', 'idle_seconds', 'hour', 'typing_wpm', 'cpu_raw', 'memory_pressure_pct', 'app_switches_15min'];
 
 export const predictionSchema = {
   type: 'object', additionalProperties: false,
@@ -38,9 +40,12 @@ function wantContext(ctx) {
 }
 
 async function generateJson(ctx, { system, prompt, schema, maxTokens = 600 }) {
+  // The want's budget bounds the wait, but a step routed to a cloud model needs the floor that model needs:
+  // a subprocess with high reasoning effort is not cancelled at a local model's pace.
+  const floor = typeof ctx.deps.callFloorSeconds === 'function' ? ctx.deps.callFloorSeconds() : 0;
   const response = await ctx.deps.llm.messages.create({ provider: ctx.deps.provider, model: ctx.deps.model, system,
     messages: [{ role: 'user', content: prompt }], max_tokens: maxTokens, temperature: 0.2 },
-    { priority: 10, responseSchema: schema, signal: AbortSignal.timeout(ctx.budget.timeBudgetSeconds * 1000) });
+    { priority: 10, responseSchema: schema, signal: AbortSignal.timeout(Math.max(ctx.budget.timeBudgetSeconds, floor) * 1000) });
   const raw = String(response.content?.[0]?.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   return JSON.parse(raw);
 }
@@ -62,7 +67,7 @@ export const STRATEGIES = [
         p = await generateJson(ctx, { schema: predictionSchema,
           system: `You form one falsifiable prediction that would move this want forward if it held. Metrics you may use: ${PREDICTION_METRICS.join(', ')}. ` +
             `Numeric metrics (${NUMERIC_METRICS.join(', ')}) take gt/gte/lt/lte with a number; the others take eq/neq/contains with a string. ` +
-            `"want_progress" is this want's observed progress in [0,1]. Use a short deadline (5-1440 minutes) and honest confidence in [0.05,0.95]. Say why it matters to the want. Respond with JSON only.`,
+            `Never predict the want's own progress or anything only a person can cause; predict what the sensors will show and say what it would settle for the want. Use a short deadline (5-1440 minutes) and honest confidence in [0.05,0.95]. Respond with JSON only.`,
           prompt: wantContext(ctx) });
       } catch (e) { return { status: 'failed', error: `prediction unavailable: ${text(e.message, 160)}` }; }
       const minutes = clamp(Number(p.deadline_minutes) || 60, 5, 1440), confidence = clamp(Number(p.confidence) || 0.5, 0.05, 0.95);
