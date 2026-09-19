@@ -115,7 +115,10 @@ export function createSelfBuild({ pool, queue, worth = null, risk = null, contro
     const { rowCount } = await pool.query(`UPDATE thought_chains SET status = 'pondering',
         ponder_state = ponder_state || jsonb_build_object('want', (ponder_state -> 'want') || '{"strategy": 0}'::jsonb, 'stallStreak', 0, 'attempts', 0, 'checkpoint', null), updated_at = NOW()
       WHERE ponder_state IS NOT NULL AND ponder_state #>> '{origin,kind}' = 'self' AND ponder_state #>> '{want,status}' = 'active'
-        AND status <> 'running'`).catch(e => { log.warn?.('[self-build] reopen:', e.message); return { rowCount: 0 }; });   // a reasoned plan or a wait for evidence is not a change: in the phase, the change comes first
+        AND status <> 'running'
+        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(ponder_state -> 'commitments', '[]'::jsonb)) c
+                        WHERE c ->> 'kind' = 'branch' AND NOT COALESCE((c ->> 'merged')::boolean, false))`)
+      .catch(e => { log.warn?.('[self-build] reopen:', e.message); return { rowCount: 0 }; });   // a plan is not a change; a published branch awaiting a person is not rebuilt
     if (rowCount) log.log?.(`[self-build] ${rowCount} self-want(s) re-opened for the phase`);
     return phase;
   }
