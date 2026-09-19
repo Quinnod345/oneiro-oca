@@ -17,7 +17,7 @@ export function createEngineApp() {
     next();
   });
   app.use(express.json({ limit: '2mb' }));
-  app.use('/web', express.static(join(__dirname, 'web')));
+  app.use('/web', express.static(join(__dirname, 'web'), { etag: true, lastModified: true, cacheControl: true, maxAge: 0 }));
   app.get('/', (_req, res) => res.redirect('/web/engine.html'));
   app.use(ocaRouter);
   app.use((err, _req, res, _next) => { res.status(err.status || 500).json({ error: err.message }); });

@@ -59,7 +59,7 @@ npm start                  # the daemon: loop + HTTP API on :3333
 npm run benchmark          # mechanism suite + scorecard → evaluation/results/latest.json
 ```
 
-**Live panel:** `http://localhost:3333/web/engine.html` — every aspect at once (health, wants, worth, risk, affect, strategies and commitments, thinker, per-want trace, the meter), polling every 5 s. It is also where a person feeds the engine: rate an entity, record an observed receipt on a want.
+**Live app:** `http://localhost:3333/` — one section per part of the chain (Overview, Wants, Self-build, Worth, Risk, Affect, Thinker, Chinese Room Meter), hash-routed, polling every 8 s. Overview leads with what needs a person: branches the engine built and wants you to merge, held decisions, wants awaiting evidence. It is also where a person feeds the engine: rate an entity, record an observed receipt on a want, permit the self-build phase, hand it a want about itself.
 
 Useful endpoints: `/oca/health`, `/oca/hunger`, `/oca/worth`, `/oca/risk`, `/oca/emotion`, `/oca/crm`, `/oca/trace/:id`, `POST /ponder` (create a want), `POST /ponder/:id/outcome` (record observed progress), `POST /oca/worth/rate` (rate an entity).
 
