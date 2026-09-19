@@ -3,7 +3,7 @@ import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userCont
 import { createPonderRouter } from './reasoning/ponder-router.js';
 import { createUserWorkspace } from './user-workspace.js';
 import { createUserOperations } from './user-operations.js';
-import llm from './llm.js';
+import llm, { setInferencePolicy } from './llm.js';
 // OCA API Routes — mounted from api.js (Express) when cognitive-loop runs
 // These endpoints expose the cognitive architecture to OpenClaw and external systems
 import { Router } from 'express';
@@ -19,7 +19,7 @@ import { registerMobileCompanionRoutes } from './mobile-companion.js';
 
 export const ocaRouter = Router();
 const userWorkspace = createUserWorkspace({ pool, queue: ponderQueue, runPending: runPendingPonder,
-  operations: createUserOperations(oca, benchmarkHarness), llmStatus: () => llm.getStatus() });
+  operations: createUserOperations(oca, benchmarkHarness), llmStatus: () => llm.getStatus(), applyInference: mode => setInferencePolicy({ mode }) });
 let workspaceStartupError = null;
 const workspaceReady = userWorkspace.recover().catch(error => { workspaceStartupError = error; });
 ocaRouter.use('/oca/ui', async (_req, res, next) => {

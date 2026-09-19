@@ -335,7 +335,17 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     if (!commitment || commitment.settled) return null;
     const settled = (row.ponder_state.commitments || []).map(c => c === commitment ? { ...c, settled: status, confirmed, at: clock() } : c);
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`, [row.id, JSON.stringify(settled)]);
-    if (!evaluation?.verifiable) return { chain_id: row.id, added: false, status };
+    if (!evaluation?.verifiable) {
+      // No evidence about the world — but a want parked on a prediction nobody could judge is parked on nothing.
+      // It re-ponders on the next strategy with the unjudged prediction on its record, instead of waiting forever.
+      const note = `prediction #${id} ${status} unevaluated: ${String(evaluation?.reason || 'its metric was never observed').slice(0, 300)}`;
+      const reopened = await mutate(row.id, r => r.status !== 'awaiting_evidence' ? { status: r.status, state: r.ponder_state }
+        : { status: 'pondering', state: { ...r.ponder_state, checkpoint: null, attempts: 0, stallStreak: 0,
+            want: { ...r.ponder_state.want, strategy: (r.ponder_state.want.strategy || 0) + 1 },
+            priorRuns: [...(r.ponder_state.priorRuns || []), { checkpoint: r.ponder_state.checkpoint, result: { status: 'failed', error: note }, at: clock() }] } })
+        .then(c => c.status === 'pondering', () => false);
+      return { chain_id: row.id, added: false, status, reopened };
+    }
     const observation = `Prediction #${id} ${confirmed ? 'held' : 'failed'}: ${String(evaluation.reason || modelUpdate || '').slice(0, 600)}`;
     try {
       await addEvidence(row.id, [{ id: `prediction-${id}`, source: 'structured hypothesis evaluation against an observed metric', observation }]);

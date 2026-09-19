@@ -37,6 +37,11 @@ test('persisted queue pause actually prevents work, survives replacement, and dr
  assert.deepEqual(await run(),{paused:true});assert.equal(calls,1);assert.equal(syncs,0);
  await assert.rejects(controls.update({queuePaused:'false'}));
  await assert.rejects(controls.update({autonomousActions:true}));
+ // which brain the engine thinks with is a control: one of three modes, nothing else
+ assert.equal((await controls.update({inference:'cloud'})).inference,'cloud');
+ assert.equal((await controls.update({inference:'local'})).inference,'local');
+ await assert.rejects(controls.update({inference:'codex'}),/inference must be one of local, auto, cloud/);
+ await assert.rejects(controls.update({inference:true}));
 }));
 
 test('pause during interest synchronization is rechecked before a new pursuit starts',()=>isolated(async pool=>{

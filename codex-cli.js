@@ -45,11 +45,14 @@ export function buildCodexEnvironment(env = process.env) {
   return childEnv;
 }
 
+export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+
 export function buildCodexArgs({
   workingDirectory = DEFAULT_WORKING_DIRECTORY,
   model = '',
   sandbox = 'read-only',
   persistent = false, threadId = null, outputSchemaPath = null,
+  reasoningEffort = '',
 } = {}) {
   const args = [
     'exec',
@@ -69,6 +72,9 @@ export function buildCodexArgs({
   if (selectedModel && /^[A-Za-z0-9._:-]+$/.test(selectedModel)) {
     args.push('--model', selectedModel);
   }
+  // --ignore-user-config drops ~/.codex/config.toml, so the effort the engine wants is stated explicitly.
+  const effort = String(reasoningEffort || '').trim().toLowerCase();
+  if (REASONING_EFFORTS.includes(effort)) args.push('--config', `model_reasoning_effort="${effort}"`);
   if (outputSchemaPath) args.push('--output-schema', outputSchemaPath);
   if (threadId) {
     if (!/^[a-f0-9-]{36}$/i.test(threadId)) throw new Error('Invalid Codex session ID');
@@ -111,6 +117,7 @@ export function runCodex(prompt, {
   signal = null,
   onText = null, onEvent = null,
   persistent = false, threadId = null, outputSchema = null,
+  reasoningEffort = process.env.OCA_CODEX_REASONING_EFFORT || process.env.ONEIRO_CODEX_REASONING_EFFORT || '',
   env = process.env,
 } = {}) {
   const codexCLI = resolveCodexCLI(env);
@@ -118,7 +125,7 @@ export function runCodex(prompt, {
   const outputSchemaPath = schemaDir ? join(schemaDir, 'response.json') : null;
   if (outputSchemaPath) writeFileSync(outputSchemaPath, JSON.stringify(outputSchema), { mode: 0o600 });
   let args;
-  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath }); }
+  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath, reasoningEffort }); }
   catch (error) { if (schemaDir) rmSync(schemaDir, { recursive: true, force: true }); throw error; }
   const childEnv = buildCodexEnvironment(env);
   const timeout = clampTimeout(timeoutMs);

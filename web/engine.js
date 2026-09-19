@@ -1,5 +1,5 @@
 // OCA Engine app — hash-routed views over the daemon's JSON. No build step.
-const $ = s => document.querySelector(s);
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const f2 = n => Number.isFinite(+n) ? (+n).toFixed(2) : '—';
 const f3 = n => Number.isFinite(+n) ? (+n).toFixed(3) : '—';
@@ -17,10 +17,22 @@ const empty = (title, hint) => `<div class="empty"><b>${esc(title)}</b>${hint ? 
 const err = e => `<div class="error">${esc(e.message || e)}</div>`;
 
 /* ── shell: health + nav counts (every view) ── */
+function brainLine(ctl, inf) {
+  const p = ctl.model?.inference || {}; const mode = ctl.inference || p.mode || 'auto';
+  const cloud = `<b>${esc(p.cloudModel || 'Codex')}</b> (${esc(p.cloudEffort || 'high')}) via Codex`, local = `<b>${esc(inf.model || 'local model')}</b> on WORK`;
+  const rest = p.codexBackedOffUntil ? ` · Codex resting ${until(p.codexBackedOffUntil)}` : '';
+  const last = p.stats?.lastUsed ? ` · last step: ${p.stats.lastUsed}` : '';
+  if (mode === 'cloud') return `${cloud}${p.codexAvailable ? '' : ' — Codex CLI missing, thinking locally'}${rest}${last}`;
+  if (mode === 'local') return `${local}${inf.reachable ? '' : ' — <b>unreachable</b>; not thinking'}${last}`;
+  return `${local}${inf.reachable ? `; ${cloud} for hard steps` : ` unreachable → ${cloud}`}${rest}${last}`;
+}
 async function shell() {
   try {
-    const [h, hunger, risk, sb] = await Promise.all([j('/oca/health'), j('/oca/hunger'), j('/oca/risk?limit=1'), j('/oca/self-build')]);
+    const [h, hunger, risk, sb, ctl] = await Promise.all([j('/oca/health'), j('/oca/hunger'), j('/oca/risk?limit=1'), j('/oca/self-build'), j('/oca/ui/controls')]);
     const inf = h.inference || {};
+    const mode = ctl.inference || ctl.model?.inference?.mode || 'auto';
+    if (!document.activeElement?.closest?.('#inference-seg')) $$('#inference-seg button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+    $('#brain-now').innerHTML = brainLine(ctl, inf);
     $('#health').innerHTML = `
       <div class="row"><span class="dot ${h.ok ? 'ok' : 'bad'}"></span>Daemon ${h.ok ? 'up' : 'degraded'} · ${(h.uptimeSeconds / 60 | 0)} min</div>
       <div class="row"><span class="dot ${h.database?.ok ? 'ok' : 'bad'}"></span>Database</div>
@@ -257,6 +269,15 @@ views.thinker = async () => {
 };
 
 /* ── actions ── */
+$$('#inference-seg button').forEach(b => b.onclick = async () => {
+  const mode = b.dataset.mode; const all = $$('#inference-seg button');
+  all.forEach(x => { x.disabled = true; });
+  try { await post('/oca/ui/controls', { inference: mode }, 'PATCH'); all.forEach(x => x.setAttribute('aria-checked', String(x === b)));
+    toast(mode === 'cloud' ? 'Thinking with Codex for every step' : mode === 'local' ? 'Thinking locally only' : 'Local first, Codex when it helps'); await shell(); }
+  catch (e) { toast(e.message, true); }
+  finally { all.forEach(x => { x.disabled = false; }); }
+});
+
 function wire() {
   document.querySelectorAll('[data-go]').forEach(el => el.onclick = () => { location.hash = el.dataset.go; });
   document.querySelectorAll('[data-rate]').forEach(b => b.onclick = async () => { b.disabled = true; try { const r = await post('/oca/worth/rate', { entityKey: b.dataset.key, rating: Number(b.dataset.rate), by: 'quinn', about: 'engine app' }); toast(`${b.dataset.key} → ${f2(r.state.worth)}`); render(); } catch (e) { toast(e.message, true); b.disabled = false; } });

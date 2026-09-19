@@ -58,7 +58,7 @@ export function parseTestOutput(out) {
 export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = null, controls, runner = null, llm = null, clock = Date.now,
   repoDir = REPO_DEFAULT, workRoot = process.env.OCA_SELF_BUILD_ROOT || join(REPO_DEFAULT, '..', 'runtime', 'workspace', 'self-build'),
   provider = 'local', model = 'qwen-agent', remote = 'origin', mainBranch = 'main', maxBuildsPerDay = 3, maxConsecutiveFailures = 3, enterPressure = 0.25,
-  quietPeriodMs = 24 * 3600_000, exitCooldownMs = 30 * 60_000, log = console } = {}) {
+  quietPeriodMs = 24 * 3600_000, exitCooldownMs = 30 * 60_000, inferenceMode = () => 'auto', log = console } = {}) {
   let phase = { active: false, since: null, reason: null, wantId: null, builds: 0, failures: 0, lastExitAt: 0 };
   let lastTickAt = 0, lastFetchAt = 0;
   // The queue's strategies need this module, so it may be handed over lazily.
@@ -295,7 +295,7 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
       if (before.fail) return fail(`baseline tests already failing on main (${before.fail}: ${before.failing.slice(0, 4).join('; ')}); a person should look first`, 'baseline_red');
       const brief = await writeBrief(dir, ctx, evidence);
       let coded;
-      const codexOk = !!runner && !(await codexBackedOff());
+      const codexOk = !!runner && inferenceMode() !== 'local' && !(await codexBackedOff());
       try { coded = codexOk ? await codeWithCodex(dir, ctx, AbortSignal.timeout(ctx.budget.timeBudgetSeconds * 1000 * 4)) : await codeWithLocal(dir, ctx, brief); }
       catch (e) {
         if (codexOk && ENVIRONMENT.test(String(e.message))) { noteCodexDown(e.message); coded = await codeWithLocal(dir, ctx, brief); }

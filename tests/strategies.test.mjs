@@ -190,7 +190,7 @@ test('with the switch on, the artifact strategy writes into the work directory a
   await rm(workDir, { recursive: true, force: true });
 }));
 
-test('a committed prediction settled by the world becomes evidence on its want exactly once; unverifiable settlements add nothing', async () => database(async pool => {
+test('a committed prediction settled by the world becomes evidence on its want exactly once; an unjudgeable one adds nothing but re-opens the want', async () => database(async pool => {
   const queue = createPonderQueue({ pool, reason: stalled, strategies: { llm: fakeLlm([]), hypothesis: { form: async () => ({ id: 99 }) } } });
   const chain = await queue.enqueue({ seed: 'Predict', evidence });
   await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '1') WHERE id = $1`, [chain.chain_id]);
@@ -207,7 +207,13 @@ test('a committed prediction settled by the world becomes evidence on its want e
   const c2 = await q2.enqueue({ seed: 'Predict again', evidence });
   await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '1') WHERE id = $1`, [c2.chain_id]);
   await q2.runNext(c2.chain_id);
+  const parked = await q2.get(c2.chain_id);
+  assert.equal(parked.status, 'awaiting_evidence'); const strategyBefore = parked.want.strategy;
   const expired = await q2.settlePrediction({ id: 100, status: 'expired', confirmed: null, evaluation: { verifiable: false, reason: 'metric_not_observed:want_progress' } });
-  assert.deepEqual([expired.added, expired.status], [false, 'expired']);
-  assert.ok(!(await q2.get(c2.chain_id)).evidence.some(e => e.id === 'prediction-100'));
+  assert.deepEqual([expired.added, expired.status, expired.reopened], [false, 'expired', true]);
+  const after2 = await q2.get(c2.chain_id);
+  assert.ok(!after2.evidence.some(e => e.id === 'prediction-100'), 'nothing about the world was learned');
+  assert.equal(after2.status, 'pondering', 'but the want is no longer parked on a prediction nobody could judge');
+  assert.equal(after2.want.strategy, strategyBefore + 1, 'the next strategy, not the same prediction again');
+  assert.match(after2.priorRuns.at(-1).result.error, /prediction #100 expired unevaluated: metric_not_observed/);
 }));
