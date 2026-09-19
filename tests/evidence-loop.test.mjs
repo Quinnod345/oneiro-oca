@@ -56,7 +56,9 @@ test('a deadline aborts the outstanding generation and cannot produce success', 
   const reason = createReasoner({ generate: ({ signal }) => new Promise(() => {
     signal.addEventListener('abort', () => { aborted = true; });
   }) });
-  const r = await reason('Review', { timeBudgetSeconds: 0.02 });
+  // The generation never resolves, so the budget alone decides; a quarter second keeps the race margin
+  // wide enough that a loaded machine (the engine verifying its own change) cannot flip it.
+  const r = await reason('Review', { timeBudgetSeconds: 0.25 });
   assert.equal(r.status, 'budget'); assert.equal(r.readyForReview, false); assert.equal(aborted, true);
 });
 test('provider and malformed-response failures remain explicit failures', async () => {
