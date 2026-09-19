@@ -320,7 +320,7 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
   }
 
   // ── confirm: a person's edits become a want; only the person's taps become worth ──
-  async function confirm({ draftId, description, doneWhen, priority, stakes = [], newEntities = [], evidenceIds = [], observations = [], draftVerdict = null, by = 'quinn' } = {}) {
+  async function confirm({ draftId, description, doneWhen, priority, stakes = [], newEntities = [], evidenceIds = [], observations = [], draftVerdict = null, by = 'quinn', continuous = true } = {}) {
     if (!UUID.test(String(draftId || ''))) throw new Error('confirm names its draft');
     const id = String(draftId).toLowerCase();
     const client = await pool.connect();
@@ -367,7 +367,7 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
       const sig = await worth.record({ id: `stake:${id}:${entityKey}`, entityKey, kind: 'rated', rating, by: text(by, 40) || 'quinn', about: text(n.about, 300) || `named as a stake of "${desc}"` });
       worthSignals.push({ id: sig.signal?.id || `stake:${id}:${entityKey}`, entityKey, rating });
     }
-    const chain = await queue.enqueue({ seed: desc, doneWhen: dw, priority: pr, topic: '', learning: false, evidence, stakes: chosen.length ? chosen : null, clientRequestId: id },
+    const chain = await queue.enqueue({ seed: desc, doneWhen: dw, priority: pr, topic: '', learning: false, evidence, stakes: chosen.length ? chosen : null, clientRequestId: id, continuous: continuous !== false },
       { origin: { kind: 'explicit', by: text(by, 40) || 'quinn', source: 'draft', draftId: id } });
     if (draftVerdict !== null && draftVerdict !== undefined) {
       try { const u = usefulnessOf(draftVerdict); await worth.record({ id: `rate:draft:${id}`, entityKey: 'self:draft_want', kind: 'rated', rating: ledgerRating(u), by: text(by, 40) || 'quinn', about: desc }); worthSignals.push({ id: `rate:draft:${id}`, entityKey: 'self:draft_want', rating: ledgerRating(u) }); }

@@ -140,6 +140,8 @@ views.wants = async (id) => {
         <div class="eyebrow">Want #${chain.chain_id} · ${esc(words(chain.status))}${chain.origin?.kind === 'self' ? ' · about itself' : chain.origin?.kind === 'interest' ? ' · self-originated inquiry' : ''}</div>
         <h2 style="margin:var(--s-2) 0 var(--s-3);font-size:20px">${esc(w.description)}</h2>
         <p class="secondary"><b>Done when:</b> ${esc(w.doneWhen)}</p>
+        <div class="toggle-row"><label class="toggle ${chain.continuous ? 'on' : ''}" id="cont-toggle" data-chain="${chain.chain_id}"><span class="sw"></span><span>Always working</span></label>
+          <span class="tiny muted">${chain.continuous ? (chain.researchActive ? 'an agent is on it now' : chain.continuity?.lastSliceEndedAt ? `last slice ${ago(chain.continuity.lastSliceEndedAt)}${chain.continuity.found === false ? ' · found nothing new' : ''}` : 'the engine keeps a research agent on this while it waits') : 'waits for you when it needs evidence'}</span></div>
         <div class="cols-4" style="margin-top:var(--s-6)">
           <div><div class="eyebrow">Pressure</div><div class="num" style="font-size:24px;font-weight:700;color:var(--teal-600)">${f2(h.pressure)}</div></div>
           <div><div class="eyebrow">Value</div><div class="num" style="font-size:24px;font-weight:700">${f2(w.value)}</div><div class="tiny muted">${esc(w.pricing?.provenance || h.valueProvenance)}${h.unpriced ? ' · unpriced' : ''}</div></div>
@@ -313,6 +315,8 @@ function wire() {
   const ws = $('#w-send');
   if (ws) ws.onclick = async () => { const seed = $('#w-seed').value.trim(); if (!seed) return toast('Say what should be true.', true); ws.disabled = true;
     try { const r = await post('/ponder', { seed, doneWhen: $('#w-done').value.trim() || undefined, topic: $('#w-topic').value.trim(), evidence: [] }); toast(`Want #${r.chain_id} created`); location.hash = `#/wants/${r.chain_id}`; } catch (e) { toast(e.message, true); ws.disabled = false; } };
+  const ct = $('#cont-toggle');
+  if (ct) ct.onclick = async () => { const on = ct.classList.contains('on'); try { await post(`/oca/inbox/want/${ct.dataset.chain}/continuous`, { on: !on }); toast(!on ? 'An agent will keep working on this' : 'It will wait for you'); render(); } catch (e) { toast(e.message, true); } };
   const sp = $('#sb-perm');
   if (sp) sp.onclick = async () => { const on = sp.classList.contains('on'); try { await post('/oca/ui/controls', { selfBuild: !on }, 'PATCH'); toast(`Self-build ${on ? 'no longer' : 'now'} permitted`); render(); } catch (e) { toast(e.message, true); } };
   const ss = $('#sb-send');

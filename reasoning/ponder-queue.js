@@ -44,7 +44,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     catch (e) { console.warn('[ponder] worth signal not recorded:', e.message); return { rejected: e.message }; }
   }
   async function enqueue({ seed, context = '', evidence = [], priority = 0.7, doneWhen, topic = '', learning = true,
-    maxPasses = 3, timeBudgetSeconds = defaultTimeBudgetSeconds, clientRequestId = null, stakes = null } = {}, { client = pool, origin = { kind: 'explicit' } } = {}) {
+    maxPasses = 3, timeBudgetSeconds = defaultTimeBudgetSeconds, clientRequestId = null, stakes = null, continuous = false } = {}, { client = pool, origin = { kind: 'explicit' } } = {}) {
     if (typeof seed !== 'string' || !seed.trim() || seed.length > 12000) throw new Error('seed must be a non-empty string of at most 12000 characters');
     if (typeof context !== 'string' || context.length > 20000) throw new Error('context must be a string of at most 20000 characters');
     if (typeof topic !== 'string' || topic.length > 160) throw new Error('topic must be a string of at most 160 characters');
@@ -66,7 +66,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       want = (await reprice([{ ponder_state: { want } }]))[0].ponder_state.want;
     }
     const state = { version: 1, context, topic: topic.trim(), learning, origin, evidence: normalizeEvidence(evidence), maxPasses, timeBudgetSeconds,
-      checkpoint: null, result: null, attempts: 0, want, createdAt: clock(), priorRuns: [] };
+      checkpoint: null, result: null, attempts: 0, want, createdAt: clock(), priorRuns: [], continuous: continuous === true };
     if (clientRequestId !== null) {
       if (typeof clientRequestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(clientRequestId)) throw new Error('Invalid client request ID');
       state.clientRequestId = clientRequestId;
@@ -83,6 +83,14 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       return snapshot(existing[0]);
     }
     return snapshot(rows[0]);
+  }
+  // A continuous want is never left idle: while it waits on evidence, the engine keeps a research
+  // slice working on it (see pursuit-work.keepWorking). A person turns it on or off.
+  async function setContinuous(id, on) {
+    const { rowCount } = await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuous}', $2::jsonb), updated_at = NOW()
+      WHERE id = $1 AND ponder_state IS NOT NULL`, [id, JSON.stringify(on === true)]);
+    if (!rowCount) throw new Error('ponder chain not found');
+    return get(id);
   }
   async function findRequest(clientRequestId) {
     const { rows } = await pool.query("SELECT * FROM thought_chains WHERE ponder_state->>'clientRequestId'=$1", [clientRequestId]);
@@ -396,5 +404,5 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
     return { wants, pressure: wants[0]?.hunger.pressure || 0, selected: wants[0]?.chain_id || null,
       pricing: worth ? 'live_from_worth_ledger' : 'explicit_priority' };
   }
-  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger, adoptLegacyWants, settlePrediction };
+  return { enqueue, get, findRequest, runNext, addEvidence, retry, outcome, cancel, hunger, adoptLegacyWants, settlePrediction, setContinuous };
 }

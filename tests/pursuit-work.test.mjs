@@ -123,3 +123,43 @@ test('long-term pursuits retain more than 64 observations and more than eight re
   assert.equal(review.evidence.length,70);assert.equal(review.want.progress,0);
   await assert.rejects(()=>queue.addEvidence(chain.chain_id,[{id:'history-0',source:'Synthetic saved observation',observation:'Changed'}]),/cannot be rewritten/);
 }));
+
+test('a continuous want is never left idle: the engine fires its own slices on a cadence that backs off while they come back dry, one at a time, and stops when the person turns it off',async()=>fixture(async({pool,queue,chain,root,make})=>{
+  let now=Date.now();const calls=[];
+  const service=createPursuitWork({pool,queue,runner:async(prompt,options)=>{calls.push(prompt);
+      // the first slice finds nothing usable; the second quotes a real file
+      if(calls.length===1) return {threadId:null,text:JSON.stringify({summary:'Nothing in the sources about revenue.',nextStep:'Ask for the Stripe export.',remainingQuestions:['Last month revenue?'],sources:[]})};
+      const source=join(root,'notes.md');await writeFile(source,'Revenue last month was $0; zero subscribers.');
+      return {threadId:null,text:JSON.stringify({summary:'Found the note.',nextStep:'Price a launch offer.',remainingQuestions:[],sources:[{path:source,quote:'Revenue last month was $0; zero subscribers.'}]})};
+    },root:join(root,'work'),sourceRoots:[root],clock:()=>now});
+  await service.init();
+  // not continuous: nothing happens while it waits
+  await pool.query(`UPDATE thought_chains SET status='awaiting_evidence', ponder_state=jsonb_set(ponder_state,'{result}','{"status":"needs_evidence","missingEvidence":["Last month revenue and costs"]}') WHERE id=$1`,[chain.chain_id]);
+  assert.deepEqual((await service.keepWorking()).started,[]);
+  await queue.setContinuous(chain.chain_id,true);
+  assert.equal((await queue.get(chain.chain_id)).continuous,true);
+  // continuous and due: one engine-fired slice, appraised as a sandboxed research slice that proceeds with the switch off
+  assert.deepEqual((await service.keepWorking()).started,[chain.chain_id]);
+  assert.deepEqual((await service.keepWorking()).started,[],'one slice per want at a time');
+  const queued=(await pool.query("SELECT * FROM pursuit_work WHERE chain_id=$1",[chain.chain_id])).rows;
+  assert.equal(queued.length,1);assert.match(queued[0].instruction,/always working on it/);assert.match(queued[0].instruction,/Last month revenue and costs/);
+  await service.runNext();
+  let saved=await queue.get(chain.chain_id);
+  assert.equal(saved.continuity.dry,1,'a dry slice counts');assert.deepEqual(saved.continuity.remaining,['Last month revenue?']);
+  assert.equal(saved.status,'awaiting_evidence','nothing found: still waiting');
+  // not due yet: the cadence doubled after a dry run
+  assert.deepEqual((await service.keepWorking()).started,[]);
+  now+=21*60_000; assert.deepEqual((await service.keepWorking()).started,[],'20 min is not enough after one dry slice');
+  now+=21*60_000; assert.deepEqual((await service.keepWorking()).started,[chain.chain_id],'40 min is');
+  const second=(await pool.query("SELECT instruction FROM pursuit_work WHERE chain_id=$1 ORDER BY created_at DESC LIMIT 1",[chain.chain_id])).rows[0];
+  assert.match(second.instruction,/OPEN QUESTIONS FROM YOUR LAST SLICE:\n- Last month revenue\?/);
+  await service.runNext();
+  saved=await queue.get(chain.chain_id);
+  assert.equal(saved.continuity.dry,0,'evidence found resets the backoff');assert.equal(saved.status,'pondering','new evidence reopens the want');
+  assert.ok(saved.evidence.some(e=>/zero subscribers/.test(e.observation)));
+  // off again: the engine leaves it alone
+  await pool.query(`UPDATE thought_chains SET status='awaiting_evidence' WHERE id=$1`,[chain.chain_id]);
+  await queue.setContinuous(chain.chain_id,false); now+=60*60_000;
+  assert.deepEqual((await service.keepWorking()).started,[]);
+  assert.equal(calls.length,2);
+}));
