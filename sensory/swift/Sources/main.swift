@@ -38,7 +38,6 @@ struct Config {
     static let screenshotsDir = "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots"
     static let socketPath = "/tmp/oneiro-sensory.sock"
     static let sharedStatePath = "/tmp/oneiro-state/perception.json"
-    static let sharedStateTmpPrefix = "/tmp/oneiro-state/perception.json.tmp"
 
     /// Skip SCStream / SCScreenshotManager so macOS does not keep "Screen Recording" active (DRM video e.g. Netflix).
     /// Set `ONEIRO_DISABLE_SCREEN_CAPTURE=0` in the environment to re-enable continuous capture.
@@ -1095,6 +1094,7 @@ class SensoryIntegrator {
     let presence: PresenceMonitor
 
     private var previousState: [String: Any]?
+    private var reportedStateWriteFailure = false
     private var surprises: [[String: Any]] = []
 
     init(visual: VisualCortex, auditory: AuditoryCortex, tactile: TactileCortex,
@@ -1204,15 +1204,14 @@ class SensoryIntegrator {
     private func writeSharedState(_ state: [String: Any]) {
         let dir = "/tmp/oneiro-state"
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let target = Config.sharedStatePath
-        let tmp = "\(Config.sharedStateTmpPrefix).\(ProcessInfo.processInfo.processIdentifier)"
-        guard let data = try? JSONSerialization.data(withJSONObject: state, options: []),
-              let str = String(data: data, encoding: .utf8) else { return }
         do {
-            try str.write(toFile: tmp, atomically: false, encoding: .utf8)
-            try FileManager.default.moveItem(atPath: tmp, toPath: target)
+            try writeSharedStateSnapshot(state, to: URL(fileURLWithPath: Config.sharedStatePath))
+            reportedStateWriteFailure = false
         } catch {
-            try? FileManager.default.removeItem(atPath: tmp)
+            if !reportedStateWriteFailure {
+                emitEvent("error", ["message": "Shared perception write failed: \(error.localizedDescription)"])
+                reportedStateWriteFailure = true
+            }
         }
     }
 }

@@ -47,12 +47,26 @@ export function buildCodexEnvironment(env = process.env) {
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 
+// The engine's one browser, offered to every Codex run as a read-only MCP tool server. Codex spawns MCP
+// servers outside its command sandbox, so this is how a sandboxed slice reaches Aside. Read tools only —
+// open, read, snapshot, search, tabs — auto-approved because none of them can act on the world.
+export const ASIDE_MCP_SERVER = new URL('./aside-mcp.js', import.meta.url).pathname;
+export const ASIDE_MCP_TOOLS = ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs'];
+export function asideMcpArgs({ server = ASIDE_MCP_SERVER, node = process.execPath } = {}) {
+  return [
+    '-c', `mcp_servers.aside.command=${JSON.stringify(node)}`,
+    '-c', `mcp_servers.aside.args=${JSON.stringify([server])}`,
+    '-c', 'mcp_servers.aside.startup_timeout_sec=30',
+    ...ASIDE_MCP_TOOLS.flatMap(t => ['-c', `mcp_servers.aside.tools.${t}.approval_mode="approve"`]),
+  ];
+}
+
 export function buildCodexArgs({
   workingDirectory = DEFAULT_WORKING_DIRECTORY,
   model = '',
   sandbox = 'read-only',
   persistent = false, threadId = null, outputSchemaPath = null,
-  reasoningEffort = '',
+  reasoningEffort = '', aside = true,
 } = {}) {
   const args = [
     'exec',
@@ -75,6 +89,7 @@ export function buildCodexArgs({
   // --ignore-user-config drops ~/.codex/config.toml, so the effort the engine wants is stated explicitly.
   const effort = String(reasoningEffort || '').trim().toLowerCase();
   if (REASONING_EFFORTS.includes(effort)) args.push('--config', `model_reasoning_effort="${effort}"`);
+  if (aside) args.push(...asideMcpArgs());
   if (outputSchemaPath) args.push('--output-schema', outputSchemaPath);
   if (threadId) {
     if (!/^[a-f0-9-]{36}$/i.test(threadId)) throw new Error('Invalid Codex session ID');
@@ -118,6 +133,7 @@ export function runCodex(prompt, {
   onText = null, onEvent = null,
   persistent = false, threadId = null, outputSchema = null,
   reasoningEffort = process.env.OCA_CODEX_REASONING_EFFORT || process.env.ONEIRO_CODEX_REASONING_EFFORT || '',
+  aside = !/^(0|false|no|off)$/i.test(String(process.env.OCA_CODEX_ASIDE || '')),
   env = process.env,
 } = {}) {
   const codexCLI = resolveCodexCLI(env);
@@ -125,7 +141,7 @@ export function runCodex(prompt, {
   const outputSchemaPath = schemaDir ? join(schemaDir, 'response.json') : null;
   if (outputSchemaPath) writeFileSync(outputSchemaPath, JSON.stringify(outputSchema), { mode: 0o600 });
   let args;
-  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath, reasoningEffort }); }
+  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath, reasoningEffort, aside }); }
   catch (error) { if (schemaDir) rmSync(schemaDir, { recursive: true, force: true }); throw error; }
   const childEnv = buildCodexEnvironment(env);
   const timeout = clampTimeout(timeoutMs);

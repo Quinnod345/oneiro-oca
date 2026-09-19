@@ -9,6 +9,12 @@ const command = (file, args) => new Promise(resolve => {
 });
 const script = text => command('/usr/bin/osascript', ['-e', text]);
 
+async function readActivity() {
+  const output = await command('/usr/sbin/ioreg', ['-c', 'IOHIDSystem']);
+  const match = output?.match(/HIDIdleTime\"?\s*=\s*(\d+)/);
+  return { idleSeconds: match ? Number(match[1]) / 1e9 : null };
+}
+
 async function readSystem() {
   const visual = (async () => {
     const [app, apps] = await Promise.all([
@@ -30,10 +36,7 @@ async function readSystem() {
     const [clipboard, uptime] = await Promise.all([command('/usr/bin/pbpaste', []), command('/usr/bin/uptime', [])]);
     return { clipboard: clipboard?.slice(0, 200) ?? null, network: { wifi: 'unknown' }, uptime: uptime ?? 'unknown' };
   })();
-  const activity = command('/usr/sbin/ioreg', ['-c', 'IOHIDSystem']).then(output => {
-    const match = output?.match(/HIDIdleTime\"?\s*=\s*(\d+)/);
-    return { idleSeconds: match ? Number(match[1]) / 1e9 : null };
-  });
+  const activity = readActivity();
   const [visualState, auditory, proprioceptive, userActivity] = await Promise.all([visual, audio, proprio, activity]);
   return { visual: visualState, auditory, proprioceptive, activity: userActivity };
 }
@@ -59,7 +62,10 @@ export function createFallbackReader({ read = readSystem, now = Date.now, refres
 }
 
 const fallback = createFallbackReader();
-export function getUserActivity(sensoryFrontApp = null, reader = fallback) {
+// Every cognitive tick needs idle time. It must not trigger the full visual,
+// audio, and clipboard fallback scan when the Swift observer is healthy.
+const activityReader = createFallbackReader({ read: async () => ({ activity: await readActivity() }) });
+export function getUserActivity(sensoryFrontApp = null, reader = activityReader) {
   const value = reader.get('activity')?.idleSeconds;
   const idleSeconds = Number.isFinite(value) && value >= 0 ? value : null;
   const frontApp = sensoryFrontApp && sensoryFrontApp !== 'unknown'

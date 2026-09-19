@@ -18,6 +18,7 @@ let package = Package(
                 .linkedFramework("IOKit"),
                 .linkedFramework("Speech"),
             ]
-        )
+        ),
+        .testTarget(name: "SensoryStateTests", dependencies: ["oneiro-sensory"], path: "Tests")
     ]
 )

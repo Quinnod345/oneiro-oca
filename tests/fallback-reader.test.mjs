@@ -1,7 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { createFallbackReader, getUserActivity } from '../sensory/fallback-reader.js';
+
+test('the real default activity reader checks idle time without launching AppleScript or reading the clipboard', async (t) => {
+  const commands = [];
+  const mocked = t.mock.method(childProcess, 'execFile', (file, args, options, done) => {
+    commands.push(file);
+    queueMicrotask(() => done(null, file === '/usr/sbin/ioreg' ? '"HIDIdleTime" = 12000000000' : ''));
+    return {};
+  });
+  syncBuiltinESMExports();
+  try {
+    getUserActivity('Finder');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(getUserActivity('Finder'), { idleSeconds: 12, frontApp: 'Finder', presence: 'present' });
+    assert.deepEqual(commands, ['/usr/sbin/ioreg']);
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
 
 test('stalled perception stays unknown while actual HTTP requests remain responsive; one refresh serves concurrent reads', async () => {
   let complete, calls = 0;
