@@ -68,7 +68,7 @@ export function setInferencePolicy({ mode, cloudModel, cloudEffort } = {}) {
   return getInferencePolicy();
 }
 export function getInferencePolicy() {
-  return { ...inferencePolicy, codexAvailable: codexAvailable(), codexBackedOffUntil: codexDownUntil > Date.now() ? new Date(codexDownUntil).toISOString() : null,
+  return { ...inferencePolicy, codexAvailable: codexAvailable(), codexSlots: CODEX_SLOTS, codexBusy: codexSlots, codexBackedOffUntil: codexDownUntil > Date.now() ? new Date(codexDownUntil).toISOString() : null,
     stats: { ...inferenceStats, calls: { ...inferenceStats.calls }, crossovers: inferenceStats.crossovers.slice(-10) } };
 }
 // The provider a step asked for, under the policy: local mode never reaches Codex; cloud mode sends local
@@ -85,10 +85,12 @@ function noteCrossover(from, to, why) {
   if (inferenceStats.crossovers.length > 50) inferenceStats.crossovers.splice(0, inferenceStats.crossovers.length - 50);
   console.warn(`[llm] ${from} → ${to}: ${String(why || '').slice(0, 140)}`);
 }
-// Codex runs as a subprocess per call; two at once is plenty, and it keeps a burst of steps from spawning a dozen.
+// Codex runs as a subprocess per call. A few at once is plenty and keeps a burst of steps from spawning a
+// dozen; a person-fired call (a draft they are waiting on) takes the next free slot ahead of queued strategies.
+const CODEX_SLOTS = Math.max(1, Math.min(8, Number(process.env.OCA_CODEX_SLOTS) || 4));
 let codexSlots = 0; const codexWaiters = [];
-async function withCodexSlot(fn) {
-  if (codexSlots >= 2) await new Promise(resolve => codexWaiters.push(resolve));
+async function withCodexSlot(fn, { interactive = false } = {}) {
+  if (codexSlots >= CODEX_SLOTS) await new Promise(resolve => { if (interactive) codexWaiters.unshift(resolve); else codexWaiters.push(resolve); });
   codexSlots++;
   try { return await fn(); } finally { codexSlots--; codexWaiters.shift()?.(); }
 }
@@ -167,7 +169,7 @@ const messages = {
 
     const effectiveBackend = resolveProvider(providerOverride || LLM_BACKEND);
     const local = async () => { const r = await localInferenceQueue.run(() => callLocal(params, options), options); noteUsed('local'); return r; };
-    const cloud = async () => { const r = await withCodexSlot(() => callCodex(params, options)); noteUsed('codex'); return r; };
+    const cloud = async () => { const r = await withCodexSlot(() => callCodex(params, options), { interactive: options.interactive === true }); noteUsed('codex'); return r; };
 
     if (effectiveBackend === 'local') {
       try { return await local(); }

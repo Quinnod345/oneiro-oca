@@ -1,5 +1,10 @@
 import { createPursuitWork } from './reasoning/pursuit-work.js';
-import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal, selfBuild } from './reasoning/ponder-service.js';
+import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal, selfBuild, draftProvider, strategyDeps } from './reasoning/ponder-service.js';
+import { createPursuitDrafts } from './reasoning/pursuit-draft.js';
+import { looksObservable } from './motivation/done-when.js';
+import episodic from './memory/episodic.js';
+import { contextForText as entityContextForText } from './memory/entity-graph.js';
+import { getEmbeddings } from './local-embed.js';
 import { createPonderRouter } from './reasoning/ponder-router.js';
 import { createUserWorkspace } from './user-workspace.js';
 import { createUserOperations } from './user-operations.js';
@@ -1495,7 +1500,40 @@ ocaRouter.post('/oca/self-build/want', async (req, res) => {
 // ── TRACE ── the story of a want from the journals: attempts, appraisals, commitments, settlements, affect.
 const trace = createTrace({ pool });
 // ── INBOX ── what the engine has for a person, and what a person gives back. The phone lives here.
-const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work' });
+// The drafter turns a loose request into a want the person confirms; its memory reads are the engine's
+// grounded surfaces only (episodic recall filtered to observed events, taught facts, screen captures' OS
+// metadata, perception now, the entity graph) — never hippoRecall, which spends a model call of its own.
+const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: ponderQueue, strategyDeps, provider: draftProvider, risk: riskJournal,
+  embed: texts => getEmbeddings(texts), sense: () => oca.sense(),
+  controls: async () => ({ autonomousActions: /^(1|true|yes|on)$/i.test(process.env.OCA_ENABLE_AUTONOMOUS_ACTIONS || process.env.ONEIRO_ENABLE_AUTONOMOUS_ACTIONS || '') }),
+  memory: {
+    episodic: (q, o) => episodic.recall(q, { limit: o?.limit || 12, since: new Date(Date.now() - 90 * 86400000) }),
+    taught: async (q, o) => (await pool.query(`SELECT id, concept, created_at FROM semantic_memory WHERE source_type = 'user_report' AND concept ILIKE $1 ORDER BY created_at DESC LIMIT $2`, [`%${String(q).slice(0, 80)}%`, o?.limit || 6])).rows,
+    visual: (q, n) => visualMemory.searchVisualMemory(q, n),
+    entities: q => entityContextForText(q, { limit: 8 }),
+  } });
+const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts });
+pursuitDrafts.sweep().then(r => { if (r.failed) console.log(`[draft] ${r.failed} draft(s) left mid-flight by a restart marked failed`); }).catch(() => {});
+// Body: { clientRequestId (uuid), text, answers?: [{questionId, answer}], by? } → 202 while drafting; poll GET /oca/inbox/draft/:id?wait=25
+ocaRouter.post('/oca/inbox/draft', async (req, res) => {
+  try { const r = await pursuitDrafts.start(req.body || {}); res.status(r.accepted ? 202 : 200).json(r); }
+  catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+ocaRouter.get('/oca/inbox/drafts', async (req, res) => {
+  try { res.json({ drafts: await pursuitDrafts.list({ status: req.query.status || null }) }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// A person's own sentence, judged by its shape — no model, instant.
+ocaRouter.post('/oca/inbox/draft/check-done-when', (req, res) => {
+  try { res.json(looksObservable(String(req.body?.statement || ''))); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+ocaRouter.get('/oca/inbox/draft/:id', async (req, res) => {
+  try { const d = await pursuitDrafts.get(req.params.id, { wait: Number(req.query.wait) || 0 }); res.status(d ? 200 : 404).json(d || { error: 'draft not found' }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+ocaRouter.post('/oca/inbox/draft/:id/abandon', async (req, res) => {
+  try { const d = await pursuitDrafts.abandon(req.params.id); res.status(d ? 200 : 404).json(d || { error: 'draft not found' }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
 ocaRouter.get('/oca/inbox', async (_req, res) => {
   try { res.json(await inbox.list()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1507,10 +1545,15 @@ ocaRouter.post('/oca/inbox/rate', async (req, res) => {
 ocaRouter.post('/oca/inbox/progress', async (req, res) => {
   try { res.json(await inbox.progress(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
 });
-// Body: { description, doneWhen?, priority?, topic? }
+// Body: { description, doneWhen?, priority?, topic? } by hand — or a confirmed draft:
+// { draftId, description, doneWhen, priority, stakes, newEntities, evidenceIds, observations, draftVerdict? }
 ocaRouter.post('/oca/inbox/want', async (req, res) => {
-  try { const chain = await inbox.want(req.body || {}); runPendingPonder(chain.chain_id).catch(() => {}); res.status(202).json(chain); }
-  catch (e) { res.status(400).json({ error: e.message }); }
+  try {
+    const r = await inbox.want(req.body || {});
+    const chain = r.chain || r;
+    if (!r.replay) runPendingPonder(chain.chain_id).catch(() => {});
+    res.status(202).json(r.chain ? { ...chain, draftId: r.draftId, worthSignals: r.worthSignals, replay: r.replay } : chain);
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 
 ocaRouter.get('/oca/trace/:chainId', async (req, res) => {
