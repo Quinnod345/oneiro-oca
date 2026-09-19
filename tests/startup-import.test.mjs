@@ -23,11 +23,13 @@ test('cognitive-loop.js and its graph load without a missing module or syntax er
 });
 
 test('the retired dream and design-build machinery is gone from the runtime graph', async () => {
-  for (const file of ['cognitive-loop.js', 'thinker-bridge.js', 'api-routes.js', 'autonomic/self-modifier.js', 'index.js']) {
+  for (const file of ['cognitive-loop.js', 'thinker-bridge.js', 'api-routes.js', 'index.js', 'executive/engine.js']) {
     const src = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
     assert.ok(!/dream-executor|dream-policy|INSERT INTO dreams|UPDATE dreams/.test(src), `${file} neither imports the executor nor writes dreams`);
     assert.ok(!/design-model\/|design\/emotion-bridge|self_train|deriveTargetProject|thought\.build\b/.test(src), `${file} carries no design-build machinery`);
+    assert.ok(!/autonomic\/self-modifier|runAutonomicCycle|UPDATE goals SET progress|processSuccess\((goal|'executive'|'self_train)/.test(src), `${file} neither self-modifies nor credits goals by count`);
   }
+  await assert.rejects(import('../autonomic/self-modifier.js'), 'the self-modifier module is gone');
   const thinker = await readFile(new URL('../thinker-bridge.js', import.meta.url), 'utf8');
   assert.ok(!/"dream": \{|"append_dream"/.test(thinker), 'the thinker prompt no longer offers dream fields');
   assert.ok(/ACTIVE WANTS/.test(thinker), 'the thinker prompt carries active wants');

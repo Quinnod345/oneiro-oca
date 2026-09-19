@@ -924,49 +924,12 @@ ocaRouter.post('/oca/goals', async (req, res) => {
   }
 });
 
-// Working memory
-// ============================================================
-// AUTONOMIC SELF-MODIFICATION
-// ============================================================
-ocaRouter.get('/oca/autonomic/metrics', async (req, res) => {
-  try {
-    const autonomic = await import('./autonomic/self-modifier.js');
-    const metrics = await autonomic.collectPerformanceMetrics();
-    res.json(metrics);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-ocaRouter.get('/oca/autonomic/trends', async (req, res) => {
-  try {
-    const autonomic = await import('./autonomic/self-modifier.js');
-    const result = await autonomic.analyzeTrends();
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-ocaRouter.get('/oca/autonomic/history', async (req, res) => {
-  try {
-    const autonomic = await import('./autonomic/self-modifier.js');
-    const history = await autonomic.getModificationHistory(parseInt(req.query.limit) || 10);
-    res.json(history);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-ocaRouter.post('/oca/autonomic/run', async (req, res) => {
-  try {
-    const autonomic = await import('./autonomic/self-modifier.js');
-    const result = await autonomic.runAutonomicCycle();
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+// Autonomic self-modification was retired 2026-09-19: self-edits go through the thinker's risk gate
+// (`edit_own_code`) and a person, never a syntax check alone.
+for (const path of ['/oca/autonomic/metrics', '/oca/autonomic/trends', '/oca/autonomic/history']) {
+  ocaRouter.get(path, (_req, res) => res.status(410).json({ error: 'Autonomic self-modification was retired.', see: '/oca/risk' }));
+}
+ocaRouter.post('/oca/autonomic/run', (_req, res) => res.status(410).json({ error: 'Autonomic self-modification was retired.', see: '/oca/risk' }));
 
 ocaRouter.get('/oca/workspace', async (req, res) => {
   try {
