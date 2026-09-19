@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createSelfBuild, classifyFriction, isConstitutional, parseTestOutput, CONSTITUTION } from '../reasoning/self-build.js';
+import { createSelfBuild, classifyFriction, isConstitutional, parseTestOutput, defectFingerprint, CONSTITUTION } from '../reasoning/self-build.js';
 import { strategyFor, eligibleStrategies, strategyNames, STRATEGIES } from '../reasoning/strategies.js';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
@@ -66,7 +66,7 @@ async function database(run) {
       created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), ponder_state JSONB)`);
     await pool.query(`CREATE TABLE oca_user_controls (id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id), settings JSONB NOT NULL DEFAULT '{"queuePaused":false,"interestDiscovery":false}', updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     await pool.query('INSERT INTO oca_user_controls (id) VALUES (true)');
-    for (const m of ['057_worth_ledger', '058_risk_decisions', '059_self_build']) await pool.query(await readFile(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
+    for (const m of ['057_worth_ledger', '058_risk_decisions', '059_self_build', '060_self_build_settlement']) await pool.query(await readFile(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
     await run(pool);
   } finally {
     if (pool) await pool.end();
@@ -137,7 +137,7 @@ test('a build: worktree on a branch, coder edits, constitution refused, tests mu
     const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false }) });
     let plan;
     const llm = { messages: { create: async () => ({ content: [{ text: JSON.stringify(plan) }] }) } };
-    const sb = createSelfBuild({ pool, queue: null, worth, risk, controls, runner: null, llm, clock: () => now, repoDir: fx.repo, workRoot: fx.work, log: { log() {}, warn() {} } });
+    const sb = createSelfBuild({ pool, queue: () => queue, worth, risk, controls, runner: null, llm, clock: () => now, repoDir: fx.repo, workRoot: fx.work, log: { log() {}, warn() {} } });
     const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk, strategies: { llm, selfBuild: sb } });
     const chain = await queue.enqueue({ seed: 'Make greet shout', topic: 'OCA engine', learning: false, stakes: [{ entityKey: 'project:oca-engine', share: 2 }],
       evidence: [{ id: 'f1', source: 'risk journal', observation: 'greet.js returns lowercase; wanted uppercase' }] }, { origin: { kind: 'self', fingerprint: 'fp1' } });
@@ -196,6 +196,47 @@ test('a build: worktree on a branch, coder edits, constitution refused, tests mu
     const parked = await queue.get(chain.chain_id);
     assert.equal(parked.status, 'awaiting_evidence', 'the built want is left waiting for the merge');
     assert.equal(eligibleStrategies({ llm, selfBuild: sb }, parked).some(s => s.name === 'improve_myself'), false);
+    assert.deepEqual(await sb.reconcile(), { merged: [], settled: [] }, 'nothing merged yet: nothing observed');
+
+    // 3d. a person merges the branch: the merge is observed from origin/main, the want gets its receipt and parks for the quiet period
+    await fx.g(['merge', '-q', '--ff-only', `origin/${commit.branch}`]); await fx.g(['push', '-q', 'origin', 'main']);
+    const observed = await sb.reconcile();
+    assert.deepEqual(observed.merged.map(m => m.branch), [commit.branch]); assert.equal(observed.merged[0].sha, commit.sha);
+    let after = await queue.get(chain.chain_id);
+    assert.equal(after.status, 'awaiting_evidence', 'parked, not pondering: the world still owes the quiet period');
+    assert.ok(after.commitments.filter(x => x.kind === 'branch').every(x => x.merged === true && x.mergedSha === commit.sha), JSON.stringify(after.commitments));
+    const receipt = after.want.receipts.find(r => r.receiptId === `merged-${commit.sha.slice(0, 12)}`);
+    assert.equal(receipt.progress, 0.5); assert.equal(receipt.criterionMet, false); assert.match(receipt.evidence[0].observation, /merged into main by a person; the running checkout carries it/);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM self_build_events WHERE kind='merged'")).rows[0].n, 1);
+    assert.equal(eligibleStrategies({ llm, selfBuild: sb }, after).some(s => s.name === 'improve_myself'), false, 'a merged fix stands: no rebuild without a recurrence');
+    assert.deepEqual(await sb.reconcile(), { merged: [], settled: [] }, 'observed once');
+
+    // 3e. the defect this want was made from shows up in the journal again after the merge: the want reopens and the strategy applies again
+    await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{origin}', $2::jsonb) WHERE id = $1`,
+      [chain.chain_id, JSON.stringify({ kind: 'self', source: 'introspection', fingerprint: defectFingerprint('greet #3 returned no id') })]);
+    now += 60_000;   // the journal is read strictly after the merge
+    const d = await risk.decide({ id: 'strategy:9:0:x', chainId: 99, kind: 'read', description: 'later attempt', serves: [], reversibility: 'readonly' });
+    await risk.observe(d.id, { result: 'failure', evidence: [{ id: 'e-9', source: 'ponder runtime status', observation: 'greet #12 returned no id' }] });
+    const again = await sb.reconcile();
+    assert.deepEqual(again.settled, [{ chainId: chain.chain_id, branch: commit.branch, recurred: true }]);
+    after = await queue.get(chain.chain_id);
+    assert.equal(after.status, 'pondering'); assert.ok(after.want.receipts.some(r => r.receiptId === `recurred-${d.id}`));
+    assert.equal(eligibleStrategies({ llm, selfBuild: sb }, after).some(s => s.name === 'improve_myself'), true, 'the journal said the fix did not hold: it may build again');
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM self_build_events WHERE kind='recurred'")).rows[0].n, 1);
+
+    // 3f. a merged fix whose defect stays out of the journal for the whole quiet period sates its want
+    const quiet = await queue.enqueue({ seed: 'Stop dropping the answer', topic: 'OCA engine', learning: false, stakes: [{ entityKey: 'project:oca-engine', share: 2 }],
+      evidence: [{ id: 'f9', source: 'risk journal', observation: 'answer #4 is undefined' }] }, { origin: { kind: 'self', source: 'introspection', fingerprint: defectFingerprint('answer #4 is undefined') } });
+    await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`,
+      [quiet.chain_id, JSON.stringify([{ kind: 'branch', branch: 'self/9-stop-dropping', sha: commit.sha, merged: true, mergedAt: now, mergedSha: commit.sha }])]);
+    now += 23 * 3600_000;
+    assert.deepEqual((await sb.reconcile()).settled, [], 'the quiet period is not over');
+    now += 2 * 3600_000;
+    assert.deepEqual((await sb.reconcile()).settled, [{ chainId: quiet.chain_id, branch: 'self/9-stop-dropping', recurred: false }]);
+    const sated = await queue.get(quiet.chain_id);
+    assert.equal(sated.status, 'resolved'); assert.equal(sated.want.status, 'sated'); assert.equal(sated.want.progress, 1);
+    assert.match(sated.want.receipts.at(-1).evidence[0].observation, /24 hours of operation .* none of them this defect/);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM self_build_events WHERE kind='settled'")).rows[0].n, 1);
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', '[]'::jsonb) WHERE id = $1`, [chain.chain_id]);
 
     // 4. permission withdrawn mid-phase: the same strategy is held, not run

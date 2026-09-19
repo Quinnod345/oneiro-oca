@@ -197,8 +197,11 @@ views.affect = async () => {
 views['self-build'] = async () => {
   const d = await j('/oca/self-build'); const p = d.phase, perm = d.permission;
   const wants = (d.selfWants || []).map(w => `<a class="item link" href="#/wants/${w.chain_id}" style="text-decoration:none;color:inherit"><span class="num" style="font-weight:600;color:var(--teal-600);min-width:36px">${f2(w.pressure)}</span><div><div class="t">#${w.chain_id} ${esc(w.description)}</div><div class="d">${esc(words(w.status))} · ${esc(words(w.strategy))}</div></div></a>`).join('');
-  const events = (d.recent || []).map(e => { const pl = e.payload || {}; const kind = e.kind === 'build' ? (pl.pushed ? 'ok' : 'bad') : e.kind === 'refused' ? 'bad' : e.kind === 'enter' ? 'info' : '';
-    const text = e.kind === 'build' ? (pl.pushed ? `Pushed <span class="mono">${esc(pl.branch)}</span> · tests ${pl.tests?.after ?? '?'}/${pl.tests?.after ?? '?'}${pl.coder ? ` · ${esc(pl.coder)}` : ''}` : `Refused: ${esc(pl.failed || pl.code || '')}`) : e.kind === 'want' ? `Wanted: ${esc(pl.defect || '')}` : e.kind === 'refused' ? `Refused — touched ${esc((pl.forbidden || []).join(', '))}` : esc(pl.reason || JSON.stringify(pl));
+  const events = (d.recent || []).map(e => { const pl = e.payload || {}; const kind = e.kind === 'build' ? (pl.pushed ? 'ok' : 'bad') : e.kind === 'refused' || e.kind === 'recurred' ? 'bad' : e.kind === 'enter' ? 'info' : e.kind === 'merged' || e.kind === 'settled' ? 'ok' : '';
+    const text = e.kind === 'build' ? (pl.pushed ? `Pushed <span class="mono">${esc(pl.branch)}</span> · tests ${pl.tests?.after ?? '?'}/${pl.tests?.after ?? '?'}${pl.coder ? ` · ${esc(pl.coder)}` : ''}` : `Refused: ${esc(pl.failed || pl.code || '')}`) : e.kind === 'want' ? `Wanted: ${esc(pl.defect || '')}` : e.kind === 'refused' ? `Refused — touched ${esc((pl.forbidden || []).join(', '))}`
+      : e.kind === 'merged' ? `You merged <span class="mono">${esc(pl.branch)}</span> at ${esc((pl.sha || '').slice(0, 7))}${pl.running ? ' · running' : ' · restart to run it'}`
+      : e.kind === 'settled' ? `Quiet after the merge of <span class="mono">${esc(pl.branch)}</span> — ${pl.failures ?? 0} failure(s) journaled, none this defect; want sated`
+      : e.kind === 'recurred' ? `The defect came back after <span class="mono">${esc(pl.branch)}</span> was merged (${pl.same ?? 0}×); want reopened` : esc(pl.reason || JSON.stringify(pl));
     return `<div class="item"><span>${chip(e.kind, kind)}</span><div><div class="t" style="font-weight:400">${text}</div>${e.chain_id ? `<div class="d">want #${e.chain_id}</div>` : ''}</div><span class="when">${ago(e.created_at)}</span></div>`; }).join('');
   return `<div class="page">
     <div class="page-head"><div><h1>Self-build</h1><p>The engine may want things about itself. You permit the phase; it enters and leaves on its own, changes its code on a branch, proves it with its tests, and publishes the branch for you to merge.</p></div>
@@ -218,7 +221,7 @@ views['self-build'] = async () => {
             <div class="field"><label>What you observed</label><textarea id="sb-obs" placeholder="A fact that shows it. Becomes evidence on the want."></textarea></div>
             <div class="actions"><button class="btn primary" id="sb-send">Hand it the want</button></div>
           </div></details></section>
-        <section class="card"><header><h2>Journal</h2><span class="meta">entries, builds, refusals</span></header><div class="list">${events || empty('Nothing yet')}</div>
+        <section class="card"><header><h2>Journal</h2><span class="meta">entries, builds, refusals, merges, settlements</span></header><div class="list">${events || empty('Nothing yet')}</div>
           <div class="body tiny muted" style="border-top:1px solid var(--border-subtle)">Constitution — untouchable by the engine: ${(d.constitution || []).map(c => `<span class="mono">${esc(c)}</span>`).join(', ')}</div></section>
       </div>
     </div></div>`;

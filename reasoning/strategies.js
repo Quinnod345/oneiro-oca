@@ -138,9 +138,16 @@ export const STRATEGIES = [
 STRATEGIES.unshift({
   name: 'improve_myself', kind: 'self_build', actionKind: 'edit_own_code', reversibility: 'undo',
   available: deps => !!deps.selfBuild,
-  // Not while a branch it already built awaits a person's merge: the next change would be a guess.
-  applies: (state, deps) => state?.origin?.kind === 'self' && deps.selfBuild?.isActive?.() === true
-    && !(state?.commitments || []).some(c => c.kind === 'branch' && !c.merged),
+  // Not while a branch it already built awaits a person's merge: the next change would be a guess. And not
+  // after a merge until the same failure is observed again: a merged fix stands until the journal says otherwise.
+  applies: (state, deps) => {
+    if (state?.origin?.kind !== 'self' || deps.selfBuild?.isActive?.() !== true) return false;
+    const branches = (state?.commitments || []).filter(c => c.kind === 'branch');
+    if (branches.some(c => !c.merged)) return false;
+    const last = branches.at(-1);
+    if (!last) return true;
+    return (state?.want?.receipts || []).some(r => /^recurred-/.test(r.receiptId) && r.at > (last.mergedAt || 0));
+  },
   describe: () => 'Change my own code on a branch in a private worktree, prove it with my tests, and publish the branch.',
   async run(ctx) { return ctx.deps.selfBuild.build(ctx); },
 });
