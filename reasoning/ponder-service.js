@@ -6,7 +6,7 @@ import { createInterestEngine } from '../motivation/interest-engine.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
 import { createUserControls, createControlledPonderRunner } from '../user-controls.js';
-import llm from '../llm.js';
+import llm, { setInferencePolicy, getInferencePolicy } from '../llm.js';
 import hypothesis from '../hypothesis/engine.js';
 import { simulate, evaluateSimulation } from '../simulation/engine.js';
 import { on } from '../event-bus.js';
@@ -41,21 +41,15 @@ const selfBuildRef = { current: null };
 strategyDeps.selfBuild = { build: ctx => selfBuildRef.current.build(ctx), isActive: () => selfBuildRef.current?.isActive() === true, permitted: () => selfBuildRef.current.permitted() };
 // The risk journal is created below; the queue receives it through this indirection.
 const riskRef = { current: null };
-// The pursuit reasoner prefers the Codex subscription for hard steps; when Codex is unavailable (usage limit,
-// sign-in, transport) the same pass runs on the local model so an outage never fails the attempt on its own.
-const CODEX_UNAVAILABLE = /usage limit|not logged|unauthori|rate limit|quota|exited \d+|ENOENT|timed out|ECONN|network/i;
-let codexBackoffUntil = 0;
+// The pursuit reasoner is the hard step: it asks for Codex unless the person set local-only. Fallbacks
+// (Codex out → local, local down → Codex under auto) and their rest periods live in llm.js.
 async function pursuitReason(goal, options) {
-  const local = { ...options, provider: strategyDeps.provider, model: strategyDeps.model };
-  if (Date.now() < codexBackoffUntil) return reason(goal, local);
-  // The loop reports transport failures as a failed result rather than throwing, so both shapes are checked.
-  let result;
-  try { result = await reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra' }); }
-  catch (e) { result = { status: 'failed', error: String(e.message) }; }
-  if (result.status !== 'failed' || !CODEX_UNAVAILABLE.test(String(result.error || ''))) return result;
-  codexBackoffUntil = Date.now() + 15 * 60_000;
-  console.warn(`[ponder] Codex unavailable (${String(result.error).slice(0, 140)}); using ${strategyDeps.model} locally for 15 min`);
-  return reason(goal, local);
+  if (getInferencePolicy().mode === 'local') return reason(goal, { ...options, provider: strategyDeps.provider, model: strategyDeps.model });
+  return reason(goal, { ...options, provider: 'codex', model: process.env.OCA_PURSUIT_MODEL || getInferencePolicy().cloudModel });
+}
+// The inference mode is a control, so it survives restarts and a change in the app takes effect at once.
+export async function syncInferencePolicy() {
+  try { const c = await userControls.get(); if (c.inference) setInferencePolicy({ mode: c.inference }); } catch {}
 }
 export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect: emotion, strategies: strategyDeps,
   risk: { decide: (...a) => riskRef.current.decide(...a), observe: (...a) => riskRef.current.observe(...a) },
@@ -68,7 +62,7 @@ export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: e
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 riskRef.current = riskJournal;
 export const selfBuild = createSelfBuild({ pool, queue: ponderQueue, worth: worthLedger, risk: riskJournal, controls: userControls,
-  runner: codexAvailable() ? runCodex : null, llm, provider: strategyDeps.provider, model: strategyDeps.model });
+  runner: codexAvailable() ? runCodex : null, llm, provider: strategyDeps.provider, model: strategyDeps.model, inferenceMode: () => getInferencePolicy().mode });
 selfBuildRef.current = selfBuild;
 
 // A prediction the engine committed to for a want, settled by the world, becomes evidence on that want.
@@ -124,6 +118,7 @@ async function syncInterests() {
   }
 }
 export async function refreshHunger() {
+  await syncInferencePolicy();
   await adoptLegacyWants();
   await selfBuild.tick().catch(e => console.warn('[self-build] tick:', e.message));
   await refreshGrounding();

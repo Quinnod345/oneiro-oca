@@ -35,6 +35,15 @@ test('Codex execution is ephemeral, non-interactive, and read-only', () => {
   assert.equal(args.at(-1), '-');
 });
 
+test('the reasoning effort is stated explicitly, since the user config is ignored; unknown efforts are dropped', () => {
+  const args = buildCodexArgs({ model: 'gpt-6-astra', reasoningEffort: 'high' });
+  assert.equal(args[args.indexOf('--model') + 1], 'gpt-6-astra');
+  assert.ok(args.includes('model_reasoning_effort="high"'), args.join(' '));
+  assert.equal(args[args.indexOf('model_reasoning_effort="high"') - 1], '--config');
+  assert.ok(!buildCodexArgs({ reasoningEffort: 'absurd' }).some(a => a.includes('model_reasoning_effort')));
+  assert.ok(!buildCodexArgs({}).some(a => a.includes('model_reasoning_effort')));
+});
+
 test('Codex JSONL parser extracts assistant text and usage', () => {
   assert.deepEqual(
     parseCodexEvent('{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}'),

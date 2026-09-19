@@ -6,7 +6,7 @@ import { createUserControls } from './user-controls.js';
 import { capabilities, diagnostics, validateInput } from './user-capabilities.js';
 
 // Dependencies are injected to exercise the real API against a private test schema.
-export function createUserWorkspace({ pool, queue, runPending, operations, llmStatus }) {
+export function createUserWorkspace({ pool, queue, runPending, operations, llmStatus, applyInference = null }) {
   const router = Router(), controls = createUserControls(pool);
   const wrap = fn => async (req, res) => { try { await fn(req, res); } catch (e) { res.status(400).json({ error: e.message }); } };
   const id = req => { const n = Number(req.params.id); if (!Number.isSafeInteger(n) || n < 1) throw new Error('Invalid pursuit ID'); return n; };
@@ -14,7 +14,11 @@ export function createUserWorkspace({ pool, queue, runPending, operations, llmSt
   router.get('/oca/ui/controls', wrap(async (_req, res) => res.json({ ...await controls.get(), model: llmStatus(),
     permissions: { autonomousActions: /^(1|true|yes)$/i.test(process.env.OCA_ENABLE_AUTONOMOUS_ACTIONS || process.env.ONEIRO_ENABLE_AUTONOMOUS_ACTIONS || ''),
       dreamExecution: /^(1|true|yes)$/i.test(process.env.OCA_ENABLE_DREAM_EXECUTION || process.env.ONEIRO_ENABLE_DREAM_EXECUTION || '') } })));
-  router.patch('/oca/ui/controls', wrap(async (req, res) => res.json(await controls.update(req.body))));
+  router.patch('/oca/ui/controls', wrap(async (req, res) => {
+    const next = await controls.update(req.body);
+    if (req.body?.inference !== undefined && applyInference) applyInference(next.inference);
+    res.json(next);
+  }));
   router.get('/oca/ui/pursuits', wrap(async (req, res) => {
     const offset = Math.max(0, Math.min(100000, Number(req.query.offset) || 0));
     const filter = ['active', 'closed', 'all'].includes(req.query.filter) ? req.query.filter : 'active';

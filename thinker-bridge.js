@@ -12,6 +12,7 @@ import diag from './diagnostic-log.js';
 import { riskJournal, ponderQueue } from './reasoning/ponder-service.js';
 import { classifyShell } from './motivation/risk.js';
 import { createHash } from 'crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { NoticeRateLimiter, normalizeNoticeIntent } from './notice-policy.js';
 import {
   filterContextRowsForThinker,
@@ -295,6 +296,21 @@ const BLOCKED_ACTION_CLASS = {
   'scratchpad-write': { kind: 'note', reversibility: 'undo', touches: [] },
   'external-agent': { kind: 'escalate', reversibility: 'none', touches: ['data:quinn'] },
 };
+// Writing the thinker meant for Quinn's notes is held at the gate like any other action on his data — but
+// the writing itself is the engine's own and is kept in its own work directory, so a person can read what
+// it actually thought instead of a title. Returns the path, or null when there was nothing to keep.
+const THINKER_WRITING_ROOT = join(process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', 'thinker');
+async function keepPrivateWriting({ title, content } = {}) {
+  const body = String(content || '').trim();
+  if (!body) return null;
+  const day = new Date().toISOString().slice(0, 10);
+  const slug = String(title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'untitled';
+  const path = join(THINKER_WRITING_ROOT, `${day}-${slug}.md`);
+  await mkdir(THINKER_WRITING_ROOT, { recursive: true, mode: 0o700 });
+  await writeFile(path, `# ${String(title || 'Untitled').trim()}\n\n_Written by the thinker on ${new Date().toISOString()}; held for a person, never sent._\n\n${body}\n`, { mode: 0o600 });
+  return path;
+}
+
 async function noteAutonomousBlocked(kind, detail = '') {
   const cls = BLOCKED_ACTION_CLASS[kind] || { kind: 'escalate', reversibility: 'none', touches: ['data:quinn'] };
   const params = kind === 'diagnosis' ? { ...cls, ...classifyShell(detail) } : cls;
@@ -836,7 +852,8 @@ async function dispatchThought(thought) {
 
   // Private writing
   if (thought.private_writing && !AUTONOMOUS_FILE_WRITE_ENABLED) {
-    await noteAutonomousBlocked('private-writing', thought.private_writing.title || '');
+    const kept = await keepPrivateWriting(thought.private_writing).catch(e => { console.warn('[thinker] could not keep private writing:', e.message); return null; });
+    await noteAutonomousBlocked('private-writing', `${thought.private_writing.title || ''}${kept ? ` — kept at ${kept}` : ''}`);
   } else if (thought.private_writing) {
     try {
       const { title, content } = thought.private_writing;

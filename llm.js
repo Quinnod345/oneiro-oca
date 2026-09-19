@@ -37,6 +37,62 @@ const LLM_BACKEND = (() => {
   return ['local', 'anthropic', 'openai', 'codex'].includes(raw) ? raw : 'local';
 })();
 
+// ═══════════════════════════════════════════════════
+// INFERENCE POLICY — which brain the engine thinks with
+// ═══════════════════════════════════════════════════
+// A person's setting, not the environment's. `local` is WORK's model over Tailscale and never spends the
+// Codex subscription; `cloud` is Codex (gpt-6-astra, high reasoning) for every step, local only while Codex
+// is out; `auto` is local first, Codex for the hard steps that ask for it and for any step while the local
+// backend is unreachable. The controls set it each tick; env seeds the default before the first tick.
+export const INFERENCE_MODES = ['local', 'auto', 'cloud'];
+const inferencePolicy = {
+  mode: INFERENCE_MODES.includes(String(process.env.OCA_INFERENCE_MODE || '').toLowerCase()) ? String(process.env.OCA_INFERENCE_MODE).toLowerCase() : 'auto',
+  cloudModel: process.env.OCA_CODEX_MODEL || process.env.ONEIRO_CODEX_MODEL || 'gpt-6-astra',
+  cloudEffort: process.env.OCA_CODEX_REASONING_EFFORT || process.env.ONEIRO_CODEX_REASONING_EFFORT || 'high',
+};
+const inferenceStats = { calls: { local: 0, codex: 0, anthropic: 0, openai: 0 }, crossovers: [], lastUsed: null, lastUsedAt: null };
+let codexDownUntil = 0;
+const CODEX_BACKOFF_MS = 15 * 60 * 1000;
+const CODEX_OUT = /usage limit|not logged|unauthori|rate limit|quota|exited \d+|ENOENT|timed out|ECONN|network|aborted/i;
+const LOCAL_DOWN = /circuit open|fetch failed|ECONN|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|timed out|aborted|socket hang up|HTTP 5\d\d/i;
+
+export function setInferencePolicy({ mode, cloudModel, cloudEffort } = {}) {
+  if (mode !== undefined) {
+    const m = String(mode).trim().toLowerCase();
+    if (!INFERENCE_MODES.includes(m)) throw new Error(`inference mode must be one of ${INFERENCE_MODES.join(', ')}`);
+    if (m !== inferencePolicy.mode) console.log(`[llm] inference mode ${inferencePolicy.mode} → ${m}`);
+    inferencePolicy.mode = m;
+  }
+  if (cloudModel !== undefined && /^[A-Za-z0-9._:-]{1,64}$/.test(String(cloudModel))) inferencePolicy.cloudModel = String(cloudModel);
+  if (cloudEffort !== undefined && ['minimal', 'low', 'medium', 'high', 'xhigh'].includes(String(cloudEffort).toLowerCase())) inferencePolicy.cloudEffort = String(cloudEffort).toLowerCase();
+  return getInferencePolicy();
+}
+export function getInferencePolicy() {
+  return { ...inferencePolicy, codexAvailable: codexAvailable(), codexBackedOffUntil: codexDownUntil > Date.now() ? new Date(codexDownUntil).toISOString() : null,
+    stats: { ...inferenceStats, calls: { ...inferenceStats.calls }, crossovers: inferenceStats.crossovers.slice(-10) } };
+}
+// The provider a step asked for, under the policy: local mode never reaches Codex; cloud mode sends local
+// requests to Codex; auto leaves the request as asked (fallbacks happen on failure, below).
+export function resolveProvider(requested) {
+  const r = ['local', 'anthropic', 'openai', 'codex'].includes(requested) ? requested : 'local';
+  if (inferencePolicy.mode === 'local' && r === 'codex') return 'local';
+  if (inferencePolicy.mode === 'cloud' && r === 'local') return codexAvailable() ? 'codex' : 'local';
+  return r;
+}
+function noteUsed(provider) { inferenceStats.calls[provider] = (inferenceStats.calls[provider] || 0) + 1; inferenceStats.lastUsed = provider; inferenceStats.lastUsedAt = Date.now(); }
+function noteCrossover(from, to, why) {
+  inferenceStats.crossovers.push({ at: Date.now(), from, to, why: String(why || '').slice(0, 160) });
+  if (inferenceStats.crossovers.length > 50) inferenceStats.crossovers.splice(0, inferenceStats.crossovers.length - 50);
+  console.warn(`[llm] ${from} → ${to}: ${String(why || '').slice(0, 140)}`);
+}
+// Codex runs as a subprocess per call; two at once is plenty, and it keeps a burst of steps from spawning a dozen.
+let codexSlots = 0; const codexWaiters = [];
+async function withCodexSlot(fn) {
+  if (codexSlots >= 2) await new Promise(resolve => codexWaiters.push(resolve));
+  codexSlots++;
+  try { return await fn(); } finally { codexSlots--; codexWaiters.shift()?.(); }
+}
+
 const ANTHROPIC_AUTH_MODE = (() => {
   const fallback = BUNDLED_APP ? 'api' : 'auto';
   const raw = String(process.env.ANTHROPIC_AUTH_MODE || fallback).trim().toLowerCase();
@@ -106,25 +162,40 @@ const messages = {
     if (providerOverride) {
       const { provider, ...forward } = params;
       void provider;
-      if (providerOverride === 'local') return await localInferenceQueue.run(() => callLocal(forward, options), options);
-      if (providerOverride === 'openai') return await callOpenAI(forward);
-      if (providerOverride === 'codex') return await callCodex(forward, options);
-      // 'anthropic' falls through to the existing Anthropic path below.
       params = forward;
     }
 
-    const effectiveBackend = providerOverride || LLM_BACKEND;
+    const effectiveBackend = resolveProvider(providerOverride || LLM_BACKEND);
+    const local = async () => { const r = await localInferenceQueue.run(() => callLocal(params, options), options); noteUsed('local'); return r; };
+    const cloud = async () => { const r = await withCodexSlot(() => callCodex(params, options)); noteUsed('codex'); return r; };
 
     if (effectiveBackend === 'local') {
-      return await localInferenceQueue.run(() => callLocal(params, options), options);
+      try { return await local(); }
+      catch (e) {
+        // Auto: a local backend that is down is not a reason for the engine to stop thinking.
+        if (inferencePolicy.mode === 'auto' && LOCAL_DOWN.test(String(e.message)) && codexAvailable() && Date.now() >= codexDownUntil) {
+          noteCrossover('local', 'codex', e.message);
+          try { return await cloud(); } catch (e2) { if (CODEX_OUT.test(String(e2.message))) codexDownUntil = Date.now() + CODEX_BACKOFF_MS; throw e; }
+        }
+        throw e;
+      }
     }
 
     if (effectiveBackend === 'openai') {
+      noteUsed('openai');
       return await callOpenAI(params);
     }
 
     if (effectiveBackend === 'codex') {
-      return await callCodex(params, options);
+      // Codex out (usage limit, sign-in, transport): the same step runs locally, and Codex rests for a while.
+      if (Date.now() < codexDownUntil) { noteCrossover('codex', 'local', `Codex resting until ${new Date(codexDownUntil).toISOString()}`); return await local(); }
+      try { return await cloud(); }
+      catch (e) {
+        if (!CODEX_OUT.test(String(e.message))) throw e;
+        codexDownUntil = Date.now() + CODEX_BACKOFF_MS;
+        noteCrossover('codex', 'local', e.message);
+        return await local();
+      }
     }
 
     if (ANTHROPIC_AUTH_MODE === 'oauth') {
@@ -215,11 +286,11 @@ async function callOpenAI(params) {
 async function callCodex(params, options = {}) {
   const prompt = buildTextPrompt(params);
   const requestedModel = String(params?.model || '').trim();
-  const model = process.env.OCA_CODEX_MODEL || process.env.ONEIRO_CODEX_MODEL ||
-    (requestedModel.startsWith('gpt-') ? requestedModel : '');
+  // A step that names a Codex model gets it; anything else (a local model name, nothing) gets the policy's.
+  const model = requestedModel.startsWith('gpt-') ? requestedModel : inferencePolicy.cloudModel;
   const result = await runCodex(prompt, {
     workingDirectory: process.env.ONEIRO_CODEX_WORKSPACE || '/Users/quinnodonnell/oneiro/runtime/workspace',
-    model,
+    model, reasoningEffort: inferencePolicy.cloudEffort,
     sandbox: 'read-only', signal: options.signal, outputSchema: options.responseSchema,
   });
 
@@ -421,6 +492,7 @@ function getStatus() {
         ? (process.env.ONEIRO_OCA_THINKER_KEEP_ALIVE || '2m') : null,
       residencyControl: process.env.ONEIRO_LOCAL_REASONER_TRANSPORT === 'ollama' ? 'per_request' : 'server_default',
     },
+    inference: getInferencePolicy(),
     authMode: ANTHROPIC_AUTH_MODE,
     apiAvailable:
       LLM_BACKEND === 'openai'
