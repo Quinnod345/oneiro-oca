@@ -25,6 +25,7 @@ Everything a person needs to understand a want is one call away: `GET /oca/trace
 - Treat its own account of its feelings as an event.
 - Accept a prediction the world cannot evaluate.
 - Reach a person with unverified content, or write to their data without a way back — these are constraints, not weights, and the risk gate refuses them outright.
+- Open, read, or drive a web page through any browser but Aside (`aside.js`), the one a person authorized for automation — never the OS default, Safari, Chrome, Arc, Dia, a CDP session, or a headless browser; and never launch one of those apps. If Aside is missing, it has no browser. A test (`tests/aside.test.mjs`) fails the suite if another browser path appears.
 - Act on the world on its own while the master switch is off. Thinking is not acting: read-only steps that touch nothing proceed; anything with a reversibility cost is recorded as a proposal for a person.
 
 ## The inbox: how a person teaches it
