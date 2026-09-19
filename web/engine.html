@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCA — Engine</title>
+<meta name="description" content="Live instrument panel for the Oneiro Cognitive Architecture: worth, hunger, risk, strategies, receipts, affect.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=Martian+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0d0c0b;--panel:#14120f;--panel-2:#1a1713;--line:#2a2621;--line-2:#3a342c;
+  --text:#e8e2d6;--text-2:#a39a8b;--text-3:#6f675b;
+  --amber:#f2a93b;--amber-2:#8a5a12;--cyan:#7fd3d0;--green:#7ac986;--red:#e5655a;--violet:#b9a4e8;
+  --serif:'Instrument Serif',Georgia,serif;--sans:'Instrument Sans',-apple-system,sans-serif;--mono:'Martian Mono',ui-monospace,Menlo,monospace;
+}
+:root[data-theme="light"]{--ink:#f4efe6;--panel:#fbf8f2;--panel-2:#f1ece2;--line:#d9d1c2;--line-2:#c4bba9;--text:#1a1712;--text-2:#5b5347;--text-3:#8c8272;--amber-2:#c98a2b}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--ink);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.045;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");z-index:0}
+a{color:inherit}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line-2);border-radius:6px;padding:3px 9px;cursor:pointer;transition:background .12s,border-color .12s}
+button:hover{background:var(--panel-2);border-color:var(--text-3)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--amber);border-color:var(--amber);color:#1a1200;font-weight:600}
+button.primary:hover{background:#ffbf57}
+input,textarea{font:inherit;color:var(--text);background:var(--ink);border:1px solid var(--line-2);border-radius:6px;padding:6px 8px;width:100%}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.mono{font-family:var(--mono);font-weight:400;letter-spacing:-.01em}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.dim{color:var(--text-2)}.faint{color:var(--text-3)}
+.wrap{position:relative;z-index:1;max-width:1720px;margin:0 auto;padding:16px 16px 48px}
+
+/* ── header: the chain ── */
+header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-family:var(--serif);font-weight:400;font-size:34px;letter-spacing:-.01em;line-height:1}
+h1 em{font-style:italic;color:var(--amber)}
+.status{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11px;color:var(--text-2)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-3);margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--green);box-shadow:0 0 0 3px rgba(122,201,134,.15)}.dot.bad{background:var(--red)}.dot.warn{background:var(--amber)}
+.chain{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.chain>div{background:var(--panel);padding:12px 14px;position:relative}
+.chain>div+div::before{content:"→";position:absolute;left:-7px;top:10px;color:var(--text-3);font-size:12px;background:var(--ink);padding:0 2px;z-index:1}
+.chain .k{font-family:var(--serif);font-size:19px;color:var(--text);letter-spacing:-.01em}
+.chain .v{font-family:var(--mono);font-size:22px;margin-top:2px;color:var(--amber);font-weight:300}
+.chain .s{font-size:11px;color:var(--text-3);margin-top:2px;min-height:14px}
+
+/* ── grid ── */
+.grid{display:grid;grid-template-columns:minmax(360px,1.15fr) minmax(320px,1fr) minmax(360px,1.2fr);gap:14px;align-items:start}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card>h2{display:flex;align-items:baseline;justify-content:space-between;font-family:var(--serif);font-weight:400;font-size:17px;padding:10px 14px;border-bottom:1px solid var(--line);letter-spacing:-.005em}
+.card>h2 .meta{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+.card .body{padding:10px 14px}
+.empty{padding:18px 14px;color:var(--text-3);font-style:italic;font-family:var(--serif);font-size:15px}
+.err{padding:10px 14px;color:var(--red);font-family:var(--mono);font-size:11px}
+
+/* wants */
+.want{padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s}
+.want:last-child{border-bottom:0}
+.want:hover{background:var(--panel-2)}
+.want.sel{background:var(--panel-2);box-shadow:inset 3px 0 0 var(--amber)}
+.want .t{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.want .id{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.want .d{font-size:13.5px;margin:3px 0 6px;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--amber);border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+.bar.cool>i{background:var(--cyan)}.bar.green>i{background:var(--green)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px;margin-top:8px}
+.kv b{font-weight:500;color:var(--text-3);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+.chip{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--line-2);color:var(--text-2);vertical-align:1px}
+.chip.proceed{color:var(--green);border-color:rgba(122,201,134,.4)}.chip.prepare_artifact{color:var(--amber);border-color:rgba(242,169,59,.4)}
+.chip.refuse{color:var(--red);border-color:rgba(229,101,90,.4)}.chip.learn_stakes{color:var(--violet);border-color:rgba(185,164,232,.4)}
+.chip.success{color:var(--green)}.chip.failure{color:var(--red)}.chip.harm{color:var(--red);font-weight:600}
+.commit{font-size:11.5px;padding:6px 0 0;color:var(--text-2)}
+.commit .due{font-family:var(--mono);color:var(--amber);font-size:10.5px}
+.commit .settled{color:var(--text-3)}
+
+/* worth */
+table{width:100%;border-collapse:collapse;font-size:12px}
+td,th{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:middle;text-align:left}
+th{font-family:var(--mono);font-size:10px;color:var(--text-3);font-weight:400;text-transform:uppercase;letter-spacing:.05em}
+tr:last-child td{border-bottom:0}
+.rate{display:flex;gap:4px;justify-content:flex-end}
+.rate button{padding:1px 7px;font-family:var(--mono);font-size:11px}
+.lock{color:var(--red);font-family:var(--mono);font-size:10px}
+
+/* risk */
+.gauge{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.gauge .big{font-family:var(--mono);font-size:30px;font-weight:300;color:var(--amber)}
+.gauge .in{font-family:var(--mono);font-size:10.5px;color:var(--text-3);line-height:1.5}
+.dec{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px}
+.dec:last-child{border-bottom:0}
+.dec .what{color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dec .ev{font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.held{margin-top:10px;padding:8px 10px;border:1px dashed var(--amber-2);border-radius:8px;font-size:12px;color:var(--text-2)}
+.held b{color:var(--amber);font-family:var(--mono)}
+
+/* affect */
+.aff{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rows{display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center;font-size:11.5px}
+.rows .l{font-family:var(--mono);font-size:10.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em}
+.rows .n{font-family:var(--mono);font-size:10.5px;color:var(--text-2);width:34px;text-align:right}
+.pad{position:relative;height:5px;background:var(--line);border-radius:3px}
+.pad>i{position:absolute;top:0;height:100%;background:var(--cyan);border-radius:3px;transition:left .4s,width .4s}
+.pad::after{content:"";position:absolute;left:50%;top:-2px;width:1px;height:9px;background:var(--line-2)}
+.drv{position:relative;height:5px;background:var(--line);border-radius:3px}
+.drv>i{position:absolute;left:0;top:0;height:100%;background:var(--violet);border-radius:3px;transition:width .4s}
+.drv>b{position:absolute;top:-3px;width:2px;height:11px;background:var(--text-2);border-radius:1px}
+.style{margin-top:10px;font-family:var(--serif);font-size:15px;color:var(--text-2);font-style:italic}
+.style span{color:var(--text)}
+
+/* trace */
+.tl{position:relative;padding-left:18px;max-height:520px;overflow:auto;overscroll-behavior:contain}
+.tl::before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:1px;background:var(--line-2)}
+.ev{position:relative;padding:5px 0 7px;font-size:12px}
+.ev::before{content:"";position:absolute;left:-15.5px;top:11px;width:6px;height:6px;border-radius:50%;background:var(--text-3);border:1px solid var(--ink)}
+.ev.c-attempt_appraised::before{background:var(--amber)}.ev.c-attempt_observed::before{background:var(--green)}
+.ev.c-prediction_committed::before,.ev.c-simulation_committed::before,.ev.c-artifact_committed::before{background:var(--cyan)}
+.ev.c-prediction_settled::before{background:var(--violet)}.ev.c-progress_observed::before{background:var(--green);box-shadow:0 0 0 3px rgba(122,201,134,.18)}
+.ev.c-worth_signal::before{background:var(--amber-2)}.ev.c-want_created::before{background:var(--text)}
+.ev .h{display:flex;gap:8px;align-items:baseline}
+.ev .k{font-family:var(--mono);font-size:10.5px;color:var(--text-2)}
+.ev .at{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-left:auto;white-space:nowrap}
+.ev .b{color:var(--text-2);margin-top:2px;overflow-wrap:anywhere}
+.ev .a{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
+.ev .a i{font-style:normal;color:var(--cyan)}
+.shift{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--text-3);padding:8px 14px;border-bottom:1px solid var(--line)}
+.shift b{color:var(--text-2);font-weight:400}
+.up{color:var(--green)}.down{color:var(--red)}
+
+/* receipt form */
+details.form{border-top:1px solid var(--line)}
+details.form summary{cursor:pointer;padding:9px 14px;font-family:var(--serif);font-size:15px;color:var(--text-2);list-style:none}
+details.form summary::before{content:"+";font-family:var(--mono);margin-right:8px;color:var(--amber)}
+details.form[open] summary::before{content:"–"}
+details.form .body{display:grid;gap:8px}
+.range{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:11.5px}
+.range input{padding:0;accent-color:var(--amber)}
+.range .n{font-family:var(--mono);width:34px;text-align:right}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:8px 14px;font-size:12.5px;transition:transform .25s cubic-bezier(.34,1.56,.64,1),opacity .2s;z-index:10;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* meter */
+.meter td:first-child{font-family:var(--sans)}
+.meter .sc{font-family:var(--mono);text-align:right;width:52px}
+.meter .st{font-family:var(--mono);font-size:10px;color:var(--text-3);text-align:right;white-space:nowrap}
+.meter tr.measured .sc{color:var(--cyan)}
+.meter .why{font-size:11px;color:var(--text-3);padding-bottom:7px}
+
+/* thinker */
+.thought{font-family:var(--serif);font-size:16px;line-height:1.35;color:var(--text)}
+.thought.silent{color:var(--text-3);font-style:italic}
+
+@media (max-width:1180px){.grid{grid-template-columns:1fr 1fr}.chain{grid-template-columns:repeat(3,1fr)}.chain>div+div::before{display:none}}
+@media (max-width:760px){.grid{grid-template-columns:1fr}.aff{grid-template-columns:1fr}.chain{grid-template-columns:repeat(2,1fr)}.wrap{padding:12px 12px 40px}h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media (prefers-contrast:more){:root{--line:#4a443a;--line-2:#6a6255;--text-2:var(--text)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>OCA <em>engine</em></h1>
+    <div class="status" id="status"><span><span class="dot"></span>connecting</span></div>
+  </header>
+
+  <div class="chain" id="chain">
+    <div><div class="k">worth</div><div class="v" id="c-worth">—</div><div class="s" id="c-worth-s"></div></div>
+    <div><div class="k">hunger</div><div class="v" id="c-hunger">—</div><div class="s" id="c-hunger-s"></div></div>
+    <div><div class="k">risk</div><div class="v" id="c-risk">—</div><div class="s" id="c-risk-s"></div></div>
+    <div><div class="k">strategies</div><div class="v" id="c-strat">—</div><div class="s" id="c-strat-s"></div></div>
+    <div><div class="k">receipts</div><div class="v" id="c-rec">—</div><div class="s" id="c-rec-s"></div></div>
+    <div><div class="k">affect</div><div class="v" id="c-aff">—</div><div class="s" id="c-aff-s"></div></div>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="card"><h2>Wants <span class="meta" id="wants-meta"></span></h2><div id="wants"><div class="empty">nothing wanted yet</div></div></section>
+      <section class="card"><h2>Worth <span class="meta">rate = the engine's only reward from you</span></h2><div class="body" id="worth"><div class="empty">—</div></div></section>
+    </div>
+    <div class="col">
+      <section class="card"><h2>Risk <span class="meta" id="risk-meta"></span></h2><div class="body" id="risk"><div class="empty">—</div></div></section>
+      <section class="card"><h2>Affect <span class="meta" id="aff-meta"></span></h2><div class="body" id="affect"><div class="empty">—</div></div></section>
+      <section class="card"><h2>Thinker <span class="meta" id="th-meta"></span></h2><div class="body" id="thinker"><div class="empty">—</div></div></section>
+    </div>
+    <div class="col">
+      <section class="card"><h2><span id="trace-title">Trace</span> <span class="meta" id="trace-meta">select a want</span></h2>
+        <div id="trace-shift"></div>
+        <div class="body"><div class="tl" id="trace"><div class="empty">select a want to read its story</div></div></div>
+        <details class="form" id="receipt"><summary>Record observed progress</summary>
+          <div class="body">
+            <div class="range"><span>progress</span><input type="range" id="r-progress" min="0" max="1" step="0.05" value="0.5"><span class="n" id="r-progress-n">0.50</span></div>
+            <div class="range"><span>usefulness</span><input type="range" id="r-useful" min="0" max="1" step="0.05" value="0.5"><span class="n" id="r-useful-n">0.50</span></div>
+            <label><input type="checkbox" id="r-done"> criterion met (sates the want; needs progress 1)</label>
+            <input id="r-source" placeholder="source of the observation (e.g. 'Quinn, reading the draft')">
+            <textarea id="r-obs" rows="3" placeholder="what was observed — a fact, not a feeling"></textarea>
+            <div style="display:flex;gap:8px;justify-content:flex-end"><button id="r-send" class="primary">Record receipt</button></div>
+          </div>
+        </details>
+      </section>
+      <section class="card"><h2>Chinese Room Meter <span class="meta" id="crm-meta"></span></h2><div class="body" id="crm"><div class="empty">—</div></div></section>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const f2=n=>Number.isFinite(+n)?(+n).toFixed(2):'—', f3=n=>Number.isFinite(+n)?(+n).toFixed(3):'—';
+const pct=n=>Math.max(0,Math.min(100,(+n||0)*100));
+const ago=t=>{if(!t)return'';const s=(Date.now()-new Date(t))/1000;return s<60?`${s|0}s`:s<3600?`${s/60|0}m`:s<86400?`${s/3600|0}h`:`${s/86400|0}d`};
+const until=t=>{const s=(new Date(t)-Date.now())/1000;if(s<0)return`${ago(t)} overdue`;return s<3600?`in ${s/60|0}m`:s<86400?`in ${s/3600|0}h ${((s%3600)/60)|0}m`:`in ${s/86400|0}d`};
+const hhmm=t=>t?new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+let selected=null, wantsCache=[];
+try{selected=Number(localStorage.getItem('oca.engine.selected'))||null}catch{}
+async function j(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Error(`${url} → ${r.status}`);return r.json()}
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.style.borderColor=bad?'var(--red)':'var(--line-2)';t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2600)}
+
+/* ── health / status strip ── */
+async function health(){
+  const el=$('#status');
+  try{
+    const h=await j('/oca/health');
+    const inf=h.inference||{};
+    el.innerHTML=`<span><span class="dot ${h.ok?'ok':'bad'}"></span>daemon ${h.ok?'up':'degraded'} · ${(h.uptimeSeconds/60|0)}m</span>
+      <span><span class="dot ${h.database?.ok?'ok':'bad'}"></span>db</span>
+      <span><span class="dot ${h.embedder?.ok?'ok':'bad'}"></span>embed ${h.embedder?.dim||''}</span>
+      <span><span class="dot ${inf.reachable?(inf.state==='closed'?'ok':'warn'):'bad'}"></span>${esc(inf.model||'inference')} ${inf.state||''}${inf.consecutiveFailures?` ·${inf.consecutiveFailures}✗`:''}</span>
+      <span><span class="dot ${h.queue?.paused?'warn':'ok'}"></span>queue ${h.queue?.paused?'paused':'live'}</span>
+      <button id="theme" title="toggle theme">◐</button>`;
+    $('#theme').onclick=()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='light'?'dark':'light';try{localStorage.setItem('oca.engine.theme',r.dataset.theme)}catch{}};
+  }catch(e){el.innerHTML=`<span><span class="dot bad"></span>disconnected — ${esc(e.message)}</span>`}
+}
+
+/* ── wants ── */
+function renderWants(d){
+  wantsCache=d.wants||[];
+  $('#wants-meta').textContent=`${wantsCache.length} active · top pressure ${f2(d.pressure)} · ${d.pricing==='live_from_worth_ledger'?'priced from worth':'explicit priority'}`;
+  if(!wantsCache.length){$('#wants').innerHTML='<div class="empty">nothing wanted yet — <span class="mono">POST /ponder</span> creates a want</div>';return}
+  if(selected&&!wantsCache.some(w=>w.chain_id===selected))selected=null;
+  if(!selected){selected=wantsCache[0].chain_id;persistSel()}
+  $('#wants').innerHTML=wantsCache.map(w=>{
+    const h=w.hunger,ls=w.lastStrategy||{},prov=w.want.pricing?.provenance||h.valueProvenance;
+    const commits=(w.commitments||[]).slice(-3).map(c=>`<div class="commit">${c.kind==='hypothesis'?'prediction':c.kind} #${esc(c.id)} ${c.settled?`<span class="settled">settled ${esc(c.settled)}${c.confirmed===true?' — held':c.confirmed===false?' — failed':''}</span>`:c.deadline?`<span class="due">${until(c.deadline)}</span>`:''}${c.title?` · ${esc(c.title)}`:''}</div>`).join('');
+    return`<div class="want ${w.chain_id===selected?'sel':''}" data-id="${w.chain_id}">
+      <div class="t"><span class="id">#${w.chain_id} · ${esc(w.status)}${h.unpriced?' · unpriced':''}</span><span class="num" style="color:var(--amber)">${f2(h.pressure)}</span></div>
+      <div class="d">${esc(w.want.description)}</div>
+      <div class="bar"><i style="width:${pct(h.pressure)}%"></i></div>
+      <div class="kv">
+        <b>value</b><span class="num">${f2(w.want.value)} <span class="faint">${esc(prov)}</span></span>
+        <b>progress</b><span><div class="bar green" style="display:inline-block;width:90px;vertical-align:middle;margin-right:6px"><i style="width:${pct(w.want.progress)}%"></i></div><span class="num">${f2(w.want.progress)}</span></span>
+        <b>strategy</b><span class="mono">${esc(h.strategy)} <span class="faint">#${h.strategyIndex??w.want.strategy}</span> · ${esc(h.mode)}${h.frustration>0?` · frustration ${f2(h.frustration)}`:''}</span>
+        <b>last</b><span>${ls.name?`<span class="mono">${esc(ls.name)}</span> <span class="chip ${esc(ls.decision||'')}">${esc(ls.status||ls.decision||'')}</span> <span class="faint">${ago(ls.at)}</span>`:'<span class="faint">no attempt yet</span>'}</span>
+      </div>${commits}
+    </div>`}).join('');
+  document.querySelectorAll('.want').forEach(el=>el.onclick=()=>{selected=Number(el.dataset.id);persistSel();renderWants({wants:wantsCache,pressure:d.pressure,pricing:d.pricing});trace()});
+}
+function persistSel(){try{localStorage.setItem('oca.engine.selected',selected)}catch{}}
+async function wants(){try{renderWants(await j('/oca/hunger'))}catch(e){$('#wants').innerHTML=`<div class="err">${esc(e.message)}</div>`}}
+
+/* ── worth ── */
+async function worth(){
+  try{
+    const d=await j('/oca/worth');const es=d.entities||[];
+    const rated=es.filter(e=>e.signals?.rated||e.signals?.observed).length;
+    $('#c-worth').textContent=es.length;$('#c-worth-s').textContent=`${rated} with evidence · ${es.filter(e=>e.constraint).length} constraints`;
+    $('#worth').innerHTML=es.length?`<table><tr><th>entity</th><th>worth</th><th>conf</th><th>from</th><th></th></tr>${es.map(e=>`<tr>
+      <td><span class="mono">${esc(e.key)}</span>${e.constraint?`<div class="lock">⛔ ${e.constraints.map(c=>esc(c.rule.replaceAll('_',' '))).join('; ')}</div>`:''}</td>
+      <td class="num">${f2(e.worth)}</td><td class="num dim">${f2(e.confidence)}</td><td class="faint mono" style="font-size:10.5px">${esc(e.provenance)}</td>
+      <td><div class="rate"><button data-k="${esc(e.key)}" data-r="1" title="rate +1">+</button><button data-k="${esc(e.key)}" data-r="-1" title="rate −1">−</button></div></td></tr>`).join('')}</table>`:'<div class="empty">—</div>';
+    document.querySelectorAll('#worth .rate button').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await j('/oca/worth/rate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({entityKey:b.dataset.k,rating:Number(b.dataset.r),by:'quinn',about:'engine panel'})});toast(`${b.dataset.k} → ${f2(r.state.worth)}`);worth();wants()}catch(e){toast(e.message,true)}b.disabled=false});
+  }catch(e){$('#worth').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── risk ── */
+async function risk(){
+  try{
+    const d=await j('/oca/risk?limit=14');const a=d.appetite||{};const dec=d.decisions||{};
+    const held=dec.prepare_artifact||0,total=Object.values(dec).reduce((x,y)=>x+y,0);
+    $('#c-risk').textContent=f2(a.appetite);$('#c-risk-s').textContent=`appetite · ${held} held for you`;
+    $('#risk-meta').textContent=`${total} decisions · switch ${d.controls?.autonomousActions?'ON':'off'}`;
+    const cal=(d.calibration||[]).map(c=>`<span class="chip">${esc(c.capability)} n${c.n} brier ${f2(c.brier)}</span>`).join(' ');
+    $('#risk').innerHTML=`<div class="gauge"><div class="big num">${f2(a.appetite)}</div><div class="in">appetite = ${f2(a.base)} + frustration ${f2(a.inputs?.frustration)} + curiosity ${f2(a.inputs?.curiosity)}<br>− fear ${f2(a.inputs?.fear)} − low energy (${f2(a.inputs?.energy)})<br>${d.awaitingOutcome||0} proceeded, awaiting outcome</div></div>
+      ${(d.recent||[]).map(r=>`<div class="dec"><span class="chip ${esc(r.decision)}">${esc(r.decision.replaceAll('_',' '))}</span><span class="what" title="${esc(r.proposal?.description)}">${esc(r.proposal?.description)}</span><span class="ev">${r.outcome?`<span class="chip ${esc(r.outcome.result)}">${esc(r.outcome.result)}</span> `:''}g${f2(r.expected?.gain)} l${f2(r.expected?.loss)} · ${ago(r.createdAt)}</span></div>`).join('')||'<div class="empty">no decisions yet</div>'}
+      ${held?`<div class="held"><b>${held}</b> proposal${held>1?'s':''} held for a person — engine-fired actions on the world stay proposals while the master switch is off.</div>`:''}
+      ${cal?`<div style="margin-top:8px">${cal}</div>`:''}`;
+    $('#c-strat').textContent=(d.recent||[]).filter(r=>String(r.id).startsWith('strategy:')).length;
+    $('#c-strat-s').textContent='attempts in the last 14 decisions';
+  }catch(e){$('#risk').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── affect ── */
+const padRow=(k,v)=>{const w=Math.abs(v)*50;const left=v<0?50-w:50;return`<span class="l">${k}</span><div class="pad"><i style="left:${left}%;width:${w}%"></i></div><span class="n">${(v>=0?'+':'')+f2(v)}</span>`};
+const chRow=(k,v)=>`<span class="l">${k}</span><div class="bar cool"><i style="width:${pct(v)}%"></i></div><span class="n">${f2(v)}</span>`;
+const drRow=(k,d)=>`<span class="l">${k.replaceAll('_',' ')}</span><div class="drv"><i style="width:${pct(d.level)}%"></i><b style="left:${pct(d.target)}%"></b></div><span class="n">${f2(d.level)}</span>`;
+async function affect(){
+  try{
+    const e=await j('/oca/emotion');const s=e.state;const st=s._style||{};
+    $('#c-aff').textContent=`${s.valence>=0?'+':''}${f2(s.valence)}`;$('#c-aff-s').textContent=`valence · fear ${f2(s.fear)} · frustration ${f2(s.frustration)}`;
+    $('#aff-meta').textContent=s._grounding?`grounded ${ago(s._grounding.at)} ago`:'not yet grounded';
+    const chs=['joy','curiosity','frustration','fear','pride','shame','trust','awe'];
+    $('#affect').innerHTML=`<div class="aff"><div><div class="rows">${['P','A','D','C','N'].map(k=>padRow({P:'pleasure',A:'arousal',D:'dominance',C:'certainty',N:'novelty'}[k],s._padcn[k])).join('')}</div>
+      <div class="rows" style="margin-top:10px">${chs.map(k=>chRow(k,s._channels[k])).join('')}</div></div>
+      <div><div class="rows">${Object.entries(s._drives).map(([k,d])=>drRow(k,d)).join('')}</div>
+      <div class="rows" style="margin-top:10px">${[['self-efficacy',s._self_model.self_efficacy],['competence id',s._self_model.competence_identity],['autonomy id',s._self_model.autonomy_identity],['stability',s._self_model.emotional_stability]].map(([k,v])=>chRow(k,v)).join('')}</div></div></div>
+      <div class="style">speaks <span>${esc(st.length)}</span>, <span>${esc(st.stance)}</span>, <span>${esc(st.warmth)}</span>; ${esc(st.hedging)}; <span>${esc(st.tempo)}</span>${st.reflect?'; reflects before concluding':''}</div>`;
+  }catch(e){$('#affect').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── thinker ── */
+async function thinker(){
+  try{
+    const t=await j('/oca/thinker/status');
+    $('#th-meta').textContent=`${t.runs} runs · ${t.errors} errors · last ${t.last_run_age_seconds!=null?ago(Date.now()-t.last_run_age_seconds*1000)+' ago':'—'}`;
+    const silent=/silent tick|^—/.test(t.last_thought||'');
+    $('#thinker').innerHTML=`<div class="thought ${silent?'silent':''}">${esc(t.last_thought||'no thought yet')}</div>${t.last_error?`<div class="err" style="padding:8px 0 0">${esc(t.last_error)} <span class="faint">${ago(t.last_error_at)} ago</span></div>`:''}`;
+  }catch(e){$('#thinker').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── trace ── */
+async function trace(){
+  if(!selected){return}
+  try{
+    const t=await j(`/oca/trace/${selected}`);
+    $('#trace-title').textContent=`Trace #${t.chain_id}`;
+    $('#trace-meta').textContent=`${t.counts.attempts} attempts · ${t.counts.predictions} predictions · ${t.counts.receipts} receipts`;
+    const sh=t.affectShift||{};
+    $('#trace-shift').innerHTML=Object.keys(sh).length?`<div class="shift">${Object.entries(sh).map(([k,v])=>`<span><b>${k}</b> <span class="${v>0.005?'up':v<-0.005?'down':''}">${v>=0?'+':''}${f2(v)}</span></span>`).join('')}</div>`:'';
+    const evs=t.events.filter(e=>!(e.kind==='attempt_appraised'&&String(e.detail.id||'').startsWith('thinker:'))).slice(-60).reverse();
+    const receipts=(t.events||[]).filter(e=>e.kind==='progress_observed').length;
+    $('#c-rec').textContent=receipts;$('#c-rec-s').textContent=`on want #${t.chain_id}`;
+    $('#trace').innerHTML=evs.map(e=>{
+      const d=e.detail||{};const a=e.affect;
+      let body='';
+      if(e.kind==='attempt_appraised')body=`<span class="chip ${esc(d.decision)}">${esc(d.decision)}</span> ${esc(d.description)}${d.reasons?.length?`<div class="faint" style="font-size:11px">${esc(d.reasons[0])}</div>`:''}`;
+      else if(e.kind==='attempt_observed')body=`<span class="chip ${esc(d.result)}">${esc(d.result)}</span> ${esc(d.observation||'')}`;
+      else if(e.kind==='prediction_committed')body=`#${d.id} ${esc(d.claim)} <span class="faint mono" style="font-size:10.5px">${esc(d.prediction)} · conf ${f2(d.confidence)}</span>`;
+      else if(e.kind==='prediction_settled')body=`#${d.id} <b>${esc(d.status)}</b> — <span class="faint">${esc(d.how)}</span>`;
+      else if(e.kind==='progress_observed')body=`progress → <b>${f2(d.progress)}</b>${d.usefulness!=null?` · usefulness ${f2(d.usefulness)}`:''}${d.criterionMet?' · <b>criterion met</b>':''}${(d.evidence||[]).slice(0,1).map(x=>`<div class="faint" style="font-size:11px">${esc(x.observation)}</div>`).join('')}`;
+      else if(e.kind==='worth_signal')body=`${esc(d.entity)} ← ${esc(d.signal)}${d.rating!=null?` ${d.rating>0?'+':''}${d.rating} by ${esc(d.by)}`:''}${d.outcome?` ${esc(d.outcome)}`:''}`;
+      else if(e.kind==='want_created')body=`${esc(d.description)}<div class="faint" style="font-size:11px">done when: ${esc(d.doneWhen)}</div>`;
+      else body=esc(JSON.stringify(d)).slice(0,220);
+      return`<div class="ev c-${esc(e.kind)}"><div class="h"><span class="k">${esc(e.kind.replaceAll('_',' '))}</span><span class="at">${hhmm(e.at)}</span></div><div class="b">${body}</div>${a?`<div class="a">fr <i>${f2(a.frustration)}</i> cur <i>${f2(a.curiosity)}</i> joy <i>${f2(a.joy)}</i> eff <i>${f2(a.selfEfficacy)}</i></div>`:''}</div>`}).join('')||'<div class="empty">no events yet</div>';
+  }catch(e){$('#trace').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── receipt form ── */
+$('#r-progress').oninput=e=>$('#r-progress-n').textContent=f2(e.target.value);
+$('#r-useful').oninput=e=>$('#r-useful-n').textContent=f2(e.target.value);
+$('#r-done').onchange=e=>{if(e.target.checked){$('#r-progress').value=1;$('#r-progress-n').textContent='1.00'}};
+$('#r-send').onclick=async()=>{
+  if(!selected)return toast('select a want first',true);
+  const source=$('#r-source').value.trim(),obs=$('#r-obs').value.trim();
+  if(!source||!obs)return toast('source and observation are required',true);
+  const body={receiptId:`panel-${Date.now().toString(36)}`,progress:Number($('#r-progress').value),usefulness:Number($('#r-useful').value),criterionMet:$('#r-done').checked,
+    evidence:[{id:`panel-${Date.now().toString(36)}`,source,observation:obs}]};
+  $('#r-send').disabled=true;
+  try{const r=await j(`/ponder/${selected}/outcome`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    toast(`want #${selected} → progress ${f2(r.want.progress)} · ${r.status}`);$('#r-obs').value='';$('#receipt').open=false;wants();trace();worth()}
+  catch(e){toast(e.message,true)}
+  $('#r-send').disabled=false;
+};
+
+/* ── meter ── */
+async function crm(){
+  try{
+    const c=await j('/oca/crm');
+    $('#crm-meta').textContent=`${c.evaluation_version} · coverage ${Math.round((c.evidence_coverage||0)*100)}% · composite ${c.composite==null?'null':f3(c.composite)}`;
+    $('#crm').innerHTML=`<table class="meter">${Object.entries(c.components||{}).map(([k,v])=>`<tr class="${esc(v.status)}"><td>${k}</td><td class="sc">${v.score==null?'—':f3(v.score)}</td><td class="st">${v.n!=null?`n ${v.n} · `:''}${esc(v.status.replaceAll('_',' '))}</td></tr><tr><td class="why" colspan="3">${esc(v.detail)}</td></tr>`).join('')}</table>`;
+  }catch(e){$('#crm').innerHTML=`<div class="err">${esc(e.message)}</div>`}
+}
+
+/* ── hunger chain cell ── */
+async function hungerCell(){try{const d=await j('/oca/hunger');const w=d.wants||[];$('#c-hunger').textContent=f2(d.pressure);$('#c-hunger-s').textContent=w.length?`${w.length} want${w.length>1?'s':''} · top #${d.selected}`:'no wants'}catch{}}
+
+/* ── schedule ── */
+try{const th=localStorage.getItem('oca.engine.theme');if(th)document.documentElement.dataset.theme=th}catch{}
+const fast=()=>{health();wants();risk();affect();thinker();hungerCell()};
+const slow=()=>{worth();crm();trace()};
+fast();slow();
+setInterval(fast,5000);setInterval(slow,20000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){fast();slow()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#receipt').open=false}});
+</script>
+</body>
+</html>
