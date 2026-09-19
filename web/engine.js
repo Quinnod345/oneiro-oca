@@ -9,7 +9,8 @@ const until = t => { const s = (new Date(t) - Date.now()) / 1000; if (s < 0) ret
 const when = t => t ? new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const clock = t => t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 const words = s => String(s || '').replaceAll('_', ' ');
-async function j(url, opts) { const r = await fetch(url, opts); const b = await r.json().catch(() => ({})); if (!r.ok) throw new Error(b.error || `${url} → ${r.status}`); return b; }
+// A degraded health report comes back as 503 with the same body; that is information, not a failure.
+async function j(url, opts) { const r = await fetch(url, opts); const b = await r.json().catch(() => ({})); if (!r.ok && !(r.status === 503 && b.at)) throw new Error(b.error || `${url} → ${r.status}`); return b; }
 const post = (url, body, method = 'POST') => j(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 function toast(m, bad) { const t = $('#toast'); t.textContent = m; t.classList.toggle('bad', !!bad); t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2800); }
 const chip = (text, kind = '') => `<span class="chip ${esc(kind)}">${esc(text)}</span>`;
