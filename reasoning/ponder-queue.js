@@ -6,6 +6,7 @@ import { normalizeEvidence, currentEvidence } from './loop.js';
 import { defaultTimeBudgetSeconds } from './budget.js';
 import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from '../motivation/hunger.js';
 import { strategyFor, budgetFor, eligibleStrategies } from './strategies.js';
+import { CAPABILITY_OF } from '../motivation/risk.js';
 
 const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
@@ -145,9 +146,12 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
             // A self-build edit touches the engine's own project; the person's phase permission is its switch.
             const selfBuild = strategy.kind === 'self_build';
             const permitted = selfBuild ? (await strategyDeps.selfBuild.permitted()).enabled : undefined;
+            // What the engine expects of this step is its record on this strategy, not a constant.
+            let record = null;
+            if (risk.trackRecord) record = await risk.trackRecord({ strategy: strategy.name, capability: CAPABILITY_OF[strategy.actionKind] }).catch(() => null);
             gate = await risk.decide({ id: `strategy:${row.id}:${state.claimSeq}:${strategy.name}`, chainId: row.id, kind: strategy.actionKind, firedBy: 'engine',
               description: `${strategy.name} for want #${row.id}: ${strategy.describe(state.want)}`, serves: state.want.stakes || [],
-              touches: selfBuild ? ['project:oca-engine'] : [], reversibility: strategy.reversibility },
+              touches: selfBuild ? ['project:oca-engine'] : [], reversibility: strategy.reversibility, pSuccess: record?.pSuccess ?? null },
               selfBuild ? { controls: { autonomousActions: permitted } } : {});
           } catch (e) { console.warn('[ponder] strategy appraisal unavailable:', e.message); }
         }

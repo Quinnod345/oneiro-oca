@@ -36,7 +36,13 @@ Two things are unforgivable and are therefore never weighed: reaching a person w
 
 ## Thinking is not acting
 
-A read-only step that touches nothing cannot affect the world, so the engine may think freely: reason, predict, simulate, argue against its own premise. Anything with a reversibility cost is an action, and actions answer to the risk gate and, while the master switch is off, to a person.
+A read-only step that touches nothing cannot affect the world, so the engine may think freely: reason, predict, simulate, argue against its own premise. Work confined to its own sandbox — a draft in its own work directory, a probe in a scratch checkout — is thinking too: it touches nothing of the person's, and a person's verdict on the draft is where it meets the world. Anything with a real reversibility cost is an action, and actions answer to the risk gate and, while the master switch is off, to a person.
+
+A prediction is about the world the sensors observe, never about the want's own progress: only a person's receipt moves that, so predicting it would be predicting the person and would settle nothing.
+
+## A person's verdict is the only reward
+
+The engine cannot rate itself. What it makes — a deliverable for a want, a note it wanted to write — waits in an inbox for a person's verdict, and that verdict is a receipt on the want or a rating on the capability that wrote it. What it expects of its own next step is its observed record on that kind of step, not a constant, so its self-knowledge is a calibration that can improve, not a self-report that cannot.
 
 ## The engine may want things about itself
 

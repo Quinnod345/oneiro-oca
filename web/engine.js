@@ -49,8 +49,19 @@ async function shell() {
 /* ── views ── */
 const views = {};
 
+// A deliverable or a note, with the four verdicts a person can give. Each is a receipt or a rating: the only teaching signal.
+const RATE_WORDS = [['useless', 'Useless'], ['meh', 'Meh'], ['useful', 'Useful'], ['great', 'Great']];
+function rateItem(it) {
+  const meta = it.kind === 'artifact' ? `for want: ${esc(it.want)}${it.judge ? ` · judge by: ${esc(it.judge)}` : ''}` : `the thinker's writing, held for you`;
+  return `<div class="item rate" data-id="${esc(it.id)}"><span>${chip(it.kind === 'artifact' ? 'deliverable' : 'note', 'info')}</span>
+    <div><div class="t">${esc(it.title)}</div><div class="d">${meta}</div>
+      <details><summary>Read it</summary><div class="prose">${esc(it.body).replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>')}</div></details>
+      <div class="verdicts">${RATE_WORDS.map(([v, l]) => `<button class="btn small" data-verdict="${v}" data-kind="${it.kind}" data-id="${esc(it.id)}">${l}</button>`).join('')}</div></div>
+    <span class="when">${ago(it.at)}</span></div>`;
+}
+
 views.overview = async () => {
-  const [hunger, risk, sb, emo, crm, thinker] = await Promise.all([j('/oca/hunger'), j('/oca/risk?limit=40'), j('/oca/self-build'), j('/oca/emotion'), j('/oca/crm'), j('/oca/thinker/status')]);
+  const [hunger, risk, sb, emo, crm, thinker, box] = await Promise.all([j('/oca/hunger'), j('/oca/risk?limit=40'), j('/oca/self-build'), j('/oca/emotion'), j('/oca/crm'), j('/oca/thinker/status'), j('/oca/inbox').catch(() => ({ toRate: [] }))]);
   const s = emo.state, st = s._style || {};
   const held = (risk.recent || []).filter(r => r.decision === 'prepare_artifact' && !r.outcome);
   const branches = (sb.selfWants || []).length ? await Promise.all(sb.selfWants.map(w => j(`/ponder/${w.chain_id}`).catch(() => null))) : [];
@@ -74,8 +85,12 @@ views.overview = async () => {
         <a href="#/meter"><div class="eyebrow">Meter</div><div class="v score">${measured.length}/${Object.keys(crm.components || {}).length}</div><div class="s">dimensions measured</div></a>
       </div>
       <div class="cols-2">
+        <div class="stack">
+        <section class="card"><header><h2>Rate</h2><span class="meta">${box.toRate.length ? `${box.toRate.length} to judge · your verdict is how it learns` : 'nothing to judge'}</span></header>
+          <div class="list">${box.toRate.slice(0, 12).map(rateItem).join('') || empty('Nothing to rate', 'Deliverables the engine drafts and notes it writes land here; a verdict is a receipt on the want or a rating on the capability.')}</div></section>
         <section class="card"><header><h2>Needs you</h2><span class="meta">${needs.length ? `${needs.length} item${needs.length > 1 ? 's' : ''}` : 'nothing right now'}</span></header>
           <div class="list">${needs.join('') || empty('All quiet', 'Held proposals, branches to merge, and wants waiting on evidence show up here.')}</div></section>
+        </div>
         <div class="stack">
           <section class="card"><header><h2>How it feels</h2><span class="meta">${s._grounding ? `grounded ${ago(s._grounding.at)}` : ''}</span></header>
             <div class="body">
@@ -281,6 +296,12 @@ $$('#inference-seg button').forEach(b => b.onclick = async () => {
 
 function wire() {
   document.querySelectorAll('[data-go]').forEach(el => el.onclick = () => { location.hash = el.dataset.go; });
+  document.querySelectorAll('[data-verdict]').forEach(b => b.onclick = async () => {
+    const row = b.closest('.rate'); row.querySelectorAll('button').forEach(x => { x.disabled = true; });
+    try { const r = await post('/oca/inbox/rate', { kind: b.dataset.kind, id: b.dataset.id, usefulness: b.dataset.verdict, by: 'quinn' });
+      toast(b.dataset.kind === 'artifact' ? `Recorded — want progress ${f2(r.want.want.progress)}` : `Recorded — self:message → ${f2(r.worth.state.worth)}`); render(); }
+    catch (e) { toast(e.message, true); row.querySelectorAll('button').forEach(x => { x.disabled = false; }); }
+  });
   document.querySelectorAll('[data-rate]').forEach(b => b.onclick = async () => { b.disabled = true; try { const r = await post('/oca/worth/rate', { entityKey: b.dataset.key, rating: Number(b.dataset.rate), by: 'quinn', about: 'engine app' }); toast(`${b.dataset.key} → ${f2(r.state.worth)}`); render(); } catch (e) { toast(e.message, true); b.disabled = false; } });
   const rp = $('#r-progress'), ru = $('#r-useful');
   if (rp) { rp.oninput = e => $('#r-progress-n').textContent = f2(e.target.value); ru.oninput = e => $('#r-useful-n').textContent = f2(e.target.value);

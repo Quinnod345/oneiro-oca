@@ -27,6 +27,12 @@ Everything a person needs to understand a want is one call away: `GET /oca/trace
 - Reach a person with unverified content, or write to their data without a way back — these are constraints, not weights, and the risk gate refuses them outright.
 - Act on the world on its own while the master switch is off. Thinking is not acting: read-only steps that touch nothing proceed; anything with a reversibility cost is recorded as a proposal for a person.
 
+## The inbox: how a person teaches it
+
+`GET /oca/inbox` is what the engine has for a person — deliverables it drafted for a want, notes it wrote that the gate held, the active wants, and what things are worth to it. Every action on it is one of the three signals that teach the engine anything: `POST /oca/inbox/rate` gives a verdict (`useless`, `meh`, `useful`, `great`) on a deliverable (a receipt on its want: useful or better is progress, less is a spent attempt and the strategy rotates) or a note (a rating on `self:message`), or a rating on an entity's worth; `POST /oca/inbox/progress` records what a person observed on a want, the only thing that satiates it; `POST /oca/inbox/want` hands it a new want. The Chinese Room Meter's creativity dimension is made of nothing but these verdicts. The Oneiro app's **Judge** page (phone and Mac) and the web app's Overview are both fronts for this.
+
+The engine's expectation for a step is its observed record on that strategy (`risk.trackRecord`), shrunk toward the capability's worth while the record is thin — so the metacognition dimension can move off the base rate. Predictions are about sensor metrics only, never the want's own progress. A draft in the engine's own work directory is thinking, not acting: it proceeds with the master switch off, because a person's verdict is where it meets the world.
+
 ## The self-build phase
 
 Friction the engine observes in its own operation becomes a want about itself (`reasoning/self-build.js`), priced like any other want. A person permits the phase (`selfBuild` in the controls); the engine enters it when a self-want has pressure and leaves when its self-wants are quiet, it keeps failing, or the day's build budget is spent. A build happens on a branch in a private worktree, with Codex when available and the local model otherwise: the suite must still pass with no test lost, the constitution (worth, risk, this gate, the philosophy, the migrations) is untouchable, and the branch is pushed for a person to merge — main moves only by a person's hand unless `selfBuildAutoMerge` is on.

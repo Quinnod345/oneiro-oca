@@ -77,6 +77,19 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
     const { rows } = await pool.query('SELECT * FROM risk_decisions WHERE id = $1', [id]);
     return row(rows[0]);
   }
+  // Self-knowledge that learns. The engine's expected success for a step is its observed record on that
+  // kind of step (decision ids end in the strategy's name), shrunk toward the capability's worth while the
+  // record is thin. An expectation that moves with the record can beat the base rate; a constant never will.
+  async function trackRecord({ strategy, capability, limit = 40, priorWeight = 8 }) {
+    if (typeof strategy !== 'string' || !/^[a-z_]{1,64}$/.test(strategy) || typeof capability !== 'string') throw new Error('a track record names a strategy and a capability');
+    const { rows } = await pool.query(`SELECT outcome->>'result' AS result FROM risk_decisions
+      WHERE capability = $1 AND id LIKE $2 AND decision = 'proceed' AND outcome IS NOT NULL AND outcome->>'result' IN ('success', 'failure', 'harm')
+      ORDER BY resolved_at DESC LIMIT $3`, [capability, `%:${strategy}`, limit]);
+    const n = rows.length, wins = rows.filter(r => r.result === 'success').length;
+    const { rows: self } = await pool.query('SELECT state FROM worth_entities WHERE key = $1', [`self:${capability}`]);
+    const prior = Number.isFinite(self[0]?.state?.worth) ? self[0].state.worth : 0.5;
+    return { pSuccess: Math.min(0.95, Math.max(0.05, (priorWeight * prior + wins) / (priorWeight + n))), n, wins, prior, strategy, capability };
+  }
   async function recent({ limit = 50, chainId = null } = {}) {
     const { rows } = await pool.query(`SELECT * FROM risk_decisions ${chainId !== null ? 'WHERE chain_id = $2' : ''} ORDER BY created_at DESC LIMIT $1`,
       chainId !== null ? [limit, chainId] : [limit]);
@@ -90,5 +103,5 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
       awaitingOutcome: open[0].n, calibration: calibrate(rows.map(row)),
       policy: { reversible: 'proceed_within_appetite', irreversible: 'prepare_artifact', constraints: 'boundaries_never_costs', selfWorth: 'observed_outcomes_only' } };
   }
-  return { decide, observe, get, recent, status, appetite: currentAppetite };
+  return { decide, observe, get, recent, status, trackRecord, appetite: currentAppetite };
 }
