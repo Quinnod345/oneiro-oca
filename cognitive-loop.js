@@ -495,8 +495,8 @@ async function think() {
   const presenceChanged = activity.presence !== previousPresence;
   if (presenceChanged) {
     if (activity.presence === 'present' && previousPresence !== 'present') {
-      // User returned — positive social signal
-      oca.layers.emotion.processInteraction(0.6);
+      // Quinn returning to the keyboard is an attention fact, not an interaction with the engine (v4: no affect).
+      console.log('[oca] presence: Quinn returned');
     }
     if (activity.presence === 'away') {
       // User left — processIdle handles emotional state
@@ -1189,7 +1189,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
         for (const r of (execResult.results || [])) {
           console.log(`[oca]   → "${r.content}": ${r.completed}/${r.tasks} tasks completed (${r.newState})`);
         }
-        oca.layers.emotion.processSuccess('executive');
+        // Executing a dream is not an observed success; outcomes reach affect through receipts (v4).
       }
     } catch (e) {
       console.error('[oca] dream execution error:', e.message);
@@ -1437,7 +1437,7 @@ Keep claims under 80 chars. Keep predictions under 60 chars.`,
       const autoResult = await withTimeout(autonomic.runAutonomicCycle(), LLM_TICK_TIMEOUT_MS, 'autonomic');
       if (autoResult.applied > 0) {
         console.log(`[oca] 🧬 autonomic: ${autoResult.applied} self-modifications applied`);
-        oca.layers.emotion.processSuccess(0.7);
+        // Applying a self-modification is not a success until something observed improves (v4).
       } else if (autoResult.phase === 'monitoring') {
         console.log(`[oca] 🧬 autonomic: monitoring, no intervention needed`);
       }

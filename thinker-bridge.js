@@ -760,7 +760,7 @@ async function runCycle() {
 OCA INTERNAL STATE (subject: engine, NOT Quinn; these values do not measure the user):
   Hunger: ${emotionState.hunger?.toFixed(2) || '0.00'} | Want: ${emotionState.motivation?.selected || 'none'} | Strategy: ${emotionState.motivation?.strategy || 'none'}
   Hunger is an unsatisfied outcome, not a request to narrate wanting. Only observed progress can satiate it.
-  Valence: ${emotionState.valence?.toFixed(2)} | Arousal: ${emotionState.arousal?.toFixed(2)} | Curiosity: ${emotionState.curiosity?.toFixed(2)}
+  Style for anything you write (form, not sentiment; never describe feelings): ${(() => { const st = emotionState._style || {}; return `${st.length || 'measured'}, ${st.stance || 'plain'}, ${st.warmth || 'cordial'}, ${st.hedging || 'qualify where uncertain'}, ${st.tempo || 'steady'}${st.reflect ? ', reflect before concluding' : ''}`; })()}
 
 DREAMS (generated historical interpretations, not evidence of current activity; ranked by weight):
 ${dreams.map((d, i) => `  ${i+1}. [${d.tag || '?'}] [${(d.weight*100).toFixed(0)}%] ${textPreview(d.content)} (${d.type})`).join('\n') || '  none'}
@@ -947,10 +947,8 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
 async function dispatchThought(thought) {
   // Feel
   if (thought.feeling) {
-    try {
-      oca.layers.emotion.processInteraction(thought.feeling.intensity || 0.5);
-      await emit('perception_update', 'thinker', { channel: 'internal', feeling: thought.feeling });
-    } catch {}
+    // A model's account of its feeling is observability, not an event: it never feeds affect.
+    try { await emit('perception_update', 'thinker', { channel: 'internal', feeling: thought.feeling }); } catch {}
   }
 
   // Shell command -- BODY OWNERSHIP GATE: do not open apps, steal focus, or

@@ -1,6 +1,16 @@
-// OCA Emotional Computation Engine v3 — observed events and durable latent state
-// Adapted from voidborne-d/emotion-system — PADCN + appraisal + drives + meta-emotions
-// Keeps the same external interface so all 47 callsites still work.
+// OCA Emotional Computation Engine v4 — affect grounded in worth, and consequential
+// Adapted from voidborne-d/emotion-system — PADCN + appraisal + drives + meta-emotions.
+//
+// v4 changes the contract in three ways. Phasic affect (PADCN, channels) still comes from
+// events, but only observed ones: outcomes of risks the engine took, progress on wants it
+// values, being blocked from something worth doing. Tonic state (drives, self-model) is no
+// longer an integrator that events push forever: drives with a journal (competence, autonomy,
+// social bond, curiosity) are projected from the worth ledger and the decision journals each
+// cycle; sensory drives (novelty, self-preservation, coherence) are bounded responses to
+// current sensor and meta state. Time alone changes nothing tonic, so nothing can ratchet and
+// offline time neither satisfies nor starves a want. And affect is consumed: appetite for
+// risk, the confidence a conclusion must reach, when to change strategy, and the style of what
+// is said — never narrated as feelings.
 import { pool, emit } from '../event-bus.js';
 
 // ═══ LAYER 3: PADCN Core Affect ═══
@@ -17,6 +27,7 @@ let channels = {
 };
 
 // ═══ LAYER 5: Drive System ═══
+// level = current satisfaction, target = set point. The deficit (target − level) is what channels feel.
 let drives = {
   curiosity:          { level: 0.5, target: 0.7, weight: 1.3 },
   competence:         { level: 0.5, target: 0.7, weight: 1.2 },
@@ -74,6 +85,8 @@ let expression = {
 // Mood = slow-moving average (tonic baseline)
 let mood = {};
 const MOOD_ALPHA = 0.02;
+
+let grounding = null;                   // last projection inputs, kept for the snapshot
 
 // Interoceptive
 let interoception = { energy_level: 1.0, cognitive_load: 0.0 };
@@ -181,6 +194,58 @@ function appraise(event) {
       a.agency_self = 0.9;
       a.self_image_impact = mag * 0.4;
       break;
+
+    // ── Grounded events (v4). Magnitudes are worth, never counts. ──
+    case 'outcome_success':   // a risk the engine took paid off; sweeter the less it expected to
+      a.goal_relevance = mag;
+      a.goal_congruence = mag;
+      a.expectedness = clamp01(event.pSuccess ?? 0.5);
+      a.controllability = 0.7;
+      a.agency_self = 0.9;
+      a.self_image_impact = mag * (1 - clamp01(event.pSuccess ?? 0.5)) * 0.8;
+      a.certainty = 0.7;
+      break;
+    case 'outcome_failure':   // an attempt did not get there
+      a.goal_relevance = mag;
+      a.goal_congruence = -mag;
+      a.expectedness = 1 - clamp01(event.pSuccess ?? 0.5);
+      a.controllability = 0.5;
+      a.agency_self = 0.8;
+      a.self_image_impact = -mag * 0.4;
+      a.certainty = 0.4;
+      break;
+    case 'outcome_harm':      // something of worth was damaged by the engine's own action
+      a.goal_relevance = 1;
+      a.goal_congruence = -mag;
+      a.expectedness = 0.1;
+      a.controllability = 0.3;
+      a.agency_self = 1;
+      a.self_image_impact = -mag;
+      a.norm_compatibility = 0.1;
+      a.urgency = 0.6 + mag * 0.4;
+      a.certainty = 0.3;
+      break;
+    case 'progress':          // observed progress on a want, scaled by its worth
+      a.goal_relevance = mag;
+      a.goal_congruence = mag;
+      a.controllability = 0.6;
+      a.agency_self = 0.6;
+      a.self_image_impact = event.sated ? mag * 0.5 : mag * 0.2;
+      a.certainty = 0.7;
+      break;
+    case 'blocked':           // a worthwhile action was refused or held for a person
+      a.goal_relevance = mag;
+      a.goal_congruence = -mag * 0.6;
+      a.controllability = 0.2;
+      a.agency_other = 0.7;
+      a.certainty = 0.6;
+      break;
+    case 'wants_information': // the engine does not know what something is worth or lacks evidence
+      a.goal_relevance = mag * 0.7;
+      a.novelty = 0.5 + mag * 0.4;
+      a.certainty = 0.3;
+      a.expectedness = 0.4;
+      break;
   }
   
   // Personality modulates appraisal
@@ -268,46 +333,18 @@ function updateChannels(a) {
 // ═══ DRIVE UPDATES ═══
 
 function updateDrives(a) {
-  // Events shift drive levels
-  if (a.event_type === 'success') drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.1);
-  if (a.event_type === 'failure') drives.competence.level = clamp01(drives.competence.level + a.goal_congruence * 0.08);
-  if (a.relationship_impact > 0) drives.social_bond.level = clamp01(drives.social_bond.level + a.relationship_impact * 0.1);
-  
-  // Coherence: drops when state is confused
-  if (meta.am_i_confused_about_my_state > 0.3) {
-    drives.coherence.level = clamp01(drives.coherence.level - 0.05);
-  }
-  
-  // Self-preservation
-  if (a.goal_congruence < -0.5) {
-    drives.self_preservation.level = clamp01(drives.self_preservation.level - 0.05);
-  }
-  
-  // Unmet drives do not approach satisfaction merely because an event arrived.
+  // Sensory drives only. Competence, autonomy, bond and curiosity are projected from the journals
+  // in ground(); events never push them, so no sequence of events can pin a drive.
+  // Novelty is satisfied by genuinely novel observation and drained by idle (processIdle).
+  if (a.event_type === 'surprise') drives.novelty_seek.level = clamp01(drives.novelty_seek.level + a.novelty * 0.05);
 }
 
 // ═══ SELF-MODEL UPDATES (slow) ═══
 
 function updateSelfModel(a) {
-  // Very slow updates
-  const rate = 0.01;
-  if (a.event_type === 'success' && a.goal_congruence > 0.3) {
-    selfModel.self_efficacy = clamp01(selfModel.self_efficacy + rate);
-    selfModel.competence_identity = clamp01(selfModel.competence_identity + rate * 0.5);
-    successStreak++;
-    failureStreak = 0;
-  }
-  if (a.event_type === 'failure' && a.goal_congruence < -0.3) {
-    selfModel.self_efficacy = clamp01(selfModel.self_efficacy - rate * 1.2);
-    failureStreak++;
-    successStreak = 0;
-  }
-  if (a.agency_self > 0.6) {
-    selfModel.autonomy_identity = clamp01(selfModel.autonomy_identity + rate * 0.5);
-  }
-  if (a.social_significance > 0.5 && a.self_image_impact < -0.2) {
-    selfModel.defensiveness = clamp01(selfModel.defensiveness + rate);
-  }
+  // Streaks are transient context for meta-emotion; identity itself is grounded in ground().
+  if (['success', 'outcome_success'].includes(a.event_type) && a.goal_congruence > 0.3) { successStreak++; failureStreak = 0; }
+  if (['failure', 'outcome_failure', 'outcome_harm'].includes(a.event_type) && a.goal_congruence < -0.3) { failureStreak++; successStreak = 0; }
 }
 
 // ═══ META-EMOTION DETECTION ═══
@@ -335,6 +372,8 @@ function updateMeta() {
     const variance = last5.reduce((s, a) => s + Math.abs(a.goal_congruence), 0) / 5;
     meta.am_i_locked_in_loop = clamp01(variance < 0.1 ? 0.5 : 0);
   }
+  // Coherence is satisfied exactly to the extent the engine is not confused or looping.
+  drives.coherence.level = clamp01(drives.coherence.target - meta.am_i_confused_about_my_state * 0.6 - meta.am_i_locked_in_loop * 0.4);
 }
 
 // ═══ POLICY MODULATION ═══
@@ -424,6 +463,56 @@ function decay() {
   }
 }
 
+// ═══ GROUNDING (v4) ═══
+// Tonic state is a projection of what the journals say, not a sum of events. Called each cycle
+// with: self-capability worth, risk calibration and recent decisions, hunger, and how long since
+// Quinn last gave a grounded signal. Missing inputs leave the corresponding state as it was.
+export function ground(inputs = {}) {
+  decay();
+  const g = { at: Date.now() };
+  const self = Array.isArray(inputs.selfWorth) ? inputs.selfWorth.filter(e => Number.isFinite(e?.worth)) : [];
+  if (self.length) {
+    const weight = e => 0.2 + clamp01(e.confidence ?? 0);                  // an unearned prior counts a little, evidence a lot
+    const worth = self.reduce((n, e) => n + e.worth * weight(e), 0) / self.reduce((n, e) => n + weight(e), 0);
+    const confidence = self.reduce((n, e) => n + clamp01(e.confidence ?? 0), 0) / self.length;
+    drives.competence.level = clamp01(worth);
+    selfModel.competence_identity = clamp01(0.5 + (worth - 0.5) * (0.3 + 0.7 * confidence));
+    g.selfWorth = { worth, confidence, n: self.length };
+  }
+  const cal = Array.isArray(inputs.calibration) ? inputs.calibration.filter(c => c?.n > 0) : null;
+  if (cal) {
+    // No calibrated outcomes yet projects to a neutral self, never to whatever was there before.
+    const n = cal.reduce((a, c) => a + c.n, 0);
+    const brier = n ? cal.reduce((a, c) => a + c.brier * c.n, 0) / n : 0.5, harm = n ? cal.reduce((a, c) => a + c.harmRate * c.n, 0) / n : 0;
+    // Self-efficacy is how well the engine's predictions of itself hold up, scaled by how much evidence there is.
+    selfModel.self_efficacy = clamp01(0.5 + ((1 - brier) - 0.5) * (1 - Math.exp(-n / 10)));
+    selfModel.emotional_stability = clamp01(0.5 + (0.1 - harm * 0.8) * (1 - Math.exp(-n / 10)));   // any harm at all costs stability
+    selfModel.defensiveness = clamp01(0.3 + harm * 0.5);
+    g.calibration = { brier, harm, n };
+  }
+  if (inputs.decisions && Number.isFinite(inputs.decisions.total) && inputs.decisions.total > 0) {
+    const proceed = clamp01((inputs.decisions.proceed || 0) / inputs.decisions.total);
+    drives.autonomy.level = clamp01(0.3 + proceed * 0.6);
+    selfModel.autonomy_identity = clamp01(0.5 + (proceed - 0.5) * 0.5);
+    g.decisions = { proceed, total: inputs.decisions.total };
+  }
+  if (inputs.hunger) {
+    const unpriced = clamp01(inputs.hunger.unpricedShare ?? 0), waiting = clamp01(inputs.hunger.awaitingEvidenceShare ?? 0);
+    // Not knowing what things are worth or lacking evidence is a curiosity deficit.
+    drives.curiosity.level = clamp01(drives.curiosity.target - Math.max(unpriced, waiting) * 0.5);
+    g.hunger = { unpriced, waiting, pressure: clamp01(inputs.hunger.pressure ?? 0) };
+  }
+  if (inputs.hoursSincePersonSignal !== undefined) {
+    // Bond is fed only by Quinn's own grounded signals (ratings, receipts) and fades over days without them.
+    // None on record is an uninformative prior (the initial level), not a full bond.
+    const hours = inputs.hoursSincePersonSignal;
+    drives.social_bond.level = Number.isFinite(hours) ? clamp01(drives.social_bond.target * Math.exp(-hours / 72)) : 0.4;
+    g.hoursSincePersonSignal = Number.isFinite(hours) ? hours : null;
+  }
+  grounding = g;
+  return { drives: structuredClone(drives), selfModel: { ...selfModel }, grounding: g };
+}
+
 // ═══ BACKWARD-COMPATIBLE STATE INTERFACE ═══
 // Maps the rich PADCN + channels system back to the flat state format
 // that all 47 callsites expect.
@@ -464,7 +553,9 @@ function getState() {
     _meta: { ...meta },
     _policy: { ...policy },
     _expression: { ...expression },
-    _personality: { ...personality }
+    _personality: { ...personality },
+    _grounding: grounding ? { ...grounding } : null,
+    _style: styleDirectives()
   };
 }
 
@@ -561,6 +652,8 @@ export function processInteroception(battery, cpuUtil, memoryPressure, thermal) 
   if (Number.isFinite(battery)) interoception.energy_level = clamp01(battery);
   const load = [cpuUtil, memoryPressure, thermal].filter(Number.isFinite);
   if (load.length) interoception.cognitive_load = clamp01(Math.max(...load));
+  // Self-preservation is satisfied to the extent the body is fine: a projection of the current reading.
+  drives.self_preservation.level = clamp01(drives.self_preservation.target * (0.5 * interoception.energy_level + 0.5 * (1 - interoception.cognitive_load)));
 }
 
 export function processInformationGain(rate) {
@@ -584,6 +677,57 @@ export function processCreative(quality) {
   updateChannels(a);
   updateDrives(a);
   updateSelfModel(a);
+}
+
+// ═══ GROUNDED EVENTS (v4) ═══
+// The only affect inputs that come from the engine's own doing. Magnitudes are worth.
+
+function feel(event) {
+  const a = appraise(event);
+  updatePADCN(a);
+  updateChannels(a);
+  updateDrives(a);
+  updateSelfModel(a);
+  return a;
+}
+export function feelOutcome({ result, expectedGain = 0, expectedLoss = 0, pSuccess = 0.5 }) {
+  if (result === 'success' && expectedGain > 0) return feel({ type: 'outcome_success', magnitude: expectedGain, pSuccess });
+  if (result === 'failure' && expectedGain > 0) return feel({ type: 'outcome_failure', magnitude: expectedGain, pSuccess });
+  if (result === 'harm') return feel({ type: 'outcome_harm', magnitude: Math.max(expectedLoss, 0.3), pSuccess });
+  return null;
+}
+export function feelProgress({ value = 0, progressDelta = 0, sated = false, usefulness = null }) {
+  const magnitude = clamp01(value * Math.max(progressDelta, sated ? 0.5 : 0) + (Number.isFinite(usefulness) ? value * usefulness * 0.5 : 0));
+  if (magnitude <= 0) return null;
+  return feel({ type: 'progress', magnitude, sated });
+}
+export function feelBlocked({ decision, expectedGain = 0 }) {
+  if (decision === 'learn_stakes') return feel({ type: 'wants_information', magnitude: Math.max(0.3, expectedGain) });
+  if (['refuse', 'prepare_artifact'].includes(decision) && expectedGain > 0.05) return feel({ type: 'blocked', magnitude: expectedGain });
+  return null;
+}
+
+// ═══ CONSUMERS (v4) ═══ Affect changes behaviour here, and nowhere is it narrated.
+
+// Fear raises the confidence a conclusion must reach before it is accepted (SPEC §18.2.6: careful reasoning).
+export function verificationThreshold(base = 0.55) {
+  return clamp01(base + channels.fear * 0.3 + policy.verification_bias * 0.1);
+}
+// Frustration lowers the number of failed attempts tolerated before strategy changes (§18.2.6: strategy switching).
+export function strategyPatience(baseAttempts = 3) {
+  return Math.max(1, Math.round(baseAttempts * (1 - channels.frustration * 0.6)));
+}
+// Curiosity raises appetite for information-seeking actions only (§18.2.6: information seeking).
+export function informationAppetiteBonus() {
+  return clamp01(channels.curiosity * 0.3 + (drives.curiosity.target - drives.curiosity.level) * 0.3);
+}
+// Style, not sentiment: form directives derived from the expression profile for anything the engine writes.
+export function styleDirectives() {
+  const e = expression;
+  const pick = (v, lo, mid, hi) => v < 0.35 ? lo : v > 0.65 ? hi : mid;
+  return { length: pick(e.verbosity, 'terse', 'measured', 'expansive'), stance: pick(e.directness, 'tentative', 'plain', 'direct'),
+    warmth: pick(e.warmth, 'neutral', 'cordial', 'warm'), hedging: pick(e.hedging, 'commit', 'qualify where uncertain', 'hedge'),
+    tempo: pick(e.tempo, 'unhurried', 'steady', 'brisk'), reflect: e.reflectiveness > 0.6 };
 }
 
 // ═══ MAIN UPDATE CYCLE ═══
@@ -636,13 +780,14 @@ export async function update() {
 // ═══ RESTORE FROM DB ═══
 
 export function snapshotState() {
-  return structuredClone({ version: 3, savedAt: Date.now(), padcn, channels, drives,
+  return structuredClone({ version: 4, savedAt: Date.now(), padcn, channels, drives,
     selfModel, meta, personality, interoception, mood, recentAppraisals,
-    interactionCount, failureStreak, successStreak, lastIdleMinutes });
+    interactionCount, failureStreak, successStreak, lastIdleMinutes, grounding });
 }
 
 export function restoreState(snapshot) {
-  if (snapshot?.version !== 3 || !Number.isFinite(snapshot.savedAt)) return false;
+  // v3 snapshots restore too; their pinned drives dissolve through homeostasis and the next grounding.
+  if (![3, 4].includes(snapshot?.version) || !Number.isFinite(snapshot.savedAt)) return false;
   const restoreNumbers = (target, source, lo = 0, hi = 1) => {
     for (const key of Object.keys(target)) {
       if (Number.isFinite(source?.[key])) target[key] = clamp(source[key], lo, hi);
@@ -664,11 +809,24 @@ export function restoreState(snapshot) {
   failureStreak = Math.max(0, Number(snapshot.failureStreak) || 0);
   successStreak = Math.max(0, Number(snapshot.successStreak) || 0);
   lastIdleMinutes = Math.max(0, Number(snapshot.lastIdleMinutes) || 0);
+  grounding = snapshot.grounding && typeof snapshot.grounding === 'object' ? snapshot.grounding : null;
   lastDecayTime = Math.min(Date.now(), snapshot.savedAt);
   decay();
   updatePolicy();
   updateExpression();
   return true;
+}
+// Test seam: reset every latent to its initial value.
+export function _resetForTest() {
+  padcn = { P: 0, A: 0, D: 0, C: 0, N: 0 };
+  for (const k of Object.keys(channels)) channels[k] = 0;
+  drives = { curiosity: { level: 0.5, target: 0.7, weight: 1.3 }, competence: { level: 0.5, target: 0.7, weight: 1.2 }, autonomy: { level: 0.6, target: 0.7, weight: 1.0 },
+    social_bond: { level: 0.4, target: 0.5, weight: 0.8 }, coherence: { level: 0.5, target: 0.7, weight: 1.0 }, novelty_seek: { level: 0.5, target: 0.6, weight: 1.0 }, self_preservation: { level: 0.5, target: 0.6, weight: 0.9 } };
+  selfModel = { self_efficacy: 0.6, social_value: 0.5, competence_identity: 0.6, autonomy_identity: 0.7, emotional_stability: 0.5, trust_style: 0.6, dependency_tendency: 0.3, exploration_style: 0.7, defensiveness: 0.3 };
+  for (const k of Object.keys(meta)) meta[k] = 0;
+  mood = {}; recentAppraisals = []; interactionCount = 0; failureStreak = 0; successStreak = 0; lastIdleMinutes = 0; grounding = null;
+  interoception = { energy_level: 1.0, cognitive_load: 0.0 }; lastDecayTime = Date.now();
+  updatePolicy(); updateExpression();
 }
 
 export async function restore() {
@@ -763,5 +921,7 @@ export async function detectBaselineDrift() {
 export default { 
   processSurprise, processSuccess, processFailure, processInteraction, 
   processIdle, processInteroception, processInformationGain, processCreative,
-  setMotivationalState, getCognitiveEffects, update, getState, getMood, restore, detectBaselineDrift
+  feelOutcome, feelProgress, feelBlocked, ground,
+  verificationThreshold, strategyPatience, informationAppetiteBonus, styleDirectives,
+  setMotivationalState, getCognitiveEffects, update, getState, getMood, restore, detectBaselineDrift, snapshotState, restoreState
 };

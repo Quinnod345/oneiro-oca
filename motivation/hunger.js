@@ -33,14 +33,15 @@ export function repriceWant(want, lookup, now = Date.now()) {
     stakes: priced.stakes.map(s => ({ entityKey: s.entityKey, share: s.share, worth: s.worth, constraint: s.constraint })), pricedAt: now };
   return { ...want, value: priced.value, pricing };
 }
-export function appetite(want, now = Date.now()) {
+// `patience` is how many failed attempts are tolerated before the strategy changes; affect lowers it.
+export function appetite(want, now = Date.now(), { patience = 3 } = {}) {
   if (!want || want.status === 'sated' || want.status === 'cancelled') {
     return { pressure: 0, frustration: 0, mode: want?.status || 'idle', strategy: null };
   }
   const gap = 1 - clamp(want.progress || 0);
   const ageHours = Math.max(0, now - want.lastProgressAt) / 3600000;
   const persistence = 1 - Math.exp(-ageHours / 8);
-  const frustration = clamp((want.failedAttempts || 0) / 3);
+  const frustration = clamp((want.failedAttempts || 0) / Math.max(1, patience));
   const strategies = ['inspect_missing_evidence', 'test_an_alternative', 'reduce_to_smallest_falsifiable_step'];
   return { pressure: clamp(want.value * gap * (0.65 + 0.35 * persistence)), gap,
     frustration, mode: frustration >= 2 / 3 ? 'change_strategy' : 'pursue',
