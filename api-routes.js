@@ -14,7 +14,6 @@ import { pool } from './event-bus.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import { thinkerTelemetry } from './thinker-bridge.js';
-import { getBuilderErrors, clearBuilderErrors } from './executive/dream-executor.js';
 import { registerMobileCompanionRoutes } from './mobile-companion.js';
 
 export const ocaRouter = Router();
@@ -40,120 +39,17 @@ ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork })
 registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
 
 // ============================================================
-// DREAM EXECUTOR — Swift-side dreams.json activations flow into the
-// Postgres `dreams` table here so the cognitive-loop's dream-executor
-// can actually pick them up and spawn builders. Without these
-// endpoints the two systems were running side-by-side in silence.
+// DREAMS — read-only archive (retired 2026-09-19; wants are the intention layer)
 // ============================================================
 
-// Idempotent insert keyed on (channel='builder', source_uuid). A repeat
-// activation from Swift updates the row's lifecycle_state back to
-// 'dispatched' instead of inserting a duplicate.
-ocaRouter.post('/oca/dreams/enqueue', async (req, res) => {
-  try {
-    const { sourceUUID, title, detail, priority, origin } = req.body || {};
-    if (!sourceUUID || typeof sourceUUID !== 'string') {
-      return res.status(400).json({ error: 'sourceUUID (string) required' });
-    }
-    if (!title && !detail) {
-      return res.status(400).json({ error: 'title or detail required' });
-    }
-    const safeTitle = String(title || '').slice(0, 200);
-    const safeDetail = String(detail || '').slice(0, 4000);
-    const content = (safeTitle && safeDetail && safeTitle !== safeDetail)
-      ? `${safeTitle}\n\n${safeDetail}`
-      : (safeTitle || safeDetail);
-    const weight = Math.max(0, Math.min(1, Number(priority ?? 0.6)));
-    const contextPayload = {
-      source: 'swift_dream_store',
-      source_uuid: sourceUUID,
-      swift_origin: origin || 'user',
-      channel: 'builder',
-      execution_owner: 'oca'
-    };
+// Dreams are a read-only archive. Durable intentions are wants: POST /ponder creates one,
+// POST /ponder/:id/outcome records observed progress. These endpoints stay so old clients get a clear answer.
+for (const path of ['/oca/dreams/enqueue', '/oca/dreams/:id/redispatch']) {
+  ocaRouter.post(path, (_req, res) => res.status(410).json({ error: 'Dreams are a read-only archive. Create a want with POST /ponder instead.', see: '/ponder' }));
+}
+ocaRouter.get('/oca/builder/errors', (_req, res) => res.json({ errors: [], note: 'The dream executor was retired; nothing builds from dreams.' }));
 
-    // Try update-by-source first (idempotent re-activation).
-    const upd = await pool.query(
-      `UPDATE dreams
-         SET content = $1,
-             weight = GREATEST(weight, $2),
-             lifecycle_state = 'dispatched',
-             resolved = false,
-             lifecycle_updated_at = NOW(),
-             dispatched_at = COALESCE(dispatched_at, NOW()),
-             lifecycle_context = COALESCE(lifecycle_context, '{}'::jsonb) || $3::jsonb
-       WHERE lifecycle_context->>'source_uuid' = $4
-       RETURNING id, lifecycle_state, weight`,
-      [content, weight, JSON.stringify(contextPayload), sourceUUID]
-    );
-    if (upd.rows.length > 0) {
-      return res.json({ ok: true, action: 'reactivated', dream: upd.rows[0] });
-    }
-
-    const ins = await pool.query(
-      `INSERT INTO dreams
-         (content, type, weight, lifecycle_state, lifecycle_updated_at,
-          dispatched_at, lifecycle_context)
-       VALUES ($1, 'goal', $2, 'dispatched', NOW(), NOW(), $3)
-       RETURNING id, lifecycle_state, weight`,
-      [content, weight, JSON.stringify(contextPayload)]
-    );
-    res.json({ ok: true, action: 'created', dream: ins.rows[0] });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Re-dispatch a stuck dream. Flips lifecycle_state back to
-// 'dispatched' so the executor's next cycle re-plans tasks for it.
-// Used by the Swift Builders panel "re-dispatch" affordance AND by
-// the cognitive-loop's stale-executing auto-revive sweep.
-ocaRouter.post('/oca/dreams/:id/redispatch', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ error: 'invalid dream id' });
-    }
-    const reason = String(req.body?.reason || 'manual').slice(0, 120);
-    const contextPatch = {
-      redispatch_reason: reason,
-      redispatch_at: new Date().toISOString(),
-    };
-    const upd = await pool.query(
-      `UPDATE dreams
-         SET lifecycle_state = 'dispatched',
-             executing_at = NULL,
-             resolved = false,
-             lifecycle_updated_at = NOW(),
-             dispatched_at = COALESCE(dispatched_at, NOW()),
-             lifecycle_context = COALESCE(lifecycle_context, '{}'::jsonb) || $1::jsonb
-       WHERE id = $2
-       RETURNING id, lifecycle_state, lifecycle_updated_at`,
-      [JSON.stringify(contextPatch), id]
-    );
-    if (upd.rows.length === 0) {
-      return res.status(404).json({ error: `dream ${id} not found` });
-    }
-    res.json({ ok: true, dream: upd.rows[0], reason });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Builder errors — surfaced through the BuildersPanel so the user
-// can SEE why no builder ran (vs the silent "0 tasks" we used to
-// show). Every error has a plain-English summary + optional hint.
-ocaRouter.get('/oca/builder/errors', (req, res) => {
-  res.json({ errors: getBuilderErrors() });
-});
-ocaRouter.post('/oca/builder/errors/clear', (req, res) => {
-  clearBuilderErrors();
-  res.json({ ok: true });
-});
-
-// Snapshot of executor state — what's queued, what's executing, what
-// finished recently, plus the most recent dream_tasks. The Swift
-// BuildersStore polls this to render the Builders panel.
+// Read-only archive snapshot of the dreams table (kept for old clients and the mobile companion).
 ocaRouter.get('/oca/dreams/state', async (req, res) => {
   try {
     const dreams = await pool.query(
@@ -183,6 +79,7 @@ ocaRouter.get('/oca/dreams/state', async (req, res) => {
     );
     res.json({
       now: new Date().toISOString(),
+      archive: true, writable: false,
       dreams: dreams.rows,
       tasks: tasks.rows
     });

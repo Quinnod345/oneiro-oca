@@ -46,7 +46,8 @@ export function appetite(want, now = Date.now(), { patience = 3 } = {}) {
   return { pressure: clamp(want.value * gap * (0.65 + 0.35 * persistence)), gap,
     frustration, mode: frustration >= 2 / 3 ? 'change_strategy' : 'pursue',
     strategy: strategies[(want.strategy || 0) % strategies.length],
-    value: want.value, valueProvenance: want.pricing?.provenance || 'priority', unpriced: want.pricing?.unpriced === true,
+    // A want with no stakes at all has never been priced; a want with stakes reports what pricing found.
+    value: want.value, valueProvenance: want.pricing?.provenance || 'priority', unpriced: want.stakes ? want.pricing?.unpriced === true : true,
     description: want.description, doneWhen: want.doneWhen };
 }
 export function recordAttempt(want, { result, now = Date.now() }) {

@@ -18,6 +18,11 @@ export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: e
   controls: () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS') }),
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 
+// Legacy wants are priced once, on first use, so nothing the loop selects is unpriced by accident.
+let adoption = null;
+export const adoptLegacyWants = () => adoption ||= ponderQueue.adoptLegacyWants().then(r => { if (r.adopted) console.log(`[oca] adopted ${r.adopted} legacy want(s) into the worth ledger`); return r; })
+  .catch(e => { console.warn('[oca] legacy want adoption:', e.message); adoption = null; return { adopted: 0, error: e.message }; });
+
 // Tonic affect is a projection of the journals. Refreshed with hunger, at most once a minute.
 let lastGroundingAt = 0, groundingState = null;
 export const groundingStatus = () => groundingState;
@@ -58,6 +63,7 @@ async function syncInterests() {
   }
 }
 export async function refreshHunger() {
+  await adoptLegacyWants();
   await refreshGrounding();
   const state = await ponderQueue.hunger();
   const selected = state.wants.find(w => w.chain_id === state.selected);
