@@ -21,8 +21,20 @@ export function composeAsk({ kind, host, want, chainId, detail }) {
   }
 }
 
+// A push notification to the person's phone, through the gateway's direct APNs path (push.test is the
+// gateway's generic alert: title + body to one paired node). Needs the paired node id and the gateway's
+// APNs credentials; both live outside this repo.
+export async function pushAlert({ nodeId, title, body, openclawCli = process.env.OCA_OPENCLAW_CLI || '/opt/homebrew/bin/openclaw', timeout = 20000 }) {
+  const params = JSON.stringify({ nodeId, title: text(title, 60), body: text(body, 220) });
+  const { stdout } = await run(openclawCli, ['gateway', 'call', 'push.test', '--json', '--timeout', String(timeout), '--params', params], { timeout: timeout + 5000, env: { ...process.env, NO_COLOR: '1' } });
+  let r = null; try { r = JSON.parse(stdout); } catch { throw new Error(`gateway: ${text(stdout, 160)}`); }
+  if (!r?.ok) throw new Error(`gateway: ${text(r?.error?.message || r?.error || stdout, 160)}`);
+  return r;
+}
+
 export function createAsks({ pool, risk, clock = Date.now, log = console,
-  imessage = process.env.OCA_OWNER_IMESSAGE || null, notify = true, perDay = 5, dedupeMs = 12 * 3600_000, deliverers = null } = {}) {
+  imessage = process.env.OCA_OWNER_IMESSAGE || null, pushNode = process.env.OCA_OWNER_PUSH_NODE || null,
+  notify = true, perDay = 5, dedupeMs = 12 * 3600_000, deliverers = null } = {}) {
 
   async function init() {
     await pool.query(`CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, message TEXT NOT NULL, category TEXT DEFAULT 'thought',
@@ -44,6 +56,8 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
       const script = `tell application "Messages"\n  set targetService to 1st service whose service type = iMessage\n  set targetBuddy to participant ${JSON.stringify(imessage)} of targetService\n  send ${JSON.stringify(message)} to targetBuddy\nend tell`;
       await run('osascript', ['-e', script], { timeout: 15000 });
     } : null,
+    // The phone, through APNs. Needs OCA_OWNER_PUSH_NODE (the paired iOS node id in the gateway).
+    push: pushNode ? async message => { await pushAlert({ nodeId: pushNode, title: 'Oneiro needs you', body: message }); } : null,
     // A macOS notification, for when the person is at the Mac.
     notification: notify ? async message => {
       await run('osascript', ['-e', `display notification ${JSON.stringify(message.slice(0, 200))} with title "Oneiro needs you"`], { timeout: 5000 });
