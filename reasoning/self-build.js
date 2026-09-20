@@ -317,6 +317,11 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
       }
       result.coder = coded.coder; result.summary = coded.report.summary;
       await rm(join(dir, 'SELF-BUILD.md'), { force: true });
+      // An agent runtime that treated the worktree as a workspace may have seeded its own files there; not a change.
+      for (const f of ['AGENTS.md', 'IDENTITY.md', 'SOUL.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md', 'BOOTSTRAP.md', 'MEMORY.md', 'memory']) {
+        const tracked = await git(['ls-files', '--error-unmatch', '--', f], dir).then(() => true, () => false);
+        if (!tracked) await rm(join(dir, f), { recursive: true, force: true }).catch(() => {});
+      }
       // The shared node_modules symlink is not a change (a symlink is not matched by the `node_modules/` ignore rule).
       const changed = (await git(['status', '--porcelain'], dir)).stdout.split('\n').filter(Boolean).map(l => l.slice(3).trim()).filter(f => f !== 'node_modules' && !f.startsWith('node_modules/'));
       if (!changed.length) return fail('the coder changed nothing', 'no_change');

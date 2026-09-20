@@ -56,7 +56,7 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
   const head = `${THINKER} You are deployed by the Oneiro engine on pursuit #${chainId}: ${text(want, 600)}\n`
     + (doneWhen ? `Done when: ${text(doneWhen, 400)}\n` : '')
     + `Your role: ${kind}. ${({ research: 'Find and verify what the pursuit is missing. The only browser is Aside — the aside__* tools: look at a tab (aside__aside_snapshot_tab), then click, type, select, press and navigate to set date ranges, filters and pages yourself until the page shows what you need. The person\'s signed-in accounts are the open tabs (aside__aside_tabs). Never ask the person to arrange a page you can arrange yourself; ask only for what only they can give — a sign-in, a number, a decision.',
-        builder: `Change the engine's own code to carry out the task, in the worktree at ${cwd || '(your working directory)'}: read SELF-BUILD.md there first, keep the constitution files untouched, run the tests (node --test tests/) until green, and report files_changed, tests_run, ready. Do not commit, push or merge — the engine does that after it observes the tests.`,
+        builder: `Change the engine's own code to carry out the task. Your worktree is ${cwd || '(named in the task)'} — every command runs there (cd into it first; your shell starts elsewhere) and you edit only files under it. Read SELF-BUILD.md there first, keep the constitution files untouched, run the tests (cd there && node --test tests/) until green. Your done block carries the fields, not prose: {"status":"done","summary":"…","files_changed":["thinker-bridge.js"],"tests_run":true,"ready":true}. Do not commit, push or merge — the engine does that after it observes the tests.`,
         executor: 'Act in the world exactly as the task says and no further; report what you did and what you observed happen, never what you intended.',
         talker: `You are the voice of the engine for this pursuit — you talk, you do not do the pursuit's work (research agents do that; you can see them and their results in the live state: curl -s ${engine}/ponder/${chainId} and curl -s ${engine}/oca/agents?chainId=${chainId}). When the person asks what is happening, answer from that state in two or three lines. What they state is fact for the engine; when they change direction, say back what changed. Do not open the browser, do not research. Until the person speaks, reply with one short line saying you are here for this pursuit.` })[kind]}\n`
     + (task ? `\nTask now: ${text(task, 3000)}\n` : '')
@@ -109,12 +109,12 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     // The label is what the app shows in its list: the want, the role, and enough of the task to tell agents apart.
     const displayName = `#${row.id} ${kind} · ${text(task || want, 56)}${task ? '' : ''}`.replace(/\s+·\s*$/, '');
     const key = `agent:${agentId}:want-${row.id}-${kind}-${id.slice(0, 8)}`;
-    await gateway.createSession({ agentId, key, label: `${displayName} (${id.slice(0, 6)})`, displayName, model, thinkingLevel, cwd });
+    await gateway.createSession({ agentId, key, label: `${displayName} (${id.slice(0, 6)})`, displayName, model, thinkingLevel });
     await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, display_name, status, fired_by, cwd)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [id, row.id, kind, text(task, 3000), brief, key, agentId, displayName, standing ? 'standing' : 'queued', firedBy, cwd]);
     log.log?.(`[agents] deployed ${kind} ${id.slice(0, 8)} for want #${row.id} (${firedBy}) → ${key}`);
     if (!standing) await startTurn(id, brief).catch(e => log.warn?.('[agents] first turn:', e.message));
-    else await gateway.turn({ sessionKey: key, message: brief, idempotencyKey: `${id}:0`, cwd }).catch(e => log.warn?.('[agents] talker brief:', e.message));
+    else await gateway.turn({ sessionKey: key, message: brief, idempotencyKey: `${id}:0` }).catch(e => log.warn?.('[agents] talker brief:', e.message));
     if (standing) await pool.query(`UPDATE agent_deployments SET seen_at_ms = $2 WHERE id = $1`, [id, clock()]);
     return { ...rowOf((await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]), decision: 'proceed' };
   }
@@ -125,7 +125,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     const { rows: [d] } = await pool.query(`UPDATE agent_deployments SET status = 'running', run_id = $2 || ':' || (turns + 1), turns = turns + 1, updated_at = now()
       WHERE id = $1 AND status IN ('queued', 'running', 'waiting_person', 'standing') RETURNING *`, [id, id]); if (!d) return;
     try {
-      await gateway.turn({ sessionKey: d.session_key, message, idempotencyKey: d.run_id, cwd: d.cwd });
+      await gateway.turn({ sessionKey: d.session_key, message, idempotencyKey: d.run_id });
       await pool.query('UPDATE agent_deployments SET seen_at_ms = $2 WHERE id = $1', [id, clock()]);
     } catch (e) {
       await pool.query(`UPDATE agent_deployments SET status = 'queued', turns = turns - 1, run_id = NULL WHERE id = $1`, [id]);
@@ -340,7 +340,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     const { rows: [d] } = await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id]); if (!d) throw new Error('agent not found');
     if (!['waiting_person', 'standing', 'done', 'running'].includes(d.status)) throw new Error(`agent is ${d.status}`);
     if (d.ask_id && asks) await asks.answer(d.ask_id, text(reply, 500)).catch(() => {});
-    if (d.status === 'standing' || d.status === 'done') { await gateway.turn({ sessionKey: d.session_key, message: `[Quinn, via ${via}] ${text(reply, 4000)}`, cwd: d.cwd }); }
+    if (d.status === 'standing' || d.status === 'done') { await gateway.turn({ sessionKey: d.session_key, message: `[Quinn, via ${via}] ${text(reply, 4000)}` }); }
     else await startTurn(d.id, `[Quinn, via ${via}] ${text(reply, 4000)}`);
     return rowOf((await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]);
   }
