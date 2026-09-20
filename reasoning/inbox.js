@@ -28,7 +28,7 @@ function parseNote(md) {
   return m ? { title: m[1], meta: m[2], body: m[3].trim() } : { title: '', meta: '', body: String(md).trim() };
 }
 
-export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null, asks = null }) {
+export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null, asks = null, agents = null }) {
   const safeName = s => /^[A-Za-z0-9._-]{1,120}$/.test(String(s)) && !String(s).includes('..');
 
   async function activeWants() {
@@ -71,9 +71,18 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return out;
   }
 
-  function wantsOf(rows) {
+  // The agents on a want, live ones first, as the app shows them: kind, status, the question if waiting, the session to open.
+  const agentOf = a => ({ id: a.id, kind: a.kind, status: a.status, task: text(a.task, 200), question: a.question || null, askId: a.askId || null, sessionKey: a.sessionKey, displayName: a.displayName, turns: a.turns, summary: text(a.report?.summary, 300), updatedAt: a.updatedAt });
+  async function agentsByWant() {
+    if (!agents) return new Map();
+    const all = await agents.list({ limit: 200 }).catch(() => []);
+    const m = new Map();
+    for (const a of all) { if (!m.has(a.chainId)) m.set(a.chainId, []); const l = m.get(a.chainId); if (l.length < 12) l.push(agentOf(a)); }
+    return m;
+  }
+  function wantsOf(rows, byWant = new Map()) {
     return rows.map(row => { const w = row.state.want, r = row.state.result || {};
-      return { kind: 'want', chainId: row.id, description: text(w.description, 400), doneWhen: text(w.doneWhen, 300), progress: w.progress || 0,
+      return { kind: 'want', chainId: row.id, agents: byWant.get(row.id) || [], description: text(w.description, 400), doneWhen: text(w.doneWhen, 300), progress: w.progress || 0,
         status: row.status, strategy: w.strategy, origin: row.state.origin?.kind || 'explicit', updatedAt: row.updated_at,
         continuous: row.state.continuous === true, continuity: row.state.continuity || null, researchActive: row.state.researchActive === true,
         needs: (row.state.needs || []).map(n => ({ kind: n.kind, host: n.host, at: n.at })),
@@ -87,8 +96,8 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
 
   async function list() {
     const rows = await activeWants();
-    const [a, n, e, open] = await Promise.all([artifacts(rows), notes(), entities(), asks ? asks.open().catch(() => []) : []]);
-    return { at: clock(), toRate: [...a, ...n].sort((x, y) => (y.at || 0) - (x.at || 0)), wants: wantsOf(rows), entities: e, asks: open };
+    const [a, n, e, open, byWant] = await Promise.all([artifacts(rows), notes(), entities(), asks ? asks.open().catch(() => []) : [], agentsByWant()]);
+    return { at: clock(), toRate: [...a, ...n].sort((x, y) => (y.at || 0) - (x.at || 0)), wants: wantsOf(rows, byWant), entities: e, asks: open, agentSlots: agents ? await agents.slots().catch(() => null) : null, agentsLive: agents ? await agents.liveCount().catch(() => 0) : 0 };
   }
 
   // A person's verdict on a deliverable: a receipt on its want. "Useful" or better is progress; anything
@@ -162,6 +171,15 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return queue.setContinuous(id, on === true);
   }
 
-  async function answerAsk({ id, reply = 'done' }) { if (!asks) throw new Error('asks are not available'); return asks.answer(Number(id), reply); }
+  // Answering an ask that an agent raised also puts the answer in that agent's session, so it continues.
+  async function answerAsk({ id, reply = 'done', via = 'the app' }) {
+    if (!asks) throw new Error('asks are not available');
+    const row = await asks.answer(Number(id), reply);
+    if (agents && row?.metadata?.sessionKey) {
+      const { rows } = await pool.query('SELECT id FROM agent_deployments WHERE ask_id = $1 LIMIT 1', [Number(id)]);
+      if (rows[0]) await agents.relay(rows[0].id, reply, { via }).catch(e => log.warn?.('[inbox] relay to agent:', e.message));
+    }
+    return row;
+  }
   return { list, rate, progress, want, continuous, answerAsk, artifacts: async () => artifacts(await activeWants()), notes };
 }

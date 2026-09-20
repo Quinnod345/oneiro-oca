@@ -249,6 +249,19 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
     await writeFile(join(dir, 'SELF-BUILD.md'), brief, { mode: 0o600 });
     return brief;
   }
+  // A builder agent: a gateway session the person can open and argue with, working in the same worktree.
+  // The engine still runs the tests, commits and publishes — a builder's report is what it says, not proof.
+  let agents = null;
+  function useAgents(a) { agents = a; }
+  async function codeWithAgent(dir, ctx, signal) {
+    const chainId = ctx.chain.chain_id;
+    const d = await agents.deploy(chainId, { kind: 'builder', task: `Carry out SELF-BUILD.md in ${dir}. Report files_changed, tests_run, ready.`, cwd: dir, firedBy: 'engine' });
+    if (!d.id) throw new Error(`builder not deployed: ${d.why || d.decision}`);
+    const done = await agents.waitFor(d.id, { timeoutMs: Math.max(120_000, ctx.budget.timeBudgetSeconds * 1000 * 4), signal });
+    if (done.status !== 'done') throw new Error(`builder ${done.status}: ${text(done.error || done.report?.summary || done.question || '', 300)}`);
+    const r = done.report || {};
+    return { coder: 'agent', deployment: d.id, report: { summary: text(r.summary, 600), files_changed: Array.isArray(r.files_changed) ? r.files_changed : [], tests_run: r.tests_run === true, ready: r.ready === true } };
+  }
   async function codeWithCodex(dir, ctx, signal) {
     const prompt = `Read SELF-BUILD.md in this directory and carry it out. Report with the structured schema: summary, files_changed, tests_run, ready.`;
     const r = await runner(prompt, { workingDirectory: dir, sandbox: 'workspace-write', timeoutMs: Math.max(120_000, ctx.budget.timeBudgetSeconds * 1000 * 4), signal, outputSchema: coderReportSchema });
@@ -296,7 +309,8 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
       const brief = await writeBrief(dir, ctx, evidence);
       let coded;
       const codexOk = !!runner && inferenceMode() !== 'local' && !(await codexBackedOff());
-      try { coded = codexOk ? await codeWithCodex(dir, ctx, AbortSignal.timeout(ctx.budget.timeBudgetSeconds * 1000 * 4)) : await codeWithLocal(dir, ctx, brief); }
+      const agentOk = !!agents && inferenceMode() !== 'local' && await agents.available().catch(() => false);
+      try { coded = agentOk ? await codeWithAgent(dir, ctx, AbortSignal.timeout(ctx.budget.timeBudgetSeconds * 1000 * 4)) : codexOk ? await codeWithCodex(dir, ctx, AbortSignal.timeout(ctx.budget.timeBudgetSeconds * 1000 * 4)) : await codeWithLocal(dir, ctx, brief); }
       catch (e) {
         if (codexOk && ENVIRONMENT.test(String(e.message))) { noteCodexDown(e.message); coded = await codeWithLocal(dir, ctx, brief); }
         else throw e;
@@ -371,5 +385,5 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
     return { ok: true, sha: built.sha };
   }
 
-  return { introspect, reconcile, tick, enter, exit, status, build, isActive, permitted, selfWants };
+  return { introspect, reconcile, tick, enter, exit, status, build, isActive, permitted, selfWants, useAgents };
 }

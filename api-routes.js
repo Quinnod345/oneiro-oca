@@ -23,6 +23,9 @@ import visualMemory from './sensory/screenshot-indexer.js';
 import { thinkerTelemetry } from './thinker-bridge.js';
 import { registerMobileCompanionRoutes } from './mobile-companion.js';
 import { createInbox } from './reasoning/inbox.js';
+import { createAgents } from './reasoning/agents.js';
+import { createGateway } from './gateway.js';
+import { aside as asideBrowser } from './aside.js';
 
 export const ocaRouter = Router();
 const userWorkspace = createUserWorkspace({ pool, queue: ponderQueue, runPending: runPendingPonder,
@@ -46,6 +49,17 @@ ocaRouter.use('/ponder/:id/work', async (_req, res, next) => {
 });
 ocaRouter.use(pursuitWork.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => pursuitWork.stop());
+// Deployed agents: gateway sessions the thinker opens for a want — research, builders, executors, and one
+// talker per want where the person and the engine speak directly. They carry continuous wants when the
+// gateway is up; Codex slices remain the fallback. Fan-out is bounded by the agentSlots control.
+const gateway = createGateway();
+const agents = createAgents({ pool, gateway, queue: ponderQueue, risk: riskJournal, asks, aside: asideBrowser, llm, controls: userControls,
+  model: process.env.OCA_AGENT_MODEL || null, agentId: process.env.OCA_AGENT_ID || 'oca',
+  roots: ['/Users/quinnodonnell/oneiro/runtime/workspace', '/Users/quinnodonnell/oneiro/oca-cognitive'] });
+const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
+agentsReady.catch(error => console.error('[agents] startup:', error.message));
+ocaRouter.use(agents.router);
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
 ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }));
 registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
 
@@ -1516,10 +1530,10 @@ const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: 
     visual: (q, n) => visualMemory.searchVisualMemory(q, n),
     entities: q => entityContextForText(q, { limit: 8 }),
   } });
-const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks });
+const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks, agents });
 // The person answers an ask (or just clears it): { reply? }
 ocaRouter.post('/oca/inbox/asks/:id/answer', async (req, res) => {
-  try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done' })); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done', via: req.body?.via || 'the app' })); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 pursuitDrafts.sweep().then(r => { if (r.failed) console.log(`[draft] ${r.failed} draft(s) left mid-flight by a restart marked failed`); }).catch(() => {});
 // Body: { clientRequestId (uuid), text, answers?: [{questionId, answer}], by? } → 202 while drafting; poll GET /oca/inbox/draft/:id?wait=25
