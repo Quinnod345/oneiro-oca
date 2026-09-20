@@ -68,7 +68,7 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
 }
 
 export function createAgents({ pool, gateway, queue, risk = null, asks = null, aside = null, llm = null, controls = null, clock = Date.now, log = console,
-  agentId = 'oca', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
+  agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
   roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000 } = {}) {
 
   async function init() {
@@ -149,8 +149,11 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     return { verified, unverified };
   }
   // The person's words in a session are theirs; the engine records them as stated evidence.
+  // A message the app sent appears once as sent and once as the run persisted it; one statement, not two.
   async function personStatements(d, messages, sinceMs = 0) {
-    const said = messages.filter(m => m.role === 'user' && (m.at || 0) > sinceMs && !String(m.text || '').startsWith(THINKER) && text(m.text, 20).length >= 3);
+    const seen = new Set();
+    const said = messages.filter(m => m.role === 'user' && (m.at || 0) > sinceMs && !String(m.text || '').startsWith(THINKER) && text(m.text, 20).length >= 3)
+      .filter(m => { const k = norm(m.text); if (seen.has(k)) return false; seen.add(k); return true; });
     return said.map(m => ({ id: `person-${d.session_key.slice(-8)}-${m.at || clock()}`, source: `stated by Quinn in the agent session "${d.display_name}"`, observation: text(String(m.text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 1000) }));
   }
   async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null }) {

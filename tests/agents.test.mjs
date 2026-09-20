@@ -95,7 +95,7 @@ test('an agent is deployed as a session, works in turns, asks the person through
   const chain = await inbox.want({ description: 'Find the current App Store price of InnerEcho', doneWhen: 'The price is quoted from the listing.' });
   // deploy
   const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Find the price', firedBy: 'engine' });
-  assert.equal(d.decision, 'proceed'); assert.equal(d.status, 'running'); assert.match(d.sessionKey, /^agent:oca:want-\d+-research-/); assert.equal(d.turns, 1);
+  assert.equal(d.decision, 'proceed'); assert.equal(d.status, 'running'); assert.match(d.sessionKey, /^agent:main:want-\d+-research-/); assert.equal(d.turns, 1);
   assert.equal(gw.calls.filter(c => c[0] === 'create').length, 1);
   assert.equal(await agents.liveCount(), 1);
   // slots bound the fan-out

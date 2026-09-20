@@ -35,7 +35,7 @@ export async function pushAlert({ nodeId, title, body, openclawCli = process.env
 
 export function createAsks({ pool, risk, clock = Date.now, log = console,
   imessage = process.env.OCA_OWNER_IMESSAGE || null, pushNode = process.env.OCA_OWNER_PUSH_NODE || null,
-  notify = true, perDay = 5, dedupeMs = 12 * 3600_000, deliverers = null } = {}) {
+  notify = true, perDay = Number(process.env.OCA_ASKS_PER_DAY) || 40, dedupeMs = 12 * 3600_000, deliverers = null } = {}) {
 
   async function init() {
     await pool.query(`CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, message TEXT NOT NULL, category TEXT DEFAULT 'thought',
@@ -79,8 +79,14 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
       AND created_at > to_timestamp($3 / 1000.0) AND replied_at IS NULL LIMIT 1`, [key, chainId, clock() - dedupeMs]);
     if (dupes.length) return { asked: false, why: 'already asked', id: dupes[0].id };
     const { rows: [{ n }] } = await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE category = 'ask' AND created_at > to_timestamp($1 / 1000.0)`, [clock() - 24 * 3600_000]);
-    if (n >= perDay) return { asked: false, why: `daily cap of ${perDay} reached` };
     const message = composeAsk({ kind, host, want, chainId, detail, agent });
+    // Past the daily cap the phone stays quiet, but the ask is still recorded: the app shows it, and an agent
+    // waiting on it is still answered from there. A question is never dropped.
+    if (n >= perDay) {
+      const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'normal', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id`,
+        [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: 'held', held: `daily cap of ${perDay}`, delivered: [], failed: [], at: clock(), ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
+      return { asked: false, id: row.id, why: `daily cap of ${perDay} reached; recorded for the app`, message };
+    }
     const id = `ask:${chainId}:${key}:${new Date(clock()).toISOString().slice(0, 13)}`.slice(0, 200);
     let decision = null;
     if (risk) {
