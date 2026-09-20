@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { createAsks, composeAsk } from '../reasoning/asks.js';
+import { createAsks, composeAsk, pushAlert } from '../reasoning/asks.js';
 import { createProposal, appraise, OWNER_KEY } from '../motivation/risk.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -71,4 +71,13 @@ test('a sign-in wall is observed from the page, not inferred; tooling friction i
   assert.equal(accessBlock({ url: 'https://app.posthog.com/login', title: 'PostHog' }).kind, 'sign_in');
   assert.equal(accessBlock({ url: 'https://appstoreconnect.apple.com/apps', title: 'Apps - App Store Connect', text: 'My Apps InnerEcho' }), null);
   assert.equal(classifyFriction('Slice x completed with 0 verified sources; evidence applied: false. tooling: 12 Aside reads yielded no verifiable rows.'), 'defect');
+});
+
+test('the phone is a delivery channel only when a paired node is configured; a push is judged by the gateway\'s answer', async () => {
+  const stub = { query: async () => ({ rows: [] }) };
+  assert.deepEqual(createAsks({ pool: stub, imessage: null, pushNode: null, notify: false }).channels(), []);
+  assert.deepEqual(createAsks({ pool: stub, imessage: null, pushNode: 'node-1', notify: false }).channels(), ['push']);
+  // a non-JSON or not-ok answer from the gateway is a failed delivery, never a silent success
+  await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/usr/bin/false' }));
+  await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/bin/echo' }), /gateway:/);
 });
