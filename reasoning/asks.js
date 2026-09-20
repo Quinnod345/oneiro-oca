@@ -30,10 +30,18 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
   }
 
   // Delivery channels, each best-effort and journaled by name. The notification row is not a channel: it is the record.
+  const openclawCli = process.env.OCA_OPENCLAW_CLI || '/opt/homebrew/bin/openclaw';
   const channels = deliverers || {
-    // iMessage to the person's own handle, through Messages on this Mac. Needs OCA_OWNER_IMESSAGE.
+    // iMessage to the person's own handle. Through OpenClaw's iMessage channel when it is there — so the
+    // ask lands in the standing conversation the person's agent keeps, with its context — else straight
+    // through Messages on this Mac. Needs OCA_OWNER_IMESSAGE.
     imessage: imessage ? async message => {
-      const script = `tell application "Messages"\n  set targetService to 1st account whose service type = iMessage\n  set targetBuddy to participant ${JSON.stringify(imessage)} of targetService\n  send ${JSON.stringify(message)} to targetBuddy\nend tell`;
+      try {
+        const { stdout } = await run(openclawCli, ['message', 'send', '--channel', 'imessage', '--target', imessage, '-m', message, '--json'], { timeout: 30000, env: { ...process.env, NO_COLOR: '1' } });
+        if (/"ok"\s*:\s*false|"error"/i.test(stdout) && !/"ok"\s*:\s*true/i.test(stdout)) throw new Error(`openclaw: ${stdout.slice(0, 160)}`);
+        return;
+      } catch (e) { if (process.env.OCA_ASK_IMESSAGE_DIRECT === '0') throw e; }
+      const script = `tell application "Messages"\n  set targetService to 1st service whose service type = iMessage\n  set targetBuddy to participant ${JSON.stringify(imessage)} of targetService\n  send ${JSON.stringify(message)} to targetBuddy\nend tell`;
       await run('osascript', ['-e', script], { timeout: 15000 });
     } : null,
     // A macOS notification, for when the person is at the Mac.
