@@ -31,16 +31,18 @@ export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 3
     return lastHealth.ok;
   }
   // A session for an agent: created idle (no turn), named so the person recognises it in the app.
-  async function createSession({ agentId, key, label, displayName, model, thinkingLevel, cwd, parentSessionKey }) {
-    // No idempotencyKey: the CLI call carries no principal the gateway would bind it to; the key itself is unique.
+  // No cwd: a session cwd makes the gateway treat the directory as a workspace and seed it with bootstrap files;
+  // a builder's worktree is named in its brief instead. No idempotencyKey: the CLI call carries no principal.
+  async function createSession({ agentId, key, label, displayName, model, thinkingLevel, parentSessionKey }) {
     const params = { agentId, key, label, displayName };
-    if (model) params.model = model; if (thinkingLevel) params.thinkingLevel = thinkingLevel; if (cwd) params.cwd = cwd; if (parentSessionKey) params.parentSessionKey = parentSessionKey;
+    if (model) params.model = model; if (thinkingLevel) params.thinkingLevel = thinkingLevel; if (parentSessionKey) params.parentSessionKey = parentSessionKey;
     return call('sessions.create', params);
   }
   // A turn: the message is what the engine (or the person, relayed) says; the agent answers in the session.
-  async function turn({ sessionKey, message, idempotencyKey = randomUUID(), timeout = 900, cwd, label }) {
+  // cwd is reserved by the gateway for its own subagent runs; a builder's worktree travels in the brief instead.
+  async function turn({ sessionKey, message, idempotencyKey = randomUUID(), timeout = 900, label }) {
     const params = { sessionKey, message, idempotencyKey, deliver: false, timeout };
-    if (cwd) params.cwd = cwd; if (label) params.label = label;
+    if (label) params.label = label;
     return call('agent', params, { timeout: 20_000 });
   }
   // Waits at most timeoutMs for a run: {status:'ok'|'error'|'pending'|'timeout', terminalReply:{text}}.
