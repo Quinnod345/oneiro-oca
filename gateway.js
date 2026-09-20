@@ -11,8 +11,14 @@ export const OPENCLAW_CLI = process.env.OCA_OPENCLAW_CLI || '/opt/homebrew/bin/o
 
 export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 30_000, log = console } = {}) {
   const exec = runner || (async (args, ms) => {
-    const { stdout } = await run(cli, args, { timeout: ms, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, NO_COLOR: '1' } });
-    return stdout;
+    try {
+      const { stdout } = await run(cli, args, { timeout: ms, maxBuffer: 16 * 1024 * 1024, env: { ...process.env, NO_COLOR: '1' } });
+      return stdout;
+    } catch (e) {
+      // The CLI's own words travel with the failure, so a hung prompt or a missing identity is named, not guessed.
+      const detail = [e.killed || e.signal ? `timed out after ${ms} ms` : '', String(e.stderr || '').trim().slice(0, 300), String(e.stdout || '').trim().slice(0, 200)].filter(Boolean).join(' | ');
+      throw new Error(`openclaw ${args[2] || args[0]}: ${detail || e.message}`);
+    }
   });
   // One RPC. The CLI prints the result as JSON; a gateway_request_error comes back as {ok:false,error}.
   async function call(method, params = {}, { timeout = timeoutMs } = {}) {

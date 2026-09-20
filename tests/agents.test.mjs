@@ -224,3 +224,20 @@ test('a provider limit is not the pursuit\'s failure: deployments pause for an h
   await assert.doesNotReject(agents.deploy(chain.chain_id, { kind: 'research', task: 'later', firedBy: 'engine' }), 'resumes after an hour');
   const journal = (await risk.recent({ chainId: chain.chain_id })).find(x => x.id === `agent:${d.id}`); assert.equal(journal.outcome.result, 'not_attempted');
 }));
+
+test('a run lost to a gateway restart is recovered from the transcript: the agent\'s newer reply is taken as the turn', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false, askOwner: true }) });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `later${block({ status: 'done', summary: 'recovered' })}` });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => ({ agentSlots: 4 }) }, clock: () => now, log: { log() {}, warn() {} } });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Recover a lost run', doneWhen: 'The reply is taken from the transcript.' });
+  const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 't', firedBy: 'engine' });
+  gw.wait = async () => ({ status: 'timeout' });   // the run id is gone with the restart
+  await agents.poll(); assert.equal((await agents.get(d.id)).status, 'running', 'within the grace period nothing is assumed');
+  now += 120_000;
+  await agents.poll(); assert.equal((await agents.get(d.id)).status, 'done', 'the transcript reply became the turn');
+}));

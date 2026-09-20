@@ -268,7 +268,19 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
           if (d.status === 'running') {
             if (!d.run_id) { await startTurn(d.id, d.brief); continue; }
             const w = await gateway.wait(d.run_id, { timeoutMs: 1000 });
-            if (!w || w.status === 'pending' || w.status === 'timeout') continue;
+            if (!w || w.status === 'pending' || w.status === 'timeout') {
+              // A gateway restart re-runs a turn under a new run id, so the old one never resolves. The transcript
+              // still shows the reply: after a grace period, a settled session whose last words are the agent's,
+              // newer than the turn's start, is that turn's reply.
+              const since = Number(d.seen_at_ms) || 0;
+              if (clock() - since < 90_000) continue;
+              const t = await gateway.transcript(d.session_key).catch(() => null);
+              const last = t?.messages?.at(-1);
+              if (!t || t.pending || !last || last.role !== 'assistant' || (last.at || 0) <= since) continue;
+              log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)}: run ${d.run_id} did not resolve; taking the reply from the transcript`);
+              await applyReply(d, last.text, t.messages);
+              continue;
+            }
             const messages = await gateway.history(d.session_key).catch(() => []);
             if (w.status === 'error') { if (w.stopReason === 'superseded') continue; await fail(d, w.error?.message || w.error || 'the run ended in error'); continue; }
             await applyReply(d, w.terminalReply?.text || '', messages);

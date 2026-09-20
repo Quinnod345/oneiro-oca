@@ -57,7 +57,7 @@ const agents = createAgents({ pool, gateway, queue: ponderQueue, risk: riskJourn
   model: process.env.OCA_AGENT_MODEL || null, agentId: process.env.OCA_AGENT_ID || 'main',
   roots: ['/Users/quinnodonnell/oneiro/runtime/workspace', '/Users/quinnodonnell/oneiro/oca-cognitive'] });
 const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
-agentsReady.catch(error => console.error('[agents] startup:', error.message));
+agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
 ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }));
