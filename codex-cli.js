@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ASIDE_TOOL_NAMES } from './aside-mcp.js';
 
 const DEFAULT_WORKING_DIRECTORY = '/Users/quinnodonnell/oneiro/runtime/workspace';
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -51,7 +52,7 @@ export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 // servers outside its command sandbox, so this is how a sandboxed slice reaches Aside. Read tools only —
 // open, read, snapshot, search, tabs — auto-approved because none of them can act on the world.
 export const ASIDE_MCP_SERVER = new URL('./aside-mcp.js', import.meta.url).pathname;
-export const ASIDE_MCP_TOOLS = ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs', 'aside_read_tab', 'aside_snapshot_tab'];
+export const ASIDE_MCP_TOOLS = ASIDE_TOOL_NAMES;   // every tool the server offers is pre-approved: the server itself is the boundary
 export function asideMcpArgs({ server = ASIDE_MCP_SERVER, node = process.execPath } = {}) {
   return [
     '-c', `mcp_servers.aside.command=${JSON.stringify(node)}`,
