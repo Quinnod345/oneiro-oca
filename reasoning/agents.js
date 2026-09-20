@@ -93,6 +93,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     const row = await chain(Number(chainId)); if (!row) throw new Error('Pursuit not found');
     if (['cancelled', 'resolved'].includes(row.status) || row.state.want?.status !== 'active') throw new Error('This pursuit is closed');
     if (!(await gateway.available())) throw new Error('The gateway is not reachable; no agent can be deployed');
+    if (firedBy === 'engine' && clock() < providerBackoffUntil) throw new Error(`the model provider is limiting agents; deployments resume at ${new Date(providerBackoffUntil).toISOString()}`);
     if (!standing && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
     const id = randomUUID();
     const s = row.state, want = s.want?.description || row.seed;
@@ -179,8 +180,24 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
     return final;
   }
+  // The model provider, not the pursuit: usage limits and quotas pause deployments for a while and tell the
+  // person once, instead of spending the cadence on attempts that cannot run.
+  const PROVIDER_LIMIT = /out of usage credits|usage limit|rate limit|quota|too many requests|\b429\b|insufficient_quota|overloaded|credit balance/i;
+  let providerBackoffUntil = 0, providerNoticeAt = 0;
+  async function providerTrouble(d, why) {
+    const until = clock() + 60 * 60_000;
+    providerBackoffUntil = Math.max(providerBackoffUntil, until);
+    log.warn?.(`[agents] provider limit: deployments paused until ${new Date(until).toISOString()}: ${text(why, 160)}`);
+    if (asks && clock() - providerNoticeAt > 6 * 3600_000) {
+      providerNoticeAt = clock();
+      try { await asks.ask({ chainId: d.chain_id, kind: 'notice', detail: `its agents cannot run — the model provider says: "${text(why, 140)}". Deployments are paused for an hour and will retry on their own; switch the agent model or add credits to resume sooner.`, want: '' }); }
+      catch (e) { log.warn?.('[agents] provider notice:', e.message); }
+    }
+  }
   async function fail(d, why) {
+    const provider = PROVIDER_LIMIT.test(String(why));
     await pool.query(`UPDATE agent_deployments SET status = 'failed', error = $2, ended_at = now(), updated_at = now() WHERE id = $1`, [d.id, text(why, 500)]);
+    if (provider) { await providerTrouble(d, why); await observe(d, 'not_attempted', `Agent ${d.id.slice(0, 8)} (${d.kind}) could not run: ${text(why, 200)}`); return; }
     await noteContinuity(d.chain_id, { found: false, error: text(why, 200) });
     await observe(d, 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) failed: ${text(why, 300)}`);
     log.warn?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} failed: ${text(why, 200)}`);
@@ -291,7 +308,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
   // thinker splits them into parallel research tasks. Builders are deployed by self-build; talkers on demand.
   const dueIn = (state, now) => { const c = state.continuity || {}, dry = Math.min(4, Number(c.dry) || 0); return Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0) + continuityIntervalMs * 2 ** dry - now; };
   async function plan({ perTick = 2 } = {}) {
-    if (!(await gateway.available())) return { started: [] };
+    if (!(await gateway.available()) || clock() < providerBackoffUntil) return { started: [] };
     const paused = await controls?.get?.().then(c => c.queuePaused === true).catch(() => false); if (paused) return { started: [] };
     const free = () => slots().then(async s => s - (await liveCount()));
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains

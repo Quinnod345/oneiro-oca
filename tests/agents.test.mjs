@@ -197,3 +197,30 @@ test('evidence that meets a want mid-review is applied on a later poll, never dr
   assert.equal(a1.status, 'waiting_person'); assert.equal(a2.status, 'waiting_person');
   assert.equal(a1.askId, a2.askId, 'the second agent joined the first ask'); assert.equal(sent.length, 1, 'one push, not two');
 }));
+
+test('a provider limit is not the pursuit\'s failure: deployments pause for an hour, the person is told once, the cadence is not spent', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const sent = [];
+  const asks = createAsks({ pool, risk, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => 'x' });
+  gw.wait = async () => ({ status: 'error', error: { message: "You're out of usage credits. Switch to another model, or manage usage credits at claude.ai" } });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} } });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, asks, agents });
+  const chain = await inbox.want({ description: 'Price InnerEcho', doneWhen: 'A price is quoted.', continuous: true });
+  const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'quote', firedBy: 'engine' });
+  await agents.poll();
+  const a = await agents.get(d.id); assert.equal(a.status, 'failed'); assert.match(a.error, /usage credits/);
+  assert.equal(sent.length, 1); assert.match(sent[0], /^Oneiro: its agents cannot run/);
+  const want = await queue.get(chain.chain_id); assert.equal(want.continuity?.dry ?? 0, 0, 'the cadence was not spent on the provider');
+  await assert.rejects(agents.deploy(chain.chain_id, { kind: 'research', task: 'again', firedBy: 'engine' }), /provider is limiting/);
+  assert.deepEqual((await agents.plan()).started, [], 'paused');
+  const person = await agents.deploy(chain.chain_id, { kind: 'research', task: 'by hand', firedBy: 'person' }); assert.ok(person.id, 'the person may still deploy by hand');
+  now += 61 * 60_000;
+  await assert.doesNotReject(agents.deploy(chain.chain_id, { kind: 'research', task: 'later', firedBy: 'engine' }), 'resumes after an hour');
+  const journal = (await risk.recent({ chainId: chain.chain_id })).find(x => x.id === `agent:${d.id}`); assert.equal(journal.outcome.result, 'not_attempted');
+}));
