@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseThought, extractFirstJsonObject } from '../thought-parse.js';
+import { parseThought, extractFirstJsonObject, thoughtText } from '../thought-parse.js';
 
 test('a clean object parses; the text alias is normalized to thoughts', () => {
   assert.deepEqual(parseThought('{"thoughts":"hello"}').thought.thoughts, 'hello');
@@ -30,6 +30,43 @@ test('non-string thoughts (the live "startsWith is not a function" failure) beco
   assert.equal(parseThought('{"thoughts":{"text":"nested"}}').thought.thoughts, 'nested');
   assert.equal(parseThought('{"thoughts":42}').thought.thoughts, '42');
   assert.equal(parseThought('{"thoughts":null,"text":"fallback"}').thought.thoughts, 'fallback');
+});
+
+test('thoughts as an array or an object survive the bridge string checks without throwing (self-build want #29)', () => {
+  const shapes = [
+    '{"thoughts":["Battery at 5%","Dia still open"]}',
+    '{"thoughts":{"text":"Battery at 5%"}}',
+    '{"thoughts":{"summary":"no text-ish key","confidence":0.4}}',
+    '{"thoughts":[["nested"],{"content":"object in array"},7,true]}',
+    '{"thoughts":42}',
+    '{"thoughts":true}',
+  ];
+  for (const raw of shapes) {
+    const { thought, error } = parseThought(raw);
+    assert.equal(error, undefined, raw);
+    assert.equal(typeof thought.thoughts, 'string', raw);
+    // The exact string methods thinker-bridge.js calls before the silent-tick and no-thoughts labels.
+    assert.doesNotThrow(() => {
+      thought.thoughts.startsWith('— (silent');
+      thought.thoughts.startsWith('[no .thoughts');
+      thought.thoughts.slice(0, 80);
+    }, raw);
+  }
+  assert.equal(parseThought(shapes[0]).thought.thoughts, 'Battery at 5% Dia still open');
+  assert.equal(parseThought(shapes[2]).thought.thoughts, '{"summary":"no text-ish key","confidence":0.4}');
+  assert.equal(parseThought(shapes[3]).thought.thoughts, 'nested object in array 7 true');
+});
+
+test('thoughtText coerces every shape to a string and never throws', () => {
+  assert.equal(thoughtText(null), '');
+  assert.equal(thoughtText(undefined), '');
+  assert.equal(thoughtText(['a', null, '', 'b']), 'a b');
+  assert.equal(thoughtText({ thoughts: ['x', 'y'] }), 'x y');
+  assert.equal(thoughtText(3.5), '3.5');
+  assert.equal(thoughtText(false), 'false');
+  const cyclic = {}; cyclic.self = cyclic;
+  assert.doesNotThrow(() => thoughtText(cyclic));
+  assert.equal(typeof thoughtText(cyclic), 'string');
 });
 
 test('malformed or absent JSON is an error, never a throw', () => {

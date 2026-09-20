@@ -1,5 +1,5 @@
 import { isSubstantiveThought, ThoughtCadence } from './thought-admission.js';
-import { parseThought } from './thought-parse.js';
+import { parseThought, thoughtText } from './thought-parse.js';
 // OCA Thinker Bridge — generative reasoning step
 // Assembles context from OCA state, calls LLM for "what should I do?",
 // dispatches actions through OCA subsystems.
@@ -615,9 +615,11 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
 
     const { thought } = parsed;
     delete thought.dream; delete thought.append_dream;   // dreams are a read-only archive
-    if (!thought.thoughts) {
-      thought.thoughts = '';
-    }
+    // The parser coerces thoughts to a string, but every check below calls
+    // string methods on it, and the price of trusting that contract was a
+    // lost tick ("thought.thoughts.startsWith is not a function" when a model
+    // returned an array or object). Coerce here too, at the crash site.
+    thought.thoughts = thoughtText(thought.thoughts).trim();
     // Three cases when thoughts is empty after normalization:
     //   (a) Intentional silent tick — {"continue_pondering": true}
     //       alone. Allowed and preferred under the new prompt. Mark it
