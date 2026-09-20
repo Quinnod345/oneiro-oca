@@ -124,11 +124,11 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
   // The row is claimed before the gateway is called, so a poll tick in between cannot send the same turn twice;
   // a call that fails hands the row back to the queue.
   async function startTurn(id, message) {
-    const { rows: [d] } = await pool.query(`UPDATE agent_deployments SET status = 'running', run_id = $2 || ':' || (turns + 1), turns = turns + 1, updated_at = now()
-      WHERE id = $1 AND status IN ('queued', 'running', 'waiting_person', 'standing') RETURNING *`, [id, id]); if (!d) return;
+    // seen_at_ms is the turn's start: everything the agent says after it belongs to this turn.
+    const { rows: [d] } = await pool.query(`UPDATE agent_deployments SET status = 'running', run_id = $2 || ':' || (turns + 1), turns = turns + 1, seen_at_ms = $3, updated_at = now()
+      WHERE id = $1 AND status IN ('queued', 'running', 'waiting_person', 'standing') RETURNING *`, [id, id, clock() - 1]); if (!d) return;
     try {
       await gateway.turn({ sessionKey: d.session_key, message, idempotencyKey: d.run_id });
-      await pool.query('UPDATE agent_deployments SET seen_at_ms = $2 WHERE id = $1', [id, clock()]);
     } catch (e) {
       await pool.query(`UPDATE agent_deployments SET status = 'queued', turns = turns - 1, run_id = NULL WHERE id = $1`, [id]);
       throw e;
