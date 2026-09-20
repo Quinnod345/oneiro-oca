@@ -48,7 +48,8 @@ const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 {"status":"needs_person","question":"the one thing only the person can answer or do","summary":"why"}  — ask in plain words above the block too
 {"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"]}
 {"status":"failed","summary":"why"}
-Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.`;
+Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
+If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.`;
 
 // The first message of a deployment: the pursuit, the task, what is known and missing, the rules.
 export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [], missing = [], remaining = [], cwd = null, engine = 'http://localhost:3333' }) {
