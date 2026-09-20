@@ -11,9 +11,10 @@ const run = promisify(execFile);
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
 // What the engine says for each kind of need. Only observed fields are interpolated.
-export function composeAsk({ kind, host, want, chainId, detail }) {
+export function composeAsk({ kind, host, want, chainId, detail, agent }) {
   const pursuit = `#${chainId}${want ? ` (${text(want, 60)})` : ''}`;
   switch (kind) {
+    case 'question': return `Oneiro's agent on ${pursuit} asks: ${text(detail, 500)} — open Oneiro and answer it in the chat${agent ? ` "${text(agent, 60)}"` : ''}, or reply here.`;
     case 'sign_in': return `Oneiro needs you: to keep working on ${pursuit} it needs you signed in to ${host} in Aside — it hit the sign-in page there. Sign in once in Aside and it will continue on its own.`;
     case 'open_tab': return `Oneiro needs you: for ${pursuit}, open the page it needs in Aside and leave the tab open — ${text(detail, 120)}. It reads open tabs.`;
     case 'evidence': return `Oneiro needs you: ${pursuit} has waited on something only you can give (${text(detail, 120)}). Open Oneiro → Judge → ${pursuit} to see what.`;
@@ -72,14 +73,14 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
   }
 
   // Ask once per (want, need) per dedupe window, at most perDay a day, only when the gate says proceed.
-  async function ask({ chainId, kind, host = '', detail = '', want = '', stakes = [] }) {
+  async function ask({ chainId, kind, host = '', detail = '', want = '', stakes = [], sessionKey = null, agent = null }) {
     const key = `${kind}:${host || text(detail, 60)}`;
     const { rows: dupes } = await pool.query(`SELECT id FROM notifications WHERE category = 'ask' AND metadata ->> 'key' = $1 AND (metadata ->> 'chainId')::int = $2
       AND created_at > to_timestamp($3 / 1000.0) AND replied_at IS NULL LIMIT 1`, [key, chainId, clock() - dedupeMs]);
     if (dupes.length) return { asked: false, why: 'already asked', id: dupes[0].id };
     const { rows: [{ n }] } = await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE category = 'ask' AND created_at > to_timestamp($1 / 1000.0)`, [clock() - 24 * 3600_000]);
     if (n >= perDay) return { asked: false, why: `daily cap of ${perDay} reached` };
-    const message = composeAsk({ kind, host, want, chainId, detail });
+    const message = composeAsk({ kind, host, want, chainId, detail, agent });
     const id = `ask:${chainId}:${key}:${new Date(clock()).toISOString().slice(0, 13)}`.slice(0, 200);
     let decision = null;
     if (risk) {
@@ -97,7 +98,7 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
       }
     }
     const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'high', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id, created_at`,
-      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock() }), clock()]);
+      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock(), ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
     if (risk && decision?.decision === 'proceed') {
       try { await risk.observe(id, { result: delivered.length ? 'success' : 'failure', evidence: [{ id: `ask-${row.id}`, source: 'ask runtime: delivery result', observation: `Ask #${row.id} ${delivered.length ? `delivered via ${delivered.join(', ')}` : 'recorded but no channel delivered'}${failed.length ? `; failed: ${failed.join('; ')}` : ''}.` }] }); }
       catch (e) { log.warn?.('[asks] outcome not journaled:', e.message); }
@@ -115,7 +116,7 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
 
   async function open() {
     const { rows } = await pool.query(`SELECT id, message, created_at, metadata FROM notifications WHERE category = 'ask' AND replied_at IS NULL ORDER BY created_at DESC LIMIT 20`);
-    return rows.map(r => ({ id: r.id, message: r.message, at: r.created_at, chainId: r.metadata?.chainId ?? null, kind: r.metadata?.kind, host: r.metadata?.host, delivered: r.metadata?.delivered || [] }));
+    return rows.map(r => ({ id: r.id, message: r.message, at: r.created_at, chainId: r.metadata?.chainId ?? null, kind: r.metadata?.kind, host: r.metadata?.host, detail: r.metadata?.detail || '', delivered: r.metadata?.delivered || [], sessionKey: r.metadata?.sessionKey || null, agent: r.metadata?.agent || null }));
   }
 
   return { init, ask, answer, open, recent, composeAsk, channels: () => Object.entries(channels).filter(([, f]) => f).map(([n]) => n) };

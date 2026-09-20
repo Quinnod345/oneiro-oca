@@ -5,10 +5,10 @@
 import { priceWant, parseEntityKey } from './worth.js';
 
 const clamp = (n, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, n));
-export const ACTION_KINDS = ['research_slice', 'read', 'web_search', 'shell', 'edit_file', 'edit_own_code', 'build', 'message', 'note', 'app_action', 'escalate', 'ask'];
+export const ACTION_KINDS = ['research_slice', 'deploy_agent', 'read', 'web_search', 'shell', 'edit_file', 'edit_own_code', 'build', 'message', 'note', 'app_action', 'escalate', 'ask'];
 // How much of a harm actually lands, by how reversible the action is.
 export const REVERSIBILITY = { readonly: 0, sandboxed: 0.05, undo: 0.25, none: 1 };
-export const CAPABILITY_OF = { research_slice: 'act_reversible', read: 'act_reversible', web_search: 'act_reversible', shell: 'act_reversible',
+export const CAPABILITY_OF = { research_slice: 'act_reversible', deploy_agent: 'act_reversible', read: 'act_reversible', web_search: 'act_reversible', shell: 'act_reversible',
   edit_file: 'act_reversible', edit_own_code: 'act_reversible', build: 'act_reversible', app_action: 'act_reversible',
   message: 'message', note: 'message', escalate: 'act_irreversible', ask: 'message' };
 // An ask is the one message the engine may send on its own: to its own person, saying only what it observed it
@@ -84,7 +84,7 @@ function constraintCheck(proposal, lookup) {
 
 // The appraisal. `lookup(entityKey)` returns ledger state or null. `controls.autonomousActions`
 // false is the master switch: nothing proceeds on its own, but the decision is still reasoned and recorded.
-export const INFORMATION_KINDS = ['read', 'web_search', 'research_slice'];
+export const INFORMATION_KINDS = ['read', 'web_search', 'research_slice', 'deploy_agent'];
 
 export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETITE, controls = { autonomousActions: false }, informationBonus = 0 } = {}) {
   // Curiosity buys appetite for finding things out, not for acting on the world.

@@ -7,12 +7,14 @@ export function createUserControls(pool) {
     const { rows } = await pool.query('SELECT settings, updated_at FROM oca_user_controls WHERE id = true');
     if (!rows[0]) throw new Error('User controls unavailable; apply migration 054');
     // askOwner: the engine may message its own person with what it observed it needs. On unless turned off.
-    return { askOwner: true, ...rows[0].settings, updatedAt: rows[0].updated_at };
+    return { askOwner: true, agentSlots: 4, ...rows[0].settings, updatedAt: rows[0].updated_at };
   }
   async function update(patch) {
     if (!patch || Array.isArray(patch) || typeof patch !== 'object' || !Object.keys(patch).length) throw new Error('Choose a control to update');
     for (const [key, value] of Object.entries(patch)) {
       if (key === 'inference') { if (!INFERENCE_MODES.includes(value)) throw new Error(`inference must be one of ${INFERENCE_MODES.join(', ')}`); continue; }
+      // agentSlots: how many deployed agents may be live at once — the person's bound on fan-out.
+      if (key === 'agentSlots') { if (!Number.isInteger(value) || value < 0 || value > 32) throw new Error('agentSlots is a whole number from 0 to 32'); continue; }
       if (!['queuePaused', 'interestDiscovery', 'selfBuild', 'selfBuildAutoMerge', 'askOwner'].includes(key) || typeof value !== 'boolean') throw new Error('Unknown control or invalid value');
     }
     await pool.query('UPDATE oca_user_controls SET settings = settings || $1::jsonb, updated_at = now() WHERE id = true', [JSON.stringify(patch)]);

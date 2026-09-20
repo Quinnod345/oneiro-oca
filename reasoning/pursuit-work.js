@@ -301,8 +301,11 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
     const last = Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0);
     return last + interval - now;
   }
+  let agents = null;   // when the gateway's agents are wired, they carry continuous wants; slices remain the fallback
+  function useAgents(a) { agents = a; }
   async function keepWorking({ perTick = 2 } = {}) {
     if (!(await canStart())) return { started: [] };
+    if (agents && await agents.available().catch(() => false)) return { started: [], deferredTo: 'agents' };
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true
         AND ponder_state #>> '{want,status}' = 'active' AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed')
@@ -343,5 +346,5 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
     sweep.then(() => runNext()).catch(e => console.error('[pursuit-work]', e.message)).finally(() => { inFlight = false; });
   }, 3000); timer.unref(); }
   function stop() { clearInterval(timer); for (const ctl of aborts.values()) ctl.abort(); }
-  return { init, list, events, artifact, enqueue, cancel, runNext, keepWorking, router, start, stop };
+  return { init, list, events, artifact, enqueue, cancel, runNext, keepWorking, useAgents, router, start, stop };
 }
