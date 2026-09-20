@@ -152,6 +152,7 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
       await git(['fetch', '-q', remote, mainBranch]).catch(e => log.warn?.('[self-build] fetch:', text(e.message, 200)));   // offline: judge by what is already known
     }
     const ancestorOfMain = sha => git(['merge-base', '--is-ancestor', sha, `refs/remotes/${remote}/${mainBranch}`]).then(() => true, () => false);
+    const { autoMerge } = pending.length ? await permitted() : { autoMerge: false };
     for (const row of pending) {
       const branches = new Map();
       for (const c of row.state.commitments) if (c.kind === 'branch' && !c.merged && c.branch) branches.set(c.branch, c);
@@ -159,13 +160,25 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
         // The tip supersedes earlier pushes of the same branch; a branch deleted after its merge is judged by the commit it recorded.
         const tip = await git(['rev-parse', '--verify', '-q', `refs/remotes/${remote}/${branch}`]).then(r => r.stdout.trim(), () => null);
         const sha = tip || c.sha;
-        if (!sha || !(await ancestorOfMain(sha))) continue;
+        if (!sha) continue;
+        // With the person's standing permission, a branch the engine published and nobody merged is the engine's
+        // to merge — once, and only while the tip is still the commit it built (a rewritten branch is a person's).
+        if (autoMerge && !(await ancestorOfMain(sha)) && (tip === c.sha || !tip) && !c.mergeAttemptedAt) {
+          const marked = row.state.commitments.map(x => x.kind === 'branch' && x.branch === branch ? { ...x, mergeAttemptedAt: clock() } : x);
+          await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`, [row.id, JSON.stringify(marked)]);
+          row.state.commitments = marked;
+          const d = await deploy({ sha, branch }, row.id).catch(e => ({ ok: false, error: e.message }));
+          log.log?.(`[self-build] want #${row.id}: ${branch} ${d.ok ? `merged into ${mainBranch} by the engine (${String(d.sha).slice(0, 7)}); restarting onto it` : `not merged: ${d.error}`}`);
+          if (!d.ok) continue;
+          c.mergeAttemptedAt = clock();
+        }
+        if (!(await ancestorOfMain(sha))) continue;
         const running = await git(['merge-base', '--is-ancestor', sha, 'HEAD']).then(() => true, () => false);
         const mergedAt = clock();
         try {
           await queue.outcome(row.id, { receiptId: `merged-${sha.slice(0, 12)}`, progress: Math.max(0.5, Math.min(0.9, (row.state.want.progress || 0) + 0.25)), criterionMet: false,
             evidence: [{ id: `merged-${sha.slice(0, 7)}`, source: `git: ${remote}/${mainBranch} contains the branch tip`,
-              observation: `${branch} (${sha.slice(0, 7)}) was merged into ${mainBranch} by a person${running ? '; the running checkout carries it' : '; the running checkout does not carry it yet'}. Remaining: ${Math.round(quietPeriodMs / 3600_000)} hours of operation without the same failure.` }] }, { park: true });
+              observation: `${branch} (${sha.slice(0, 7)}) was merged into ${mainBranch} ${c.mergeAttemptedAt ? 'by the engine under the person\'s auto-merge permission' : 'by a person'}${running ? '; the running checkout carries it' : '; the running checkout does not carry it yet'}. Remaining: ${Math.round(quietPeriodMs / 3600_000)} hours of operation without the same failure.` }] }, { park: true });
         } catch (e) { log.warn?.(`[self-build] merge receipt for #${row.id}:`, text(e.message, 200)); continue; }   // running a pass: observed again next tick
         const next = row.state.commitments.map(x => x.kind === 'branch' && x.branch === branch ? { ...x, merged: true, mergedAt, mergedSha: sha } : x);
         await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb), updated_at = NOW() WHERE id = $1`, [row.id, JSON.stringify(next)]);
@@ -376,18 +389,35 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
   // process keeps its loaded code until it restarts (OCA_LAUNCHD_LABEL set: a restart is scheduled).
   // Health after restart is NOT verified here — the supervisor's KeepAlive catches a crash loop and the
   // next tick's journal shows it; a person reverts. This is why the control defaults to off.
+  // The engine merges its own branch: fast-forward when main has not moved, a merge commit when it has — made
+  // in a private worktree of main, proven by the whole suite on the merged tree, then pushed, pulled into the
+  // live checkout, and the process restarted onto it. A conflict or a red suite leaves main untouched.
   async function deploy(built, chainId) {
     const prev = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+    const dir = join(workRoot, 'merge', String(chainId));
+    let sha = built.sha;
     try {
-      await git(['push', remote, `${built.sha}:refs/heads/main`]);
-      await git(['pull', '--ff-only', remote, 'main']);
+      await git(['fetch', '-q', remote, mainBranch]);
+      await mkdir(dirname(dir), { recursive: true, mode: 0o700 }); await rm(dir, { recursive: true, force: true }); await git(['worktree', 'prune']);
+      await git(['worktree', 'add', '--detach', dir, `refs/remotes/${remote}/${mainBranch}`]);
+      await stat(join(dir, 'node_modules')).catch(() => symlink(join(repoDir, 'node_modules'), join(dir, 'node_modules'), 'dir').catch(() => {}));
+      const ff = await git(['merge-base', '--is-ancestor', `refs/remotes/${remote}/${mainBranch}`, built.sha]).then(() => true, () => false);
+      if (ff) await git(['merge', '--ff-only', built.sha], dir);
+      else {
+        await git(['-c', 'user.name=OCA Self-Build', '-c', 'user.email=oca@oneiro.local', 'merge', '--no-ff', '-m', `self-build: merge ${built.branch || built.sha.slice(0, 7)} into ${mainBranch}`, built.sha], dir);
+        const after = await baselineTests(dir);
+        if (after.fail || !after.tests) throw new Error(`tests on the merged tree: ${after.pass}/${after.tests} passing, ${after.fail} failing${after.firstError ? ` — ${after.firstError}` : ''}`);
+        sha = (await git(['rev-parse', 'HEAD'], dir)).stdout.trim();
+      }
+      await git(['push', remote, `${sha}:refs/heads/${mainBranch}`], dir);
+      await git(['pull', '--ff-only', remote, mainBranch]);
     } catch (e) {
       await journal('rollback', chainId, { sha: built.sha, prev, reason: `deploy failed before restart: ${text(e.message, 200)}` });
       return { ok: false, error: text(e.message, 200) };
-    }
-    await journal('deploy', chainId, { sha: built.sha, prev, restartScheduled: !!process.env.OCA_LAUNCHD_LABEL });
+    } finally { await git(['worktree', 'remove', '--force', dir]).catch(() => {}); }
+    await journal('deploy', chainId, { sha, branchSha: built.sha, prev, restartScheduled: !!process.env.OCA_LAUNCHD_LABEL });
     if (process.env.OCA_LAUNCHD_LABEL) setTimeout(() => run('launchctl', ['kickstart', '-k', `gui/${process.getuid()}/${process.env.OCA_LAUNCHD_LABEL}`]).catch(() => {}), 1500).unref();
-    return { ok: true, sha: built.sha };
+    return { ok: true, sha };
   }
 
   return { introspect, reconcile, tick, enter, exit, status, build, isActive, permitted, selfWants, useAgents };

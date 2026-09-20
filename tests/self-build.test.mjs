@@ -247,3 +247,59 @@ test('a build: worktree on a branch, coder edits, constitution refused, tests mu
     assert.equal(c.lastStrategy.name, 'improve_myself'); assert.equal(c.lastStrategy.decision, 'prepare_artifact');
   } finally { await rm(fx.root, { recursive: true, force: true }); }
 }));
+
+test('with auto-merge, a published branch that main has moved past is merged by the engine itself: a merge commit proven by the suite, main pushed, the live checkout pulled; a red merge leaves main alone', async () => database(async pool => {
+  const fx = await fixtureRepo();
+  try {
+    let now = 10 * DAY;
+    const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+    const controls = createUserControls(pool); await controls.update({ selfBuild: true, selfBuildAutoMerge: true });
+    const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false }) });
+    const sb = createSelfBuild({ pool, queue: () => queue, worth, risk, controls, runner: null, llm: null, clock: () => now, repoDir: fx.repo, workRoot: fx.work, log: { log() {}, warn() {} } });
+    const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk, strategies: { selfBuild: sb } });
+    const author = ['-c', 'user.name=t', '-c', 'user.email=t@t'];
+    // the engine's branch: greet shouts, with a test — published to origin
+    await fx.g(['checkout', '-q', '-b', 'self/7-shout']);
+    await writeFile(join(fx.repo, 'greet.js'), "export function greet(n) { return ('hello ' + n).toUpperCase(); }\n");
+    await writeFile(join(fx.repo, 'tests', 'greet.test.mjs'), "import test from 'node:test'; import assert from 'node:assert/strict'; import { greet } from '../greet.js';\ntest('greets by name', () => assert.equal(greet('x'), 'HELLO X'));\ntest('greets are strings', () => assert.equal(typeof greet('y'), 'string'));\n");
+    await fx.g([...author, 'commit', '-q', '-am', 'self-build: shout']); const branchSha = (await fx.g(['rev-parse', 'HEAD'])).stdout.trim();
+    await fx.g(['push', '-q', 'origin', 'self/7-shout']); await fx.g(['checkout', '-q', 'main']);
+    // main moves on without it (an unrelated file), so a fast-forward is impossible
+    await writeFile(join(fx.repo, 'README.md'), 'engine\n'); await fx.g(['add', 'README.md']); await fx.g([...author, 'commit', '-q', '-m', 'docs']); await fx.g(['push', '-q', 'origin', 'main']);
+    const mainBefore = (await fx.g(['rev-parse', 'HEAD'])).stdout.trim();
+    const chain = await queue.enqueue({ seed: 'Make greet shout', topic: 'OCA engine', learning: false, stakes: [{ entityKey: 'project:oca-engine', share: 2 }],
+      evidence: [{ id: 'f1', source: 'risk journal', observation: 'greet.js returns lowercase' }] }, { origin: { kind: 'self', fingerprint: 'fp7' } });
+    await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`,
+      [chain.chain_id, JSON.stringify([{ kind: 'branch', branch: 'self/7-shout', sha: branchSha, deployed: false }])]);
+    const r = await sb.reconcile();
+    assert.deepEqual(r.merged.map(m => m.branch), ['self/7-shout'], 'merged by the engine on the first reconcile');
+    const head = (await fx.g(['rev-parse', 'HEAD'])).stdout.trim();
+    assert.notEqual(head, mainBefore); assert.equal(head, (await run('git', ['rev-parse', 'main'], { cwd: fx.bare })).stdout.trim(), 'live checkout pulled what was pushed');
+    assert.equal((await fx.g(['merge-base', '--is-ancestor', branchSha, 'HEAD'])).stdout, '', 'the branch is an ancestor of main');
+    assert.match((await fx.g(['log', '-1', '--format=%an|%s'])).stdout, /^OCA Self-Build\|self-build: merge self\/7-shout into main/);
+    assert.equal((await fx.g(['show', 'HEAD:greet.js'])).stdout.includes('toUpperCase'), true); assert.equal((await fx.g(['show', 'HEAD:README.md'])).stdout, 'engine\n', 'both sides kept');
+    const want = await queue.get(chain.chain_id);
+    assert.ok(want.commitments[0].merged && want.commitments[0].mergeAttemptedAt, JSON.stringify(want.commitments));
+    assert.match(want.want.receipts.at(-1).evidence[0].observation, /merged into main by the engine under the person's auto-merge permission/);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM self_build_events WHERE kind='deploy'")).rows[0].n, 1);
+    assert.equal((await fx.g(['worktree', 'list'])).stdout.split('\n').filter(Boolean).length, 1, 'merge worktree cleaned up');
+    assert.deepEqual(await sb.reconcile(), { merged: [], settled: [] }, 'once');
+    // a branch whose merged tree fails the suite is not merged: main untouched, rollback journaled, tried once
+    await fx.g(['checkout', '-q', '-b', 'self/8-break']);
+    await writeFile(join(fx.repo, 'greet.js'), "export function greet(n) { return 42; }\n");
+    await fx.g([...author, 'commit', '-q', '-am', 'self-build: break']); const badSha = (await fx.g(['rev-parse', 'HEAD'])).stdout.trim();
+    await fx.g(['push', '-q', 'origin', 'self/8-break']); await fx.g(['checkout', '-q', 'main']);
+    await writeFile(join(fx.repo, 'NOTES.md'), 'n\n'); await fx.g(['add', 'NOTES.md']); await fx.g([...author, 'commit', '-q', '-m', 'notes']); await fx.g(['push', '-q', 'origin', 'main']);
+    const mainAfter = (await fx.g(['rev-parse', 'HEAD'])).stdout.trim();
+    const bad = await queue.enqueue({ seed: 'Break greet', topic: 'OCA engine', learning: false, stakes: [{ entityKey: 'project:oca-engine', share: 2 }],
+      evidence: [{ id: 'f2', source: 'risk journal', observation: 'x' }] }, { origin: { kind: 'self', fingerprint: 'fp8' } });
+    await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = jsonb_set(ponder_state, '{commitments}', $2::jsonb) WHERE id = $1`,
+      [bad.chain_id, JSON.stringify([{ kind: 'branch', branch: 'self/8-break', sha: badSha, deployed: false }])]);
+    assert.deepEqual((await sb.reconcile()).merged, [], 'a red merge is refused');
+    assert.equal((await fx.g(['rev-parse', 'HEAD'])).stdout.trim(), mainAfter, 'main untouched');
+    const rb = (await pool.query("SELECT payload FROM self_build_events WHERE kind='rollback' ORDER BY id DESC LIMIT 1")).rows[0].payload;
+    assert.match(rb.reason, /tests on the merged tree/);
+    assert.ok((await queue.get(bad.chain_id)).commitments[0].mergeAttemptedAt, 'tried once; a person decides next');
+    assert.deepEqual((await sb.reconcile()).merged, [], 'not retried');
+  } finally { await rm(fx.root, { recursive: true, force: true }); }
+}));
