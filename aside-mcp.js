@@ -89,23 +89,34 @@ function tagControls(limit) {
   const OVERLAY = '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[role="tooltip"],[data-floating-ui-portal],[data-radix-popper-content-wrapper],[data-popper-placement],.Popover,.ant-picker-dropdown,.ant-dropdown,.ant-select-dropdown,.MuiPopover-root,.MuiMenu-root,.MuiPopper-root';
   const floats = el => { for (let a = el; a && a !== document.body; a = a.parentElement) { const cs = getComputedStyle(a); if ((cs.position === 'fixed' || cs.position === 'absolute') && Number(cs.zIndex) >= 100) return a; } return null; };
   const overlayOf = el => el.closest(OVERLAY) || floats(el);
-  const candidates = []; let n = 0;
+  const visible = el => { const r = el.getBoundingClientRect(); if (!r.width || !r.height) return false; const st = getComputedStyle(el); return st.visibility !== 'hidden' && st.display !== 'none'; };
+  const candidates = []; const seen = new Set(); let n = 0;
   for (const el of document.querySelectorAll(SEL)) {
-    const r = el.getBoundingClientRect(); if (!r.width || !r.height) continue;
-    const st = getComputedStyle(el); if (st.visibility === 'hidden' || st.display === 'none') continue;
+    if (!visible(el)) continue;
     if (dialog && !dialog.contains(el)) continue;   // a modal owns the page while it is open
-    candidates.push({ el, overlay: !dialog && !!overlayOf(el) });
+    seen.add(el); candidates.push({ el, overlay: !dialog && !!overlayOf(el) });
   }
-  candidates.sort((a, b) => Number(b.overlay) - Number(a.overlay));   // stable: overlay first, document order within
+  // Older web apps (App Store Connect, for one) make clickable things out of plain divs and spans with a pointer
+  // cursor and no role. Those are controls too: the leaf-most pointer element that is not inside, and does not
+  // contain, a real control. Reported as inferred so a slice knows the name came from its text.
+  for (const el of document.querySelectorAll('div,span,li,td,th,p,img,svg,label')) {
+    if (seen.has(el) || !visible(el) || getComputedStyle(el).cursor !== 'pointer') continue;
+    if (el.closest(SEL) || el.querySelector(SEL)) continue;
+    if ([...el.querySelectorAll('div,span,li,td,p')].some(d => getComputedStyle(d).cursor === 'pointer' && d.getBoundingClientRect().width)) continue;
+    if (dialog && !dialog.contains(el)) continue;
+    seen.add(el); candidates.push({ el, overlay: !dialog && !!overlayOf(el), inferred: true });
+  }
+  candidates.sort((a, b) => (Number(b.overlay) - Number(a.overlay)) || (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
   const out = []; let overlayNode = null;
-  for (const { el, overlay } of candidates) {
+  for (const { el, overlay, inferred } of candidates) {
     if (++n > limit) break;
     const ref = 'r' + n; el.setAttribute('data-oca-ref', ref);
     if (overlay && !overlayNode) overlayNode = overlayOf(el);
-    const tag = el.tagName.toLowerCase(), role = roleOf(el), inputType = tag === 'input' ? (el.type || 'text').toLowerCase() : '';
+    const tag = el.tagName.toLowerCase(), role = inferred ? 'button' : roleOf(el), inputType = tag === 'input' ? (el.type || 'text').toLowerCase() : '';
     const form = el.closest('form');
     const c = { ref, role, name: nameOf(el), tag };
     if (overlay) c.overlay = true;
+    if (inferred) c.inferred = true;   // a pointer-cursor element with no semantics; named by its text
     if (inputType) c.inputType = inputType;
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') c.disabled = true;
     if (el.getAttribute('aria-expanded')) c.expanded = el.getAttribute('aria-expanded') === 'true';
