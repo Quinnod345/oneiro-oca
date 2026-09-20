@@ -22,13 +22,21 @@ export function extractFirstJsonObject(text) {
   return null;
 }
 
-function asText(value) {
+// Coerce whatever the model put in a text field to a string. Arrays join, objects
+// yield their text-ish member (or their JSON), numbers and booleans stringify,
+// null and undefined become ''. Always returns a string; never throws.
+export function thoughtText(value) {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(' ');
-  if (typeof value === 'object') return asText(value.text ?? value.content ?? value.thoughts ?? JSON.stringify(value));
+  if (Array.isArray(value)) return value.map(thoughtText).filter(Boolean).join(' ');
+  if (typeof value === 'object') {
+    const inner = value.text ?? value.content ?? value.thoughts;
+    if (inner !== undefined) return thoughtText(inner);
+    try { return JSON.stringify(value); } catch { return String(value); }
+  }
   return String(value);
 }
+const asText = thoughtText;
 
 // Returns { thought } or { error, raw }. Never throws.
 export function parseThought(rawText) {
