@@ -51,8 +51,9 @@ test('asks are composed from observed fields only, deduplicated per want and nee
   const other = await asks.ask({ chainId: 27, kind: 'sign_in', host: 'app.posthog.com' });
   assert.equal(other.asked, true); assert.equal(sent.length, 2);
   const capped = await asks.ask({ chainId: 27, kind: 'sign_in', host: 'ads.apple.com' });
-  assert.equal(capped.asked, false); assert.match(capped.why, /daily cap/);
-  const open = await asks.open(); assert.deepEqual(open.map(o => o.host).sort(), ['app.posthog.com', 'appstoreconnect.apple.com']);
+  assert.equal(capped.asked, false); assert.match(capped.why, /daily cap/); assert.ok(capped.id, 'still recorded for the app'); assert.equal(sent.length, 2, 'the phone stayed quiet');
+  const open = await asks.open(); assert.deepEqual(open.map(o => o.host).sort(), ['ads.apple.com', 'app.posthog.com', 'appstoreconnect.apple.com']);
+  await asks.answer(capped.id, 'seen');
   const journal = (await risk.recent({ chainId: 27 })).filter(d => d.id.startsWith('ask:'));
   assert.equal(journal.length, 2); assert.ok(journal.every(d => d.decision === 'proceed' && d.outcome?.result === 'success'));
   // the person answers; the same need may be asked again later
