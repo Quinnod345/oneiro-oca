@@ -11,7 +11,7 @@ export const workSchema = {
     summary: { type: 'string' }, nextStep: { type: 'string' },
     remainingQuestions: { type: 'array', items: { type: 'string' } },
     sources: { type: 'array', items: { type: 'object', additionalProperties: false,
-      properties: { path: { type: 'string' }, quote: { type: 'string' } }, required: ['path', 'quote'] } },
+      properties: { path: { type: 'string', description: 'Absolute file path or final http(s) URL observed through Aside during this slice.' }, quote: { type: 'string' } }, required: ['path', 'quote'] } },
   }, required: ['summary', 'nextStep', 'remainingQuestions', 'sources'],
 };
 const uuid = value => typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value);
@@ -33,13 +33,49 @@ export function visibleWorkEvent(event) {
   return null;
 }
 const inside = (path, root) => { const r = relative(root, path); return r === '' || (!r.startsWith('..') && !isAbsolute(r)); };
-export async function verifyWorkSources(candidates, { roots, workRoot, startedAt }) {
+const normalizeText = text => text.replace(/\s+/g, ' ').trim();
+const ASIDE_PAGE_TOOLS = new Set(['aside_read', 'aside_search', 'aside_snapshot', 'aside_read_tab',
+  'aside_snapshot_tab', 'aside_click', 'aside_type', 'aside_select', 'aside_press', 'aside_scroll', 'aside_go']);
+const webUrl = value => {
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw Error('A web source needs an http(s) URL without credentials.');
+  if (url.href.length > 800) throw Error('The web source URL is too long for an evidence record.');
+  return url.href;
+};
+// Only runtime tool results can supply page text. Never trust text copied into the model's report,
+// tab titles, control labels, failed calls or access walls as evidence of the requested page.
+function observedPage(event, at) {
+  const item = event.item;
+  if (event.type !== 'item.completed' || item?.type !== 'mcp_tool_call' || item.server !== 'aside'
+    || item.status !== 'completed' || item.error || !ASIDE_PAGE_TOOLS.has(item.tool) || item.result?.isError) return null;
+  try {
+    const raw = item.result?.structured_content ?? item.result?.structuredContent
+      ?? item.result?.content?.find(c => c.type === 'text')?.text;
+    const page = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!page || page.refused || page.accessBlocked || typeof page.text !== 'string' || !page.text.trim()) return null;
+    return { url: webUrl(page.url), text: page.text.slice(0, 60000), at };
+  } catch { return null; }
+}
+export async function verifyWorkSources(candidates, { roots, workRoot, startedAt, observedPages = [] }) {
   roots = await Promise.all(roots.map(root => realpath(root)));
   workRoot = await realpath(workRoot);
   const evidence = [], rejected = [];
   for (const item of (Array.isArray(candidates) ? candidates : []).slice(0, 12)) {
     try {
-      if (typeof item.path !== 'string' || !isAbsolute(item.path) || typeof item.quote !== 'string' || item.quote.trim().length < 8 || item.quote.length > 4000) throw Error('A source needs an absolute path and an exact quotation.');
+      if (typeof item?.path === 'string' && /^https?:\/\//i.test(item.path)) {
+        const url = webUrl(item.path);
+        if (typeof item.quote !== 'string' || normalizeText(item.quote).length < 24 || item.quote.length > 4000) throw Error('A web source needs an exact quotation of 24–4000 characters.');
+        const quote = normalizeText(item.quote);
+        const page = observedPages.find(page => page.url === url && normalizeText(page.text).includes(quote));
+        if (!page) throw Error('The quoted text was not observed at this URL in a successful Aside call during this slice.');
+        const hash = createHash('sha256').update(page.text).digest('hex');
+        const id = `aside-${createHash('sha256').update(JSON.stringify([url, hash, quote, page.at])).digest('hex').slice(0, 32)}`;
+        if (!evidence.some(e => e.id === id)) evidence.push({ id,
+          source: `Aside browser: ${url} · captured ${new Date(page.at).toISOString()} · SHA256 ${hash}`,
+          observation: `Observed page text during this slice (not proof the described work was executed):\n${quote}` });
+        continue;
+      }
+      if (typeof item?.path !== 'string' || !isAbsolute(item.path) || typeof item.quote !== 'string' || item.quote.trim().length < 8 || item.quote.length > 4000) throw Error('A source needs an absolute path and an exact quotation.');
       const path = await realpath(item.path);
       if (!roots.some(root => inside(path, root)) || inside(path, workRoot)
         || /(^|\/)(\.env(?:\.[^/]*)?|\.ssh|\.codex|\.openclaw|credentials?|secrets?|auth\.json|config\.toml)(\/|$)/i.test(path)) throw Error('Source is outside the readable research scope.');
@@ -193,10 +229,10 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
         + `Resolve the missing evidence where possible by inspecting existing sources. Use your tools; do not merely tell the user to gather evidence. Read-only source roots: ${sourceRoots.join(', ')}. Never read credentials, .env, .ssh, .codex, .openclaw or secret files. Only write research artifacts in this working directory. Do not send messages, change settings, deploy, or claim an outcome has occurred. The only browser is Aside, offered to you as the aside_* tools. Use them for anything on the web, including the person's signed-in accounts (aside_tabs lists the open tabs). You can work a page yourself — look (aside_snapshot_tab), then click, type, select, press and navigate to set date ranges, filters, breakdowns and pages until the page shows what you need; do that rather than asking the person to set a page up. The tools refuse anything that commits (send, submit, pay, delete, publish, save, create, upload, sign out) and every credential field; when a tool refuses, say exactly what the person must do. Never any other browser, never post or send.\n`
         + `User direction for this slice: ${run.instruction || 'Find and resolve what is blocking this pursuit; produce a concrete next step.'}\n`
         + `Previous result: ${JSON.stringify(prior.rows[0]?.report || null)}\n`
-        + `Return the structured report. sources must quote exact text from existing unchanged files outside your work directory, using absolute paths. The engine independently reads these files before attaching observations. If facts cannot be collected, explain precisely what is missing and give the user an actionable way to provide it. A plan, draft or generated report is not proof of success.`;
+        + `Return the structured report. Each sources entry has path and quote. For files, path is an absolute path to an existing unchanged file outside your work directory; the engine independently reads it. For web pages, path is the final http(s) URL from a successful Aside result in THIS slice, and quote is 24–4000 characters from that result's visible text (whitespace differences are allowed). Use aside_read_tab if you need more page text. The engine verifies web quotes against its own captured Aside results, including filtered views; a URL alone, a tab title, or a generated file is not evidence. If facts cannot be collected, explain precisely what is missing and give the user an actionable way to provide it. A plan, draft or generated report is not proof of success.`;
       // What the slice observed about access while it worked: sign-in walls the Aside tools reported, and how
       // many Aside reads it made. Observed by the runtime, so an ask built from it is verified content.
-      const blocks = new Map(); let asideCalls = 0, asideActions = 0;
+      const blocks = new Map(), observedPages = []; let asideCalls = 0, asideActions = 0;
       const result = await runner(prompt, { workingDirectory: directory, model: run.model, persistent: true,
         threadId: prior.rows[0]?.thread_id || null, sandbox: 'workspace-write', timeoutMs: 10 * 60_000,
         signal: ctl.signal, outputSchema: workSchema,
@@ -208,13 +244,19 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
             const block = observedBlock(event.item.result);
             if (block?.host && !blocks.has(block.host)) blocks.set(block.host, { ...block, at: clock() });
           }
+          const page = observedPage(event, clock());
+          if (page) {
+            observedPages.push(page);
+            // Bound retained browser text to 64 snapshots of at most 60,000 characters.
+            if (observedPages.length > 64) observedPages.shift();
+          }
           if (event.type === 'thread.started' && uuid(event.thread_id)) await pool.query("UPDATE pursuit_work SET thread_id=$3 WHERE id=$1 AND lease=$2 AND status='running'", [run.id, lease, event.thread_id]);
           const visible = visibleWorkEvent(event); if (visible) await append(run.id, visible, lease);
         } });
       if (ctl.signal.aborted) throw Error('Work cancelled');
       const report = JSON.parse(result.text);
       if (typeof report.summary !== 'string' || !report.summary.trim() || typeof report.nextStep !== 'string' || !Array.isArray(report.remainingQuestions)) throw Error('Codex returned an incomplete research report');
-      const verified = await verifyWorkSources(report.sources, { roots: await Promise.all(sourceRoots.map(r => realpath(r))), workRoot: await realpath(root), startedAt });
+      const verified = await verifyWorkSources(report.sources, { roots: await Promise.all(sourceRoots.map(r => realpath(r))), workRoot: await realpath(root), startedAt, observedPages });
       // Evidence is committed only while holding the work lease; cancelling the parent
       // serializes on the same parent-row lock in queue.addEvidence.
       const saved = await pool.query(`UPDATE pursuit_work SET report=$3::jsonb,thread_id=COALESCE($4,thread_id), updated_at=now()
