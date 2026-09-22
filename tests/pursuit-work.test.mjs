@@ -163,3 +163,128 @@ test('a continuous want is never left idle: the engine fires its own slices on a
   assert.deepEqual((await service.keepWorking()).started,[]);
   assert.equal(calls.length,2);
 }));
+
+
+test('Aside page evidence survives six calls and two view actions, but cannot leak into a later slice', async()=>fixture(async({pool,queue,chain,root})=>{
+  const url = 'https://analytics.example.test/report';
+  const quote = 'August revenue was $120 from 8 subscribers.';
+  const observations = [];
+  let attempt = 0;
+  const service = createPursuitWork({pool,queue,root:join(root,'work'),sourceRoots:[root],
+    risk:{decide:async()=>({decision:'proceed'}),observe:async(id,outcome)=>observations.push(outcome)},
+    runner:async(prompt,options)=>{
+      attempt++;
+      if (attempt === 1) {
+        const calls = ['aside_read', 'aside_snapshot_tab', 'aside_click', 'aside_select', 'aside_read_tab', 'aside_read_tab'];
+        for (const [i,tool] of calls.entries()) {
+          const page = {url, text:i < 3 ? 'Choose a reporting period to see revenue.' : quote};
+          const result = i === 3 ? {structured_content:page} : {content:[{type:'text',text:JSON.stringify(page)}],isError:false};
+          await options.onEvent({type:'item.completed',item:{type:'mcp_tool_call',server:'aside',tool,status:'completed',result}});
+        }
+      }
+      return {text:JSON.stringify({summary:'The filtered page shows August revenue.',nextStep:'Review the revenue observation.',remainingQuestions:[],
+        sources:[{path:url,quote}, {path:url,quote:'August revenue was $999 from 8 subscribers.'}, {path:url+'/unseen',quote}]})};
+    }});
+  await service.init();
+  const run = await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+  const result = await service.runNext();
+  assert.equal(result.evidenceApplied,true,JSON.stringify(result));
+  assert.equal(result.evidence.length,1);
+  assert.equal(result.rejected.length,2);
+  assert.match(result.evidence[0].source,/Aside browser/);
+  assert.ok(result.evidence[0].source.includes(url));
+  assert.ok(result.evidence[0].observation.includes(quote));
+  const saved = await queue.get(chain.chain_id);
+  assert.equal(saved.evidence.length,1);
+  assert.equal(saved.want.progress,0,'a page observation is not an outcome receipt');
+  assert.equal(saved.want.receipts.length,0);
+  assert.equal(saved.continuity.dry,0);
+  assert.equal(observations[0].result,'success');
+  assert.match(observations[0].evidence[0].observation,/2 view actions.*6 Aside calls/);
+  assert.equal((await service.events(chain.chain_id,run.id)).run.report.evidenceApplied,true);
+  await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+  const stale = await service.runNext();
+  assert.equal(stale.evidenceApplied,false,'the next slice must observe its own page');
+  assert.equal(stale.evidence.length,0);
+  assert.equal(observations[1].result,'failure');
+}));
+
+test('only successful Aside page text can ground a web quote', async()=>fixture(async({queue,chain,make})=>{
+  const quote = 'August revenue was $120 from 8 subscribers.';
+  const cases = [
+    {status:'failed'},
+    {error:{message:'transport failed'}},
+    {resultFlags:{isError:true}},
+    {pageFlags:{refused:true}},
+    {pageFlags:{accessBlocked:{kind:'sign_in'}}},
+    {server:'untrusted'},
+    {tool:'aside_tabs'},
+    {tool:'aside_unknown'},
+    {eventType:'item.started'},
+    {pageFlags:{text:undefined,title:quote}},
+    {pageFlags:{text:undefined,controls:[{name:quote}]}},
+    {raw:'not JSON'},
+  ];
+  const service = make(async(_,options)=>{
+    const sources = [];
+    for (const [i,c] of cases.entries()) {
+      const url = `https://analytics.example.test/rejected/${i}`;
+      const page = {url,text:quote,...c.pageFlags};
+      await options.onEvent({type:c.eventType || 'item.completed',item:{type:'mcp_tool_call',server:c.server || 'aside',tool:c.tool || 'aside_read_tab',
+        status:c.status || 'completed',error:c.error,result:{content:[{type:'text',text:c.raw || JSON.stringify(page)}],...c.resultFlags}}});
+      sources.push({path:url,quote});
+    }
+    return {text:JSON.stringify({summary:'None of the supplied claims have a successful page read.',nextStep:'Read the page successfully.',remainingQuestions:[],sources})};
+  });
+  await service.init();await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+  const result = await service.runNext();
+  assert.equal(result.evidence.length,0);
+  assert.equal(result.evidenceApplied,false);
+  assert.equal(result.rejected.length,cases.length);
+  assert.equal((await queue.get(chain.chain_id)).evidence.length,0);
+}));
+
+
+test('web verification preserves filtered snapshots, normalizes whitespace, deduplicates quotes and retains file evidence', async()=>fixture(async({queue,chain,root,make})=>{
+  const file = join(root,'existing.md');
+  const fileQuote = 'The local inventory still needs a comparison.';
+  await writeFile(file,fileQuote);
+  const quotes = ['August revenue was $120 from 8 subscribers.', 'September revenue was $240 from 16 subscribers.', 'October revenue was $360 from 24 subscribers.'];
+  const url = 'https://analytics.example.test/report';
+  const service = make(async(_,options)=>{
+    for (const [i,quote] of quotes.entries()) {
+      const page = {url,text:quote.replaceAll(' ', '\n  ')};
+      const result = i === 0 ? {structured_content:page} : i === 1 ? {structuredContent:page} : {content:[{type:'text',text:JSON.stringify(page)}]};
+      await options.onEvent({type:'item.completed',item:{type:'mcp_tool_call',server:'aside',tool:'aside_select',status:'completed',result}});
+    }
+    return {text:JSON.stringify({summary:'Observed three reporting periods and a local file.',nextStep:'Compare the periods.',remainingQuestions:[],
+      sources:[...quotes.map(quote=>({path:url,quote})),{path:url,quote:quotes[0]}, {path:file,quote:fileQuote},
+        {path:url,quote:'August'}, {path:url,quote:7}, {path:url,quote:'x'.repeat(4001)},
+        {path:'https://name:password@analytics.example.test/report',quote:quotes[0]},
+        {path:'file:///report',quote:quotes[0]}, {path:url+'?filter='+'x'.repeat(1000),quote:quotes[0]},null]})};
+  });
+  await service.init();await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+  const result = await service.runNext();
+  assert.equal(result.evidenceApplied,true,JSON.stringify(result));
+  assert.equal(result.evidence.length,4);
+  assert.equal(result.rejected.length,7);
+  for (const quote of [...quotes,fileQuote]) assert.ok(result.evidence.some(e=>e.observation.includes(quote)));
+  assert.equal((await queue.get(chain.chain_id)).evidence.length,4);
+}));
+
+test('cancellation also fences captured web evidence', async()=>fixture(async({queue,chain,make})=>{
+  const url = 'https://analytics.example.test/report', quote = 'August revenue was $120 from 8 subscribers.';
+  let release,started;
+  const ready = new Promise(resolve=>started=resolve);
+  const service = make(async(_,options)=>{
+    await options.onEvent({type:'item.completed',item:{type:'mcp_tool_call',server:'aside',tool:'aside_read',status:'completed',
+      result:{content:[{type:'text',text:JSON.stringify({url,text:quote})}]}}});
+    started();await new Promise(resolve=>release=resolve);
+    return {text:JSON.stringify({summary:'Late web report.',nextStep:'Review it.',remainingQuestions:[],sources:[{path:url,quote}]})};
+  });
+  await service.init();const run = await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+  const running = service.runNext();await ready;
+  await service.cancel(chain.chain_id,run.id);release();await running;
+  assert.equal((await service.events(chain.chain_id,run.id)).run.status,'cancelled');
+  assert.equal((await queue.get(chain.chain_id)).evidence.length,0);
+}));
