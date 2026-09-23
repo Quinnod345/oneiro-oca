@@ -25,3 +25,25 @@ test('the gateway is available when anything answered lately; otherwise its own 
     mode = 'up'; t += 16_000; assert.equal(await g.available(), true, 'recovers on the next check');
   } finally { Date.now = realNow; }
 });
+
+test('transcript preserves active-run and reply identity metadata alongside current and legacy queues', async () => {
+  let raw = { messages: [
+    { role: 'assistant', content: [{ type: 'text', text: 'progress' }], timestamp: 123, openclawStreamFallback: true,
+      stopReason: 'stop', idempotencyKey: 'deployment:6', __openclaw: { runId: 'restarted-run' }, channel: 'commentary' },
+    { role: 'toolResult', content: 'not a reply', timestamp: 124 },
+  ], inFlightRun: { runId: 'deployment:6' }, sessionInfo: { hasActiveRun: false, status: 'idle' } };
+  const gateway = createGateway({ runner: async () => JSON.stringify(raw) });
+  for (const [pendingInputs, expected] of [[{ items: [{ runId: 'deployment:7' }], total: 1 }, 1],
+    [{ items: [], total: 3 }, 3], [{ items: [{}], total: 0 }, 1], [[{}], 1], [[], 0], [{ items: [], total: 0 }, 0], [undefined, 0]]) {
+    raw.pendingInputs = pendingInputs;
+    const t = await gateway.transcript('session');
+    assert.equal(t.pending, expected); assert.equal(t.active, true); assert.equal(t.activeRunId, 'deployment:6');
+    assert.deepEqual(t.messages, [{ role: 'assistant', text: 'progress', at: 123, runId: 'restarted-run',
+      idempotencyKey: 'deployment:6', streamFallback: true, channel: 'commentary', terminal: null }]);
+  }
+  raw = { messages: [{ role: 'assistant', content: 'legacy final', timestamp: 125 }], pendingInputs: [] };
+  const t = await gateway.transcript('session');
+  assert.equal(t.active, false); assert.equal(t.activeRunId, null); assert.equal(t.pending, 0);
+  assert.equal(t.messages[0].streamFallback, false);
+  assert.deepEqual(await gateway.history('session'), t.messages);
+});

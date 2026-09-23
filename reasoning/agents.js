@@ -25,6 +25,26 @@ const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice
 const norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const THINKER = '[thinker]';
 
+// Stream fallback entries are not terminal without an explicit terminal marker, even with stopReason 'stop'.
+// Prefer explicit turn identity when present; timestamps retain legacy restart recovery.
+function settledReply(t, since, runId = null) {
+  const last = t?.messages?.at(-1);
+  if (!t || t.pending || t.active || !last || last.role !== 'assistant'
+    || !Number.isFinite(Number(last.at)) || Number(last.at) <= since
+    || last.terminal === false || (last.streamFallback && last.terminal !== true) || (last.channel && last.channel !== 'final')) return null;
+  if (runId) {
+    const user = t.messages.findLast(m => m.role === 'user');
+    // Assistant idempotency keys identify mirrored messages, not the requested turn. User
+    // prompt keys can anchor a restarted execution to the original <requested run>:user.
+    const requestedRun = user?.idempotencyKey?.endsWith(':user') ? user.idempotencyKey.slice(0, -5) : user?.runId;
+    if (requestedRun && requestedRun !== runId) return null;
+    if (last.runId && last.runId !== runId
+      && !(requestedRun === runId && user?.runId === last.runId)) return null;
+    if (!last.runId && !requestedRun && user && Number(user.at) <= since) return null;
+  }
+  return last;
+}
+
 // The last ```oca block in a reply, validated. Null when the agent did not report.
 export function parseReport(reply) {
   const blocks = [...String(reply || '').matchAll(/```oca\s*\n([\s\S]*?)```/g)];
@@ -160,7 +180,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   // The row is claimed before the gateway is called, so a poll tick in between cannot send the same turn twice;
   // a call that fails hands the row back to the queue.
   async function startTurn(id, message) {
-    // seen_at_ms is the turn's start: everything the agent says after it belongs to this turn.
+    // seen_at_ms is the turn's start; recovery also checks liveness and available turn identity.
     const { rows: [d] } = await pool.query(`UPDATE agent_deployments SET status = 'running', run_id = $2 || ':' || (turns + 1), turns = turns + 1, seen_at_ms = $3, updated_at = now()
       WHERE id = $1 AND status IN ('queued', 'running', 'waiting_person', 'standing') RETURNING *`, [id, id, clock() - 1]); if (!d) return;
     try {
@@ -338,8 +358,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
               const since = Number(d.seen_at_ms) || 0;
               if (clock() - since < 90_000) continue;
               const t = await gateway.transcript(d.session_key).catch(() => null);
-              const last = t?.messages?.at(-1);
-              if (!t || t.pending || !last || last.role !== 'assistant' || (last.at || 0) <= since) continue;
+              const last = settledReply(t, since, d.run_id);
+              if (!last) continue;
               log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)}: run ${d.run_id} did not resolve; taking the reply from the transcript`);
               await applyReply(d, last.text, t.messages);
               continue;
@@ -352,12 +372,13 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           // waiting on the person, or a standing talker: the person may have spoken in the session; the app ran the turn.
           const t = await gateway.transcript(d.session_key).catch(() => null);
           if (!t) continue;
-          const { messages, pending } = t;
+          const { messages } = t;
           const since = Number(d.seen_at_ms) || 0;
           const fresh = messages.filter(m => (m.at || 0) > since);
-          if (!fresh.length || pending) continue;   // nothing new, or a turn is still in flight
+          if (!fresh.length) continue;
           const personSaid = fresh.filter(m => m.role === 'user' && !String(m.text || '').startsWith(THINKER) && !String(m.text || '').startsWith('[Quinn, via'));
-          const last = messages.at(-1);
+          const last = settledReply(t, since);
+          if (!last) continue;   // no settled reply yet, including when the app is running the turn
           const latest = Math.max(since, ...messages.map(m => m.at || 0));
           if (d.status === 'standing') {
             // Whatever the person states to the talker is theirs to state; it goes on the want as evidence.

@@ -77,8 +77,22 @@ export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 3
   // Only what was said: tool calls and results come back as text-less parts and are dropped here.
   async function transcript(sessionKey, { limit = 200 } = {}) {
     const r = await call('chat.history', { sessionKey, limit });
-    const messages = (Array.isArray(r?.messages) ? r.messages : []).map(m => ({ role: m.role, text: messageText(m.content), at: m.timestamp || null })).filter(m => (m.role === 'user' || m.role === 'assistant') && m.text.trim());
-    return { messages, pending: Array.isArray(r?.pendingInputs) ? r.pendingInputs.length : 0 };
+    const messages = (Array.isArray(r?.messages) ? r.messages : []).map(m => ({
+      role: m.role, text: messageText(m.content), at: m.timestamp || null,
+      runId: m.runId || m.__openclaw?.runId || null, idempotencyKey: m.idempotencyKey || null,
+      streamFallback: Boolean(m.openclawStreamFallback), channel: m.channel || null,
+      terminal: typeof m.__openclaw?.runTerminal === 'boolean' ? m.__openclaw.runTerminal : null,
+    })).filter(m => (m.role === 'user' || m.role === 'assistant') && m.text.trim());
+    // Current gateways return {items,total}; older ones return an array. A truncated items list
+    // must not hide a positive total, and inconsistent totals must not hide queued items either.
+    const inputs = r?.pendingInputs;
+    const pending = Array.isArray(inputs) ? inputs.length : Math.max(
+      Array.isArray(inputs?.items) ? inputs.items.length : 0,
+      Number.isFinite(inputs?.total) && inputs.total > 0 ? inputs.total : 0);
+    const activeRunId = r?.inFlightRun?.runId || null;
+    const active = Boolean(r?.inFlightRun) || r?.sessionInfo?.hasActiveRun === true
+      || ['running', 'queued'].includes(r?.sessionInfo?.status);
+    return { messages, pending, active, activeRunId };
   }
   async function history(sessionKey, opts) { return (await transcript(sessionKey, opts)).messages; }
   async function sessions({ agentId, limit = 200 } = {}) { const r = await call('sessions.list', { agentId, limit, includeLastMessage: false }); return Array.isArray(r?.sessions) ? r.sessions : []; }
