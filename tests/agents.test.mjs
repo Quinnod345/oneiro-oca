@@ -458,3 +458,201 @@ test('person-answer and standing-session polling also waits for a settled reply'
     assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
   });
 }));
+
+// Real PostgreSQL persistence and the controller's public plan/deploy/poll paths. The only
+// scripted judgment is semantic interpretation; quotations and revision checks remain real.
+async function retirementHarness(pool, { maxTurns = 12 } = {}) {
+  let now = 30 * 86400000, task = 'Reconcile historical AI costs for August 2026 paid subscribers';
+  let report = { status: 'done', summary: 'Historical AI cost reconciliation exhausted; production usage records remain missing.' };
+  let unavailable = false, malformed = false, forge = false, comparisonCalls = 0, decisions = 0;
+  const { rows: [row] } = await pool.query(`INSERT INTO thought_chains (seed,status,ponder_state) VALUES ('Improve InnerEcho','awaiting_evidence',$1::jsonb) RETURNING id`,
+    [JSON.stringify({ continuous: true, want: { status: 'active', description: 'Improve InnerEcho' }, evidence: [], continuity: {} })]);
+  const gw = fakeGateway({ clock: () => ++now, reply: () => block(report) });
+  const llm = { messages: { create: async ({ system, messages }) => {
+    if (!system.startsWith('You check task retirement')) return JSON.stringify({ thought: 'Do this concrete task.', moves: [{ task, stream: 'Measurement' }] });
+    comparisonCalls++;
+    if (unavailable) throw new Error('semantic comparison unavailable');
+    if (malformed) return '{}';
+    const input = JSON.parse(messages[0].content);
+    const candidate = input.candidate.description;
+    const cite = e => ({ fingerprint: e.fingerprint, quote: forge ? 'Invented quote that is not in any actual supplied observation.' : e.observation });
+    return JSON.stringify({
+      relation: /Publish a launch|office equipment|prospective|September 2026/.test(candidate) ? 'distinct' : 'equivalent',
+      reason: /Publish a launch|office equipment|prospective|September 2026/.test(candidate) ? 'Different objective or measurement period.' : 'Same historical AI cost calculation and paid cohort.',
+      ownerSupersedes: input.currentOwner.some(e => /fresh.start|retire|do not audit/.test(e.observation)),
+      ownerSupersession: input.currentOwner.filter(e => /fresh.start|retire|do not audit/.test(e.observation)).slice(-1).map(cite),
+      materialEvidence: input.newEvidence.filter(e => /August 2026 production usage:|September 2026 production usage:/.test(e.observation)).map(cite),
+      ownerPermission: input.newOwner.filter(e => /Reopen the historical August 2026 AI cost reconciliation/.test(e.observation)).slice(-1).map(cite),
+    });
+  } } };
+  const options = { pool, gateway: gw, llm, clock: () => now, maxTurns, continuityIntervalMs: 1,
+    risk: { decide: async () => { decisions++; return { decision: 'proceed' }; }, observe: async () => {} },
+    log: { log() {}, warn() {} }, slotsDefault: 4 };
+  let agents = createAgents(options);
+  return {
+    id: row.id, gw, get agents() { return agents; }, get comparisonCalls() { return comparisonCalls; }, get decisions() { return decisions; },
+    set task(v) { task = v; }, set report(v) { report = v; }, set unavailable(v) { unavailable = v; }, set malformed(v) { malformed = v; }, set forge(v) { forge = v; },
+    async deploy(candidate = task, extra = {}) { return agents.deploy(row.id, { kind: 'research', task: candidate, ...extra }); },
+    async cycle() { now += 86400000; return agents.plan(); },
+    restart() { agents = createAgents(options); },
+    async evidence(observation, { owner = false, id = randomBytes(8).toString('hex'), supersedes = [] } = {}) {
+      const item = { id: `${owner ? 'person-' : 'record-'}${id}`, source: owner ? 'stated by Quinn' : 'file: /verified/cost-ledger', observation, supersedes };
+      await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{evidence}', (ponder_state->'evidence') || $2::jsonb) WHERE id = $1`, [row.id, JSON.stringify([item])]);
+      return item;
+    },
+    async raw(id) { return (await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]; },
+  };
+}
+
+test('task retirement survives cadence expiry, paraphrases, long sibling history and controller recreation', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const first = await h.cycle(); assert.equal(first.started.length, 1);
+  await h.agents.poll();
+  const d = await h.raw(first.started[0]);
+  const retired = d.report.taskDisposition;
+  assert.equal(retired.status, 'exhausted'); assert.equal(retired.period, 'historical');
+  assert.equal(retired.sourceRun, `${d.id}:1`); assert.equal(retired.sourceDeployment, d.id);
+  assert.equal(retired.evidenceRevision.length, 64); assert.equal(retired.ownerScopeRevision.length, 64);
+  assert.match(retired.scope.description, /August 2026/);
+  // More than the strategist's 14-row window, with success resetting pursuit-wide dry.
+  h.report = { status: 'done', summary: 'Published a useful launch update.' };
+  for (let i = 0; i < 17; i++) {
+    const sibling = await h.deploy(`Publish a launch update number ${i}`);
+    assert.ok(sibling.id); await h.agents.poll();
+  }
+  const state = (await pool.query('SELECT ponder_state FROM thought_chains WHERE id = $1', [h.id])).rows[0].ponder_state;
+  assert.equal(state.continuity.dry, 0);
+  const before = h.gw.calls.length, decisions = h.decisions;
+  for (const task of [
+    'Reconstruct historical API spend for August 2026 paying users',
+    'Determine past inference expenses attributable to the August 2026 paid cohort',
+    'Establish what serving last summer\'s premium members actually consumed in dollars',
+    'Keep this pursuit moving; do the most useful concrete thing now',
+  ]) {
+    h.task = task;
+    for (let i = 0; i < 3; i++) { h.restart(); assert.deepEqual((await h.cycle()).started, []); }
+  }
+  assert.equal(h.gw.calls.length, before, 'suppression happens before sessions or turns');
+  assert.equal(h.decisions, decisions, 'retired attempts do not create fresh risk decisions');
+  assert.deepEqual((await h.raw(d.id)).report.taskDisposition, retired, 'sibling completion never clears or rewrites retirement');
+}));
+
+test('turn-budget exhaustion cannot mint equivalent deployments; material evidence reopens once per revision', async () => database(async pool => {
+  const h = await retirementHarness(pool, { maxTurns: 1 });
+  h.report = { status: 'working', summary: 'Still checking the available records.' };
+  const first = await h.deploy(); await h.agents.poll();
+  assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'exhausted');
+  for (let i = 0; i < 3; i++) { h.restart(); assert.deepEqual((await h.cycle()).started, []); }
+  await h.evidence('The launch directory listing is now public and visible.');
+  assert.equal((await h.deploy()).decision, 'retired', 'unrelated evidence cannot reopen');
+  await h.evidence('August 2026 production usage: verified paid-cohort token counts and invoice totals are now available.');
+  const reopened = await h.deploy(); assert.ok(reopened.id, 'materially relevant facts can reopen ordinary exhaustion');
+  await h.agents.poll();
+  const second = (await h.raw(reopened.id)).report.taskDisposition;
+  assert.notEqual(second.evidenceRevision, (await h.raw(first.id)).report.taskDisposition.evidenceRevision);
+  assert.equal((await h.deploy()).decision, 'retired', 'the same new records cannot buy unlimited budgets');
+  await h.evidence('August 2026 production usage: verified paid-cohort token counts and invoice totals are now available.', { id: 'different-id' });
+  h.restart(); assert.equal((await h.deploy()).decision, 'retired', 'duplicate facts with new ids do not change evidence revision');
+}));
+
+test('fresh-start supersession requires both relevant evidence and new applicable owner authorization', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  await h.evidence('Use the fresh-start launch plan; do not audit historical August costs.', { owner: true });
+  h.report = { status: 'failed', summary: 'Historical API-cost reconciliation cannot proceed under Quinn’s recorded fresh-start instruction. Retire this deployment.' };
+  const first = await h.deploy(); await h.agents.poll();
+  assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'superseded');
+  await h.evidence('The launch listing is now live with the new product screenshots.');
+  h.report = { status: 'done', summary: 'The launch update is complete.' };
+  const sibling = await h.deploy('Publish a launch update for InnerEcho'); assert.ok(sibling.id); await h.agents.poll();
+  h.restart(); assert.deepEqual((await h.cycle()).started, []);
+  await h.evidence('August 2026 production usage: verified paid-cohort token counts and invoice totals are now available.');
+  assert.equal((await h.deploy()).decision, 'retired', 'new relevant records alone cannot override the owner');
+  await h.evidence('Keep improving the product and measure prospective costs going forward.', { owner: true });
+  assert.equal((await h.deploy(undefined, { firedBy: 'person' })).decision, 'retired', 'firedBy and general encouragement are not scope-specific authorization');
+  // A separate prospective task remains available while the historical scope is retired.
+  assert.ok((await h.deploy('Set up prospective AI cost measurement for new users')).id);
+  await h.agents.poll();
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation using the newly supplied paid-cohort records.', { owner: true });
+  h.restart(); assert.ok((await h.deploy()).id, 'both new facts and applicable owner permission permit reopening');
+}));
+
+test('owner permission alone cannot reopen superseded work; later owner supersession tightens ordinary exhaustion', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const first = await h.deploy(); await h.agents.poll();
+  await h.evidence('Use the fresh-start launch plan; do not audit historical August costs.', { owner: true });
+  assert.equal((await h.deploy()).decision, 'retired');
+  assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'superseded', 'owner change after retirement persists');
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation if relevant records become available.', { owner: true });
+  assert.equal((await h.deploy()).decision, 'retired', 'permission without new evidence is insufficient');
+  h.restart(); assert.deepEqual((await h.cycle()).started, []);
+}));
+
+test('legacy terminal outcomes are backfilled without a recent window and failed semantic checks fail closed', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const id = 'ee000000-0000-4000-8000-000000000032';
+  await pool.query(`INSERT INTO agent_deployments (id,chain_id,kind,task,brief,session_key,agent_id,status,run_id,error,created_at)
+    VALUES ($1,$2,'research','Historical AI-cost reconciliation for August 2026','brief','legacy-retired','main','failed',$3,$4,now()-interval '3 years')`,
+    [id, h.id, `${id}:7`, 'Historical audit exhausted; no further action taken. Do not retry without new evidence and authorization to reopen the historical audit.']);
+  h.restart(); assert.equal((await h.deploy()).decision, 'retired');
+  const retired = (await h.raw(id)).report.taskDisposition;
+  assert.equal(retired.sourceRun, `${id}:7`);
+  h.task = 'Establish dollars consumed serving the premium members last summer';
+  h.unavailable = true; assert.deepEqual((await h.cycle()).started, []);
+  h.unavailable = false; h.malformed = true; assert.deepEqual((await h.cycle()).started, []);
+  assert.equal(h.gw.calls.length, 0);
+  h.restart(); assert.deepEqual((await h.raw(id)).report.taskDisposition, retired);
+}));
+
+test('structured evidence-blocked reports persist; a genuinely different period is not the retired scope', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  h.report = { status: 'done', summary: 'No applicable records exist for the requested calculation.', disposition: { status: 'evidence-blocked' } };
+  const d = await h.deploy(); await h.agents.poll();
+  assert.equal((await h.raw(d.id)).report.taskDisposition.status, 'evidence-blocked');
+  assert.equal((await h.deploy()).decision, 'retired');
+  assert.ok((await h.deploy('Reconcile historical AI costs for September 2026 paid subscribers')).id, 'non-overlapping period remains eligible');
+}));
+
+test('earlier permission cannot beat later owner withdrawal, and invented citations cannot reopen a scope', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  h.report = { status: 'failed', summary: 'Historical API-cost reconciliation cannot proceed under the fresh-start instruction. Retire this deployment.' };
+  const first = await h.deploy(); await h.agents.poll();
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation with the newly available records.', { owner: true });
+  await h.evidence('New direction: use the fresh-start launch plan and do not audit historical August costs.', { owner: true });
+  await h.evidence('August 2026 production usage: the complete token ledger and paid subscriber cohort are now available.');
+  assert.equal((await h.deploy()).decision, 'retired', 'a later withdrawal beats earlier permission');
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation; this explicitly replaces my fresh-start restriction.', { owner: true });
+  h.forge = true;
+  assert.equal((await h.deploy()).decision, 'retired', 'model claims require matching source quotations');
+  h.forge = false;
+  // Use a new unambiguous authorization after the withdrawn instruction.
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation now, using the supplied verified production records.', { owner: true });
+  assert.ok((await h.deploy()).id);
+  assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'superseded', 'reopening does not erase the durable retirement');
+}));
+
+test('superseded evidence and old authorizations cannot be used as new reopening facts', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const first = await h.deploy(); await h.agents.poll();
+  const fact = await h.evidence('August 2026 production usage: verified paid-cohort totals from the invoice ledger.');
+  await h.evidence('That uploaded ledger was a sample, not the historical production invoice. No replacement records exist.', { supersedes: [fact.id] });
+  assert.equal((await h.deploy()).decision, 'retired', 'retracted facts cannot reopen the task');
+  assert.ok((await h.raw(first.id)).report.taskDisposition);
+}));
+
+test('provider-credit exhaustion and successful fresh-start work are not task retirements', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  h.report = { status: 'failed', summary: 'Out of usage credits: provider quota exhausted.' };
+  const first = await h.deploy(); await h.agents.poll();
+  assert.equal((await h.raw(first.id)).report.taskDisposition, undefined);
+  h.restart(); h.report = { status: 'done', summary: 'Created the fresh-start launch plan.', remaining: ['Historical records missing'] };
+  const second = await h.deploy(); assert.ok(second.id); await h.agents.poll();
+  assert.equal((await h.raw(second.id)).report.taskDisposition, undefined);
+  assert.ok((await h.deploy()).id, 'neither provider failure nor a successful fresh-start artifact retires the scope');
+}));
+
+
+test('retirement is task-scoped, not a ban on unrelated calculations in the same period', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  await h.deploy(); await h.agents.poll();
+  assert.ok((await h.deploy('Reconcile historical office equipment costs for August 2026')).id);
+}));

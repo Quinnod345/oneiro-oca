@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { resolveProvider } from '../llm.js';
 import { OWNER_KEY } from '../motivation/risk.js';
 import { streamName } from './board.js';
+import { createTaskDispositions, makeDisposition, DISPOSITIONS, PROVIDER_LIMIT } from './task-dispositions.js';
 
 export const AGENT_KINDS = ['research', 'talker', 'builder', 'executor'];
 export const REPORT_STATUSES = ['working', 'needs_person', 'done', 'failed', 'note'];
@@ -54,6 +55,7 @@ export function parseReport(reply) {
   if (!r || typeof r !== 'object' || !REPORT_STATUSES.includes(r.status)) return { status: 'malformed', summary: 'the oca block has no valid status' };
   const out = { status: r.status, summary: text(r.summary, 2000) };
   if (r.status === 'needs_person') out.question = text(r.question, 800) || text(r.summary, 800);
+  if (DISPOSITIONS.includes(r.disposition?.status)) out.disposition = { status: r.disposition.status };
   if (typeof r.nextStep === 'string') out.nextStep = text(r.nextStep, 600);
   // When the next step belongs to a future moment (a launch date, the end of a month), the agent says when.
   if (typeof r.resumeAt === 'string' && Number.isFinite(Date.parse(r.resumeAt))) out.resumeAt = new Date(Date.parse(r.resumeAt)).toISOString();
@@ -73,6 +75,7 @@ const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 {"status":"needs_person","question":"the one thing only the person can answer or do","summary":"why"}  — ask in plain words above the block too
 {"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00","made":[{"what":"what you set up that lasts","where":"its URL or file path"}]}
 {"status":"failed","summary":"why"}
+If this task scope is exhausted, superseded by the owner, or blocked on missing evidence, include "disposition":{"status":"exhausted|superseded|evidence-blocked"} in your done/failed block. Name the objective, period and blocker in the summary; do not report ordinary progress as retirement.
 Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
 made lists only what exists now because of you and will last: a live listing, a published post, a changed account setting, a finished asset or file others will use. Leave it out when you only read or researched.
 If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.
@@ -99,6 +102,8 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
 export function createAgents({ pool, gateway, queue, risk = null, asks = null, aside = null, llm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
   roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000 } = {}) {
+
+  const dispositions = createTaskDispositions({ pool, llm, log });
 
   async function init() {
     await pool.query(await readFile(new URL('../migrations/062_agent_deployments.sql', import.meta.url), 'utf8'));
@@ -156,6 +161,10 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (firedBy === 'engine' && clock() < providerBackoffUntil) throw new Error(`the model provider is limiting agents; deployments resume at ${new Date(providerBackoffUntil).toISOString()}`);
     // A builder is the engine repairing itself (self-build runs one at a time); it never waits behind pursuit work.
     if (!standing && kind !== 'builder' && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
+    if (kind !== 'talker') {
+      const eligibility = await dispositions.eligible(row.id, task || row.state.want?.description || row.seed, row.state);
+      if (!eligibility.eligible) return { id: null, decision: 'retired', why: eligibility.why, disposition: eligibility.disposition };
+    }
     const id = randomUUID();
     const s = row.state, want = s.want?.description || row.seed;
     const brief = briefOverride || composeBrief({ kind, chainId: row.id, want, doneWhen: s.want?.doneWhen || s.doneWhen, task,
@@ -248,16 +257,16 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (evidence.length && ['awaiting_evidence', 'stalled', 'budget', 'failed', 'pondering', 'running', 'needs_input'].includes((await chain(d.chain_id))?.status)) {
       try { await queue.addEvidence(d.chain_id, evidence); applied = true; } catch (e) { applyError = e.message; }
     }
-    const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError };
+    const taskDisposition = makeDisposition(d, report, (await chain(d.chain_id))?.state);
+    const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError, ...(taskDisposition ? { taskDisposition } : {}) };
     await pool.query(`UPDATE agent_deployments SET status = 'done', report = $2::jsonb, ended_at = now(), updated_at = now(), question = NULL WHERE id = $1`, [d.id, JSON.stringify(final)]);
-    await noteContinuity(d.chain_id, { found: applied || report.status === 'done', remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null, stream: d.stream || null });
+    await noteContinuity(d.chain_id, { found: !taskDisposition && (applied || report.status === 'done'), remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null, stream: d.stream || null });
     await observe(d, applied ? 'success' : 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) finished after ${d.turns} turns: ${verified.length} verified sources of ${(report.evidence || []).length} claimed, ${stated.length} statements by the person; evidence applied: ${applied}${applyError ? '; ' + applyError : ''}.`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
     return final;
   }
   // The model provider, not the pursuit: usage limits and quotas pause deployments for a while and tell the
   // person once, instead of spending the cadence on attempts that cannot run.
-  const PROVIDER_LIMIT = /out of usage credits|usage limit|rate limit|quota|too many requests|\b429\b|insufficient_quota|overloaded|credit balance/i;
   let providerBackoffUntil = 0, providerNoticeAt = 0;
   async function providerTrouble(d, why) {
     const until = clock() + 60 * 60_000;
@@ -269,9 +278,11 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       catch (e) { log.warn?.('[agents] provider notice:', e.message); }
     }
   }
-  async function fail(d, why) {
+  async function fail(d, why, report = {}) {
     const provider = PROVIDER_LIMIT.test(String(why));
-    await pool.query(`UPDATE agent_deployments SET status = 'failed', error = $2, ended_at = now(), updated_at = now() WHERE id = $1`, [d.id, text(why, 500)]);
+    const taskDisposition = provider ? null : makeDisposition(d, report, (await chain(d.chain_id))?.state, why);
+    await pool.query(`UPDATE agent_deployments SET status = 'failed', error = $2, report = COALESCE(report, '{}'::jsonb) || $3::jsonb, ended_at = now(), updated_at = now() WHERE id = $1`,
+      [d.id, text(why, 500), JSON.stringify({ ...report, ...(provider ? { failureClass: 'provider' } : {}), ...(taskDisposition ? { taskDisposition } : {}) })]);
     if (provider) { await providerTrouble(d, why); await observe(d, 'not_attempted', `Agent ${d.id.slice(0, 8)} (${d.kind}) could not run: ${text(why, 200)}`); return; }
     await noteContinuity(d.chain_id, { found: false, error: text(why, 200) });
     await observe(d, 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) failed: ${text(why, 300)}`);
@@ -307,7 +318,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       return startTurn(d.id, nudge);
     }
     if (report.status === 'needs_person') return needPerson(d, report, messages);
-    if (report.status === 'failed') return fail(d, report.summary);
+    if (report.status === 'failed') return fail(d, report.summary, report);
     return finish(d, report, messages);
   }
 
@@ -480,6 +491,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
         left(coalesce(report ->> 'summary', error, question, ''), 260) AS outcome, stream FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker' ORDER BY created_at DESC LIMIT 14`, [row.id]);
     const { rows: acts } = await pool.query(`SELECT to_char(created_at, 'MM-DD HH24:MI') AS at, class, host, decision, coalesce(outcome, '') AS outcome, left(description, 180) AS d
         FROM agent_actions WHERE chain_id = $1 ORDER BY created_at DESC LIMIT 8`, [row.id]).catch(() => ({ rows: [] }));
+    const retired = await dispositions.records(row.id, s);
+    const retirement = retired.map(d => `- [${d.status}] ${d.scope.description} (${d.period}); ${d.reason}`).join('\n');
     const ev = s.evidence || [];
     const said = ev.filter(e => /stated by Quinn|observed by quinn/i.test(e.source || '') || /^person-/.test(e.id || '')).slice(-8).map(e => `- ${text(e.observation, 300)}`).join('\n');
     const known = ev.filter(e => !/stated by Quinn/i.test(e.source || '')).slice(-12).map(e => `- ${text(e.observation, 200)}`).join('\n');
@@ -489,8 +502,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const own = s.standing === 'self' ? `\n\nThe engine's own operation (this pursuit is about itself; its moves are reviews that end in concrete self-wants, one defect each, with the evidence):\n${await selfSignals()}` : '';
     const p = resolveProvider('cloud');
     const r = await llm.messages.create({ provider: p.provider, model: p.model, max_tokens: 1400, temperature: 0.4,
-      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
-      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
+      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; retired tasks stay retired unless materially new relevant evidence permits reopening, and superseded scopes additionally require new applicable owner authorization; propose distinct useful work instead; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
+      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nDurable task dispositions (not a recent-run window):\n${retirement || '- (none)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
     const raw = typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
     const j = JSON.parse(String(raw).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1'));
     const moves = (Array.isArray(j.moves) ? j.moves : []).map(m => ({ task: text(m?.task, 1500), why: text(m?.why, 300), stream: streamName(m?.stream) })).filter(m => m.task.length >= 20).slice(0, max);
