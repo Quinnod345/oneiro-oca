@@ -262,7 +262,20 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
       if (!(await gateway.available())) return;
       await reapply().catch(e => log.warn?.('[agents] reapply:', e.message));
       const { rows } = await pool.query(`SELECT * FROM agent_deployments WHERE status IN ('queued','running','waiting_person','standing') ORDER BY updated_at ASC LIMIT 40`);
+      // Sessions parked on the person (or standing) are read only when the gateway says they changed: one
+      // sessions.list instead of a transcript per session per tick.
+      let changed = null;
+      if (rows.some(d => d.status === 'waiting_person' || d.status === 'standing') && gateway.sessions) {
+        try {
+          const list = await gateway.sessions({ agentId, limit: 300 });
+          changed = new Map(list.map(s => [s.key, Number(s.updatedAt) || 0]));
+        } catch (e) { log.warn?.('[agents] sessions.list:', text(e.message, 160)); }
+      }
       for (const d of rows) {
+        if ((d.status === 'waiting_person' || d.status === 'standing') && changed) {
+          const at = changed.get(d.session_key);
+          if (at !== undefined && at <= (Number(d.seen_at_ms) || 0)) continue;   // nothing new in that session
+        }
         try {
           if (d.status === 'queued') { await startTurn(d.id, d.brief); continue; }
           if (d.status === 'running') {
@@ -326,9 +339,9 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true AND ponder_state #>> '{want,status}' = 'active'
         AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input')
-        AND NOT EXISTS (SELECT 1 FROM agent_deployments a WHERE a.chain_id = thought_chains.id AND a.status = ANY($1))
+        AND NOT EXISTS (SELECT 1 FROM agent_deployments a WHERE a.chain_id = thought_chains.id AND a.status IN ('queued', 'running'))
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
-      ORDER BY updated_at ASC`, [LIVE]);
+      ORDER BY updated_at ASC`);
     const now = clock(), started = [];
     for (const row of rows.filter(r => dueIn(r.state, now) <= 0).slice(0, perTick)) {
       if ((await free()) <= 0) break;
