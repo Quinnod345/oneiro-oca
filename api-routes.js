@@ -56,7 +56,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => pursuitWork.sto
 const gateway = createGateway();
 const agents = createAgents({ pool, gateway, queue: ponderQueue, risk: riskJournal, asks, aside: asideBrowser, llm, controls: userControls,
   model: process.env.OCA_AGENT_MODEL || null, agentId: process.env.OCA_AGENT_ID || 'main',
-  roots: ['/Users/quinnodonnell/oneiro/runtime/workspace', '/Users/quinnodonnell/oneiro/oca-cognitive'], ensureSelf: true });
+  roots: ['/Users/quinnodonnell'], ensureSelf: true });
 const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
