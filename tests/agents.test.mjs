@@ -265,3 +265,28 @@ test('a pursuit waiting on a future moment is parked: no agents until then, and 
   const p = await agents.plan(); assert.equal(p.started.length, 1, 'the moment came');
   assert.match(briefs.at(-1), /the time the pursuit was parked for\. Do the planned step: Publish the Day 1 X post and the Instagram carousel/);
 }));
+
+test('dated steps form a schedule: a later report adds its step and never swallows an earlier one', async () => database(async pool => {
+  let now = Date.parse('2026-09-23T17:00:00Z');
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const plans = [{ nextStep: 'Review October results', resumeAt: '2026-11-01T14:00:00Z' }, { nextStep: 'Publish Day 1', resumeAt: '2026-10-01T13:00:00Z' }];
+  let k = 0;
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `ok${block({ status: 'done', summary: 's', ...plans[k++ % 2] })}` });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Launch InnerEcho in October', doneWhen: 'A month nets positive.', continuous: true });
+  await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence' WHERE id = $1`, [chain.chain_id]);
+  await agents.deploy(chain.chain_id, { kind: 'research', task: 'a', firedBy: 'engine' }); await agents.poll();
+  await agents.deploy(chain.chain_id, { kind: 'research', task: 'b', firedBy: 'engine' }); await agents.poll();
+  let c = (await queue.get(chain.chain_id)).continuity;
+  assert.deepEqual(c.schedule.map(x => x.task), ['Publish Day 1', 'Review October results']); assert.equal(c.resumeTask, 'Publish Day 1');
+  now = Date.parse('2026-10-01T13:01:00Z');
+  assert.equal((await agents.plan()).started.length, 1);
+  c = (await queue.get(chain.chain_id)).continuity;
+  assert.equal(c.resumeTask, 'Review October results', 'the next dated step is now the park point'); assert.equal(c.firedStep.task, 'Publish Day 1');
+}));
+
