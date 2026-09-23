@@ -27,7 +27,7 @@ async function database(run) {
       created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), ponder_state JSONB)`);
     await pool.query(`CREATE TABLE hypotheses (id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now(), domain TEXT, claim TEXT, confidence FLOAT8, prediction TEXT, prediction_deadline TIMESTAMPTZ, status TEXT, actual_outcome TEXT, tested_at TIMESTAMPTZ, source_type TEXT, source_data JSONB DEFAULT '{}'::jsonb)`);
     await pool.query(`CREATE TABLE pursuit_work (id UUID PRIMARY KEY, chain_id INT, status TEXT, request_id UUID, created_at TIMESTAMPTZ DEFAULT now())`);
-    for (const m of ['057_worth_ledger', '058_risk_decisions', '062_agent_deployments']) await pool.query(await readFile(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
+    for (const m of ['057_worth_ledger', '058_risk_decisions', '062_agent_deployments', '064_pursuit_board']) await pool.query(await readFile(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
     await run(pool);
   } finally { if (pool) await pool.end(); await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); await admin.end(); }
 }
@@ -64,6 +64,10 @@ test('a report is the last oca block of a reply, validated; no block is no repor
   assert.equal(r.status, 'done'); assert.equal(r.evidence.length, 1); assert.equal(r.evidence[0].quote, 'the price is $4.99 per month'); assert.deepEqual(r.remaining, ['q1']);
   assert.equal(parseReport(`first${block({ status: 'working', summary: 'a' })} then${block({ status: 'needs_person', summary: 'why' })}`).question, 'why', 'the last block wins; a question defaults to the summary');
   assert.equal(parseReport(block({ status: 'done', summary: 's', files_changed: ['a.js'], tests_run: true, ready: true })).ready, true);
+  // what an agent set up that lasts travels with its report, for the board; a bare string or a stub is not a thing made
+  const made = parseReport(block({ status: 'done', summary: 's', made: [{ what: 'Listing on OBOHITO', where: 'https://obohito.com/app/innerecho' }, 'x', { what: 'ab' }] })).made;
+  assert.deepEqual(made, [{ what: 'Listing on OBOHITO', where: 'https://obohito.com/app/innerecho' }]);
+  assert.ok(composeBrief({ kind: 'research', chainId: 1, want: 'w' }).includes('"made":[{"what"'), 'the contract asks for what was made');
   assert.equal(messageText([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }]), 'a\nb');
 });
 
@@ -138,7 +142,7 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => msg.startsWith('[thinker] You are deployed') && /Your role: talker/.test(msg) ? 'Here for you.' : `w${block({ status: 'working', summary: 'w' })}` });
   const split = { called: 0 };
-  const llm = { messages: { create: async () => { split.called++; return { content: [{ type: 'text', text: '{"thought":"Pricing is the lever right now.","moves":[{"task":"Find the US price on the App Store listing and quote it","why":"anchor"},{"task":"Find the cost per subscriber from the hosting invoices","why":"margin"}]}' }] }; } } };
+  const llm = { messages: { create: async () => { split.called++; return { content: [{ type: 'text', text: '{"thought":"Pricing is the lever right now.","moves":[{"task":"Find the US price on the App Store listing and quote it","why":"anchor","stream":"pricing"},{"task":"Find the cost per subscriber from the hosting invoices","why":"margin","stream":"Costs!"}]}' }] }; } } };
   const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
@@ -151,6 +155,9 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   assert.equal((await queue.get(chain.chain_id)).continuity.lastThought, 'Pricing is the lever right now.', 'its thought is kept on the pursuit');
   assert.equal(await agents.liveCount(chain.chain_id), 2);
   assert.deepEqual((await agents.plan()).started, [], 'nothing more while agents are live');
+  // each move is filed under the workstream the strategist named for it, as the board shows it
+  const filed = (await pool.query(`SELECT stream FROM agent_deployments WHERE chain_id = $1 ORDER BY stream`, [chain.chain_id])).rows.map(r => r.stream);
+  assert.deepEqual(filed, ['Costs', 'Pricing']);
   // the talker: standing, one per want; the person's words there become evidence on the want
   const t = await agents.talker(chain.chain_id); assert.equal(t.status, 'standing'); assert.equal(t.kind, 'talker');
   assert.equal((await agents.talker(chain.chain_id)).id, t.id, 'one talker per want');

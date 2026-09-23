@@ -17,6 +17,7 @@ import { readFile, realpath } from 'node:fs/promises';
 import { Router } from 'express';
 import { resolveProvider } from '../llm.js';
 import { OWNER_KEY } from '../motivation/risk.js';
+import { streamName } from './board.js';
 
 export const AGENT_KINDS = ['research', 'talker', 'builder', 'executor'];
 export const REPORT_STATUSES = ['working', 'needs_person', 'done', 'failed', 'note'];
@@ -62,15 +63,18 @@ export function parseReport(reply) {
   if (typeof r.tests_run === 'boolean') out.tests_run = r.tests_run;
   if (typeof r.ready === 'boolean') out.ready = r.ready;
   if (typeof r.branch === 'string') out.branch = text(r.branch, 120);
+  // What the agent set up that lasts — a live listing, a post, a changed setting, a finished asset — for the board.
+  if (Array.isArray(r.made)) out.made = r.made.slice(0, 8).filter(m => m && typeof m === 'object').map(m => ({ what: text(m.what, 200), where: text(m.where, 400) })).filter(m => m.what.length >= 4);
   return out;
 }
 
 const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 {"status":"working","summary":"what you did and what is next"}  — you made progress and want to keep going (the thinker sends you on)
 {"status":"needs_person","question":"the one thing only the person can answer or do","summary":"why"}  — ask in plain words above the block too
-{"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00"}
+{"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00","made":[{"what":"what you set up that lasts","where":"its URL or file path"}]}
 {"status":"failed","summary":"why"}
 Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
+made lists only what exists now because of you and will last: a live listing, a published post, a changed account setting, a finished asset or file others will use. Leave it out when you only read or researched.
 If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.
 If the next step cannot happen before a certain time (a planned launch date, results that only exist after a period ends), set resumeAt to that time and nextStep to exactly what to do then: the engine sends no one until then, and at that time deploys an agent to do nextStep. Do not research what cannot exist yet.`;
 
@@ -98,6 +102,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
 
   async function init() {
     await pool.query(await readFile(new URL('../migrations/062_agent_deployments.sql', import.meta.url), 'utf8'));
+    await pool.query(await readFile(new URL('../migrations/064_pursuit_board.sql', import.meta.url), 'utf8'));
     if (ensureSelf) await selfPursuit().catch(e => log.warn?.('[agents] self pursuit:', e.message));
   }
   // The engine's one standing pursuit about itself. Quinn asked for it: the only time it sits is when it is
@@ -131,7 +136,7 @@ Self-build events (24 h): ${builds.map(b => `${b.kind} ${b.n}`).join(', ') || 'n
 To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is /Users/quinnodonnell/oneiro/oca-cognitive (read it; do not edit it directly).`;
   }
   const rowOf = r => r && ({ id: r.id, chainId: r.chain_id, kind: r.kind, task: r.task, sessionKey: r.session_key, agentId: r.agent_id, displayName: r.display_name,
-    status: r.status, turns: r.turns, question: r.question, askId: r.ask_id, report: r.report, error: r.error, firedBy: r.fired_by, cwd: r.cwd,
+    status: r.status, turns: r.turns, question: r.question, askId: r.ask_id, report: r.report, error: r.error, firedBy: r.fired_by, cwd: r.cwd, stream: r.stream || null,
     createdAt: r.created_at, updatedAt: r.updated_at, endedAt: r.ended_at });
   const chain = async chainId => (await pool.query('SELECT id, seed, status, ponder_state AS state FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL', [chainId])).rows[0] || null;
   async function slots() { try { const c = await controls?.get?.(); const n = Number(c?.agentSlots); return Number.isInteger(n) && n >= 0 ? n : slotsDefault; } catch { return slotsDefault; } }
@@ -142,7 +147,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   }
 
   // ── deploy ────────────────────────────────────────────────────────────────────────────────────────────
-  async function deploy(chainId, { kind, task = '', firedBy = 'engine', by = 'quinn', cwd = null, brief: briefOverride = null, standing = false } = {}) {
+  async function deploy(chainId, { kind, task = '', firedBy = 'engine', by = 'quinn', cwd = null, brief: briefOverride = null, standing = false, stream = null } = {}) {
     if (!AGENT_KINDS.includes(kind)) throw new Error(`an agent is one of ${AGENT_KINDS.join(', ')}`);
     if (!['engine', 'person'].includes(firedBy)) throw new Error('an agent is fired by a person or the engine');
     const row = await chain(Number(chainId)); if (!row) throw new Error('Pursuit not found');
@@ -168,8 +173,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const displayName = `#${row.id} ${kind} · ${text(task || want, 56)}${task ? '' : ''}`.replace(/\s+·\s*$/, '');
     const key = `agent:${agentId}:want-${row.id}-${kind}-${id.slice(0, 8)}`;
     await gateway.createSession({ agentId, key, label: `${displayName} (${id.slice(0, 6)})`, displayName, model, thinkingLevel });
-    await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, display_name, status, fired_by, cwd)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [id, row.id, kind, text(task, 3000), brief, key, agentId, displayName, standing ? 'standing' : 'queued', firedBy, cwd]);
+    await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, display_name, status, fired_by, cwd, stream)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [id, row.id, kind, text(task, 3000), brief, key, agentId, displayName, standing ? 'standing' : 'queued', firedBy, cwd, streamName(stream)]);
     log.log?.(`[agents] deployed ${kind} ${id.slice(0, 8)} for want #${row.id} (${firedBy}) → ${key}`);
     if (!standing) await startTurn(id, brief).catch(e => log.warn?.('[agents] first turn:', e.message));
     else await gateway.turn({ sessionKey: key, message: brief, idempotencyKey: `${id}:0` }).catch(e => log.warn?.('[agents] talker brief:', e.message));
@@ -216,14 +221,14 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   }
   // Dated steps form a schedule: a report adds its step, it never erases another's (a November review must
   // not swallow an October launch). The earliest future step is what the pursuit waits for.
-  async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null, resumeAt = undefined }) {
+  async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null, resumeAt = undefined, stream = null }) {
     const at = resumeAt ? Date.parse(resumeAt) : null;
     let schedule = null;
     if (at && at > clock() + 60 * 60_000 && nextStep) {
       const { rows: [r] } = await pool.query(`SELECT ponder_state -> 'continuity' -> 'schedule' AS s FROM thought_chains WHERE id = $1`, [chainId]).catch(() => ({ rows: [] }));
       const prior = Array.isArray(r?.s) ? r.s : [];
       const iso = new Date(at).toISOString();
-      schedule = [...prior.filter(x => Date.parse(x.at) > clock() && !(x.at === iso && x.task === nextStep)), { at: iso, task: text(nextStep, 1500), addedAt: new Date(clock()).toISOString() }]
+      schedule = [...prior.filter(x => Date.parse(x.at) > clock() && !(x.at === iso && x.task === nextStep)), { at: iso, task: text(nextStep, 1500), addedAt: new Date(clock()).toISOString(), ...(stream ? { stream } : {}) }]
         .sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).slice(0, 12);
     }
     const next = schedule?.[0];
@@ -245,7 +250,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     }
     const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError };
     await pool.query(`UPDATE agent_deployments SET status = 'done', report = $2::jsonb, ended_at = now(), updated_at = now(), question = NULL WHERE id = $1`, [d.id, JSON.stringify(final)]);
-    await noteContinuity(d.chain_id, { found: applied || report.status === 'done', remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null });
+    await noteContinuity(d.chain_id, { found: applied || report.status === 'done', remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null, stream: d.stream || null });
     await observe(d, applied ? 'success' : 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) finished after ${d.turns} turns: ${verified.length} verified sources of ${(report.evidence || []).length} claimed, ${stated.length} statements by the person; evidence applied: ${applied}${applyError ? '; ' + applyError : ''}.`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
     return final;
@@ -434,9 +439,10 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       const threads = [...new Set([...missing, ...remaining].map(x => text(x, 300)).filter(Boolean))];
       const c = row.state.continuity || {};
       const resuming = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
-      let tasks = [`Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.`];
+      let tasks = [{ task: `Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.` }];
       if (resuming && c.resumeTask) {
-        tasks = [`It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`];
+        const step = (Array.isArray(c.schedule) ? c.schedule : []).find(x => x.at === c.resumeAt && x.task === c.resumeTask);
+        tasks = [{ task: `It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`, stream: step?.stream || null }];
         const rest = (Array.isArray(c.schedule) ? c.schedule : []).filter(x => Date.parse(x.at) > now);
         await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
           [row.id, JSON.stringify({ schedule: rest, resumeAt: rest[0]?.at || null, resumeTask: rest[0]?.task || null, firedStep: { at: c.resumeAt, task: c.resumeTask, firedAt: new Date(now).toISOString() } })]).catch(() => {});
@@ -447,17 +453,17 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
             [row.id, JSON.stringify({ lastThought: s.thought, lastThoughtAt: new Date(now).toISOString(), lastMoves: s.moves.map(m => m.task.slice(0, 300)) })]).catch(() => {});
           log.log?.(`[agents] thinking on #${row.id}: ${text(s.thought, 200)} → ${s.moves.length} move(s)`);
-          if (s.moves.length) tasks = s.moves.map(m => `${m.task}${m.why ? `\nWhy now: ${m.why}` : ''}`);
+          if (s.moves.length) tasks = s.moves.map(m => ({ task: `${m.task}${m.why ? `\nWhy now: ${m.why}` : ''}`, stream: m.stream }));
           else {   // nothing worth doing this cycle: say so and look again next cycle
             await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
               [row.id, JSON.stringify({ lastSliceStartedAt: now, lastSliceEndedAt: now })]).catch(() => {});
             continue;
           }
-        } else if (threads.length >= 2 && (await free()) >= 2) tasks = await split(row, threads, Math.min(3, await free())).catch(() => tasks);
+        } else if (threads.length >= 2 && (await free()) >= 2) tasks = await split(row, threads, Math.min(3, await free())).then(t => t.map(task => ({ task }))).catch(() => tasks);
       }
       let deployed = 0;
-      for (const task of tasks) {
-        try { const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine' }); if (d.id) { started.push(d.id); deployed++; } } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
+      for (const { task, stream = null } of tasks) {
+        try { const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine', stream }); if (d.id) { started.push(d.id); deployed++; } } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
       }
       // The cadence advances only on a deployment; a failed attempt is retried on the next tick.
       if (deployed) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
@@ -471,7 +477,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   async function strategize(row, max, now) {
     const s = row.state || {}, want = s.want || {};
     const { rows: recent } = await pool.query(`SELECT to_char(created_at, 'MM-DD HH24:MI') AS at, status, left(task, 240) AS task,
-        left(coalesce(report ->> 'summary', error, question, ''), 260) AS outcome FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker' ORDER BY created_at DESC LIMIT 14`, [row.id]);
+        left(coalesce(report ->> 'summary', error, question, ''), 260) AS outcome, stream FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker' ORDER BY created_at DESC LIMIT 14`, [row.id]);
     const { rows: acts } = await pool.query(`SELECT to_char(created_at, 'MM-DD HH24:MI') AS at, class, host, decision, coalesce(outcome, '') AS outcome, left(description, 180) AS d
         FROM agent_actions WHERE chain_id = $1 ORDER BY created_at DESC LIMIT 8`, [row.id]).catch(() => ({ rows: [] }));
     const ev = s.evidence || [];
@@ -483,11 +489,11 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const own = s.standing === 'self' ? `\n\nThe engine's own operation (this pursuit is about itself; its moves are reviews that end in concrete self-wants, one defect each, with the evidence):\n${await selfSignals()}` : '';
     const p = resolveProvider('cloud');
     const r = await llm.messages.create({ provider: p.provider, model: p.model, max_tokens: 1400, temperature: 0.4,
-      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; no graded coursework, no CAPTCHAs, nothing in anyone else's name. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
-      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}] ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.d}`).join('\n') || '- (none)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
+      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
+      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
     const raw = typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
     const j = JSON.parse(String(raw).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1'));
-    const moves = (Array.isArray(j.moves) ? j.moves : []).map(m => ({ task: text(m?.task, 1500), why: text(m?.why, 300) })).filter(m => m.task.length >= 20).slice(0, max);
+    const moves = (Array.isArray(j.moves) ? j.moves : []).map(m => ({ task: text(m?.task, 1500), why: text(m?.why, 300), stream: streamName(m?.stream) })).filter(m => m.task.length >= 20).slice(0, max);
     return { thought: text(j.thought, 400) || '(no thought)', moves };
   }
   // The thinker splits open threads into parallel, non-overlapping tasks. JSON only; falls back to one task.
@@ -558,5 +564,5 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   router.get('/oca/inbox/want/:id/talker', route(req => talker(Number(req.params.id))));
   router.post('/oca/inbox/want/:id/talker', route(req => talker(Number(req.params.id))));
 
-  return { init, deploy, poll, plan, talker, relay, cancel, list, get, waitFor, liveCount, slots, available: () => gateway.available(), start, stop, router, composeBrief, parseReport };
+  return { init, deploy, poll, plan, talker, relay, cancel, list, get, waitFor, liveCount, slots, pausedUntil: () => (providerBackoffUntil > clock() ? providerBackoffUntil : null), available: () => gateway.available(), start, stop, router, composeBrief, parseReport };
 }
