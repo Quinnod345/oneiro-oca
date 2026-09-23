@@ -72,7 +72,7 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
   }
 
   // The agents on a want, live ones first, as the app shows them: kind, status, the question if waiting, the session to open.
-  const agentOf = a => ({ id: a.id, kind: a.kind, status: a.status, task: text(a.task, 200), question: a.question || null, askId: a.askId || null, sessionKey: a.sessionKey, displayName: a.displayName, turns: a.turns, summary: text(a.report?.summary, 300), updatedAt: a.updatedAt });
+  const agentOf = a => ({ id: a.id, kind: a.kind, status: a.status, task: text(a.task, 200), question: a.question || null, askId: a.askId || null, sessionKey: a.sessionKey, displayName: a.displayName, turns: a.turns, summary: text(a.report?.summary, 300), stream: a.stream || null, updatedAt: a.updatedAt });
   async function agentsByWant() {
     if (!agents) return new Map();
     const all = await agents.list({ limit: 200 }).catch(() => []);

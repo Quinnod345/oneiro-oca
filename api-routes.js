@@ -25,6 +25,7 @@ import { registerMobileCompanionRoutes } from './mobile-companion.js';
 import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
 import { createActuator } from './reasoning/actuator.js';
+import { createBoard } from './reasoning/board.js';
 import { createGateway } from './gateway.js';
 import { aside as asideBrowser } from './aside.js';
 
@@ -64,6 +65,12 @@ ocaRouter.use(agents.router);
 const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue });
 actuator.init().catch(e => console.error('[actuator] init:', e.message));
 ocaRouter.use(actuator.router);
+// The board: the orchestrator's account of each pursuit — workstreams it named, milestones, what it set up —
+// kept by a model that reads the pursuit's history; the map in the app reads it at /oca/orchestra.
+const board = createBoard({ pool, llm, asks, agents, controls: userControls, gateway });
+agentsReady.then(() => board.init()).then(() => board.start()).catch(e => console.error('[board] init:', e.message));
+ocaRouter.use(board.router);
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => board.stop());
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
 ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }));
 registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
