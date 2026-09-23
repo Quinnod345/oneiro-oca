@@ -10,18 +10,18 @@ test('CLI calls queue behind a concurrency limit instead of starving each other'
   assert.equal(peak, 2);
 });
 
-test('the gateway is available when anything answered lately; one failed probe is not an outage, two are', async () => {
-  let mode = 'ok', probes = 0;
-  const runner = async args => { if (args[2] === 'health') probes++; if (mode === 'down') throw new Error('timed out'); return '{"ok":true}'; };
-  const g = createGateway({ runner, log: { warn() {} } });
+test('the gateway is available when anything answered lately; otherwise its own /startupz says so — one failed check is not an outage, two are', async () => {
+  let mode = 'up', checks = 0;
+  const fetchImpl = async url => { checks++; assert.match(url, /\/startupz$/); if (mode === 'down') throw new Error('ECONNREFUSED'); return { status: mode === 'draining' ? 503 : 200 }; };
+  const g = createGateway({ runner: async () => '{"ok":true}', fetchImpl, log: { warn() {} } });
   await g.call('chat.history', { sessionKey: 'x' });
   mode = 'down';
-  assert.equal(await g.available(), true, 'a recent answer counts'); assert.equal(probes, 0, 'no probe needed');
-  // two minutes of silence later: probe, fail once → still up; fail twice → down
+  assert.equal(await g.available(), true, 'a recent answer counts'); assert.equal(checks, 0, 'no check needed');
   const realNow = Date.now; let t = realNow() + 121_000; Date.now = () => t;
   try {
-    assert.equal(await g.available(), true, 'one strike'); assert.equal(probes, 1);
-    t += 31_000; assert.equal(await g.available(), false, 'two strikes'); assert.equal(probes, 2);
-    mode = 'ok'; t += 31_000; assert.equal(await g.available(), true, 'recovers on the next probe');
+    assert.equal(await g.available(), true, 'one strike'); assert.equal(checks, 1);
+    t += 16_000; assert.equal(await g.available(), false, 'two strikes'); assert.equal(checks, 2);
+    mode = 'draining'; t += 16_000; assert.equal(await g.available(), false, 'draining is not ready');
+    mode = 'up'; t += 16_000; assert.equal(await g.available(), true, 'recovers on the next check');
   } finally { Date.now = realNow; }
 });

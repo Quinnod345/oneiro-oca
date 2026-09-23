@@ -129,7 +129,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (['cancelled', 'resolved'].includes(row.status) || row.state.want?.status !== 'active') throw new Error('This pursuit is closed');
     if (!(await gateway.available())) throw new Error('The gateway is not reachable; no agent can be deployed');
     if (firedBy === 'engine' && clock() < providerBackoffUntil) throw new Error(`the model provider is limiting agents; deployments resume at ${new Date(providerBackoffUntil).toISOString()}`);
-    if (!standing && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
+    // A builder is the engine repairing itself (self-build runs one at a time); it never waits behind pursuit work.
+    if (!standing && kind !== 'builder' && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
     const id = randomUUID();
     const s = row.state, want = s.want?.description || row.seed;
     const brief = briefOverride || composeBrief({ kind, chainId: row.id, want, doneWhen: s.want?.doneWhen || s.doneWhen, task,

@@ -11,7 +11,8 @@ export const OPENCLAW_CLI = process.env.OCA_OPENCLAW_CLI || '/opt/homebrew/bin/o
 
 // Each CLI call starts a whole OpenClaw process (seconds of CPU). Calls run at most `concurrency` at a time,
 // so a burst of polls queues instead of starving each other into timeouts.
-export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 30_000, concurrency = 2, log = console } = {}) {
+export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 30_000, concurrency = 2, log = console,
+  httpUrl = process.env.OCA_GATEWAY_HTTP || 'http://127.0.0.1:18789', fetchImpl = null } = {}) {
   let active = 0; const waiting = [];
   const slot = () => new Promise(res => { if (active < concurrency) { active++; res(); } else waiting.push(res); });
   const release = () => { const next = waiting.shift(); if (next) next(); else active--; };
@@ -40,14 +41,19 @@ export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 3
   // Reachable is observed, not probed for its own sake: any call that got an answer in the last two minutes
   // counts. Only when nothing has answered lately is health asked — with a timeout generous enough for a busy
   // machine, and one failure is not an outage: it takes two in a row to call the gateway down.
+  // Liveness is the gateway's own HTTP endpoint (/startupz: 200 once started, 503 while starting or draining) —
+  // a millisecond fetch, not a CLI process that a busy machine can take half a minute to start.
   let lastOk = 0, lastProbe = 0, lastProbeOk = true, strikes = 0;
   async function available() {
     const now = Date.now();
     if (now - lastOk < 120_000) return true;
-    if (now - lastProbe < 30_000) return lastProbeOk;
+    if (now - lastProbe < 15_000) return lastProbeOk;
     lastProbe = now;
-    try { const h = await call('health', {}, { timeout: 20_000 }); lastProbeOk = !!h && h.ok !== false; if (lastProbeOk) strikes = 0; }
-    catch (e) { strikes++; lastProbeOk = strikes < 2; log.warn?.(`[gateway] health probe failed (${strikes}${strikes >= 2 ? ', treating as down' : ''}):`, String(e.message).slice(0, 160)); }
+    try {
+      const res = await (fetchImpl || fetch)(`${httpUrl}/startupz`, { signal: AbortSignal.timeout(5000) });
+      if (res.status === 200) { lastProbeOk = true; strikes = 0; lastOk = now; }
+      else { strikes++; lastProbeOk = false; log.warn?.(`[gateway] not ready: HTTP ${res.status}`); }
+    } catch (e) { strikes++; lastProbeOk = strikes < 2; log.warn?.(`[gateway] liveness check failed (${strikes}${strikes >= 2 ? ', treating as down' : ''}):`, String(e.message).slice(0, 160)); }
     return lastProbeOk;
   }
   // A session for an agent: created idle (no turn), named so the person recognises it in the app.
