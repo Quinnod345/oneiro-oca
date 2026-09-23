@@ -253,7 +253,7 @@ const TOOLS = [
 export const ASIDE_TOOL_NAMES = TOOLS.map(t => t.name);
 const KEYS = new Set(['Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Enter']);
 
-async function call(name, args = {}) {
+export async function callAsideTool(name, args = {}) {
   const id = String(args.targetId || '');
   switch (name) {
     case 'aside_read': { const r = await aside.readPage(validateUrl(args.url), { maxChars: MAX(args.maxChars) }); return withBlock({ title: r.title, url: r.url, source: r.source, text: r.text, targetId: await tabIdFor(r.url) }); }
@@ -381,7 +381,7 @@ rl?.on('line', async line => {
         const { name, arguments: args } = req.params || {};
         if (!TOOLS.some(t => t.name === name)) return fail(-32602, `unknown tool ${name}`);
         pending++;
-        try { const result = await call(name, args || {}); if (result?.refused) process.stderr.write(`[aside-mcp] refused ${result.action} ${result.control}: ${result.why}\n`); else if (result?.action) process.stderr.write(`[aside-mcp] ${JSON.stringify(result.action)} → ${result.url}\n`); return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false }); }
+        try { const result = await callAsideTool(name, args || {}); if (result?.refused) process.stderr.write(`[aside-mcp] refused ${result.action} ${result.control}: ${result.why}\n`); else if (result?.action) process.stderr.write(`[aside-mcp] ${JSON.stringify(result.action)} → ${result.url}\n`); return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], isError: false }); }
         catch (e) { return reply({ content: [{ type: 'text', text: `Aside: ${e.message}` }], isError: true }); }
         finally { pending--; }
       }

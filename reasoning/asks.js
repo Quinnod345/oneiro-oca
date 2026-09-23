@@ -16,7 +16,8 @@ export function composeAsk({ kind, host, want, chainId, detail, agent }) {
   switch (kind) {
     case 'question': return `Oneiro's agent on ${pursuit} asks: ${text(detail, 500)} — open Oneiro and answer it in the chat${agent ? ` "${text(agent, 60)}"` : ''}, or reply here.`;
     case 'notice': return `Oneiro: ${text(detail, 400)}`;
-    case 'sign_in': return `Oneiro needs you: to keep working on ${pursuit} it needs you signed in to ${host} in Aside — it hit the sign-in page there. Sign in once in Aside and it will continue on its own.`;
+    case 'sign_in': if (text(detail)) return `Oneiro needs you: for ${pursuit}, finish access to ${host} in Aside — ${text(detail, 300)}. Then reply here and I’ll check the protected page.`;
+      return `Oneiro needs you: to keep working on ${pursuit} it needs you signed in to ${host} in Aside — it hit the sign-in page there. Sign in once in Aside and it will continue on its own.`;
     case 'open_tab': return `Oneiro needs you: for ${pursuit}, open the page it needs in Aside and leave the tab open — ${text(detail, 120)}. It reads open tabs.`;
     case 'evidence': return `Oneiro needs you: ${pursuit} has waited on something only you can give (${text(detail, 120)}). Open Oneiro → Judge → ${pursuit} to see what.`;
     default: return `Oneiro needs you: ${pursuit} needs ${text(detail, 140) || 'something only you can give'}. Open Oneiro → Judge.`;
