@@ -1,0 +1,79 @@
+{
+  "note": "Reduced live chat.history fixture for deployment eeb08eb9-b610-496d-86e8-438ad7e678e5. Active :6 and queued :7 metadata captured in pursuit-31-person-routing-2026-09-23/continuation-transcript.json; exact :6 user, progress and terminal metadata reread from that session during build #34. First Continue at 2026-09-23T17:49:27.271Z preceded first done at 17:55:03.862Z by 336.591 seconds. Tests replace terminal content with synthetic report controls.",
+  "sessionKey": "agent:main:want-31-research-eeb08eb9",
+  "pendingInputs": {
+    "items": [
+      {
+        "id": "ea7cc186-1c93-44e9-9daf-078f11c57c0a",
+        "acceptedAt": 1790186373863,
+        "state": "queued",
+        "message": {
+          "role": "user",
+          "content": "[thinker] Continue. (6 turns left.)",
+          "timestamp": 1790186373863,
+          "__openclaw": {
+            "senderIsOwner": false,
+            "id": "pending:ea7cc186-1c93-44e9-9daf-078f11c57c0a"
+          }
+        },
+        "runId": "eeb08eb9-b610-496d-86e8-438ad7e678e5:7"
+      }
+    ],
+    "total": 1
+  },
+  "sessionInfo": {
+    "hasActiveRun": true,
+    "status": "running"
+  },
+  "inFlightRun": {
+    "runId": "eeb08eb9-b610-496d-86e8-438ad7e678e5:6",
+    "startedAt": 1790186386907
+  },
+  "messages": [
+    {
+      "role": "user",
+      "timestamp": 1790186266955,
+      "content": "[thinker] Continue. (7 turns left.)",
+      "idempotencyKey": "eeb08eb9-b610-496d-86e8-438ad7e678e5:6:user",
+      "__openclaw": {
+        "runId": "eeb08eb9-b610-496d-86e8-438ad7e678e5:6"
+      }
+    },
+    {
+      "role": "assistant",
+      "timestamp": 1790186445208,
+      "content": [
+        {
+          "type": "text",
+          "text": "The fallback treats an empty input queue as proof that a turn has finished, then reads the last assistant message. That could mistake a progress update for the final reply. I’ll check the transcript and reproduce it using the required `but-for-real` verification skill.\n\n```oca\n{\"status\":\"working\",\"summary\":\"Found a possible premature-completion path in transcript fallback; checking live history and reproducing it before drawing a conclusion.\"}\n```"
+        }
+      ],
+      "stopReason": "stop",
+      "idempotencyKey": "codex-app-server:01a0cf6c-7636-7320-9495-74db53f77190:01a0cf6c-769f-7910-a03c-9d8cd1a6095e:commentary:msg_0a82eb0e01d56597016ab413cd517487d19a4d75855249f404",
+      "openclawStreamFallback": {
+        "replacementText": "The fallback treats an empty input queue as proof that a turn has finished, then reads the last assistant message. That could mistake a progress update for the final reply. I’ll check the transcript and reproduce it using the required `but-for-real` verification skill.\n\n```oca\n{\"status\":\"working\",\"summary\":\"Found a possible premature-completion path in transcript fallback; checking live history and reproducing it before drawing a conclusion.\"}\n```",
+        "source": "segment",
+        "itemId": "msg_0a82eb0e01d56597016ab413cd517487d19a4d75855249f404"
+      },
+      "__openclaw": {
+        "runId": "eeb08eb9-b610-496d-86e8-438ad7e678e5:6"
+      }
+    }
+  ],
+  "terminal": {
+    "role": "assistant",
+    "timestamp": 1790186640211,
+    "content": [
+      {
+        "type": "text",
+        "text": "Found why this task kept continuing: the engine mistakes active-run progress for a completed reply and queues another turn.\n\nFiled and verified **fix #34**, separate from sign-in fix #33. Four reproduction checks passed. Implementation and merge remain pending.\n\n```oca\n{\"status\":\"done\",\"summary\":\"Verified premature continuation defect and submitted self-want #34. Research is complete; no engine source changed.\",\"evidence\":[{\"source\":\"/Users/quinnodonnell/oneiro/runtime/workspace/research/pursuit-31-person-routing-2026-09-23/continuation-reproduction-results.json\",\"quote\":\"CONFIRMED: active-run progress triggers a new Continue because queued-input objects and active-run metadata are discarded.\",\"observation\":\"Actual gateway and polling code reproduced premature continuation; settled terminal recovery passed its control.\"},{\"source\":\"/Users/quinnodonnell/oneiro/runtime/workspace/research/pursuit-31-person-routing-2026-09-23/CONTINUATION-DEFECT.md\",\"quote\":\"POST /oca/self-build/want returned HTTP 202 with chain_id 34.\",\"observation\":\"Independent database read verified the request and all three evidence entries.\"}],\"nextStep\":\"Implement existing self-wants #34 and #33 through the builder workflow, verify regression contracts and full tests, and merge through the engine.\",\"remaining\":[\"Builder implementation, full-suite verification, and merge.\"]}\n```"
+      }
+    ],
+    "stopReason": "stop",
+    "idempotencyKey": "codex-app-server:01a0cf6c-7636-7320-9495-74db53f77190:01a0cf6c-769f-7910-a03c-9d8cd1a6095e:assistant",
+    "__openclaw": {
+      "runId": "eeb08eb9-b610-496d-86e8-438ad7e678e5:6",
+      "runTerminal": true
+    }
+  }
+}

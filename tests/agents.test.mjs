@@ -12,7 +12,7 @@ import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
 import { createProposal, ACTION_KINDS } from '../motivation/risk.js';
-import { messageText } from '../gateway.js';
+import { createGateway, messageText } from '../gateway.js';
 
 const blocked = async () => ({ status: 'needs_evidence', checkpoint: { version: 1, passes: [] }, missingEvidence: ['August pricing', 'Cost per subscriber'] });
 async function database(run) {
@@ -318,3 +318,136 @@ test('the only time the engine sits is when it thinks over itself: idle capacity
   assert.deepEqual((await agents.plan()).started, [], 'one at a time, and not again inside the gap');
 }));
 
+
+const continuationFixture = JSON.parse(await readFile(new URL('./fixtures/active-run-6-queued-7.json', import.meta.url), 'utf8'));
+const capturedDeployment = 'eeb08eb9-b610-496d-86e8-438ad7e678e5';
+
+// Exercise both real modules and real persistence. Only RPC, time and external delivery are scripted.
+async function continuationHarness(pool, { status = 'running', waitStatus = 'timeout', maxTurns = 6 } = {}) {
+  await pool.query('DELETE FROM agent_deployments');
+  let raw = structuredClone(continuationFixture);
+  const since = raw.inFlightRun.startedAt - 1;
+  let now = raw.messages.at(-1).timestamp + 120_000;
+  const calls = [], notices = [], outcomes = [], warnings = [];
+  const gateway = createGateway({ runner: async args => {
+    const method = args[2], params = JSON.parse(args.at(-1));
+    if (method === 'chat.history') return JSON.stringify(raw);
+    if (method === 'agent.wait') return JSON.stringify({ status: waitStatus });
+    if (method === 'agent') { calls.push(params); return JSON.stringify({ status: 'accepted', runId: params.idempotencyKey }); }
+    throw new Error(`Unexpected RPC: ${method}`);
+  } });
+  gateway.available = async () => true;
+  // Let parked deployments read every poll, independent of sessions.list change detection.
+  gateway.sessions = undefined;
+  await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, status, run_id, turns, seen_at_ms)
+    VALUES ($1,31,'research','regression','brief',$2,'main',$3,$4,6,$5)`,
+  [capturedDeployment, raw.sessionKey, status, raw.inFlightRun.runId, since]);
+  const options = { pool, gateway, clock: () => now, maxTurns,
+    asks: { open: async () => [], ask: async args => { notices.push(args); return { id: 1 }; }, answer: async () => {} },
+    risk: { observe: async (...args) => outcomes.push(args) },
+    log: { log() {}, warn: (...args) => { if (!String(args[0]).includes('failed: settled reply')) warnings.push(args); } } };
+  let agents = createAgents(options);
+  return {
+    gateway, calls, notices, outcomes, warnings, since,
+    get raw() { return raw; }, set raw(value) { raw = value; },
+    row: async () => (await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [capturedDeployment])).rows[0],
+    async poll() { await agents.poll(); now += 120_000; assert.deepEqual(warnings, []); },
+    restart() { agents = createAgents(options); },
+    settle(report = 'done', extra = {}) {
+      raw = { ...raw, pendingInputs: { items: [], total: 0 }, inFlightRun: null, sessionInfo: { hasActiveRun: false, status: 'idle' },
+        messages: [{ role: 'assistant', timestamp: now - 1, content: block({ status: report, summary: 'settled reply', question: 'Which region?' }), ...extra }] };
+    },
+  };
+}
+
+test('live :6/:7 fixture and all independent busy signals cannot consume progress after repeated grace periods', async t => database(async pool => {
+  const busyCases = {
+    captured: () => {},
+    'in-flight only': r => { r.pendingInputs = []; r.sessionInfo = { hasActiveRun: false, status: 'idle' }; },
+    'active flag only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo.status = 'idle'; },
+    'running status only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo.hasActiveRun = false; },
+    'queued status only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo = { hasActiveRun: false, status: 'queued' }; },
+    'object queue only': r => { r.inFlightRun = null; r.sessionInfo = { hasActiveRun: false, status: 'idle' }; },
+    'total-only queue': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs.items = []; },
+    'items despite zero total': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs.total = 0; },
+    'legacy queue': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs = r.pendingInputs.items; },
+  };
+  for (const [name, change] of Object.entries(busyCases)) await t.test(name, async () => {
+    const h = await continuationHarness(pool); change(h.raw);
+    await h.poll();   // first replay the unmodified captured progress entry
+    // Do not let the progress marker mask a broken liveness guard. Each report would otherwise
+    // continue, exhaust the budget, notify the person, or finish the deployment.
+    for (const status of ['working', 'needs_person', 'done', 'failed']) {
+      h.raw.messages.at(-1).openclawStreamFallback = false;
+      h.raw.messages.at(-1).content = block({ status, summary: 'not settled', question: 'Do you know?' });
+      for (let i = 0; i < 3; i++) await h.poll();
+      const row = await h.row();
+      assert.equal(row.status, 'running'); assert.equal(row.turns, 6); assert.equal(row.run_id, `${capturedDeployment}:6`);
+      assert.equal(Number(row.seen_at_ms), h.since);
+      assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
+    }
+    h.settle(); await h.poll(); h.restart(); await h.poll();
+    assert.equal((await h.row()).status, 'done'); assert.equal((await h.row()).turns, 6);
+    assert.equal(h.calls.length, 0); assert.equal(h.notices.length, 0); assert.equal(h.outcomes.length, 1);
+  });
+}));
+
+test('restart recovery accepts settled reports once and rejects stale, mismatched and stream-progress replies', async t => database(async pool => {
+  for (const waitStatus of ['pending', 'timeout']) {
+    for (const status of ['done', 'needs_person', 'failed', 'working']) await t.test(`${waitStatus}: settled ${status}`, async () => {
+      const h = await continuationHarness(pool, { waitStatus, maxTurns: 12 });
+      h.settle(status, { ...continuationFixture.terminal, timestamp: h.since + 1000, content: block({ status, summary: 'settled reply', question: 'Which region?' }) });
+      h.restart(); await h.poll();
+      // A late transcript write must not make the old run look like the continuation's reply.
+      if (status === 'working') h.raw.messages[0].timestamp = Number((await h.row()).seen_at_ms) + 1;
+      h.restart(); await h.poll(); await h.poll();
+      assert.equal(h.calls.length, status === 'working' ? 1 : 0);
+      assert.equal(h.notices.length, status === 'needs_person' ? 1 : 0);
+      assert.equal(h.outcomes.length, ['done', 'failed'].includes(status) ? 1 : 0);
+      assert.equal((await h.row()).status, { done: 'done', failed: 'failed', needs_person: 'waiting_person', working: 'running' }[status]);
+      assert.equal((await h.row()).turns, status === 'working' ? 7 : 6);
+    });
+  }
+  for (const mode of ['legacy', 'restarted run']) await t.test(`recover ${mode}`, async () => {
+    const h = await continuationHarness(pool); h.settle();
+    if (mode === 'restarted run') {
+      h.raw.messages[0].__openclaw = { runId: 'new-run-after-restart', runTerminal: true };
+      h.raw.messages.unshift({ role: 'user', content: '[thinker] Continue.', timestamp: h.since + 1,
+        idempotencyKey: `${capturedDeployment}:6:user`, __openclaw: { runId: 'new-run-after-restart' } });
+    }
+    h.restart(); await h.poll(); h.restart(); await h.poll();
+    assert.equal((await h.row()).status, 'done'); assert.equal(h.outcomes.length, 1);
+    assert.equal(h.calls.length, 0); assert.equal(h.notices.length, 0);
+  });
+  const rejected = {
+    'pre-start reply': h => { h.raw.messages[0].timestamp = h.since - 1; },
+    'at-start reply': h => { h.raw.messages[0].timestamp = h.since; },
+    'invalid timestamp': h => { h.raw.messages[0].timestamp = 'invalid'; },
+    'previous run': h => { h.raw.messages[0].__openclaw = { runId: `${capturedDeployment}:5`, runTerminal: true }; },
+    'explicit nonterminal': h => { h.raw.messages[0].__openclaw = { runId: `${capturedDeployment}:6`, runTerminal: false }; },
+    'unrelated run': h => { h.raw.messages[0].runId = 'unrelated'; },
+    'stream fallback with stopReason stop': h => { Object.assign(h.raw.messages[0], { openclawStreamFallback: true, stopReason: 'stop' }); },
+    commentary: h => { h.raw.messages[0].channel = 'commentary'; },
+    'previous user turn': h => { h.raw.messages.unshift({ role: 'user', timestamp: h.since - 1, content: '[thinker] Continue.' }); },
+    'different user turn key': h => { h.raw.messages.unshift({ role: 'user', timestamp: h.since + 1, content: '[thinker] Continue.', idempotencyKey: `${capturedDeployment}:5:user` }); },
+  };
+  for (const [name, change] of Object.entries(rejected)) await t.test(name, async () => {
+    const h = await continuationHarness(pool); h.settle('working'); change(h);
+    for (let i = 0; i < 3; i++) await h.poll();
+    assert.equal((await h.row()).status, 'running'); assert.equal((await h.row()).turns, 6);
+    assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
+  });
+}));
+
+test('person-answer and standing-session polling also waits for a settled reply', async t => database(async pool => {
+  for (const status of ['waiting_person', 'standing']) await t.test(status, async () => {
+    const h = await continuationHarness(pool, { status });
+    h.raw.messages.unshift({ role: 'user', timestamp: h.since + 1, content: 'Use the US store.' });
+    h.raw.messages.at(-1).content = block({ status: 'needs_person', question: 'Another question?' });
+    h.raw.messages.at(-1).openclawStreamFallback = false;
+    h.raw.pendingInputs = [];
+    for (let i = 0; i < 3; i++) await h.poll();
+    assert.equal((await h.row()).status, status); assert.equal(Number((await h.row()).seen_at_ms), h.since);
+    assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
+  });
+}));
