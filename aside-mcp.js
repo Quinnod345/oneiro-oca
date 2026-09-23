@@ -13,6 +13,7 @@
 // Protocol: MCP over stdio, newline-delimited JSON-RPC 2.0 (initialize, tools/list, tools/call, ping).
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
+import { terminalObservation } from './reasoning/action-retries.js';
 import { createAside, validateUrl } from './aside.js';
 
 const aside = createAside();
@@ -196,12 +197,12 @@ async function gate(args, { cls, url, control = '', description }) {
   if (!Number.isInteger(pursuit) || pursuit < 1) return { held: true, why: `This ${cls} action needs the pursuit it serves: pass pursuit (the #id from your brief) and purpose.` };
   const purpose = String(args.purpose || '').trim();
   const d = await engine('/oca/act/authorize', { chainId: pursuit, class: cls, host: hostOf(url), url, control, description: purpose ? `${purpose} (${description})` : description,
-    cost: Number(args.cost) || 0, approval: args.approval || null });
+    cost: Number(args.cost) || 0, approval: args.approval || null, retryEvidence: args.retryEvidence || null });
   if (d.decision === 'proceed') return { proceed: true, actionId: d.actionId };
   if (d.decision === 'ask') return { held: true, askId: d.askId, question: d.question, why: `${d.why}. The engine asked Quinn (ask #${d.askId}). End your turn with needs_person using exactly this question: "${d.question}". When he answers yes, retry this same action with approval=${d.askId}.` };
   return { refused: true, why: d.why };
 }
-async function report(actionId, result, observation) { if (actionId) await engine('/oca/act/observe', { actionId, result, observation: String(observation || '').slice(0, 1500) }).catch(() => {}); }
+async function report(actionId, result, observation) { if (actionId) await engine('/oca/act/observe', { actionId, result, observation: terminalObservation(observation, 1500) }).catch(() => {}); }
 const heldOrRefused = (kind, c, g) => g.refused ? { refused: true, action: kind, control: c ? `${c.role} "${c.name}"` : undefined, why: g.why } : { held: true, action: kind, control: c ? `${c.role} "${c.name}"` : undefined, askId: g.askId, question: g.question, why: g.why };
 // Run a committing step after a proceed; report what the page showed afterwards.
 async function committed(id, g, kind, c, actionJs) {
@@ -250,6 +251,11 @@ const TOOLS = [
   { name: 'aside_go', description: `Navigate an open tab to an http(s) URL (for example the same report with different query parameters), or "back". Keeps the person's session. ${LOOK}`,
     inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, url: { type: 'string' } }, required: ['targetId', 'url'], additionalProperties: false } },
 ];
+// Recovery is evidence, never an approval override. Reads remain ungated.
+for (const tool of TOOLS.filter(t => t.inputSchema.properties.pursuit)) {
+  tool.inputSchema.properties.retryEvidence = { type: 'object', description: 'For a suppressed retry: a source the engine can re-read and an exact quote demonstrating changed supported route or target state. One observed state permits at most one attempt.',
+    properties: { source: { type: 'string' }, quote: { type: 'string' } }, required: ['source', 'quote'], additionalProperties: false };
+}
 export const ASIDE_TOOL_NAMES = TOOLS.map(t => t.name);
 const KEYS = new Set(['Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Enter']);
 
@@ -354,7 +360,7 @@ export async function callAsideTool(name, args = {}) {
       try {
         const r = await aside.delegate(`${task}${url ? `\nWhere: ${url}` : ''}${files.length ? `\nFiles to use, in order: ${files.join(', ')}` : ''}\n${DELEGATE_RULES}`, { timeout: 15 * 60_000, permission: files.length ? 'full-access' : null });
         const done = /DONE:/i.test(r.output) && !/BLOCKED:/i.test(r.output.split('\n').slice(-3).join(' '));
-        await report(g.actionId, done ? 'success' : 'failure', String(r.output).slice(-1200));
+        await report(g.actionId, done ? 'success' : 'failure', terminalObservation(r.output, 1500));
         return { action: { kind: cls, committed: true, actionId: g.actionId, done }, asideAgent: String(r.output).slice(-3000) };
       } catch (e) { await report(g.actionId, 'failure', e.message); throw e; }
     }

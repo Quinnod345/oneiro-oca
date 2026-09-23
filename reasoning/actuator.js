@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Router } from 'express';
+import { createActionRetries, actionObservation, terminalObservation, actionHost } from './action-retries.js';
 import { CHARTER_CLASSES } from '../user-controls.js';
 
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -18,7 +19,8 @@ export const NO = /^\s*(n|no|nope|don'?t|do not|stop|deny|denied|decline[d]?|can
 export const COURSEWORK_HOSTS = /(^|\.)(instructure\.com|canvas\.[a-z.]+|pearson\.com|pearsoned\.com|mylabmastering\.com|mathxl\.com|mheducation\.com|webassign\.net|gradescope\.com|blackboard\.com|brightspace\.com|d2l\.com|moodle\.[a-z.]+|yellowdig\.app|yellowdig\.com|turnitin\.com|proctorio\.com|respondus\.com|cengage\.com|wiley\.com|wileyplus\.com|quizlet\.com|chegg\.com|psu\.edu)$/i;
 export function isCoursework(host) { return COURSEWORK_HOSTS.test(String(host || '').toLowerCase().replace(/:\d+$/, '')); }
 
-export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console } = {}) {
+export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console, llm = null, aside = null } = {}) {
+  const retries = createActionRetries({ llm, aside, log });
   async function init() { await pool.query(await readFile(new URL('../migrations/063_agent_actions.sql', import.meta.url), 'utf8')); }
   const monthStart = () => { const d = new Date(clock()); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
   async function monthSpend() {
@@ -40,20 +42,41 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     return { state: 'unclear', ask: a };
   }
 
-  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, approval = null, sessionKey = null, agent = null } = {}) {
+  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null } = {}) {
     if (!CHARTER_CLASSES.includes(cls)) throw new Error(`an action class is one of ${CHARTER_CLASSES.join(', ')}`);
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what the action is');
     const id = randomUUID();
     const want = queue ? await queue.get(Number(chainId)) : { want: { status: 'active' } };
+    const candidate = { chainId: Number(chainId) || 0, class: cls, host, url, control, description };
+    let retry = { eligible: true };
     const record = async (decision, why, extra = {}) => {
-      await pool.query(`INSERT INTO agent_actions (id, chain_id, class, host, url, control, description, cost, decision, why, ask_id, approved_by_ask, created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, to_timestamp($13 / 1000.0))`,
-        [id, Number(chainId) || 0, cls, text(host, 200), text(url, 1000), text(control, 200), text(description, 2000), Number(cost) || 0, decision, text(why, 500), extra.askId || null, extra.approvedBy || null, clock()]);
+      // Browser/model/policy work happens without a pinned connection. Only the final history
+      // check and claim are locked, so concurrent controllers cannot duplicate a recovered attempt
+      // or exhaust the pool while waiting on each other's evidence checks.
+      if (decision === 'proceed' && retry.recovery) why += `; one recovery attempt after ${retry.recoveryEvidence[0].failedActionId}`;
+      const db = decision === 'proceed' ? await pool.connect() : pool;
+      try {
+        if (decision === 'proceed') {
+          await db.query('BEGIN');
+          await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`action:${candidate.chainId}:${cls}:${actionHost(host)}`]);
+          if (!await retries.unchanged(db, candidate, retry.snapshot)) {
+            decision = 'refuse';
+            why = 'Retry suppressed: action history changed during authorization. Read the latest action outcome before trying again.';
+          }
+        }
+        await db.query(`INSERT INTO agent_actions (id, chain_id, class, host, url, control, description, cost, decision, why, ask_id, approved_by_ask, created_at, observation)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, to_timestamp($13 / 1000.0), $14)`,
+        [id, Number(chainId) || 0, cls, text(host, 200), text(url, 1000), text(control, 200), text(description, 2000), Number(cost) || 0, decision, text(why, 500), extra.askId || null, extra.approvedBy || null, clock(), JSON.stringify({ actionRetry: 1, detail: '', recovery: decision === 'proceed' ? retry.recovery || null : null, recoveryFacts: decision === 'proceed' ? retry.recoveryFacts || [] : [], recoveryEvidence: decision === 'proceed' ? retry.recoveryEvidence || [] : [] })]);
+        if (db !== pool) await db.query('COMMIT');
+      } catch (e) { if (db !== pool) await db.query('ROLLBACK'); throw e; }
+      finally { if (db !== pool) db.release(); }
       log.log?.(`[actuator] ${cls} on ${host || '—'} for #${chainId}: ${decision}${extra.askId ? ` (ask #${extra.askId})` : ''} — ${text(why, 140)}`);
       return { decision, actionId: id, why, ...extra };
     };
     if (!want || want.want?.status !== 'active') return record('refuse', 'no active pursuit is named; an action serves a pursuit');
     if (cls !== 'sign_in' && isCoursework(host)) return record('refuse', `${host} is a course or assessment site: graded work is submitted by Quinn himself, never by the engine`);
+    retry = await retries.check(pool, candidate, retryEvidence);
+    if (!retry.eligible) return record('refuse', retry.why);
     const charter = (await controls.get()).charter || {};
     const grant = charter[cls] || { granted: false };
     let approvedBy = null;
@@ -99,15 +122,17 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
 
   async function observe({ actionId, result, observation = '' }) {
     if (!['success', 'failure'].includes(result)) throw new Error('an outcome is success or failure');
+    const { rows: [prior] } = await pool.query('SELECT observation FROM agent_actions WHERE id = $1', [actionId]);
+    const saved = { ...actionObservation(prior?.observation), actionRetry: 1, detail: terminalObservation(observation, 1500) };
     const { rows: [a] } = await pool.query(`UPDATE agent_actions SET outcome = $2, observation = $3, observed_at = to_timestamp($4 / 1000.0) WHERE id = $1 AND decision = 'proceed' AND outcome IS NULL RETURNING *`,
-      [actionId, result, text(observation, 1500), clock()]);
+      [actionId, result, JSON.stringify(saved), clock()]);
     if (!a) throw new Error('no proceeding action by that id awaits an outcome');
-    if (risk) await risk.observe(`act:${actionId}`, { result, evidence: [{ id: `act-${String(actionId).slice(0, 8)}`, source: 'actuator: the page after the action', observation: `${a.class} on ${a.host}: ${text(observation, 800) || result}` }] }).catch(e => log.warn?.('[actuator] observe:', e.message));
+    if (risk) await risk.observe(`act:${actionId}`, { result, evidence: [{ id: `act-${String(actionId).slice(0, 8)}`, source: `actuator action ${actionId}: ${a.url || a.host}`, observation: `${a.class} on ${a.host}: ${terminalObservation(observation, 800) || result}` }] }).catch(e => log.warn?.('[actuator] observe:', e.message));
     log.log?.(`[actuator] ${a.class} on ${a.host} for #${a.chain_id}: ${result}`);
     return { actionId, result };
   }
   async function recent({ limit = 50 } = {}) {
-    const { rows } = await pool.query(`SELECT id, chain_id, class, host, description, cost, decision, why, ask_id, approved_by_ask, outcome, observation, created_at FROM agent_actions ORDER BY created_at DESC LIMIT $1`, [limit]);
+    const { rows } = await pool.query(`SELECT id, chain_id, class, host, url, control, description, cost, decision, why, ask_id, approved_by_ask, outcome, observation, created_at FROM agent_actions ORDER BY created_at DESC LIMIT $1`, [limit]);
     return rows;
   }
 
