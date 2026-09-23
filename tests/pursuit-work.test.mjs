@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import pg from 'pg';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createPursuitWork, visibleWorkEvent, verifyWorkSources } from '../reasoning/pursuit-work.js';
+import { createAsks } from '../reasoning/asks.js';
 import { buildCodexArgs } from '../codex-cli.js';
 
 async function fixture(fn) {
@@ -287,4 +288,217 @@ test('cancellation also fences captured web evidence', async()=>fixture(async({q
   await service.cancel(chain.chain_id,run.id);release();await running;
   assert.equal((await service.events(chain.chain_id,run.id)).run.status,'cancelled');
   assert.equal((await queue.get(chain.chain_id)).evidence.length,0);
+}));
+
+
+// Exercise runNext and the real ask ledger together; no live browser or notification delivery.
+const accessTarget = 'https://app.posthog.com/project/27/dashboard?period=month';
+const accessWall = { url: 'https://app.posthog.com/login', title: 'Sign in', targetId: 'tab-27',
+  accessBlocked: { kind: 'sign_in', host: 'app.posthog.com', url: 'https://app.posthog.com/login', title: 'Sign in' } };
+const accessSuccess = { action: { kind: 'sign in', committed: true, signedIn: true },
+  url: accessTarget, title: 'Dashboard', text: 'Protected project dashboard with monthly revenue.' };
+const accessPage = { url: accessTarget, title: 'Dashboard', text: 'Protected project dashboard with monthly revenue.' };
+const accessEvent = (tool, result, args = {}, overrides = {}) => ({ type: 'item.completed', item: {
+  type: 'mcp_tool_call', server: 'aside', tool, arguments: args, status: 'completed', result: { structuredContent: result }, ...overrides } });
+async function accessFixture(fn) {
+  return fixture(async ({pool,queue,chain,root}) => {
+    let now = Date.now(), events = [], summary = 'Access remains unverified.';
+    const trace = [], sent = [];
+    const realAsks = createAsks({pool,clock:()=>now,log:{log(){},warn(){}},deliverers:{test:async m=>sent.push(m)}});
+    await realAsks.init();
+    const asks = {...realAsks,ask:async args=>{trace.push(['ask',args]);return realAsks.ask(args);},
+      answer:async(...args)=>{trace.push(['answer',...args]);return realAsks.answer(...args);}};
+    let browser = async()=>{throw Error('Unexpected browser action');};
+    const service = createPursuitWork({pool,queue,root:join(root,'work'),sourceRoots:[root],asks,clock:()=>now,
+      asideTool:async(tool,args)=>{trace.push([tool,args]);return browser(tool,args);},
+      runner:async(_,options)=>{
+        for(const event of events) await options.onEvent(event);
+        return {text:JSON.stringify({summary,nextStep:'Inspect the protected target.',remainingQuestions:[],sources:[]})};
+      }});
+    await service.init();
+    const slice = async(nextEvents=[],nextBrowser=null,advance=0)=>{
+      now+=advance; events=nextEvents; if(nextBrowser) browser=nextBrowser;
+      await service.enqueue(chain.chain_id,{requestId:randomUUID()});
+      const result=await service.runNext(); assert.equal(result.error,undefined,JSON.stringify(result));
+      return (await queue.get(chain.chain_id)).needs;
+    };
+    await fn({slice,asks,trace,sent,chain,pool,setSummary:s=>{summary=s;}});
+  });
+}
+const wallEvent = () => accessEvent('aside_read', accessWall, {url:accessTarget});
+
+test('login wall executes gated recovery before one precise credential handoff; unrelated slices preserve it and suppress the 67-minute duplicate', async()=>accessFixture(async({slice,trace,sent,asks,chain,setSummary})=>{
+  const blocked={...accessWall, action:{kind:'sign in',committed:true,signedIn:false},asideAgent:'BLOCKED: No saved login is available for PostHog.'};
+  let needs=await slice([wallEvent()],async(tool,args)=>{
+    assert.equal(tool,'aside_sign_in');assert.equal(args.pursuit,chain.chain_id);assert.equal(args.targetId,'tab-27');assert.ok(args.purpose);
+    assert.equal(sent.length,0,'recover before contacting Quinn');return blocked;
+  });
+  assert.deepEqual(trace.map(t=>t[0]),['aside_sign_in','ask']);
+  assert.equal(needs[0].status,'person_required');assert.ok(needs[0].askId);
+  assert.match(sent[0],/No saved login is available/);
+  const id=needs[0].askId;
+  setSummary('Access is unchanged: Apple remains at sign-in, and no invoice files arrived.');
+  needs=await slice([accessEvent('aside_tabs',{tabs:[{targetId:'tab-27',url:accessWall.url}]})]);
+  assert.equal(needs[0].askId,id);assert.equal((await asks.open()).length,1);
+  needs=await slice([wallEvent()],null,67*60_000);
+  assert.equal(needs[0].askId,id);assert.equal(sent.length,1);assert.equal(trace.filter(t=>t[0]==='answer').length,0);
+}));
+
+test('successful recovery plus a fresh exact protected-target read clears the wall without an ask',async()=>accessFixture(async({slice,trace,sent})=>{
+  const needs=await slice([wallEvent()],async(tool,args)=>{
+    if(tool==='aside_sign_in') return accessSuccess;
+    assert.equal(tool,'aside_read');assert.equal(args.url,accessTarget);return accessPage;
+  });
+  assert.deepEqual(trace.map(t=>t[0]),['aside_sign_in','aside_read']);assert.deepEqual(needs,[]);assert.deepEqual(sent,[]);
+}));
+
+test('a claimed recovery is not access: public, unrelated, wrong-filter, empty, errored and still-blocked reads cannot resolve',async()=>{
+  for(const read of [
+    {...accessPage,url:'https://app.posthog.com/'},
+    {...accessPage,url:'https://apple.com/apps'},
+    {...accessPage,url:accessTarget.replace('month','week')},
+    {...accessPage,text:''},
+    {isError:true,content:[{type:'text',text:'timeout'}]},
+    accessWall,
+  ]) await accessFixture(async({slice,asks,sent,chain})=>{
+    const first=await asks.ask({chainId:chain.chain_id,kind:'sign_in',host:'app.posthog.com',detail:'SMS code required.'});
+    const needs=await slice([wallEvent()],async tool=>tool==='aside_sign_in'?accessSuccess:read);
+    assert.equal(needs.length,1);assert.equal(sent.length,1);
+    assert.equal((await asks.recent({chainId:chain.chain_id})).find(a=>a.id===first.id).replied_at,null);
+  });
+});
+
+test('only the matching host ask is resolved after observed recovery and a fresh protected read',async()=>accessFixture(async({slice,asks,trace,chain})=>{
+  const own=await asks.ask({chainId:chain.chain_id,kind:'sign_in',host:'app.posthog.com',detail:'SMS code required.'});
+  const apple=await asks.ask({chainId:chain.chain_id,kind:'sign_in',host:'idmsa.apple.com',detail:'Approve on the phone.'});
+  await slice([wallEvent()],async tool=>tool==='aside_sign_in'?accessSuccess:accessPage);
+  assert.deepEqual(trace.filter(t=>t[0]==='answer').map(t=>t[1]),[own.id]);
+  assert.deepEqual((await asks.open()).map(a=>a.id),[apple.id]);
+}));
+
+test('held approvals reuse the existing ask id on the next gated attempt without a second handoff',async()=>accessFixture(async({slice,asks,trace,sent,chain})=>{
+  const held=await asks.ask({chainId:chain.chain_id,kind:'question',detail:'Sign in to PostHog with the saved login?'});
+  let needs=await slice([wallEvent()],async()=>({held:true,askId:held.id,question:'Sign in to PostHog with the saved login?',why:'one yes required'}));
+  assert.equal(needs[0].askId,held.id);assert.equal(needs[0].status,'held');
+  needs=await slice([wallEvent()],async(tool,args)=>{
+    assert.equal(args.approval,held.id);return {held:true,askId:held.id,question:'Sign in to PostHog with the saved login?'};
+  });
+  assert.equal(sent.length,1);assert.equal(trace.filter(t=>t[0]==='ask').length,1);
+  await asks.answer(held.id,'yes');
+  needs=await slice([wallEvent()],async(tool,args)=>{
+    if(tool==='aside_sign_in'){assert.equal(args.approval,held.id);return accessSuccess;}
+    return accessPage;
+  });
+  assert.deepEqual(needs,[]);assert.equal(sent.length,1);
+}));
+
+test('person-only refusals are handed off precisely and never bypassed with another action',async()=>accessFixture(async({slice,trace,sent})=>{
+  const needs=await slice([wallEvent(),accessEvent('aside_click',{refused:true,control:'button "Create Reports"',why:'would commit something; the person does that.'},{targetId:'tab-27',ref:'r8'})]);
+  assert.deepEqual(trace.map(t=>t[0]),['ask']);assert.equal(needs[0].status,'person_required');
+  assert.match(sent[0],/Create Reports.*would commit something; the person does that/);
+}));
+
+test('real credential and user-presence barriers send one exact handoff; transient failures do not',async()=>{
+  for(const barrier of ['An SMS code is required.','Approve sign-in on another device.','Complete the CAPTCHA.','No saved password is available.']) {
+    await accessFixture(async({slice,trace,sent})=>{
+      const needs=await slice([wallEvent()],async()=>({...accessWall,action:{committed:true,signedIn:false},asideAgent:`BLOCKED: ${barrier}`}));
+      assert.deepEqual(trace.map(t=>t[0]),['aside_sign_in','ask']);assert.equal(needs[0].status,'person_required');assert.ok(sent[0].includes(barrier));
+      await slice([wallEvent()]);assert.equal(sent.length,1);
+    });
+  }
+  await accessFixture(async({slice,sent})=>{
+    const needs=await slice([wallEvent()],async()=>{throw Error('Aside transport timed out');});
+    assert.equal(needs[0].status,'recovery_failed');assert.equal(sent.length,0);
+  });
+});
+
+test('saved-login tool redirects recover; untrusted or incomplete tool events cannot create needs',async()=>accessFixture(async({slice,trace,sent})=>{
+  await slice([
+    accessEvent('aside_read',accessWall,{url:accessTarget},{server:'untrusted'}),
+    accessEvent('aside_read',accessWall,{url:accessTarget},{status:'failed'}),
+    {...wallEvent(),type:'item.started'},
+    accessEvent('aside_read',accessWall,{url:accessTarget},{result:{isError:true,structuredContent:accessWall}}),
+  ]);
+  assert.deepEqual(trace,[]);
+  const needs=await slice([wallEvent(),accessEvent('aside_click',{refused:true,why:'it submits a sign-in form: use aside_sign_in, which signs in with the saved login'},{targetId:'tab-27'})],async tool=>tool==='aside_sign_in'?accessSuccess:accessPage);
+  assert.deepEqual(needs,[]);assert.deepEqual(sent,[]);assert.deepEqual(trace.map(t=>t[0]),['aside_sign_in','aside_read']);
+}));
+
+test('agent-performed recovery is not repeated, stale page reads cannot resolve, and later fresh reads can',async()=>accessFixture(async({slice,trace,sent})=>{
+  let needs=await slice([wallEvent(),accessEvent('aside_read',accessPage,{url:accessTarget}),
+    accessEvent('aside_sign_in',accessSuccess,{targetId:'tab-27'})],async()=>({...accessPage,url:'https://app.posthog.com/'}));
+  assert.equal(needs[0].status,'unverified');assert.deepEqual(trace.map(t=>t[0]),['aside_read']);
+  needs=await slice([accessEvent('aside_read',accessPage,{url:accessTarget})]);
+  assert.deepEqual(needs,[]);assert.deepEqual(sent,[]);
+}));
+
+test('cross-host login redirects retain the protected target and verify that target, not the identity provider',async()=>accessFixture(async({slice,trace})=>{
+  const wall={...accessWall,url:'https://accounts.google.com/login',accessBlocked:{kind:'sign_in',host:'accounts.google.com',url:'https://accounts.google.com/login'}};
+  const needs=await slice([accessEvent('aside_read',wall,{url:accessTarget})],async tool=>tool==='aside_sign_in'?accessSuccess:accessPage);
+  assert.deepEqual(needs,[]);assert.equal(trace[1][1].url,accessTarget);
+}));
+
+test('an approved recovery can still hit a new person-only barrier without losing its precise handoff',async()=>accessFixture(async({slice,asks,chain,sent,trace})=>{
+  const approval=await asks.ask({chainId:chain.chain_id,kind:'question',detail:'Use the saved login on PostHog?'});
+  await slice([wallEvent()],async()=>({held:true,askId:approval.id,question:'Use the saved login on PostHog?'}));
+  await asks.answer(approval.id,'yes');
+  const needs=await slice([wallEvent()],async(tool,args)=>{
+    assert.equal(args.approval,approval.id);
+    return {...accessWall,action:{committed:true,signedIn:false},asideAgent:'BLOCKED: An SMS code is required.'};
+  });
+  assert.equal(needs[0].status,'person_required');assert.notEqual(needs[0].askId,approval.id);
+  assert.equal(sent.length,2);assert.match(sent[1],/An SMS code is required/);
+  await slice([wallEvent()]);assert.equal(sent.length,2);
+  assert.equal(trace.filter(t=>t[0]==='aside_sign_in').length,2);
+}));
+
+test('a declined approval or policy refusal is not retried or turned into another request',async()=>accessFixture(async({slice,trace,sent})=>{
+  let needs=await slice([wallEvent()],async()=>({refused:true,why:'Quinn declined (ask #71: "no")'}));
+  assert.equal(needs[0].status,'refused');assert.deepEqual(trace.map(t=>t[0]),['aside_sign_in']);
+  needs=await slice([wallEvent()]);assert.equal(needs[0].status,'refused');assert.equal(trace.length,1);assert.deepEqual(sent,[]);
+}));
+
+test('a wall without a usable tab remains an observation, and report prose cannot resolve it',async()=>accessFixture(async({slice,trace,setSummary})=>{
+  const wall={...accessWall,targetId:undefined};
+  let needs=await slice([accessEvent('aside_read',wall,{url:accessTarget})]);
+  assert.equal(needs[0].status,'observed');assert.deepEqual(trace,[]);
+  setSummary('Signed in successfully; everything is fixed.');
+  needs=await slice([]);assert.equal(needs[0].status,'observed');assert.deepEqual(trace,[]);
+}));
+
+test('an in-slice recovery followed by a fresh protected read removes stale walls before handoff',async()=>accessFixture(async({slice,trace,sent})=>{
+  const needs=await slice([wallEvent(),accessEvent('aside_sign_in',accessSuccess,{targetId:'tab-27'}),
+    accessEvent('aside_read_tab',accessPage,{targetId:'tab-27'})]);
+  assert.deepEqual(needs,[]);assert.deepEqual(trace,[]);assert.deepEqual(sent,[]);
+}));
+
+test('approval for a different held action or tab is never reused for automatic sign-in',async()=>{
+  await accessFixture(async({slice,trace,sent})=>{
+    let needs=await slice([wallEvent(),accessEvent('aside_click',{held:true,askId:91,question:'Create Reports?'},{targetId:'tab-27',ref:'r8'})]);
+    assert.equal(needs[0].askId,91);
+    needs=await slice([wallEvent()]);assert.equal(needs[0].status,'held');assert.deepEqual(trace,[]);assert.deepEqual(sent,[]);
+  });
+  await accessFixture(async({slice,trace})=>{
+    await slice([wallEvent()],async()=>({held:true,askId:91,question:'Sign in on this tab?'}));
+    await slice([accessEvent('aside_read',{...accessWall,targetId:'different-tab'},{url:accessTarget})]);
+    assert.equal(trace.length,1,'do not carry the prior tab approval to another tab');
+  });
+});
+
+test('a person recovery reply still requires a fresh protected-target read before clearing the need',async()=>accessFixture(async({slice,asks,trace})=>{
+  const needs=await slice([wallEvent()],async()=>({...accessWall,action:{committed:true,signedIn:false},asideAgent:'BLOCKED: An SMS code is required.'}));
+  await asks.answer(needs[0].askId,'signed in');
+  let pending=await slice([accessEvent('aside_tabs',{tabs:[{url:accessTarget}]})]);
+  assert.equal(pending.length,1,'a reply and a tab title are not verification');
+  pending=await slice([accessEvent('aside_read',accessPage,{url:accessTarget})]);
+  assert.deepEqual(pending,[]);assert.equal(trace.filter(t=>t[0]==='aside_sign_in').length,1);
+}));
+
+
+test('a held sign-in approval cannot follow a tab to another host',async()=>accessFixture(async({slice,trace})=>{
+  await slice([wallEvent()],async()=>({held:true,askId:91,question:'Sign in to PostHog?'}));
+  const wall={...accessWall,url:'https://accounts.google.com/login',accessBlocked:{kind:'sign_in',host:'accounts.google.com',url:'https://accounts.google.com/login'}};
+  const needs=await slice([accessEvent('aside_read',wall,{url:accessTarget})]);
+  assert.equal(needs[0].host,'accounts.google.com');assert.equal(needs[0].status,'held');
+  assert.equal(trace.length,1,'the original approval is not authorization for a different host');
 }));
