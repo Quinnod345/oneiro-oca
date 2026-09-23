@@ -46,6 +46,7 @@ test('a stream name is short and title-cased; the board keeper\'s answer is vali
   assert.deepEqual(b.labels, { [ids[0]]: 'Content' }, 'labels resolve short ids to runs and only to named streams');
   assert.equal(b.made.length, 1, 'the same thing twice is one thing; a stub is nothing'); assert.equal(b.made[0].stream, 'Distribution');
   assert.deepEqual(b.milestones.map(m => m.state), ['done', 'next']); assert.equal(b.milestones[1].at, '2026-10-01T13:00:00.000Z');
+  assert.equal(b.made[0].at, '2026-09-23', 'a day stays a day: no timezone turns it into the evening before');
   assert.equal(b.updatedAt, '2026-09-23T19:00:00.000Z');
   assert.throws(() => parseBoard('no json here'));
 });
@@ -118,6 +119,8 @@ test('the map: the orchestrator and every pursuit with its streams, live agents 
   assert.deepEqual(p.agents.map(a => a.status).sort(), ['running', 'waiting_person'], 'only agents that are on it now');
   assert.deepEqual(p.milestones, { done: 1, total: 3, now: 'Reels' }); assert.equal(p.asks, 1);
   assert.equal(map.pursuits.find(x => x.chainId === self1).parent, selfId, 'a self-want hangs off the pursuit about itself');
+  assert.equal(map.pursuits.find(x => x.chainId === self1).mergedAt, new Date(now - 100000).toISOString(), 'a merged fix says so while it settles');
+  assert.equal(p.mergedAt, null);
   const full = await board.detail(id);
   assert.deepEqual(full.made.map(m => m.what), ['Directory listing on OBOHITO', 'Launch kit with five carousel images'],
     'what it set up: newer agent reports join the board\'s list once each; the submit click behind the listing is the listing; failures and older reports are the board\'s to judge');

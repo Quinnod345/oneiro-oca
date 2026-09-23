@@ -16,6 +16,8 @@ import { Router } from 'express';
 
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const iso = v => { if (v === null || v === undefined || v === '') return null; const t = v instanceof Date ? v.getTime() : typeof v === 'number' ? v : Date.parse(v); return Number.isFinite(t) ? new Date(t).toISOString() : null; };
+// A board date is a day ("2026-10-01") or a moment; a day stays a day, so no timezone moves it to the day before.
+const day = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : iso(v));
 const ms = v => { const t = v instanceof Date ? v.getTime() : typeof v === 'number' ? v : Date.parse(v); return Number.isFinite(t) ? t : 0; };
 export const STREAM_STATES = ['active', 'waiting', 'blocked', 'done'];
 export const MILESTONE_STATES = ['done', 'now', 'next'];
@@ -54,14 +56,14 @@ export function parseBoard(raw, { runIds = [], now = Date.now() } = {}) {
   }
   const made = [];
   for (const m of Array.isArray(j.made) ? j.made : []) {
-    const item = { what: text(m?.what, 200), where: text(m?.where, 400), stream: names.get(key(m?.stream)) || null, at: iso(m?.at) };
+    const item = { what: text(m?.what, 200), where: text(m?.where, 400), stream: names.get(key(m?.stream)) || null, at: day(m?.at) };
     if (item.what.length < 4 || made.some(x => sameThing(x, item))) continue;
     made.push(item); if (made.length >= 30) break;
   }
   const milestones = [];
   for (const m of Array.isArray(j.milestones) ? j.milestones : []) {
     const label = text(m?.label, 140); if (label.length < 3) continue;
-    milestones.push({ label, state: MILESTONE_STATES.includes(m?.state) ? m.state : 'next', at: iso(m?.at) });
+    milestones.push({ label, state: MILESTONE_STATES.includes(m?.state) ? m.state : 'next', at: day(m?.at) });
     if (milestones.length >= 10) break;
   }
   return { headline: text(j.headline, 48) || null, progress: text(j.progress, 300) || null, streams, labels, made, milestones, updatedAt: new Date(now).toISOString() };
@@ -192,7 +194,10 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     for (const m of merges) if (ms(m.created_at) > since) add({ what: `Merged ${m.payload?.branch || 'a fix'}`, where: String(m.payload?.sha || '').slice(0, 12), stream: null, at: iso(m.created_at), kind: 'merge', source: 'self-build' });
     return out.sort((a, b) => ms(b.at) - ms(a.at));
   }
-  function summaryOf(row, runs, openAsks, selfId) {
+  // When each fix the engine filed against itself was merged: a merged self-want is done work, even while
+  // it waits out its quiet period before it is settled.
+  const mergedAt = async () => new Map((await pool.query(`SELECT chain_id, max(created_at) AS at FROM self_build_events WHERE kind = 'merged' GROUP BY chain_id`).catch(() => ({ rows: [] }))).rows.map(r => [r.chain_id, iso(r.at)]));
+  function summaryOf(row, runs, openAsks, selfId, merged = new Map()) {
     const s = row.state || {}, want = s.want || {}, c = s.continuity || {}, board = c.board || null;
     const schedule = (Array.isArray(c.schedule) ? c.schedule : []).filter(x => ms(x.at) > clock()).sort((a, b) => ms(a.at) - ms(b.at));
     const origin = s.origin?.kind || 'explicit';
@@ -207,7 +212,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
       milestones: { done: (board?.milestones || []).filter(m => m.state === 'done').length, total: (board?.milestones || []).length, now: (board?.milestones || []).find(m => m.state === 'now')?.label || null },
       agents: runs.filter(r => [...LIVE, 'waiting_person', 'standing'].includes(r.status)).map(agentOf),
       counts: { ...counts(work), made: (board?.made || []).length }, asks: openAsks.filter(a => a.chainId === row.id).length,
-      boardAt: board?.updatedAt || null, updatedAt: iso(row.updated_at),
+      boardAt: board?.updatedAt || null, updatedAt: iso(row.updated_at), mergedAt: merged.get(row.id) || null,
     };
   }
 
@@ -219,6 +224,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     const { rows: runs } = ids.length ? await pool.query(`SELECT * FROM agent_deployments WHERE chain_id = ANY($1) ORDER BY created_at DESC`, [ids]) : { rows: [] };
     const byChain = new Map(ids.map(id => [id, []])); for (const r of runs) byChain.get(r.chain_id)?.push(r);
     const openAsks = asks ? await asks.open().catch(() => []) : [];
+    const merged = await mergedAt();
     const selfId = rows.find(r => r.state?.standing === 'self')?.id || null;
     for (const row of rows) if (!row.state?.continuity?.board && (byChain.get(row.id) || []).some(r => r.kind !== 'talker') && row.state?.want?.status === 'active') soon(row.id);
     const q = (sql, args = []) => pool.query(sql, args).then(r => r.rows).catch(() => []);
@@ -237,7 +243,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
         lastMerge: lastMerge ? { chainId: lastMerge.chain_id, branch: lastMerge.payload?.branch || null, at: iso(lastMerge.created_at) } : null,
         asks: openAsks.length,
       },
-      pursuits: rows.map(row => summaryOf(row, byChain.get(row.id) || [], openAsks, selfId)),
+      pursuits: rows.map(row => summaryOf(row, byChain.get(row.id) || [], openAsks, selfId, merged)),
     };
   }
 
@@ -261,7 +267,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     if (c.firedStep?.firedAt) history.push({ at: iso(c.firedStep.firedAt), kind: 'step', title: text(c.firedStep.task, 300) });
     history.sort((a, b) => ms(b.at) - ms(a.at));
     return {
-      ...summaryOf(row, runs, openAsks, self?.id || null),
+      ...summaryOf(row, runs, openAsks, self?.id || null, await mergedAt()),
       streams: streamsOf(board, work),
       milestoneList: board?.milestones || [],
       made: madeOf(board, work, acts, merges),
