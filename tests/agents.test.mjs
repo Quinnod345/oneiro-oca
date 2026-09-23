@@ -241,3 +241,27 @@ test('a run lost to a gateway restart is recovered from the transcript: the agen
   now += 120_000;
   await agents.poll(); assert.equal((await agents.get(d.id)).status, 'done', 'the transcript reply became the turn');
 }));
+
+test('a pursuit waiting on a future moment is parked: no agents until then, and at that moment an agent does the planned step', async () => database(async pool => {
+  let now = Date.parse('2026-09-23T17:00:00Z');
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const briefs = [];
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => { if (msg.startsWith('[thinker] You are deployed')) briefs.push(msg); return `Planned.${block({ status: 'done', summary: 'launch kit ready', nextStep: 'Publish the Day 1 X post and the Instagram carousel', resumeAt: '2026-10-01T13:00:00Z' })}`; } });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Launch InnerEcho on October 1', doneWhen: 'Day 1 posts are live.', continuous: true });
+  await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence' WHERE id = $1`, [chain.chain_id]);
+  assert.equal((await agents.plan()).started.length, 1);
+  await agents.poll();
+  const want = await queue.get(chain.chain_id);
+  assert.equal(want.continuity.resumeAt, '2026-10-01T13:00:00.000Z'); assert.match(want.continuity.resumeTask, /Publish the Day 1/);
+  now += 3 * 86400000;
+  assert.deepEqual((await agents.plan()).started, [], 'parked: nobody is sent before October 1');
+  now = Date.parse('2026-10-01T13:00:30Z');
+  const p = await agents.plan(); assert.equal(p.started.length, 1, 'the moment came');
+  assert.match(briefs.at(-1), /the time the pursuit was parked for\. Do the planned step: Publish the Day 1 X post and the Instagram carousel/);
+}));
