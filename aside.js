@@ -67,7 +67,7 @@ export function createAside({ cli = ASIDE_CLI, runner = null, timeoutMs = DEFAUL
   async function delegate(task, { timeout = 10 * 60_000, permission = null } = {}) {
     ensure();
     const { stdout } = await exec(['exec', ...base(), ...(permission ? ['--permission', permission] : []), String(task)], timeout);
-    return { browser: 'aside', output: String(stdout).trim() };
+    return { browser: 'aside', output: String(stdout).replace(/\x1b\[[0-9;]*m/g, '').trim() };   // the CLI colours its transcript
   }
   return { openUrl, readPage, search, delegate, repl, available: () => (runner ? true : asideAvailable(cli)) };
 }
