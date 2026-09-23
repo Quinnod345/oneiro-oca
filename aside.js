@@ -63,9 +63,10 @@ export function createAside({ cli = ASIDE_CLI, runner = null, timeoutMs = DEFAUL
   }
   async function search(query, opts) { return { query: String(query), ...(await readPage(searchUrl(query), opts)) }; }
   // Delegate a whole task to Aside's own agent (a subagent with the person's sites and memory).
-  async function delegate(task, { timeout = 10 * 60_000 } = {}) {
+  // `permission: 'full-access'` lets Aside's agent read local files (an upload); the default Guard asks first.
+  async function delegate(task, { timeout = 10 * 60_000, permission = null } = {}) {
     ensure();
-    const { stdout } = await exec(['exec', ...base(), String(task)], timeout);
+    const { stdout } = await exec(['exec', ...base(), ...(permission ? ['--permission', permission] : []), String(task)], timeout);
     return { browser: 'aside', output: String(stdout).trim() };
   }
   return { openUrl, readPage, search, delegate, repl, available: () => (runner ? true : asideAvailable(cli)) };
