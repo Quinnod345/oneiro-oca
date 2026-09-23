@@ -74,10 +74,41 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
 
 export function createAgents({ pool, gateway, queue, risk = null, asks = null, aside = null, llm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
-  roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000 } = {}) {
+  roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000 } = {}) {
 
   async function init() {
     await pool.query(await readFile(new URL('../migrations/062_agent_deployments.sql', import.meta.url), 'utf8'));
+    if (ensureSelf) await selfPursuit().catch(e => log.warn?.('[agents] self pursuit:', e.message));
+  }
+  // The engine's one standing pursuit about itself. Quinn asked for it: the only time it sits is when it is
+  // thinking over itself. Idle capacity goes here; its moves are fixes the engine files against its own code.
+  const SELF_SEED = 'Keep getting better at pursuing Quinn\'s wants: find where I fail, waste runs, repeat myself, stall, or ask Quinn for something I could have done — and fix it in my own code.';
+  async function selfPursuit() {
+    const { rows } = await pool.query(`SELECT id FROM thought_chains WHERE ponder_state ->> 'standing' = 'self' AND ponder_state #>> '{want,status}' = 'active' ORDER BY id LIMIT 1`);
+    if (rows[0]) return rows[0].id;
+    if (!queue?.enqueue) return null;
+    const c = await queue.enqueue({ seed: SELF_SEED, doneWhen: 'Never finished: each week at least one of my own fixes is merged, and fewer agent runs fail, repeat, or stall than the week before.',
+      topic: 'OCA engine', learning: false, priority: 0.6, continuous: true }, { origin: { kind: 'explicit', by: 'quinn' } });
+    await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = ponder_state || '{"standing":"self"}'::jsonb WHERE id = $1`, [c.chain_id]);
+    log.log?.(`[agents] standing self pursuit is #${c.chain_id}`);
+    return c.chain_id;
+  }
+  // What the engine can see about its own operation over the last day: the material for thinking over itself.
+  async function selfSignals() {
+    const q = (sql, args = []) => pool.query(sql, args).then(r => r.rows).catch(() => []);
+    const byStatus = await q(`SELECT status, count(*)::int AS n FROM agent_deployments WHERE created_at > now() - interval '24 hours' GROUP BY status`);
+    const failures = await q(`SELECT '#' || chain_id AS want, left(coalesce(error, report ->> 'summary', ''), 200) AS why FROM agent_deployments WHERE status = 'failed' AND created_at > now() - interval '48 hours' ORDER BY created_at DESC LIMIT 8`);
+    const actions = await q(`SELECT class, host, decision, coalesce(outcome, '') AS outcome, left(why, 120) AS why FROM agent_actions WHERE created_at > now() - interval '48 hours' AND (decision <> 'proceed' OR outcome = 'failure') ORDER BY created_at DESC LIMIT 8`);
+    const asks = await q(`SELECT left(metadata ->> 'detail', 160) AS q, coalesce(left(reply, 80), '(open)') AS a FROM notifications WHERE category = 'ask' AND created_at > now() - interval '72 hours' ORDER BY id DESC LIMIT 8`);
+    const builds = await q(`SELECT kind, count(*)::int AS n FROM self_build_events WHERE created_at > now() - interval '24 hours' GROUP BY kind`);
+    const churn = await q(`SELECT '#' || chain_id AS want, count(*)::int AS runs, sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)::int AS failed FROM agent_deployments WHERE created_at > now() - interval '24 hours' GROUP BY chain_id ORDER BY runs DESC LIMIT 6`);
+    return `Agent runs in the last 24 h by status: ${byStatus.map(r => `${r.status} ${r.n}`).join(', ') || 'none'}
+Runs per pursuit (24 h): ${churn.map(r => `${r.want} ${r.runs} (${r.failed} failed)`).join(', ') || 'none'}
+Recent failures:\n${failures.map(f => `- ${f.want}: ${f.why}`).join('\n') || '- none'}
+Actions held, refused or failed:\n${actions.map(a => `- ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.why}`).join('\n') || '- none'}
+Questions sent to Quinn (72 h) and his answers:\n${asks.map(a => `- ${a.q} → ${a.a}`).join('\n') || '- none'}
+Self-build events (24 h): ${builds.map(b => `${b.kind} ${b.n}`).join(', ') || 'none'}
+To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is /Users/quinnodonnell/oneiro/oca-cognitive (read it; do not edit it directly).`;
   }
   const rowOf = r => r && ({ id: r.id, chainId: r.chain_id, kind: r.kind, task: r.task, sessionKey: r.session_key, agentId: r.agent_id, displayName: r.display_name,
     status: r.status, turns: r.turns, question: r.question, askId: r.ask_id, report: r.report, error: r.error, firedBy: r.fired_by, cwd: r.cwd,
@@ -193,7 +224,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     }
     const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError };
     await pool.query(`UPDATE agent_deployments SET status = 'done', report = $2::jsonb, ended_at = now(), updated_at = now(), question = NULL WHERE id = $1`, [d.id, JSON.stringify(final)]);
-    await noteContinuity(d.chain_id, { found: applied || !!report.resumeAt, remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null });
+    await noteContinuity(d.chain_id, { found: applied || report.status === 'done', remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null });
     await observe(d, applied ? 'success' : 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) finished after ${d.turns} turns: ${verified.length} verified sources of ${(report.evidence || []).length} claimed, ${stated.length} statements by the person; evidence applied: ${applied}${applyError ? '; ' + applyError : ''}.`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
     return final;
@@ -352,8 +383,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
   const dueIn = (state, now) => {
     const c = state.continuity || {};
     const resume = c.resumeAt ? Date.parse(c.resumeAt) : null;
-    if (resume && resume > now && Number(c.lastSliceStartedAt || 0) < resume) return resume - now;   // parked until a moment
-    if (resume && resume <= now && Number(c.lastSliceStartedAt || 0) < resume) return 0;            // that moment has come
+    if (resume && resume <= now && Number(c.lastSliceStartedAt || 0) < resume) return 0;            // a dated step's moment has come
     const dry = Math.min(4, Number(c.dry) || 0);
     return Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0) + continuityIntervalMs * 2 ** dry - now;
   };
@@ -368,20 +398,41 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
       ORDER BY updated_at ASC`);
     const now = clock(), started = [];
-    for (const row of rows.filter(r => dueIn(r.state, now) <= 0).slice(0, perTick)) {
+    // The only time the engine sits is when it thinks over itself: when no other pursuit is due and a slot is
+    // free, the standing self pursuit is due (at most every selfGapMs), whatever its own cadence says.
+    const isSelf = r => r.state?.standing === 'self';
+    const due = rows.filter(r => !isSelf(r) && dueIn(r.state, now) <= 0);
+    if (!due.length && (await free()) > 0) {
+      const self = rows.find(r => isSelf(r) && now - Math.max(Number(r.state.continuity?.lastSliceStartedAt) || 0, Number(r.state.continuity?.lastSliceEndedAt) || 0) >= selfGapMs);
+      if (self) due.push(self);
+    }
+    for (const row of due.slice(0, perTick)) {
       if ((await free()) <= 0) break;
       const missing = row.state.result?.missingEvidence || [], remaining = row.state.continuity?.remaining || [];
       const threads = [...new Set([...missing, ...remaining].map(x => text(x, 300)).filter(Boolean))];
       const c = row.state.continuity || {};
       const resuming = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
-      let tasks = [`Keep this pursuit moving; the person wants an agent always working on it. Find what is still missing; if it truly is not obtainable, do the most useful concrete work toward the done-when and state precisely what only the person can provide.`];
+      let tasks = [`Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.`];
       if (resuming && c.resumeTask) {
         tasks = [`It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`];
         const rest = (Array.isArray(c.schedule) ? c.schedule : []).filter(x => Date.parse(x.at) > now);
         await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
           [row.id, JSON.stringify({ schedule: rest, resumeAt: rest[0]?.at || null, resumeTask: rest[0]?.task || null, firedStep: { at: c.resumeAt, task: c.resumeTask, firedAt: new Date(now).toISOString() } })]).catch(() => {});
       }
-      else if (threads.length >= 2 && (await free()) >= 2 && llm) tasks = await split(row, threads, Math.min(3, await free())).catch(e => { log.warn?.('[agents] plan:', e.message); return tasks; });
+      else if (llm) {
+        const s = await strategize(row, Math.max(1, Math.min(3, await free())), now).catch(e => { log.warn?.('[agents] strategist:', text(e.message, 200)); return null; });
+        if (s) {
+          await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
+            [row.id, JSON.stringify({ lastThought: s.thought, lastThoughtAt: new Date(now).toISOString(), lastMoves: s.moves.map(m => m.task.slice(0, 300)) })]).catch(() => {});
+          log.log?.(`[agents] thinking on #${row.id}: ${text(s.thought, 200)} → ${s.moves.length} move(s)`);
+          if (s.moves.length) tasks = s.moves.map(m => `${m.task}${m.why ? `\nWhy now: ${m.why}` : ''}`);
+          else {   // nothing worth doing this cycle: say so and look again next cycle
+            await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
+              [row.id, JSON.stringify({ lastSliceStartedAt: now, lastSliceEndedAt: now })]).catch(() => {});
+            continue;
+          }
+        } else if (threads.length >= 2 && (await free()) >= 2) tasks = await split(row, threads, Math.min(3, await free())).catch(() => tasks);
+      }
       let deployed = 0;
       for (const task of tasks) {
         try { const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine' }); if (d.id) { started.push(d.id); deployed++; } } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
@@ -391,6 +442,31 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
         [row.id, JSON.stringify({ lastSliceStartedAt: now, runs: Number(row.state.continuity?.runs || 0) + deployed })]).catch(() => {});
     }
     return { started };
+  }
+  // The strategist: every cycle, for a pursuit that is always worked, what are the most useful moves right now?
+  // It sees the goal, what the person said, what is known, what agents recently did and how it went, what the
+  // engine may do on its own, and what is scheduled — and answers with one line of thought and 0–max moves.
+  async function strategize(row, max, now) {
+    const s = row.state || {}, want = s.want || {};
+    const { rows: recent } = await pool.query(`SELECT to_char(created_at, 'MM-DD HH24:MI') AS at, status, left(task, 240) AS task,
+        left(coalesce(report ->> 'summary', error, question, ''), 260) AS outcome FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker' ORDER BY created_at DESC LIMIT 14`, [row.id]);
+    const { rows: acts } = await pool.query(`SELECT to_char(created_at, 'MM-DD HH24:MI') AS at, class, host, decision, coalesce(outcome, '') AS outcome, left(description, 180) AS d
+        FROM agent_actions WHERE chain_id = $1 ORDER BY created_at DESC LIMIT 8`, [row.id]).catch(() => ({ rows: [] }));
+    const ev = s.evidence || [];
+    const said = ev.filter(e => /stated by Quinn|observed by quinn/i.test(e.source || '') || /^person-/.test(e.id || '')).slice(-8).map(e => `- ${text(e.observation, 300)}`).join('\n');
+    const known = ev.filter(e => !/stated by Quinn/i.test(e.source || '')).slice(-12).map(e => `- ${text(e.observation, 200)}`).join('\n');
+    const charter = await controls?.get?.().then(c => c.charter).catch(() => null);
+    const grants = charter ? Object.entries(charter).filter(([k, v]) => v && v.granted).map(([k, v]) => k + (v.monthlyCap ? ` (≤ $${v.monthlyCap}/month)` : '')).join(', ') : 'unknown';
+    const schedule = (Array.isArray(s.continuity?.schedule) ? s.continuity.schedule : []).map(x => `- ${x.at}: ${text(x.task, 200)}`).join('\n');
+    const own = s.standing === 'self' ? `\n\nThe engine's own operation (this pursuit is about itself; its moves are reviews that end in concrete self-wants, one defect each, with the evidence):\n${await selfSignals()}` : '';
+    const p = resolveProvider('cloud');
+    const r = await llm.messages.create({ provider: p.provider, model: p.model, max_tokens: 1400, temperature: 0.4,
+      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), drive Mac apps and his iPhone apps (iPhone Mirroring), write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; no graded coursework, no CAPTCHAs, nothing in anyone else's name. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
+      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}] ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${a.class} on ${a.host}: ${a.decision}/${a.outcome} — ${a.d}`).join('\n') || '- (none)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
+    const raw = typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
+    const j = JSON.parse(String(raw).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1'));
+    const moves = (Array.isArray(j.moves) ? j.moves : []).map(m => ({ task: text(m?.task, 1500), why: text(m?.why, 300) })).filter(m => m.task.length >= 20).slice(0, max);
+    return { thought: text(j.thought, 400) || '(no thought)', moves };
   }
   // The thinker splits open threads into parallel, non-overlapping tasks. JSON only; falls back to one task.
   async function split(row, threads, max) {
