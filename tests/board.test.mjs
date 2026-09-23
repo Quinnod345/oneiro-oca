@@ -56,8 +56,8 @@ test('the board keeper reads a pursuit\'s history, writes its board, and files u
   const r1 = await run(pool, id, { task: 'Verify live prices in App Store Connect', summary: 'Prices verified: $3.99/mo, $27.99/yr', at: now - 3 * 86400000, ended: now - 3 * 86400000 + 600000 });
   const r2 = await run(pool, id, { task: 'Secure one free directory listing', summary: 'Listing live on OBOHITO', stream: 'Distribution', made: [{ what: 'Listing on OBOHITO', where: 'https://obohito.com/x' }], at: now - 3600000, ended: now - 1800000 });
   await run(pool, id, { kind: 'talker', status: 'standing', task: '', at: now - 3600000 });
-  let prompt = '';
-  const llm = { messages: { create: async ({ system, messages }) => { prompt = system + '\n' + messages[0].content; return { content: [{ type: 'text', text: JSON.stringify({
+  let prompt = '', provider = null;
+  const llm = { messages: { create: async ({ system, messages, provider: p }) => { prompt = system + '\n' + messages[0].content; provider = p; return { content: [{ type: 'text', text: JSON.stringify({
     headline: 'InnerEcho profit', progress: 'Set up for launch; nothing measured yet.',
     streams: [{ name: 'Pricing', aim: 'Know the unit economics', state: 'done', standing: 'Verified' }, { name: 'Distribution', aim: 'Get found', state: 'active', standing: 'One listing live' }],
     labels: { [r1.slice(0, 8)]: 'Pricing', [r2.slice(0, 8)]: 'Pricing' },
@@ -70,6 +70,7 @@ test('the board keeper reads a pursuit\'s history, writes its board, and files u
   await board.review(id);
   for (const s of ['Verify live prices', 'Listing on OBOHITO @ https://obohito.com/x', 'We start from zero.', 'Done when: A month nets positive.']) assert.ok(prompt.includes(s), s);
   assert.ok(!/\| talker \|/.test(prompt), 'the talker is the engine\'s voice, not work on the pursuit');
+  assert.equal(provider, 'codex', 'a whole history goes to the capable model, not the small local one');
   const b = (await row()).state.continuity.board;
   assert.equal(b.headline, 'InnerEcho profit'); assert.equal(b.streams.length, 2); assert.equal(b.milestones.length, 3);
   const streams = Object.fromEntries((await pool.query(`SELECT id, stream FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker'`, [id])).rows.map(r => [r.id, r.stream]));
@@ -77,6 +78,9 @@ test('the board keeper reads a pursuit\'s history, writes its board, and files u
   assert.equal(await board.stale(await row()), false, 'fresh');
   now += 30 * 60_000;
   assert.equal(await board.stale(await row()), false, 'older than the cadence but nothing happened since');
+  await pool.query(`UPDATE agent_deployments SET stream = NULL WHERE id = $1`, [r1]);
+  assert.equal(await board.stale(await row()), true, 'a run left unfiled brings the keeper back on the cadence');
+  await pool.query(`UPDATE agent_deployments SET stream = 'Pricing' WHERE id = $1`, [r1]);
   await run(pool, id, { task: 'Make two reels', at: now - 60000 });
   assert.equal(await board.stale(await row()), true, 'a run started after the board was written');
 }));
@@ -125,5 +129,6 @@ test('the map: the orchestrator and every pursuit with its streams, live agents 
   assert.ok(full.history.some(h => h.kind === 'action' && h.outcome === 'failure'), 'a failed action is part of what it did');
   assert.ok(full.history.some(h => h.kind === 'failed' && /turn budget/.test(h.title)));
   assert.equal((await board.detail(self1)).made[0].what, 'Merged self/34-fix', 'a merged fix is something the engine set up for itself');
+  assert.ok((await board.detail(selfId)).made.some(m => m.what === 'Merged self/34-fix'), 'the pursuit about itself owns the merges of the fixes it filed');
   await assert.rejects(board.detail(9999), /not found/);
 }));

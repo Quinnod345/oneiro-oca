@@ -76,12 +76,21 @@ export function createBoard({ pool, llm = null, asks = null, agents = null, cont
   const chainRow = async id => (await pool.query(`SELECT id, seed, status, updated_at, ponder_state AS state FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL`, [id])).rows[0] || null;
   const runsOf = async (id, limit = 80) => (await pool.query(`SELECT * FROM agent_deployments WHERE chain_id = $1 ORDER BY created_at DESC LIMIT $2`, [id, limit])).rows;
   const actionsOf = async (id, limit = 40) => (await pool.query(`SELECT * FROM agent_actions WHERE chain_id = $1 ORDER BY created_at DESC LIMIT $2`, [id, limit]).catch(() => ({ rows: [] }))).rows;
-  const mergesOf = async id => (await pool.query(`SELECT kind, payload, created_at FROM self_build_events WHERE chain_id = $1 AND kind = 'merged' ORDER BY created_at DESC LIMIT 10`, [id]).catch(() => ({ rows: [] }))).rows;
+  // The pursuit about itself owns the merges of every fix it filed against its own code.
+  const selfWantIds = async () => (await pool.query(`SELECT id FROM thought_chains WHERE ponder_state #>> '{origin,kind}' = 'self' AND COALESCE(ponder_state ->> 'standing', '') <> 'self'`)).rows.map(r => r.id);
+  const mergesOf = async (id, standing = null) => {
+    const ids = standing === 'self' ? [id, ...(await selfWantIds())] : [id];
+    return (await pool.query(`SELECT chain_id, kind, payload, created_at FROM self_build_events WHERE chain_id = ANY($1) AND kind = 'merged' ORDER BY created_at DESC LIMIT 20`, [ids]).catch(() => ({ rows: [] }))).rows;
+  };
+  const selfWantsOf = async () => (await pool.query(`SELECT id, status, ponder_state #>> '{want,status}' AS want, left(ponder_state #>> '{want,description}', 200) AS what FROM thought_chains
+    WHERE ponder_state #>> '{origin,kind}' = 'self' AND COALESCE(ponder_state ->> 'standing', '') <> 'self' ORDER BY id DESC LIMIT 20`)).rows;
 
   // ── the board keeper ─────────────────────────────────────────────────────────────────────────────────
   const outcomeOf = r => text(r.report?.summary || r.error || r.question || '', 280);
+  // The board reads a whole history, so it asks the capable model (Codex), not the small local one; the
+  // person's inference policy still decides — in local-only mode this runs locally like everything else.
   async function ask(system, user) {
-    const r = await llm.messages.create({ max_tokens: 2400, temperature: 0.2, system, messages: [{ role: 'user', content: user }] });
+    const r = await llm.messages.create({ provider: 'codex', max_tokens: 3000, temperature: 0.2, system, messages: [{ role: 'user', content: user }] });
     return typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
   }
   async function review(chainId) {
@@ -94,13 +103,14 @@ export function createBoard({ pool, llm = null, asks = null, agents = null, cont
       const s = row.state || {}, want = s.want || {}, prior = s.continuity?.board || null;
       const runs = (await runsOf(id, 60)).filter(r => r.kind !== 'talker').reverse();
       const acts = (await actionsOf(id, 30)).reverse();
-      const merges = await mergesOf(id);
+      const merges = await mergesOf(id, s.standing);
+      const children = s.standing === 'self' ? await selfWantsOf() : [];
       const schedule = (Array.isArray(s.continuity?.schedule) ? s.continuity.schedule : []).map(x => `- ${x.at}: ${text(x.task, 220)}`).join('\n');
       const said = (s.evidence || []).filter(e => /stated by Quinn|observed by quinn/i.test(e.source || '')).slice(-6).map(e => `- ${text(e.observation, 260)}`).join('\n');
       const system = `You keep the board for one pursuit of a cognitive engine that works for Quinn. The engine deploys agents on the pursuit; you read its whole history and write down, for Quinn to see at a glance:
-- streams: the workstreams (categories of work) the orchestrator runs for this pursuit — 2 to 6, short names (1–3 words, e.g. "Content", "Distribution", "Measurement", "Pricing", "Product"). Keep the existing names unless one is clearly wrong. For each: aim (what it is for, one line), state (active | waiting | blocked | done), standing (one line: where it stands now, concrete).
-- labels: every run id (the 8-character id) filed under exactly one stream.
-- made: what the pursuit SET UP that lasts and exists now — a live listing, a published post, a changed account setting, a finished asset kit, a tracker or sheet in use, a merged fix. Only what the history shows was actually done and verified; never plans, never research notes. what (short, concrete), where (URL or file path), stream, at (ISO date).
+- streams: the workstreams (categories of work) the orchestrator runs for this pursuit — 2 to 6, short names (1–3 words) named for what the work is FOR, not for the kind of activity: "Pricing", "Content", "Distribution", "Measurement", "Costs", "Reliability" — never "Research", "Tasks" or "General". Keep the existing names unless one is clearly wrong. For each: aim (what it is for, one line), state (active | waiting | blocked | done), standing (one line: where it stands now, concrete, with numbers where the history has them).
+- labels: EVERY run id listed below (the 8-character id at the start of each line) filed under exactly one of your streams. Do not skip any.
+- made: what the pursuit SET UP that lasts and exists now because of it — a live listing, a published post, a changed account setting (a bio link), a finished asset kit (images, video), a tracker or sheet in use, a merged fix. Only what the history shows was actually done; never plans. NOT findings, verifications, analyses, research notes or documents that only record what was learned. what (short, concrete), where (URL or file path from the history), stream, at (ISO date).
 - milestones: the path from where it started to done-when, in order — done ones, then the one in progress ("now"), then what is next (with the scheduled date when there is one). 4 to 8, each a short concrete label.
 - progress: one honest sentence on how far along the pursuit is toward done-when. The measured progress is the only proof; do not claim more.
 - headline: the pursuit in 2–5 words.
@@ -123,7 +133,7 @@ ${runs.map(r => `- ${r.id.slice(0, 8)} | ${iso(r.created_at)?.slice(0, 16)} | ${
 
 Actions on the world (class on host: decision/outcome — what):
 ${acts.map(a => `- ${iso(a.created_at)?.slice(0, 16)} ${a.class} on ${a.host}: ${a.decision}/${a.outcome || '-'} — ${text(a.description, 160)} ${a.url ? `(${text(a.url, 120)})` : ''}`).join('\n') || '- (none)'}
-${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.slice(0, 16)} ${m.payload?.branch || ''} ${String(m.payload?.sha || '').slice(0, 8)}`).join('\n')}` : ''}`;
+${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.slice(0, 16)} #${m.chain_id} ${m.payload?.branch || ''} ${String(m.payload?.sha || '').slice(0, 8)}`).join('\n')}` : ''}${children.length ? `\n\nFixes it filed against its own code (self-wants):\n${children.map(c => `- #${c.id} [${c.want === 'sated' ? 'merged and settled' : c.status}] ${c.what}`).join('\n')}` : ''}`;
       const board = parseBoard(await ask(system, user), { runIds: runs.map(r => r.id), now: clock() });
       await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || jsonb_build_object('board', $2::jsonb))) WHERE id = $1`, [id, JSON.stringify(board)]);
       for (const [runId, name] of Object.entries(board.labels)) await pool.query(`UPDATE agent_deployments SET stream = $2 WHERE id = $1 AND stream IS NULL`, [runId, name]);
@@ -139,7 +149,10 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     if (clock() - since < reviewEveryMs) return false;
     const { rows: [r] } = await pool.query(`SELECT max(greatest(updated_at, coalesce(ended_at, created_at))) AS at FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker'`, [row.id]);
     const { rows: [a] } = await pool.query(`SELECT max(coalesce(observed_at, created_at)) AS at FROM agent_actions WHERE chain_id = $1`, [row.id]).catch(() => ({ rows: [{}] }));
-    return Math.max(ms(r?.at), ms(a?.at)) > since;
+    if (Math.max(ms(r?.at), ms(a?.at)) > since) return true;
+    // Runs the keeper has not filed yet: it looks again on the cadence until every run has a stream.
+    const { rows: [u] } = await pool.query(`SELECT count(*)::int AS n FROM agent_deployments WHERE chain_id = $1 AND kind <> 'talker' AND stream IS NULL`, [row.id]);
+    return (u?.n || 0) > 0;
   }
   // At most two boards are written at once: a first look at the map must not start a review per pursuit.
   const soon = id => { if (llm && !reviewing.has(id) && reviewing.size < 2) review(id).catch(e => log.warn?.(`[board] #${id}:`, text(e.message, 200))); };
@@ -231,7 +244,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
   async function detail(chainId) {
     const id = Number(chainId);
     const row = await chainRow(id); if (!row) throw new Error('pursuit not found');
-    const [runs, acts, merges] = await Promise.all([runsOf(id, 120), actionsOf(id, 60), mergesOf(id)]);
+    const [runs, acts, merges] = await Promise.all([runsOf(id, 120), actionsOf(id, 60), mergesOf(id, row.state?.standing)]);
     const openAsks = asks ? await asks.open().catch(() => []) : [];
     const { rows: [self] } = await pool.query(`SELECT id FROM thought_chains WHERE ponder_state ->> 'standing' = 'self' AND ponder_state #>> '{want,status}' = 'active' ORDER BY id LIMIT 1`);
     const s = row.state || {}, c = s.continuity || {}, board = c.board || null;
@@ -244,7 +257,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
       if (r.ended_at || r.status === 'waiting_person') history.push({ at: iso(r.ended_at || r.updated_at), kind: r.status, title: text(r.report?.summary || r.error || r.question || '', 400), stream: r.stream || null, agentId: r.id, agentKind: r.kind });
     }
     for (const a of acts) history.push({ at: iso(a.observed_at || a.created_at), kind: 'action', title: text(a.description, 300), detail: `${a.class} on ${a.host}: ${a.decision}${a.outcome ? ' → ' + a.outcome : ''}`, url: a.url || null, outcome: a.outcome || null, decision: a.decision });
-    for (const m of merges) history.push({ at: iso(m.created_at), kind: 'merged', title: `Merged ${m.payload?.branch || 'a fix'}`, detail: String(m.payload?.sha || '').slice(0, 12) });
+    for (const m of merges) history.push({ at: iso(m.created_at), kind: 'merged', title: `Merged ${m.payload?.branch || 'a fix'}`, detail: String(m.payload?.sha || '').slice(0, 12), chainId: m.chain_id });
     if (c.firedStep?.firedAt) history.push({ at: iso(c.firedStep.firedAt), kind: 'step', title: text(c.firedStep.task, 300) });
     history.sort((a, b) => ms(b.at) - ms(a.at));
     return {
