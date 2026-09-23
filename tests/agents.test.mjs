@@ -69,7 +69,7 @@ test('a report is the last oca block of a reply, validated; no block is no repor
 
 test('a brief names the pursuit, the role, the task, what is known, and the contract; the engine speaks as [thinker]', () => {
   const b = composeBrief({ kind: 'research', chainId: 27, want: 'InnerEcho profitability', doneWhen: 'net positive month', task: 'Find the price', evidence: [{ source: 'file', observation: 'zero' }], missing: ['pricing'], remaining: ['q'] });
-  for (const s of ['[thinker] You are deployed', 'pursuit #27', 'Done when: net positive month', 'Your role: research', 'aside__aside_snapshot_tab', 'Task now: Find the price', 'Still missing', '- pricing', 'Open questions', 'already known', '"status":"needs_person"', 'never post, pay, delete or sign out']) assert.ok(b.includes(s), s);
+  for (const s of ['[thinker] You are deployed', 'pursuit #27', 'Done when: net positive month', 'Your role: research', 'aside__aside_snapshot_tab', 'Task now: Find the price', 'Still missing', '- pricing', 'Open questions', 'already known', '"status":"needs_person"', 'hand the whole task to aside__aside_do', 'passing pursuit 27', 'Graded coursework and CAPTCHAs are never yours']) assert.ok(b.includes(s), s);
   assert.ok(composeBrief({ kind: 'builder', chainId: 3, want: 'fix', cwd: '/tmp/wt' }).includes('/tmp/wt'));
   assert.ok(composeBrief({ kind: 'talker', chainId: 3, want: 'x', engine: 'http://e' }).includes('curl -s http://e/ponder/3'));
   assert.deepEqual(AGENT_KINDS, ['research', 'talker', 'builder', 'executor']);

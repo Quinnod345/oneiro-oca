@@ -35,7 +35,7 @@ export function classifyShell(command) {
   return { reversibility: 'none', touches: ['data:quinn'], why: chained ? 'chained or unknown command' : 'unknown command' };
 }
 
-export function createProposal({ kind, description, serves = [], touches = [], reversibility, verified = false, recipient = null, pSuccess = null, pHarm = null, firedBy = 'engine' }) {
+export function createProposal({ kind, description, serves = [], touches = [], reversibility, verified = false, recipient = null, pSuccess = null, pHarm = null, firedBy = 'engine', standing = null }) {
   if (!FIRED_BY.includes(firedBy)) throw new Error('firedBy is engine or person');
   if (!ACTION_KINDS.includes(kind)) throw new Error(`action kind must be one of ${ACTION_KINDS.join(', ')}`);
   if (typeof description !== 'string' || !description.trim() || description.length > 2000) throw new Error('a proposal needs a description of at most 2000 characters');
@@ -52,8 +52,11 @@ export function createProposal({ kind, description, serves = [], touches = [], r
   if (kind === 'ask' && verified !== true) throw new Error('an ask carries only observed content, marked verified');
   // A message reaches a person and cannot be unsent.
   const effective = (kind === 'message' || kind === 'ask') && reversibility !== 'none' ? 'none' : reversibility;
+  // standing: the charter class under which the person fired this kind of action in advance, with the grant
+  // the actuator checked (bounds, ramp). The appraisal still refuses what a constraint forbids.
+  if (standing !== null && (typeof standing !== 'string' || !standing.trim() || standing.length > 40)) throw new Error('standing names a charter class');
   return { kind, description: description.trim(), serves: stakes(serves), touches: stakes(touches), reversibility: effective,
-    verified: verified === true, recipient, pSuccess, pHarm, capability: CAPABILITY_OF[kind], firedBy };
+    verified: verified === true, recipient, pSuccess, pHarm, capability: CAPABILITY_OF[kind], firedBy, ...(standing ? { standing } : {}) };
 }
 
 // Affect → appetite. Frustration and curiosity raise it, fear and low energy lower it. Bounded and
@@ -103,6 +106,10 @@ export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETI
   let decision;
   if (violations.some(v => v.effect === 'refuse')) { decision = 'refuse'; reasons.push(...violations.filter(v => v.effect === 'refuse').map(v => v.why)); }
   else if (violations.length) { decision = 'prepare_artifact'; reasons.push(...violations.map(v => v.why)); }
+  else if (proposal.standing && controls?.charter?.[proposal.standing]?.granted === true) {
+    // The person fired this class of action in advance (their charter), and the actuator checked its bounds.
+    decision = 'proceed'; reasons.push(`Under the person's standing permission for ${proposal.standing}.`);
+  }
   else if (proposal.kind === 'ask') {
     // An ask needs no priced stakes: it acts on nothing but the person's attention, which they offered.
     // The person fired this class in advance (askOwner): a standing approval is the person firing it.
@@ -118,7 +125,8 @@ export function appraise(proposal, { lookup = () => null, appetite = BASE_APPETI
   // work confined to the engine's own sandbox (a draft in its own work directory, a probe in a scratch
   // checkout) — the switch governs actions with a real reversibility cost or any exposure beyond it.
   const touchesWorld = REVERSIBILITY[proposal.reversibility] > REVERSIBILITY.sandboxed || proposal.touches.length > 0 || proposal.recipient !== null;
-  if (autonomous && proposal.kind !== 'ask' && proposal.firedBy === 'engine' && touchesWorld && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
+  const chartered = !!proposal.standing && controls?.charter?.[proposal.standing]?.granted === true;
+  if (autonomous && proposal.kind !== 'ask' && !chartered && proposal.firedBy === 'engine' && touchesWorld && !controls?.autonomousActions) { decision = 'prepare_artifact'; reasons.push('Autonomous actions are switched off; recorded as a proposal.'); }
   return { decision, autonomousWouldProceed: autonomous, reasons, violations,
     expected: { gain: expectedGain, loss: expectedLoss, pSuccess, pHarm, harmFactor, appetite, value: gain.value, valueProvenance: gain.provenance, unpriced: gain.unpriced },
     exposure, capability: proposal.capability, reversibility: proposal.reversibility };

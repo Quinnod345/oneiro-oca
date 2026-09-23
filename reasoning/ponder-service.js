@@ -63,7 +63,7 @@ export const ponderQueue = createPonderQueue({ pool, worth: worthLedger, affect:
 const envFlag = name => ['1', 'true', 'yes', 'on'].includes(String(process.env[name] || '').trim().toLowerCase());
 export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: emotion,
   controls: async () => ({ autonomousActions: envFlag('OCA_ENABLE_AUTONOMOUS_ACTIONS') || envFlag('ONEIRO_ENABLE_AUTONOMOUS_ACTIONS'),
-    askOwner: await userControls.get().then(c => c.askOwner === true).catch(() => false) }),
+    ...(await userControls.get().then(c => ({ askOwner: c.askOwner === true, charter: c.charter })).catch(() => ({ askOwner: false, charter: null }))) }),
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 riskRef.current = riskJournal;
 export const selfBuild = createSelfBuild({ pool, queue: ponderQueue, worth: worthLedger, risk: riskJournal, controls: userControls,

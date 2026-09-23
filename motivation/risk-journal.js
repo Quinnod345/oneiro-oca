@@ -21,7 +21,7 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
   }
   async function currentControls() {
     const c = typeof controls === 'function' ? await controls() : controls;
-    return { autonomousActions: c?.autonomousActions === true, askOwner: c?.askOwner === true };
+    return { autonomousActions: c?.autonomousActions === true, askOwner: c?.askOwner === true, charter: c?.charter || null };
   }
 
   // Appraise and record. Idempotent on id: the same id with a different proposal is an error.
@@ -34,7 +34,7 @@ export function createRiskJournal({ pool, worth = null, clock = Date.now, contro
       return { ...row(existing[0]), duplicate: true };
     }
     const [lookup, { appetite }, ctl] = [await lookupFor(proposal), await currentAppetite(),
-      controlsOverride ? { autonomousActions: controlsOverride.autonomousActions === true } : await currentControls()];
+      controlsOverride ? { autonomousActions: controlsOverride.autonomousActions === true, charter: controlsOverride.charter || null } : await currentControls()];
     let informationBonus = 0;
     feelSafe(f => { informationBonus = f.informationAppetiteBonus?.() || 0; });
     const appraisal = appraise(proposal, { lookup, appetite, controls: ctl, informationBonus });

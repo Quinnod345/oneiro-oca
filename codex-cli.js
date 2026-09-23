@@ -58,6 +58,7 @@ export function asideMcpArgs({ server = ASIDE_MCP_SERVER, node = process.execPat
     '-c', `mcp_servers.aside.command=${JSON.stringify(node)}`,
     '-c', `mcp_servers.aside.args=${JSON.stringify([server])}`,
     '-c', 'mcp_servers.aside.startup_timeout_sec=30',
+    '-c', 'mcp_servers.aside.tool_timeout_sec=960',   // a delegated sign-in or post runs minutes, not seconds
     ...ASIDE_MCP_TOOLS.flatMap(t => ['-c', `mcp_servers.aside.tools.${t}.approval_mode="approve"`]),
   ];
 }

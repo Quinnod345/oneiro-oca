@@ -70,7 +70,7 @@ test('no live module opens, drives, or reads a page through anything but Aside; 
   assert.deepEqual(importers, [], `motor/skills must stay unloaded: ${importers.join(', ')}`);
 });
 
-test('the MCP server speaks JSON-RPC over stdio, lists its look-and-work tools, and answers a call through the adapter', async () => {
+test('the MCP server speaks JSON-RPC over stdio, lists its tools, and answers a call through the adapter', async () => {
   const { spawn } = await import('node:child_process');
   const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env, OCA_ASIDE_CLI: '/nowhere/aside' } });
   let out = ''; child.stdout.on('data', d => { out += d; });
@@ -82,32 +82,40 @@ test('the MCP server speaks JSON-RPC over stdio, lists its look-and-work tools, 
   await new Promise(r => child.on('close', r));
   const msgs = out.trim().split('\n').map(l => JSON.parse(l));
   assert.equal(msgs.find(m => m.id === 1).result.serverInfo.name, 'aside');
-  assert.deepEqual(msgs.find(m => m.id === 2).result.tools.map(t => t.name), ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs', 'aside_read_tab', 'aside_snapshot_tab', 'aside_click', 'aside_type', 'aside_select', 'aside_press', 'aside_scroll', 'aside_go'], 'look and work tools; nothing that posts');
+  assert.deepEqual(msgs.find(m => m.id === 2).result.tools.map(t => t.name), ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs', 'aside_read_tab', 'aside_snapshot_tab', 'aside_click', 'aside_type', 'aside_select', 'aside_press', 'aside_scroll', 'aside_sign_in', 'aside_do', 'aside_go'], 'look, work, and act through the actuator');
   const read = msgs.find(m => m.id === 3).result;
   assert.equal(read.isError, true); assert.match(read.content[0].text, /no other browser/, 'no Aside installed: no browser, not another one');
   assert.match(msgs.find(m => m.id === 4).error.message, /unknown tool/);
 });
 
-test('the tool boundary: a slice may change what it sees, never commit — decided from observed control facts', async () => {
-  const { interactionPolicy, ASIDE_TOOL_NAMES } = await import('../aside-mcp.js');
+test('the tool boundary: looking is free; a committing control is classified for the engine\'s actuator; credentials, uploads and disabled controls never go through a click', async () => {
+  const { interactionPolicy, commitClass, ASIDE_TOOL_NAMES } = await import('../aside-mcp.js');
   const { ASIDE_MCP_TOOLS } = await import('../codex-cli.js');
   assert.deepEqual(ASIDE_MCP_TOOLS, ASIDE_TOOL_NAMES, 'Codex pre-approves exactly the tools the server offers');
-  const ok = (kind, c) => assert.equal(interactionPolicy(kind, c).allowed, true, `${kind} ${JSON.stringify(c)}`);
+  for (const t of ['aside_sign_in', 'aside_do']) assert.ok(ASIDE_TOOL_NAMES.includes(t), t);
+  const view = (kind, c) => { const p = interactionPolicy(kind, c); assert.equal(p.allowed, true, `${kind} ${JSON.stringify(c)}`); assert.equal(p.commit, undefined, `${kind} ${JSON.stringify(c)} is a view action`); };
+  const commits = (kind, c, cls) => { const p = interactionPolicy(kind, c); assert.equal(p.allowed, true, `${kind} ${JSON.stringify(c)}`); assert.equal(p.commit, cls, `${kind} ${JSON.stringify(c)}`); };
   const no = (kind, c, why) => { const p = interactionPolicy(kind, c); assert.equal(p.allowed, false, `${kind} ${JSON.stringify(c)}`); if (why) assert.match(p.why, why); };
-  // looking: pickers, filters, presets, tabs, pagination, dialogs about the view
-  ok('click', { role: 'button', name: '6–12 Sep' }); ok('click', { role: 'button', name: 'Last 30 days' }); ok('click', { role: 'button', name: 'Apply' });
-  ok('click', { role: 'button', name: 'Add filter' }); ok('click', { role: 'button', name: 'Remove filter' }); ok('click', { role: 'button', name: 'Clear date range' });
-  ok('click', { role: 'button', name: 'Close dialog' }); ok('click', { role: 'button', name: 'close' }); ok('click', { role: 'button', name: 'Cancel' }); ok('click', { role: 'button', name: '×' }); ok('click', { role: 'tab', name: 'Trends' }); ok('click', { role: 'link', name: 'Next page', href: '/reports?page=2' });
-  ok('click', { role: 'checkbox', name: 'Premium Purchased' }); ok('click', { role: 'option', name: 'August' }); ok('click', { role: 'button', name: 'Show more' });
-  // committing: refused, with the reason the person will be told
-  no('click', { role: 'button', name: 'Send' }, /commit/); no('click', { role: 'button', name: 'Save as cohort' }); no('click', { role: 'button', name: 'Download CSV' });
-  no('click', { role: 'button', name: 'Delete dashboard' }, /may commit/); no('click', { role: 'button', name: 'Close account' }); no('click', { role: 'button', name: 'Cancel subscription' });
-  no('click', { role: 'link', name: 'Sign out', href: '/logout' }); no('click', { role: 'button', name: 'Pay now' }); no('click', { role: 'button', name: 'Publish' });
-  no('click', { role: 'button', name: 'Continue', submit: true, inForm: true, formHasCredential: true }, /credential/); no('click', { role: 'file', name: 'Upload', inputType: 'file' }, /upload/);
-  no('click', { role: 'link', name: 'Email us', href: 'mailto:x@y' }, /mailto/); no('click', { role: 'button', name: 'Apply', disabled: true }, /disabled/);
-  // typing: search and filter boxes yes; credentials never; Enter only where it cannot submit a committing form
-  ok('type', { role: 'searchbox', name: 'Search events' }); ok('type', { role: 'textbox', name: 'Filter' }); ok('type', { role: 'combobox', name: 'Event' });
+  // looking: pickers, filters, presets, tabs, pagination, dialogs about the view — no decision needed
+  view('click', { role: 'button', name: '6–12 Sep' }); view('click', { role: 'button', name: 'Last 30 days' }); view('click', { role: 'button', name: 'Apply' });
+  view('click', { role: 'button', name: 'Add filter' }); view('click', { role: 'button', name: 'Remove filter' }); view('click', { role: 'button', name: 'Clear date range' });
+  view('click', { role: 'button', name: 'Close dialog' }); view('click', { role: 'button', name: 'close' }); view('click', { role: 'button', name: 'Cancel' }); view('click', { role: 'button', name: '×' }); view('click', { role: 'tab', name: 'Trends' }); view('click', { role: 'link', name: 'Next page', href: '/reports?page=2' });
+  view('click', { role: 'checkbox', name: 'Premium Purchased' }); view('click', { role: 'option', name: 'August' }); view('click', { role: 'button', name: 'Show more' });
+  // committing: classified for the actuator, never silently done
+  commits('click', { role: 'button', name: 'Share' }, 'publish'); commits('click', { role: 'button', name: 'Post' }, 'publish'); commits('click', { role: 'button', name: 'Publish' }, 'publish');
+  commits('click', { role: 'button', name: 'Save as cohort' }, 'submit'); commits('click', { role: 'button', name: 'Download CSV' }, 'submit'); commits('click', { role: 'button', name: 'Create Reports' }, 'submit');
+  commits('click', { role: 'button', name: 'Pay now' }, 'spend'); commits('click', { role: 'button', name: 'Boost post' }, 'spend');
+  commits('click', { role: 'button', name: 'Delete dashboard' }, 'destroy'); commits('click', { role: 'button', name: 'Close account' }, 'destroy'); commits('click', { role: 'button', name: 'Cancel subscription' }, 'destroy'); commits('click', { role: 'link', name: 'Sign out', href: '/logout' }, 'destroy');
+  commits('click', { role: 'button', name: 'Send' }, 'message');
+  commits('click', { role: 'button', name: 'Continue', submit: true, inForm: true }, 'submit');
+  assert.equal(commitClass('Reply'), 'publish'); assert.equal(commitClass('Buy now'), 'spend'); assert.equal(commitClass('Save'), 'submit');
+  // never through a click: credential forms (aside_sign_in), file inputs and mailto (aside_do), disabled controls
+  no('click', { role: 'button', name: 'Continue', submit: true, inForm: true, formHasCredential: true }, /aside_sign_in/); no('click', { role: 'file', name: 'Upload', inputType: 'file' }, /aside_do/);
+  no('click', { role: 'link', name: 'Email us', href: 'mailto:x@y' }, /aside_do/); no('click', { role: 'button', name: 'Apply', disabled: true }, /disabled/);
+  // typing: text fields yes; credentials never; Enter on a committing form is classified
+  view('type', { role: 'searchbox', name: 'Search events' }); view('type', { role: 'textbox', name: 'Filter' }); view('type', { role: 'combobox', name: 'Event' });
   no('type', { role: 'textbox', name: 'Password', credential: true }, /credential/); no('type', { role: 'textbox', name: 'Card number', credential: true }); no('type', { role: 'button', name: 'x' }, /not a text field/);
-  ok('enter', { role: 'searchbox', name: 'Search', inForm: true, formSubmitName: 'Search' }); no('enter', { role: 'textbox', name: 'Email', inForm: true, formHasCredential: true }); no('enter', { role: 'textbox', name: 'Message', inForm: true, formSubmitName: 'Send' }, /Send/);
-  ok('select', { role: 'combobox', name: 'Interval', tag: 'select' }); no('select', { role: 'combobox', name: 'Interval', tag: 'div' }, /click the option/);
+  view('enter', { role: 'searchbox', name: 'Search', inForm: true, formSubmitName: 'Search' }); no('enter', { role: 'textbox', name: 'Email', inForm: true, formHasCredential: true }, /aside_sign_in/);
+  commits('enter', { role: 'textbox', name: 'Message', inForm: true, formSubmitName: 'Send' }, 'message');
+  view('select', { role: 'combobox', name: 'Interval', tag: 'select' }); no('select', { role: 'combobox', name: 'Interval', tag: 'div' }, /click the option/);
 });

@@ -24,6 +24,7 @@ import { thinkerTelemetry } from './thinker-bridge.js';
 import { registerMobileCompanionRoutes } from './mobile-companion.js';
 import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
+import { createActuator } from './reasoning/actuator.js';
 import { createGateway } from './gateway.js';
 import { aside as asideBrowser } from './aside.js';
 
@@ -59,6 +60,10 @@ const agents = createAgents({ pool, gateway, queue: ponderQueue, risk: riskJourn
 const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
+// The actuator: every committing step an agent takes on the world is decided here, under the person's charter.
+const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue });
+actuator.init().catch(e => console.error('[actuator] init:', e.message));
+ocaRouter.use(actuator.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
 ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }));
 registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
