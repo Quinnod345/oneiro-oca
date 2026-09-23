@@ -5,7 +5,7 @@
 // self-wants are quiet or it keeps failing. It may not touch its constitution.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, writeFile, readFile, rm, stat, symlink } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rm, stat, symlink, realpath } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -312,6 +312,13 @@ export function createSelfBuild({ pool, queue: queueDep, worth = null, risk = nu
       await mkdir(dirname(dir), { recursive: true, mode: 0o700 });
       await rm(dir, { recursive: true, force: true });
       await git(['worktree', 'prune']);
+      // An earlier attempt's worktree can still hold the branch (a restart mid-build skips the cleanup), and then
+      // the branch cannot be deleted or recreated: every retry of that want fails. Those worktrees are the
+      // engine's own, under its work root; they go.
+      const held = await git(['worktree', 'list', '--porcelain']).then(r => String(r.stdout).split('\n\n')
+        .map(b => ({ dir: (b.match(/^worktree (.+)$/m) || [])[1], branch: (b.match(/^branch refs\/heads\/(.+)$/m) || [])[1] }))).catch(() => []);
+      const root = await realpath(workRoot).catch(() => workRoot);   // git names worktrees by their real path
+      for (const w of held) if (w.branch === branch && w.dir && (w.dir.startsWith(root + '/') || w.dir.startsWith(workRoot + '/'))) await git(['worktree', 'remove', '--force', w.dir]).catch(() => {});
       await git(['branch', '-D', branch]).catch(() => {});
       await git(['worktree', 'add', '-b', branch, dir, 'HEAD']);
       // A worktree carries the tree, not the dependencies: share the checkout's node_modules by symlink.

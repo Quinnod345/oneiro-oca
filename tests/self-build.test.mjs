@@ -170,6 +170,8 @@ test('a build: worktree on a branch, coder edits, constitution refused, tests mu
     await worth.record({ id: 'quinn-says-try-again', entityKey: 'self:act_reversible', kind: 'rated', rating: 1, by: 'quinn' });
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{want,strategy}', '0') WHERE id = $1`, [chain.chain_id]);
 
+    // an earlier attempt that died mid-build left its worktree holding the branch: the next attempt clears it, it does not fail on it
+    await fx.g(['worktree', 'add', '-b', `self/${chain.chain_id}-make-greet-shout`, join(fx.work, String(chain.chain_id), '99'), 'HEAD']);
     // 3b. a correct edit with a new test → committed on a branch, pushed, evidence on the want
     plan = { summary: 'greet in uppercase and cover it', edits: [
       { path: 'greet.js', find: "return 'hello ' + n;", replace: "return ('hello ' + n).toUpperCase();" },
