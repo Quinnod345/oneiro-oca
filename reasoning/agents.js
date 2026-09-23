@@ -34,6 +34,8 @@ export function parseReport(reply) {
   const out = { status: r.status, summary: text(r.summary, 2000) };
   if (r.status === 'needs_person') out.question = text(r.question, 800) || text(r.summary, 800);
   if (typeof r.nextStep === 'string') out.nextStep = text(r.nextStep, 600);
+  // When the next step belongs to a future moment (a launch date, the end of a month), the agent says when.
+  if (typeof r.resumeAt === 'string' && Number.isFinite(Date.parse(r.resumeAt))) out.resumeAt = new Date(Date.parse(r.resumeAt)).toISOString();
   if (Array.isArray(r.remaining)) out.remaining = r.remaining.slice(0, 5).map(x => text(x, 300)).filter(Boolean);
   if (Array.isArray(r.evidence)) out.evidence = r.evidence.slice(0, 12).filter(e => e && typeof e === 'object').map(e => ({ source: text(e.source, 500), quote: typeof e.quote === 'string' ? e.quote.replace(/\s+/g, ' ').trim().slice(0, 600) : '', observation: text(e.observation, 800) })).filter(e => e.source && e.observation);
   if (Array.isArray(r.files_changed)) out.files_changed = r.files_changed.slice(0, 40).map(x => text(x, 200));
@@ -46,10 +48,11 @@ export function parseReport(reply) {
 const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 {"status":"working","summary":"what you did and what is next"}  — you made progress and want to keep going (the thinker sends you on)
 {"status":"needs_person","question":"the one thing only the person can answer or do","summary":"why"}  — ask in plain words above the block too
-{"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"]}
+{"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00"}
 {"status":"failed","summary":"why"}
 Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
-If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.`;
+If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.
+If the next step cannot happen before a certain time (a planned launch date, results that only exist after a period ends), set resumeAt to that time and nextStep to exactly what to do then: the engine sends no one until then, and at that time deploys an agent to do nextStep. Do not research what cannot exist yet.`;
 
 // The first message of a deployment: the pursuit, the task, what is known and missing, the rules.
 export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [], missing = [], remaining = [], cwd = null, engine = 'http://localhost:3333' }) {
@@ -159,9 +162,12 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
       .filter(m => { const k = norm(m.text); if (seen.has(k)) return false; seen.add(k); return true; });
     return said.map(m => ({ id: `person-${d.session_key.slice(-8)}-${m.at || clock()}`, source: `stated by Quinn in the agent session "${d.display_name}"`, observation: text(String(m.text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 1000) }));
   }
-  async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null }) {
+  async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null, resumeAt = undefined }) {
+    const at = resumeAt ? Date.parse(resumeAt) : null;
+    const resume = at && at > clock() + 60 * 60_000 ? { resumeAt: new Date(at).toISOString(), resumeTask: nextStep } : resumeAt === undefined ? {} : { resumeAt: null, resumeTask: null };
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
-      [chainId, JSON.stringify({ lastSliceEndedAt: clock(), found, remaining, nextStep, error, ...(found ? { dry: 0 } : {}) })]).catch(() => {});
+      [chainId, JSON.stringify({ lastSliceEndedAt: clock(), found, remaining, nextStep, error, ...resume, ...(found ? { dry: 0 } : {}) })]).catch(() => {});
+    if (resume.resumeAt) log.log?.(`[agents] #${chainId} parked until ${resume.resumeAt}: ${text(nextStep, 140)}`);
     if (!found) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity,dry}', to_jsonb(COALESCE((ponder_state #>> '{continuity,dry}')::int, 0) + 1)) WHERE id = $1`, [chainId]).catch(() => {});
   }
   const observe = (d, result, observation) => risk ? risk.observe(`agent:${d.id}`, { result, evidence: [{ id: `agent-${d.id.slice(0, 8)}-${result}`, source: 'agent runtime: gateway session and verification', observation }] }).catch(e => log.warn?.('[agents] outcome not journaled:', e.message)) : Promise.resolve();
@@ -176,7 +182,7 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
     }
     const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError };
     await pool.query(`UPDATE agent_deployments SET status = 'done', report = $2::jsonb, ended_at = now(), updated_at = now(), question = NULL WHERE id = $1`, [d.id, JSON.stringify(final)]);
-    await noteContinuity(d.chain_id, { found: applied, remaining: report.remaining || [], nextStep: report.nextStep || null });
+    await noteContinuity(d.chain_id, { found: applied || !!report.resumeAt, remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null });
     await observe(d, applied ? 'success' : 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) finished after ${d.turns} turns: ${verified.length} verified sources of ${(report.evidence || []).length} claimed, ${stated.length} statements by the person; evidence applied: ${applied}${applyError ? '; ' + applyError : ''}.`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
     return final;
@@ -332,7 +338,14 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
   // The floor is deterministic: a continuous want with no live agent gets a research agent on the
   // continuity cadence. Above the floor, when slots are free and a want has several open threads, the
   // thinker splits them into parallel research tasks. Builders are deployed by self-build; talkers on demand.
-  const dueIn = (state, now) => { const c = state.continuity || {}, dry = Math.min(4, Number(c.dry) || 0); return Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0) + continuityIntervalMs * 2 ** dry - now; };
+  const dueIn = (state, now) => {
+    const c = state.continuity || {};
+    const resume = c.resumeAt ? Date.parse(c.resumeAt) : null;
+    if (resume && resume > now && Number(c.lastSliceStartedAt || 0) < resume) return resume - now;   // parked until a moment
+    if (resume && resume <= now && Number(c.lastSliceStartedAt || 0) < resume) return 0;            // that moment has come
+    const dry = Math.min(4, Number(c.dry) || 0);
+    return Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0) + continuityIntervalMs * 2 ** dry - now;
+  };
   async function plan({ perTick = 2 } = {}) {
     if (!(await gateway.available()) || clock() < providerBackoffUntil) return { started: [] };
     const paused = await controls?.get?.().then(c => c.queuePaused === true).catch(() => false); if (paused) return { started: [] };
@@ -348,8 +361,11 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
       if ((await free()) <= 0) break;
       const missing = row.state.result?.missingEvidence || [], remaining = row.state.continuity?.remaining || [];
       const threads = [...new Set([...missing, ...remaining].map(x => text(x, 300)).filter(Boolean))];
+      const c = row.state.continuity || {};
+      const resuming = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
       let tasks = [`Keep this pursuit moving; the person wants an agent always working on it. Find what is still missing; if it truly is not obtainable, do the most useful concrete work toward the done-when and state precisely what only the person can provide.`];
-      if (threads.length >= 2 && (await free()) >= 2 && llm) tasks = await split(row, threads, Math.min(3, await free())).catch(e => { log.warn?.('[agents] plan:', e.message); return tasks; });
+      if (resuming && c.resumeTask) tasks = [`It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`];
+      else if (threads.length >= 2 && (await free()) >= 2 && llm) tasks = await split(row, threads, Math.min(3, await free())).catch(e => { log.warn?.('[agents] plan:', e.message); return tasks; });
       let deployed = 0;
       for (const task of tasks) {
         try { const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine' }); if (d.id) { started.push(d.id); deployed++; } } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
