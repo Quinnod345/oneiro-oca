@@ -162,12 +162,23 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
       .filter(m => { const k = norm(m.text); if (seen.has(k)) return false; seen.add(k); return true; });
     return said.map(m => ({ id: `person-${d.session_key.slice(-8)}-${m.at || clock()}`, source: `stated by Quinn in the agent session "${d.display_name}"`, observation: text(String(m.text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 1000) }));
   }
+  // Dated steps form a schedule: a report adds its step, it never erases another's (a November review must
+  // not swallow an October launch). The earliest future step is what the pursuit waits for.
   async function noteContinuity(chainId, { found, remaining = [], nextStep = null, error = null, resumeAt = undefined }) {
     const at = resumeAt ? Date.parse(resumeAt) : null;
-    const resume = at && at > clock() + 60 * 60_000 ? { resumeAt: new Date(at).toISOString(), resumeTask: nextStep } : resumeAt === undefined ? {} : { resumeAt: null, resumeTask: null };
+    let schedule = null;
+    if (at && at > clock() + 60 * 60_000 && nextStep) {
+      const { rows: [r] } = await pool.query(`SELECT ponder_state -> 'continuity' -> 'schedule' AS s FROM thought_chains WHERE id = $1`, [chainId]).catch(() => ({ rows: [] }));
+      const prior = Array.isArray(r?.s) ? r.s : [];
+      const iso = new Date(at).toISOString();
+      schedule = [...prior.filter(x => Date.parse(x.at) > clock() && !(x.at === iso && x.task === nextStep)), { at: iso, task: text(nextStep, 1500), addedAt: new Date(clock()).toISOString() }]
+        .sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).slice(0, 12);
+    }
+    const next = schedule?.[0];
+    const resume = schedule ? { schedule, resumeAt: next.at, resumeTask: next.task } : {};
     await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
       [chainId, JSON.stringify({ lastSliceEndedAt: clock(), found, remaining, nextStep, error, ...resume, ...(found ? { dry: 0 } : {}) })]).catch(() => {});
-    if (resume.resumeAt) log.log?.(`[agents] #${chainId} parked until ${resume.resumeAt}: ${text(nextStep, 140)}`);
+    if (schedule) log.log?.(`[agents] #${chainId} scheduled ${new Date(at).toISOString()}: ${text(nextStep, 120)}; next due ${next.at}`);
     if (!found) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity,dry}', to_jsonb(COALESCE((ponder_state #>> '{continuity,dry}')::int, 0) + 1)) WHERE id = $1`, [chainId]).catch(() => {});
   }
   const observe = (d, result, observation) => risk ? risk.observe(`agent:${d.id}`, { result, evidence: [{ id: `agent-${d.id.slice(0, 8)}-${result}`, source: 'agent runtime: gateway session and verification', observation }] }).catch(e => log.warn?.('[agents] outcome not journaled:', e.message)) : Promise.resolve();
@@ -364,7 +375,12 @@ export function createAgents({ pool, gateway, queue, risk = null, asks = null, a
       const c = row.state.continuity || {};
       const resuming = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
       let tasks = [`Keep this pursuit moving; the person wants an agent always working on it. Find what is still missing; if it truly is not obtainable, do the most useful concrete work toward the done-when and state precisely what only the person can provide.`];
-      if (resuming && c.resumeTask) tasks = [`It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`];
+      if (resuming && c.resumeTask) {
+        tasks = [`It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`];
+        const rest = (Array.isArray(c.schedule) ? c.schedule : []).filter(x => Date.parse(x.at) > now);
+        await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
+          [row.id, JSON.stringify({ schedule: rest, resumeAt: rest[0]?.at || null, resumeTask: rest[0]?.task || null, firedStep: { at: c.resumeAt, task: c.resumeTask, firedAt: new Date(now).toISOString() } })]).catch(() => {});
+      }
       else if (threads.length >= 2 && (await free()) >= 2 && llm) tasks = await split(row, threads, Math.min(3, await free())).catch(e => { log.warn?.('[agents] plan:', e.message); return tasks; });
       let deployed = 0;
       for (const task of tasks) {
