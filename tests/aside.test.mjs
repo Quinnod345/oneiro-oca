@@ -119,3 +119,34 @@ test('the tool boundary: looking is free; a committing control is classified for
   commits('enter', { role: 'textbox', name: 'Message', inForm: true, formSubmitName: 'Send' }, 'message');
   view('select', { role: 'combobox', name: 'Interval', tag: 'select' }); no('select', { role: 'combobox', name: 'Interval', tag: 'div' }, /click the option/);
 });
+
+test('a retry refusal stops Aside delegation, forwards recovery evidence, and leaves discovery ungated', async () => {
+  const { createServer } = await import('node:http');
+  const { spawn } = await import('node:child_process');
+  const requests = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    requests.push({ path: req.url, body: JSON.parse(body) });
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ decision: 'refuse', why: 'Retry suppressed after stored mobile-only failure; read-only discovery remains allowed.' }));
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  try {
+    const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env,
+      OCA_ENGINE_URL: `http://127.0.0.1:${server.address().port}`, OCA_ASIDE_CLI: '/nowhere/aside' } });
+    let out = ''; child.stdout.on('data', d => { out += d; });
+    const retryEvidence = { source: 'https://www.instagram.com/getinnerecho/', quote: 'The profile editor is available through a supported mobile route.' };
+    for (const [id, name, args] of [
+      [1, 'aside_do', { pursuit: 27, class: 'submit', task: 'Update the @getinnerecho profile website link.', url: retryEvidence.source, retryEvidence }],
+      [2, 'aside_read', { url: retryEvidence.source }],
+    ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+    child.stdin.end(); await new Promise(r => child.on('close', r));
+    const messages = out.trim().split('\n').map(l => JSON.parse(l));
+    const commit = JSON.parse(messages.find(m => m.id === 1).result.content[0].text);
+    assert.equal(commit.refused, true); assert.match(commit.why, /mobile-only/);
+    assert.equal(requests.length, 1, 'no actuator call for read-only discovery and no outcome from a refused delegation');
+    assert.equal(requests[0].path, '/oca/act/authorize');
+    assert.deepEqual(requests[0].body.retryEvidence, retryEvidence);
+    assert.match(messages.find(m => m.id === 2).result.content[0].text, /no other browser/, 'read reached the browser adapter independently of retry suppression');
+  } finally { await new Promise(r => server.close(r)); }
+});

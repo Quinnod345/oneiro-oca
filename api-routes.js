@@ -62,7 +62,7 @@ const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAg
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
 // The actuator: every committing step an agent takes on the world is decided here, under the person's charter.
-const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue });
+const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue, llm, aside: asideBrowser });
 actuator.init().catch(e => console.error('[actuator] init:', e.message));
 ocaRouter.use(actuator.router);
 // The board: the orchestrator's account of each pursuit — workstreams it named, milestones, what it set up —

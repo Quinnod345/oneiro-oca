@@ -317,10 +317,16 @@ test('the only time the engine sits is when it thinks over itself: idle capacity
   await agents.init(); assert.equal((await pool.query(`SELECT count(*)::int AS n FROM thought_chains WHERE ponder_state ->> 'standing' = 'self'`)).rows[0].n, 1, 'one standing self pursuit');
   // a failure for it to notice
   await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, status, error, created_at) VALUES (gen_random_uuid(), 27, 'research', 't', 'b', 'k1', 'main', 'failed', 'turn budget of 12 spent without a result', now())`);
+  const storedFailure = JSON.parse(await readFile(new URL('./fixtures/instagram-retry-actions.json', import.meta.url), 'utf8'))[1];
+  await pool.query(`INSERT INTO agent_actions (id, chain_id, class, host, url, description, decision, why, outcome, observation)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [storedFailure.id, self, storedFailure.class, storedFailure.host, storedFailure.url,
+    storedFailure.description, storedFailure.decision, storedFailure.why, storedFailure.outcome, storedFailure.observation]);
   // nothing else is due: the idle slot goes to the self pursuit, and the strategist sees the engine's own record
   const p = await agents.plan();
   assert.equal(p.started.length, 1); assert.equal((await agents.get(p.started[0])).chainId, self);
   assert.match(prompt, /turn budget of 12 spent/); assert.match(prompt, /self-build\/want/);
+  assert.ok(prompt.split(storedFailure.id).length >= 3, 'both strategist actions and self-signals carry the source failure ID');
+  assert.ok(prompt.includes(storedFailure.url)); assert.match(prompt, /mobile app/);
   assert.match((await queue.get(self)).continuity.lastThought, /mine to fix/);
   assert.deepEqual((await agents.plan()).started, [], 'one at a time, and not again inside the gap');
 }));
