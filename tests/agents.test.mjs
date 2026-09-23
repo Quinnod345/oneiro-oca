@@ -138,7 +138,7 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => msg.startsWith('[thinker] You are deployed') && /Your role: talker/.test(msg) ? 'Here for you.' : `w${block({ status: 'working', summary: 'w' })}` });
   const split = { called: 0 };
-  const llm = { messages: { create: async () => { split.called++; return { content: [{ type: 'text', text: '{"tasks":["Find the US price on the App Store listing and quote it","Find the cost per subscriber from the hosting invoices"]}' }] }; } } };
+  const llm = { messages: { create: async () => { split.called++; return { content: [{ type: 'text', text: '{"thought":"Pricing is the lever right now.","moves":[{"task":"Find the US price on the App Store listing and quote it","why":"anchor"},{"task":"Find the cost per subscriber from the hosting invoices","why":"margin"}]}' }] }; } } };
   const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
@@ -147,7 +147,8 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = jsonb_set(ponder_state, '{result}', '{"missingEvidence":["August pricing","Cost per subscriber"]}'::jsonb) WHERE id = $1`, [chain.chain_id]);
   // due now: the thinker splits two open threads across two agents (slots allow), not one
   const p = await agents.plan();
-  assert.equal(p.started.length, 2, 'two parallel research agents'); assert.equal(split.called, 1);
+  assert.equal(p.started.length, 2, 'the strategist chose two moves'); assert.equal(split.called, 1);
+  assert.equal((await queue.get(chain.chain_id)).continuity.lastThought, 'Pricing is the lever right now.', 'its thought is kept on the pursuit');
   assert.equal(await agents.liveCount(chain.chain_id), 2);
   assert.deepEqual((await agents.plan()).started, [], 'nothing more while agents are live');
   // the talker: standing, one per want; the person's words there become evidence on the want
@@ -242,7 +243,7 @@ test('a run lost to a gateway restart is recovered from the transcript: the agen
   await agents.poll(); assert.equal((await agents.get(d.id)).status, 'done', 'the transcript reply became the turn');
 }));
 
-test('a pursuit waiting on a future moment is parked: no agents until then, and at that moment an agent does the planned step', async () => database(async pool => {
+test('a dated step does not put the pursuit to sleep: work goes on between, and at that moment an agent does the planned step', async () => database(async pool => {
   let now = Date.parse('2026-09-23T17:00:00Z');
   const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
   const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
@@ -260,7 +261,8 @@ test('a pursuit waiting on a future moment is parked: no agents until then, and 
   const want = await queue.get(chain.chain_id);
   assert.equal(want.continuity.resumeAt, '2026-10-01T13:00:00.000Z'); assert.match(want.continuity.resumeTask, /Publish the Day 1/);
   now += 3 * 86400000;
-  assert.deepEqual((await agents.plan()).started, [], 'parked: nobody is sent before October 1');
+  assert.equal((await agents.plan()).started.length, 1, 'not parked: the pursuit keeps being worked before October 1');
+  await agents.poll();
   now = Date.parse('2026-10-01T13:00:30Z');
   const p = await agents.plan(); assert.equal(p.started.length, 1, 'the moment came');
   assert.match(briefs.at(-1), /the time the pursuit was parked for\. Do the planned step: Publish the Day 1 X post and the Instagram carousel/);
@@ -288,5 +290,31 @@ test('dated steps form a schedule: a later report adds its step and never swallo
   assert.equal((await agents.plan()).started.length, 1);
   c = (await queue.get(chain.chain_id)).continuity;
   assert.equal(c.resumeTask, 'Review October results', 'the next dated step is now the park point'); assert.equal(c.firedStep.task, 'Publish Day 1');
+}));
+
+test('the only time the engine sits is when it thinks over itself: idle capacity goes to the standing self pursuit, which sees the engine\'s own failures', async () => database(async pool => {
+  let now = Date.parse('2026-09-23T18:00:00Z');
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  await pool.query(`CREATE TABLE IF NOT EXISTS self_build_events (id SERIAL PRIMARY KEY, kind TEXT, chain_id INT, payload JSONB, created_at TIMESTAMPTZ DEFAULT now())`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, message TEXT, category TEXT, priority TEXT, read BOOLEAN DEFAULT false, reply TEXT, replied_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now(), metadata JSONB DEFAULT '{}'::jsonb)`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS agent_actions (id UUID PRIMARY KEY, chain_id INT, class TEXT, host TEXT, url TEXT, control TEXT, description TEXT, cost NUMERIC, decision TEXT, why TEXT, ask_id INT, approved_by_ask INT, outcome TEXT, observation TEXT, created_at TIMESTAMPTZ DEFAULT now(), observed_at TIMESTAMPTZ)`);
+  let prompt = '';
+  const llm = { messages: { create: async ({ messages }) => { prompt = messages[0].content; return { content: [{ type: 'text', text: '{"thought":"Three agents failed the same way yesterday; that is mine to fix.","moves":[{"task":"Review yesterday\'s failed runs and file one self-want per defect","why":"repeated failure"}]}' }] }; } } };
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `ok${block({ status: 'working', summary: 'reviewing' })}` });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, ensureSelf: true, selfGapMs: 60_000 });
+  await agents.init();
+  const self = (await pool.query(`SELECT id FROM thought_chains WHERE ponder_state ->> 'standing' = 'self'`)).rows[0].id;
+  await agents.init(); assert.equal((await pool.query(`SELECT count(*)::int AS n FROM thought_chains WHERE ponder_state ->> 'standing' = 'self'`)).rows[0].n, 1, 'one standing self pursuit');
+  // a failure for it to notice
+  await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, status, error, created_at) VALUES (gen_random_uuid(), 27, 'research', 't', 'b', 'k1', 'main', 'failed', 'turn budget of 12 spent without a result', now())`);
+  // nothing else is due: the idle slot goes to the self pursuit, and the strategist sees the engine's own record
+  const p = await agents.plan();
+  assert.equal(p.started.length, 1); assert.equal((await agents.get(p.started[0])).chainId, self);
+  assert.match(prompt, /turn budget of 12 spent/); assert.match(prompt, /self-build\/want/);
+  assert.match((await queue.get(self)).continuity.lastThought, /mine to fix/);
+  assert.deepEqual((await agents.plan()).started, [], 'one at a time, and not again inside the gap');
 }));
 
