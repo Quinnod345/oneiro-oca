@@ -44,7 +44,7 @@ What became of the branch is observed, never assumed. Each tick the engine check
 
 ## Measured
 
-`npm run benchmark` runs the isolated mechanism suite (every behavioral contract as a test) and the Chinese Room Meter, and writes [`evaluation/results/latest.json`](evaluation/results/latest.json). Each dimension is measured against a stated baseline with its n, or says what evidence it still needs. The composite stays null until every dimension is measured.
+`npm run benchmark` runs the isolated mechanism suite (every behavioral contract as a test) and the Chinese Room Meter, and writes [`evaluation/results/latest.json`](evaluation/results/latest.json). Each dimension is measured against a stated baseline with its n, or says what evidence it still needs. The composite stays null until every dimension is measured. It also measures the orchestrator's work week over week from the runtime journals (`evaluation/operations.js`, `GET /oca/operations`): runs that went wrong, runs that produced something the engine confirmed, stops by the model provider counted apart, its own fixes and whether they held, and the person's verdicts. These are measurements, never rewards. The one place they act is the standing pursuit about itself, whose done-when is exactly this comparison: at each week's end the measured result is recorded on it as a receipt, capped so that pursuit never closes.
 
 <!-- measured:start (written by npm run benchmark; do not edit by hand) -->
 
