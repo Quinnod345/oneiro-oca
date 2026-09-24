@@ -69,7 +69,7 @@ export function parseBoard(raw, { runIds = [], now = Date.now() } = {}) {
   return { headline: text(j.headline, 48) || null, progress: text(j.progress, 300) || null, streams, labels, made, milestones, updatedAt: new Date(now).toISOString() };
 }
 
-export function createBoard({ pool, llm = null, asks = null, agents = null, controls = null, gateway = null, clock = Date.now, log = console,
+export function createBoard({ pool, llm = null, asks = null, agents = null, controls = null, gateway = null, operations = null, clock = Date.now, log = console,
   reviewEveryMs = 20 * 60_000, tickMs = 5 * 60_000 } = {}) {
   const reviewing = new Set();
 
@@ -245,6 +245,8 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
         lastMerge: lastMerge ? { chainId: lastMerge.chain_id, branch: lastMerge.payload?.branch || null, at: iso(lastMerge.created_at) } : null,
         asks: openAsks.length,
       },
+      // Week over week, from the journals: the same numbers the benchmark writes into the README.
+      operations: operations ? await operations.measure().catch(() => null) : null,
       pursuits: rows.map(row => summaryOf(row, byChain.get(row.id) || [], openAsks, selfId, merged)),
     };
   }

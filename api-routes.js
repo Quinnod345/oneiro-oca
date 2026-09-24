@@ -26,6 +26,7 @@ import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
 import { createActuator } from './reasoning/actuator.js';
 import { createBoard } from './reasoning/board.js';
+import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
 import { aside as asideBrowser } from './aside.js';
 
@@ -67,7 +68,14 @@ actuator.init().catch(e => console.error('[actuator] init:', e.message));
 ocaRouter.use(actuator.router);
 // The board: the orchestrator's account of each pursuit — workstreams it named, milestones, what it set up —
 // kept by a model that reads the pursuit's history; the map in the app reads it at /oca/orchestra.
-const board = createBoard({ pool, llm, asks, agents, controls: userControls, gateway });
+// Operations: the orchestrator's work measured week over week from its journals (runs that went wrong, runs
+// that produced something the engine confirmed, fixes that held, the person's verdicts). At each week's end the
+// result goes on the standing self pursuit as a receipt — its done-when is exactly that comparison.
+const operations = createOperations({ pool, queue: ponderQueue });
+agentsReady.then(() => operations.start()).catch(e => console.error('[operations] start:', e.message));
+ocaRouter.use(operations.router);
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => operations.stop());
+const board = createBoard({ pool, llm, asks, agents, controls: userControls, gateway, operations });
 agentsReady.then(() => board.init()).then(() => board.start()).catch(e => console.error('[board] init:', e.message));
 ocaRouter.use(board.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => board.stop());

@@ -4,6 +4,7 @@
 export const START = '<!-- measured:start (written by npm run benchmark; do not edit by hand) -->';
 export const END = '<!-- measured:end -->';
 
+const MIN = 10;   // evaluation/operations.js MIN_RUNS
 const fmt = v => (v == null || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(3));
 const words = s => String(s || '').replace(/_/g, ' ');
 
@@ -25,6 +26,22 @@ export function renderMeasured(report) {
     if (p && Number.isFinite(p.brier) && Number.isFinite(p.base_rate_brier)) {
       lines.push(`Prediction: Brier ${p.brier.toFixed(3)} against ${p.base_rate_brier.toFixed(3)} for always guessing each metric's base rate, over ${p.n} predictions (skill ${fmt(p.skill)}).`);
     }
+  }
+  const o = report?.operations;
+  if (o && !o.error && o.thisWeek) {
+    const pct = r => (r == null ? '—' : `${Math.round(r * 100)}%`);
+    const row = (label, a, b) => `| ${label} | ${a} | ${b} |`;
+    const t = o.thisWeek, l = o.lastWeek;
+    lines.push('', '**Operations**, the orchestrator\'s work over the last 7 days against the 7 before, from the runtime journals:', '',
+      '| | last 7 days | the 7 before |', '|---|---|---|',
+      row('agent runs the engine answers for', t.counted, l.counted),
+      row('went wrong (failed, or repeated a recent failure)', `${t.wentWrong} (${pct(t.rates.wentWrong)})`, `${l.wentWrong} (${pct(l.rates.wentWrong)})`),
+      row('stalled (turn budget or timeout)', t.stalled, l.stalled),
+      row('productive (something the engine confirmed)', `${t.productive} (${pct(t.rates.productive)})`, `${l.productive} (${pct(l.rates.productive)})`),
+      row('stopped by the model provider (not counted)', t.providerStopped, l.providerStopped),
+      row('its own fixes merged', o.fixes.merged, o.fixesBefore?.merged ?? '—'),
+      row('verdicts from the person (useful or better)', `${o.verdicts.rated} (${o.verdicts.useful})`, `${o.verdictsBefore?.rated ?? '—'} (${o.verdictsBefore?.useful ?? '—'})`),
+      '', `Fixes merged at least a day ago: ${o.fixes.holding} of ${o.fixes.matured} holding, ${o.fixes.recurred} recurred. Rates need ${MIN} runs in a week to be compared. Self-improvement criterion: ${o.selfCriterion.why}.`);
   }
   lines.push('', END);
   return lines.join('\n');
