@@ -3,9 +3,11 @@
 //   1. the mechanism suite: every behavioral contract as an isolated test (worth, hunger, risk, affect, strategies);
 //   2. the scorecard: each Chinese Room Meter dimension measured from the journals against its stated baseline,
 //      or the exact evidence it still needs.
-// Usage: node scripts/benchmark.mjs [--no-tests] [--json out.json]
+// Usage: node scripts/benchmark.mjs [--no-tests] [--json out.json] [--no-readme]
+// A run to the default path also rewrites README.md's Measured block (evaluation/readme-table.js), so the README
+// always shows the last run and its date rather than numbers someone once typed in.
 import { spawn } from 'node:child_process';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +15,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const noTests = args.includes('--no-tests');
 const jsonOut = args.includes('--json') ? args[args.indexOf('--json') + 1] : join(root, 'evaluation', 'results', 'latest.json');
+// Only the canonical run speaks for the README: a run to a custom path is someone's experiment.
+const writeReadme = !args.includes('--no-readme') && !args.includes('--json');
 
 async function runTests() {
   return new Promise(resolve => {
@@ -42,6 +46,14 @@ const card = await scorecard();
 const report = { benchmark_version: 1, ran_at: new Date().toISOString(), node: process.version, mechanism: tests, scorecard: card, duration_ms: Date.now() - started };
 await mkdir(dirname(jsonOut), { recursive: true });
 await writeFile(jsonOut, JSON.stringify(report, null, 2) + '\n');
+let readmeNote = '';
+if (writeReadme) {
+  const { renderMeasured, updateReadme } = await import(join(root, 'evaluation', 'readme-table.js'));
+  const path = join(root, 'README.md');
+  const r = updateReadme(await readFile(path, 'utf8'), renderMeasured(report));
+  if (r.replaced) { await writeFile(path, r.text); readmeNote = 'README.md Measured block updated'; }
+  else readmeNote = 'README.md has no measured markers; left unchanged';
+}
 
 const pad = (s, n) => String(s).padEnd(n);
 console.log(`OCA benchmark — ${report.ran_at}`);
@@ -55,4 +67,5 @@ else {
   console.log(`  ${card.interpretation}`);
 }
 console.log(`written: ${jsonOut}`);
+if (readmeNote) console.log(readmeNote);
 process.exit(tests?.fail ? 1 : 0);

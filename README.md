@@ -46,19 +46,28 @@ What became of the branch is observed, never assumed. Each tick the engine check
 
 `npm run benchmark` runs the isolated mechanism suite (every behavioral contract as a test) and the Chinese Room Meter, and writes [`evaluation/results/latest.json`](evaluation/results/latest.json). Each dimension is measured against a stated baseline with its n, or says what evidence it still needs. The composite stays null until every dimension is measured.
 
+<!-- measured:start (written by npm run benchmark; do not edit by hand) -->
+
+**Last run: 2026-09-24.** Mechanism suite: 301/301 passing.
+
 | dimension | score | n | status |
 |---|---|---|---|
-| grounding | 1.000 | 23 | measured |
-| prediction | 0.000 | 4879 | measured |
-| metacognition | — | — | insufficient evidence |
-| emotion | — | — | insufficient evidence |
+| grounding | 0.989 | 271 | measured |
+| prediction | 0.000 | 4958 | measured |
+| transfer | — | — | unmeasured |
 | surprise | — | — | insufficient evidence |
 | creativity | — | — | insufficient evidence |
-| transfer | — | — | unmeasured |
+| metacognition | 0.094 | 379 | measured |
+| emotion | 1.000 | 47 | measured |
 | counterfactual | — | — | unmeasured |
 | causal | — | — | unmeasured |
 
-*As of 2026-09-19.* The prediction score is the honest starting point: across 4,879 ambient predictions made before wants existed, the engine's stated confidence was no better than always guessing each metric's base rate (Brier 0.209 vs 0.194). Want-driven predictions are reported separately and have to beat that.
+Evidence coverage 44%. Composite: none yet — it stays empty until every dimension is measured.
+Prediction: Brier 0.207 against 0.195 for always guessing each metric's base rate, over 4958 predictions (skill 0.000).
+
+<!-- measured:end -->
+
+The block above is written by the benchmark itself, dated, so this README never shows more than the last run did. Prediction is the honest starting point: the engine's stated confidence is scored against always guessing each metric's base rate, and a skill of 0 means no better than that. Want-driven predictions are reported separately and have to beat it.
 
 A blind-judge protocol (`scripts/judge-pack.mjs`, `scripts/judge.mjs`) renders a want's journal into a first-person account with the same local model that also, separately, reasons the want through with no engine; a judge scores both blind on a five-point rubric. Packs contain the person's own want text and are written outside the repository.
 

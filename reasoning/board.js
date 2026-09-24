@@ -218,8 +218,8 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
 
   async function overview() {
     const { rows } = await pool.query(`SELECT id, seed, status, updated_at, ponder_state AS state FROM thought_chains WHERE ponder_state IS NOT NULL
-      AND (ponder_state #>> '{want,status}' = 'active' OR (ponder_state #>> '{want,status}' = 'sated' AND updated_at > now() - interval '7 days'))
-      ORDER BY updated_at DESC LIMIT 40`);
+      AND (ponder_state #>> '{want,status}' = 'active' OR (ponder_state #>> '{want,status}' = 'sated' AND updated_at > $1))
+      ORDER BY updated_at DESC LIMIT 40`, [new Date(clock() - 7 * 86400_000)]);
     const ids = rows.map(r => r.id);
     const { rows: runs } = ids.length ? await pool.query(`SELECT * FROM agent_deployments WHERE chain_id = ANY($1) ORDER BY created_at DESC`, [ids]) : { rows: [] };
     const byChain = new Map(ids.map(id => [id, []])); for (const r of runs) byChain.get(r.chain_id)?.push(r);
@@ -228,8 +228,10 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     const selfId = rows.find(r => r.state?.standing === 'self')?.id || null;
     for (const row of rows) if (!row.state?.continuity?.board && (byChain.get(row.id) || []).some(r => r.kind !== 'talker') && row.state?.want?.status === 'active') soon(row.id);
     const q = (sql, args = []) => pool.query(sql, args).then(r => r.rows).catch(() => []);
-    const [today] = await q(`SELECT count(*)::int AS deployed, sum((status = 'done')::int)::int AS done, sum((status = 'failed')::int)::int AS failed FROM agent_deployments WHERE created_at > now() - interval '24 hours' AND kind <> 'talker'`);
-    const [merges] = await q(`SELECT count(*)::int AS n FROM self_build_events WHERE kind = 'merged' AND created_at > now() - interval '24 hours'`);
+    // "The last day" is the engine's clock, not the database's: one clock for every window the map reports.
+    const dayAgo = new Date(clock() - 86400_000);
+    const [today] = await q(`SELECT count(*)::int AS deployed, sum((status = 'done')::int)::int AS done, sum((status = 'failed')::int)::int AS failed FROM agent_deployments WHERE created_at > $1 AND kind <> 'talker'`, [dayAgo]);
+    const [merges] = await q(`SELECT count(*)::int AS n FROM self_build_events WHERE kind = 'merged' AND created_at > $1`, [dayAgo]);
     const [lastMerge] = await q(`SELECT chain_id, payload, created_at FROM self_build_events WHERE kind = 'merged' ORDER BY created_at DESC LIMIT 1`);
     const c = await controls?.get?.().catch(() => null);
     const live = runs.filter(r => LIVE.includes(r.status));
