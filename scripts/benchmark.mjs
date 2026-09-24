@@ -35,15 +35,19 @@ async function scorecard() {
     const { compute } = await import(join(root, 'evaluation', 'chinese-room-meter.js'));
     const s = await compute();
     const { pool } = await import(join(root, 'event-bus.js'));
+    // The orchestrator's work, week over week, from the same journals (evaluation/operations.js).
+    try { const { createOperations } = await import(join(root, 'evaluation', 'operations.js')); operationsReport = await createOperations({ pool }).measure(); }
+    catch (e) { operationsReport = { error: e.message }; }
     await pool.end().catch(() => {});
     return s;
   } catch (e) { return { error: `scorecard unavailable: ${e.message}`, hint: 'Set DATABASE_URL to a Postgres with the OCA schema (npm run migrate).' }; }
 }
 
+let operationsReport = null;
 const started = Date.now();
 const tests = noTests ? null : await runTests();
 const card = await scorecard();
-const report = { benchmark_version: 1, ran_at: new Date().toISOString(), node: process.version, mechanism: tests, scorecard: card, duration_ms: Date.now() - started };
+const report = { benchmark_version: 1, ran_at: new Date().toISOString(), node: process.version, mechanism: tests, scorecard: card, operations: operationsReport, duration_ms: Date.now() - started };
 await mkdir(dirname(jsonOut), { recursive: true });
 await writeFile(jsonOut, JSON.stringify(report, null, 2) + '\n');
 let readmeNote = '';
@@ -65,6 +69,10 @@ else {
     console.log(`  ${pad(k, 14)} ${pad(v.status, 22)} ${v.score == null ? '  -  ' : v.score.toFixed(3)}  n=${pad(v.n ?? '-', 6)} ${String(v.detail).slice(0, 96)}`);
   }
   console.log(`  ${card.interpretation}`);
+}
+if (operationsReport && !operationsReport.error) {
+  const o = operationsReport, pct = r => (r == null ? '—' : `${Math.round(r * 100)}%`);
+  console.log(`operations: went wrong ${pct(o.thisWeek.rates.wentWrong)} this week vs ${pct(o.lastWeek.rates.wentWrong)} (n=${o.thisWeek.counted}/${o.lastWeek.counted}); productive ${pct(o.thisWeek.rates.productive)}; fixes merged ${o.fixes.merged}, holding ${o.fixes.holding}/${o.fixes.matured}`);
 }
 console.log(`written: ${jsonOut}`);
 if (readmeNote) console.log(readmeNote);

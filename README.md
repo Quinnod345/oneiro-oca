@@ -48,7 +48,7 @@ What became of the branch is observed, never assumed. Each tick the engine check
 
 <!-- measured:start (written by npm run benchmark; do not edit by hand) -->
 
-**Last run: 2026-09-24.** Mechanism suite: 301/301 passing.
+**Last run: 2026-09-24.** Mechanism suite: 304/304 passing.
 
 | dimension | score | n | status |
 |---|---|---|---|
@@ -58,12 +58,26 @@ What became of the branch is observed, never assumed. Each tick the engine check
 | surprise | — | — | insufficient evidence |
 | creativity | — | — | insufficient evidence |
 | metacognition | 0.094 | 379 | measured |
-| emotion | 1.000 | 47 | measured |
+| emotion | 0.191 | 47 | measured |
 | counterfactual | — | — | unmeasured |
 | causal | — | — | unmeasured |
 
 Evidence coverage 44%. Composite: none yet — it stays empty until every dimension is measured.
 Prediction: Brier 0.207 against 0.195 for always guessing each metric's base rate, over 4958 predictions (skill 0.000).
+
+**Operations**, the orchestrator's work over the last 7 days against the 7 before, from the runtime journals:
+
+| | last 7 days | the 7 before |
+|---|---|---|
+| agent runs the engine answers for | 41 | 0 |
+| went wrong (failed, or repeated a recent failure) | 10 (24%) | 0 (—) |
+| stalled (turn budget or timeout) | 3 | 0 |
+| productive (something the engine confirmed) | 26 (63%) | 0 (—) |
+| stopped by the model provider (not counted) | 13 | 0 |
+| its own fixes merged | 7 | 0 |
+| verdicts from the person (useful or better) | 2 (1) | 0 (0) |
+
+Fixes merged at least a day ago: 7 of 7 holding, 0 recurred. Rates need 10 runs in a week to be compared. Self-improvement criterion: 7 of its own fixes merged; run comparison not measurable (41 and 0 runs; needs 10 in each week).
 
 <!-- measured:end -->
 
