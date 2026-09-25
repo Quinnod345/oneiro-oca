@@ -695,3 +695,44 @@ test('an always-worked pursuit whose review is ready is still worked, and what i
   assert.equal(failed.status, 'failed'); assert.match(failed.error, /gateway never answered this run .* no reply after \d+ minutes/);
   assert.equal(await agents.liveCount(), 0, 'its slot is free again');
 }));
+
+test('a move refused as a repeat of retired work is said, not dropped: the strategist sees it next cycle, and the pursuit waits its interval instead of re-thinking every minute', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 3 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const T = 'Reconcile the historical August 2026 API invoices against the subscriber ledger';
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `Stopping.${block({ status: 'failed', summary: 'exhausted: no further research possible on the August invoices' })}` });
+  const prompts = [];
+  const llm = { messages: { create: async ({ system, messages }) => {
+    prompts.push(messages[0].content);
+    return { content: [{ type: 'text', text: JSON.stringify({ thought: 'Costs first.', moves: [{ task: T, why: 'costs', stream: 'Costs' }] }) }] };
+  } } };
+  const lines = [];
+  const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log: m => lines.push(m), warn() {} }, continuityIntervalMs: 20 * 60_000 });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'InnerEcho makes a profit', doneWhen: 'A month nets positive.', continuous: true });
+  // the same task already ran and was retired as exhausted
+  await agents.deploy(chain.chain_id, { kind: 'research', task: T, firedBy: 'engine' });
+  await agents.poll();
+  await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = jsonb_set(ponder_state, '{continuity}', (ponder_state -> 'continuity') || '{"lastSliceStartedAt": 0, "lastSliceEndedAt": 0, "dry": 0}'::jsonb) WHERE id = $1`, [chain.chain_id]);
+  const p = await agents.plan();
+  assert.deepEqual(p.started, [], 'the retired task is not run again');
+  const c = (await queue.get(chain.chain_id)).continuity;
+  assert.equal(c.lastRefused.length, 1); assert.equal(c.lastRefused[0].decision, 'retired'); assert.match(c.lastRefused[0].task, /August 2026 API invoices/);
+  assert.ok(lines.some(l => /move not deployed \(retired\)/.test(l)), 'the refusal is logged');
+  assert.equal(c.lastSliceStartedAt, now, 'the cycle counts as a slice');
+  // a minute later: not due, so no model call spent re-proposing it
+  const calls = prompts.length; now += 60_000;
+  await agents.plan();
+  assert.equal(prompts.length, calls, 'no re-think a minute later');
+  // after the interval the strategist thinks again, and is told what was refused
+  now += 21 * 60_000;
+  await agents.plan();
+  assert.ok(prompts.length > calls);
+  const strategist = prompts.filter(x => x.startsWith('Now: '));
+  assert.match(strategist.at(-1), /Moves refused last cycle, before they started[\s\S]*August 2026 API invoices/);
+  assert.equal(prompts.length - strategist.length, 0, 'a move identical to retired work is refused without a model call, even with its "Why now"');
+}));

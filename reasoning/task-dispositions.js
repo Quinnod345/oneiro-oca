@@ -34,7 +34,9 @@ export function dispositionStatus(report = {}, error = '') {
 // Keep the full objective and explicit period, not a title hash or workstream label. Different
 // wording requires semantic comparison; unavailable/malformed comparison cannot permit a run.
 export function semanticScope(task) {
-  const description = String(task || '').trim();
+  // The planner appends "Why now: …" to a move's task; the reason is not the objective. Without this, a move and
+  // its retired twin never match exactly, and every candidate costs a model comparison.
+  const description = String(task || '').replace(/\n\s*Why now:[\s\S]*$/i, '').trim();
   const t = norm(description);
   const months = [...t.matchAll(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/g)].map(m => m[1].slice(0, 3));
   const years = [...t.matchAll(/\b20\d{2}\b/g)].map(m => m[0]);
