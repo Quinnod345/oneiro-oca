@@ -736,3 +736,18 @@ test('a move refused as a repeat of retired work is said, not dropped: the strat
   assert.match(strategist.at(-1), /Moves refused last cycle, before they started[\s\S]*August 2026 API invoices/);
   assert.equal(prompts.length - strategist.length, 0, 'a move identical to retired work is refused without a model call, even with its "Why now"');
 }));
+
+test('the planner\'s own "keep this pursuit moving" prompt is never a retired scope, so one stalled cadence run cannot veto every later move', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const cadence = 'Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now.';
+  h.task = cadence;
+  h.report = { status: 'failed', summary: 'turn budget of 12 spent without a result; exhausted' };
+  const first = await h.cycle(); assert.equal(first.started.length, 1);
+  await h.agents.poll();
+  assert.equal((await h.raw(first.started[0])).report?.taskDisposition, undefined, 'no retirement is minted for the cadence prompt');
+  // a record saved before this rule existed is ignored when read
+  await pool.query(`UPDATE agent_deployments SET report = COALESCE(report, '{}'::jsonb) || $2::jsonb WHERE id = $1`, [first.started[0],
+    JSON.stringify({ taskDisposition: { version: 1, status: 'exhausted', scope: { description: cadence.slice(0, 120), period: 'unspecified', months: [], years: [] }, period: 'unspecified', evidenceFacts: [], ownerFacts: [] } })]);
+  const d = await h.deploy('Improve the App Store screenshots and first line of the listing');
+  assert.ok(d.id, 'a concrete move is not vetoed by the cadence prompt'); assert.equal(h.comparisonCalls, 0, 'and costs no comparison');
+}));
