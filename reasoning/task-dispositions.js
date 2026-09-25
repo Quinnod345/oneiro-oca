@@ -45,9 +45,14 @@ export function semanticScope(task) {
   return { description, period, months: [...new Set(months)].sort(), years: [...new Set(years)].sort() };
 }
 
+// The planner's own cadence prompt ("Keep this pursuit moving…") is not a task scope. Its scope is "any useful
+// work on the pursuit", so once retired it matched every later move and vetoed all work on that pursuit (#27 went
+// quiet for days behind one such record). It never becomes, and never counts as, a retired scope.
+export const CADENCE_TASK = /^\s*Keep this pursuit moving\b/i;
+
 export function makeDisposition(d, report, state, error = '') {
   const status = dispositionStatus(report, error);
-  if (!status || d.kind === 'talker') return null;
+  if (!status || d.kind === 'talker' || CADENCE_TASK.test(d.task || d.brief || '')) return null;
   const scope = semanticScope(d.task || d.brief);
   return { version: 1, status, scope, period: scope.period,
     requiresOwnerAuthorization: status === 'superseded' || /(?:reopen|retry|resume).{0,100}authoriz|authoriz.{0,100}(?:reopen|retry|resume)/i.test(error || report.summary || ''),
@@ -77,7 +82,7 @@ export function createTaskDispositions({ pool, llm, log = console }) {
           WHERE id = $1 AND NOT COALESCE(report, '{}'::jsonb) ? 'taskDisposition' RETURNING report`, [d.id, JSON.stringify(disposition)]);
         disposition = saved.rows[0]?.report?.taskDisposition || (await pool.query('SELECT report FROM agent_deployments WHERE id = $1', [d.id])).rows[0]?.report?.taskDisposition;
       }
-      if (disposition) result.push(disposition);
+      if (disposition && !CADENCE_TASK.test(disposition.scope?.description || '')) result.push(disposition);
     }
     return result;
   }
