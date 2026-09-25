@@ -102,7 +102,8 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
 
 export function createAgents({ pool, gateway, queue, risk = null, asks = null, aside = null, llm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
-  roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000 } = {}) {
+  roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000,
+  staleTurnMs = 90 * 60_000 } = {}) {
 
   const dispositions = createTaskDispositions({ pool, llm, log });
 
@@ -255,7 +256,9 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const stated = await personStatements(d, messages, 0);
     const evidence = [...stated, ...verified];
     let applied = false, applyError = null;
-    if (evidence.length && ['awaiting_evidence', 'stalled', 'budget', 'failed', 'pondering', 'running', 'needs_input'].includes((await chain(d.chain_id))?.status)) {
+    // Any open want takes new evidence, including one whose last review is ready for the person: an always-worked
+    // pursuit keeps learning while its review waits.
+    if (evidence.length && ['awaiting_evidence', 'stalled', 'budget', 'failed', 'pondering', 'running', 'needs_input', 'ready'].includes((await chain(d.chain_id))?.status)) {
       try { await queue.addEvidence(d.chain_id, evidence); applied = true; } catch (e) { applyError = e.message; }
     }
     const taskDisposition = makeDisposition(d, report, (await chain(d.chain_id))?.state);
@@ -367,7 +370,9 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           if (d.status === 'queued') { await startTurn(d.id, d.brief); continue; }
           if (d.status === 'running') {
             if (!d.run_id) { await startTurn(d.id, d.brief); continue; }
-            const w = await gateway.wait(d.run_id, { timeoutMs: 1000 });
+            // A wait the gateway does not answer is the same as a run still pending: it falls through to the
+            // transcript, which is where a lost run is recovered from (or found never to have run).
+            const w = await gateway.wait(d.run_id, { timeoutMs: 1000 }).catch(e => { log.warn?.(`[agents] wait ${d.id.slice(0, 8)}:`, text(e.message, 120)); return null; });
             if (!w || w.status === 'pending' || w.status === 'timeout') {
               // A gateway restart re-runs a turn under a new run id, so the old one never resolves. The transcript
               // still shows the reply: after a grace period, a settled session whose last words are the agent's,
@@ -376,7 +381,13 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
               if (clock() - since < 90_000) continue;
               const t = await gateway.transcript(d.session_key).catch(() => null);
               const last = settledReply(t, since, d.run_id);
-              if (!last) continue;
+              if (!last) {
+                // A turn that has shown nothing for longer than any turn runs — no reply, nothing pending, nothing
+                // active — was lost by the gateway. It fails, with the reason, so its slot and its pursuit are free
+                // again; waiting on it would hold both forever.
+                if (clock() - since > staleTurnMs && t && !t.pending && !t.active) await fail(d, `the gateway never answered this run (${d.run_id}) and its session shows no reply after ${Math.round((clock() - since) / 60_000)} minutes`);
+                continue;
+              }
               log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)}: run ${d.run_id} did not resolve; taking the reply from the transcript`);
               await applyReply(d, last.text, t.messages);
               continue;
@@ -432,7 +443,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const free = () => slots().then(async s => s - (await liveCount()));
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true AND ponder_state #>> '{want,status}' = 'active'
-        AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input')
+        AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input', 'ready')
         AND NOT EXISTS (SELECT 1 FROM agent_deployments a WHERE a.chain_id = thought_chains.id AND a.status IN ('queued', 'running'))
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
       ORDER BY updated_at ASC`);

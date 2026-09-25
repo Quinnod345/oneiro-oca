@@ -662,3 +662,36 @@ test('retirement is task-scoped, not a ban on unrelated calculations in the same
   await h.deploy(); await h.agents.poll();
   assert.ok((await h.deploy('Reconcile historical office equipment costs for August 2026')).id);
 }));
+
+test('an always-worked pursuit whose review is ready is still worked, and what its agents find is applied; a run the gateway lost fails after the stale limit instead of holding its slot forever', async () => database(async pool => {
+  const dir = await mkdtemp(join(tmpdir(), 'oca-agents-'));
+  await writeFile(join(dir, 'kit.txt'), 'The launch kit holds five carousel images and two finished reels.\n');
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 2 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `Checked.${block({ status: 'done', summary: 'kit checked', evidence: [{ source: join(dir, 'kit.txt'), quote: 'five carousel images and two finished reels', observation: 'the kit is complete' }] })}` });
+  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir], continuityIntervalMs: 1000, staleTurnMs: 60 * 60_000 });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: dir, clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Launch the app well', doneWhen: 'A month nets positive.', continuous: true });
+  // its last review is ready for the person: an always-worked pursuit is still worked
+  await pool.query(`UPDATE thought_chains SET status = 'ready' WHERE id = $1`, [chain.chain_id]);
+  const p = await agents.plan();
+  assert.equal(p.started.length, 1, 'a ready review does not park an always-worked pursuit');
+  await agents.poll();
+  const done = await agents.get(p.started[0]);
+  assert.equal(done.status, 'done'); assert.equal(done.report.evidenceApplied, true, 'what its agent verified reaches the want');
+  assert.ok((await queue.get(chain.chain_id)).evidence.some(e => /five carousel images/.test(e.observation)));
+  // a run the gateway lost: its wait never answers and its session never shows a reply
+  const lost = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Check the schedule', firedBy: 'engine' });
+  gw.sessions.get(lost.sessionKey).messages.length = 0;
+  gw.wait = async () => { throw new Error('openclaw agent.wait: timed out after 26000 ms'); };
+  now += 30 * 60_000; await agents.poll();
+  assert.equal((await agents.get(lost.id)).status, 'running', 'within the stale limit it is still waited on');
+  now += 31 * 60_000; await agents.poll();
+  const failed = await agents.get(lost.id);
+  assert.equal(failed.status, 'failed'); assert.match(failed.error, /gateway never answered this run .* no reply after \d+ minutes/);
+  assert.equal(await agents.liveCount(), 0, 'its slot is free again');
+}));
