@@ -159,7 +159,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (!['engine', 'person'].includes(firedBy)) throw new Error('an agent is fired by a person or the engine');
     const row = await chain(Number(chainId)); if (!row) throw new Error('Pursuit not found');
     if (['cancelled', 'resolved'].includes(row.status) || row.state.want?.status !== 'active') throw new Error('This pursuit is closed');
-    if (!(await gateway.available())) throw new Error('The gateway is not reachable; no agent can be deployed');
+    // A cached "down" is re-checked before it stops a deployment: the planner may have spent minutes thinking since.
+    if (!(await gateway.available()) && !(await gateway.available({ force: true }))) throw new Error('The gateway is not reachable; no agent can be deployed');
     if (firedBy === 'engine' && clock() < providerBackoffUntil) throw new Error(`the model provider is limiting agents; deployments resume at ${new Date(providerBackoffUntil).toISOString()}`);
     // A builder is the engine repairing itself (self-build runs one at a time); it never waits behind pursuit work.
     if (!standing && kind !== 'builder' && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
@@ -437,8 +438,16 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const dry = Math.min(4, Number(c.dry) || 0);
     return Math.max(Number(c.lastSliceStartedAt) || 0, Number(c.lastSliceEndedAt) || 0) + continuityIntervalMs * 2 ** dry - now;
   };
-  async function plan({ perTick = 2 } = {}) {
-    if (!(await gateway.available()) || clock() < providerBackoffUntil) return { started: [] };
+  // One plan at a time. A strategist call can take minutes (a slow model, a fallback), longer than the plan
+  // interval; two plans at once would both see a pursuit with no live agent and both deploy on it.
+  let planning = false;
+  async function plan(opts = {}) {
+    if (planning) return { started: [], busy: true };
+    planning = true;
+    try { return await planOnce(opts); } finally { planning = false; }
+  }
+  async function planOnce({ perTick = 2 } = {}) {
+    if ((!(await gateway.available()) && !(await gateway.available({ force: true }))) || clock() < providerBackoffUntil) return { started: [] };
     const paused = await controls?.get?.().then(c => c.queuePaused === true).catch(() => false); if (paused) return { started: [] };
     const free = () => slots().then(async s => s - (await liveCount()));
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains

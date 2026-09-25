@@ -12,7 +12,7 @@ test('CLI calls queue behind a concurrency limit instead of starving each other'
 
 test('the gateway is available when anything answered lately; otherwise its own /startupz says so — one failed check is not an outage, two are', async () => {
   let mode = 'up', checks = 0;
-  const fetchImpl = async url => { checks++; assert.match(url, /\/startupz$/); if (mode === 'down') throw new Error('ECONNREFUSED'); return { status: mode === 'draining' ? 503 : 200 }; };
+  const fetchImpl = async (url, opts) => { checks++; assert.match(url, /\/startupz$/); assert.equal(opts.headers.connection, 'close', 'each probe on its own connection'); if (mode === 'down') throw new Error('ECONNREFUSED'); return { status: mode === 'draining' ? 503 : 200 }; };
   const g = createGateway({ runner: async () => '{"ok":true}', fetchImpl, log: { warn() {} } });
   await g.call('chat.history', { sessionKey: 'x' });
   mode = 'down';
@@ -23,6 +23,11 @@ test('the gateway is available when anything answered lately; otherwise its own 
     t += 16_000; assert.equal(await g.available(), false, 'two strikes'); assert.equal(checks, 2);
     mode = 'draining'; t += 16_000; assert.equal(await g.available(), false, 'draining is not ready');
     mode = 'up'; t += 16_000; assert.equal(await g.available(), true, 'recovers on the next check');
+    // a caller about to act re-checks now rather than trust a cached "down"
+    mode = 'down'; t += 121_000; await g.available(); t += 16_000; assert.equal(await g.available(), false, 'down again, two strikes');
+    mode = 'up'; t += 1_000; const before = checks;
+    assert.equal(await g.available(), false, 'within 15 s the cached answer stands'); assert.equal(checks, before);
+    assert.equal(await g.available({ force: true }), true, 'a forced check probes now'); assert.equal(checks, before + 1);
   } finally { Date.now = realNow; }
 });
 

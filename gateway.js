@@ -43,14 +43,17 @@ export function createGateway({ cli = OPENCLAW_CLI, runner = null, timeoutMs = 3
   // machine, and one failure is not an outage: it takes two in a row to call the gateway down.
   // Liveness is the gateway's own HTTP endpoint (/startupz: 200 once started, 503 while starting or draining) —
   // a millisecond fetch, not a CLI process that a busy machine can take half a minute to start.
+  // Each probe opens its own connection ("connection: close"): a pooled keep-alive socket the gateway has
+  // already dropped can hang a request until it times out, which read as "gateway down" while it was fine.
+  // `force` skips the cached answer and probes now, with more patience — for a caller about to act on it.
   let lastOk = 0, lastProbe = 0, lastProbeOk = true, strikes = 0;
-  async function available() {
+  async function available({ force = false } = {}) {
     const now = Date.now();
     if (now - lastOk < 120_000) return true;
-    if (now - lastProbe < 15_000) return lastProbeOk;
+    if (!force && now - lastProbe < 15_000) return lastProbeOk;
     lastProbe = now;
     try {
-      const res = await (fetchImpl || fetch)(`${httpUrl}/startupz`, { signal: AbortSignal.timeout(5000) });
+      const res = await (fetchImpl || fetch)(`${httpUrl}/startupz`, { headers: { connection: 'close' }, signal: AbortSignal.timeout(force ? 12_000 : 5000) });
       if (res.status === 200) { lastProbeOk = true; strikes = 0; lastOk = now; }
       else { strikes++; lastProbeOk = false; log.warn?.(`[gateway] not ready: HTTP ${res.status}`); }
     } catch (e) { strikes++; lastProbeOk = strikes < 2; log.warn?.(`[gateway] liveness check failed (${strikes}${strikes >= 2 ? ', treating as down' : ''}):`, String(e.message).slice(0, 160)); }
