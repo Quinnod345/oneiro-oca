@@ -493,13 +493,24 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           }
         } else if (threads.length >= 2 && (await free()) >= 2) tasks = await split(row, threads, Math.min(3, await free())).then(t => t.map(task => ({ task }))).catch(() => tasks);
       }
-      let deployed = 0;
+      let deployed = 0; const refused = [];
       for (const { task, stream = null } of tasks) {
-        try { const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine', stream }); if (d.id) { started.push(d.id); deployed++; } } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
+        try {
+          const d = await deploy(row.id, { kind: 'research', task, firedBy: 'engine', stream });
+          if (d.id) { started.push(d.id); deployed++; continue; }
+          // Refused before it started: a repeat of retired work, or held/refused by the risk gate. Said, not dropped.
+          refused.push({ task: text(task, 300), decision: d.decision, why: text(d.why || d.decision, 200), at: new Date(now).toISOString() });
+          log.log?.(`[agents] #${row.id} move not deployed (${d.decision}): ${text(d.why || '', 120)} — ${text(task, 100)}`);
+        } catch (e) { log.warn?.(`[agents] plan #${row.id}:`, text(e.message, 200)); break; }
       }
-      // The cadence advances only on a deployment; a failed attempt is retried on the next tick.
+      // The cadence advances on a deployment; a failed attempt is retried on the next tick.
       if (deployed) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
         [row.id, JSON.stringify({ lastSliceStartedAt: now, runs: Number(row.state.continuity?.runs || 0) + deployed })]).catch(() => {});
+      // What was refused goes to the strategist next cycle, so it proposes different work instead of variants of
+      // the same. A cycle whose every move was refused still counts as a slice: thinking again a minute later would
+      // spend a model call per retired task only to be refused again.
+      if (tasks.length) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
+        [row.id, JSON.stringify({ lastRefused: refused, ...(!deployed && refused.length ? { lastSliceStartedAt: now, lastSliceEndedAt: now } : {}) })]).catch(() => {});
     }
     return { started };
   }
@@ -514,6 +525,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
         FROM agent_actions WHERE chain_id = $1 ORDER BY created_at DESC LIMIT 8`, [row.id]).catch(() => ({ rows: [] }));
     const retired = await dispositions.records(row.id, s);
     const retirement = retired.map(d => `- [${d.status}] ${d.scope.description} (${d.period}); ${d.reason}`).join('\n');
+    const refusedLast = (Array.isArray(s.continuity?.lastRefused) ? s.continuity.lastRefused : []).map(r => `- ${text(r.task, 200)} → ${text(r.why, 120)}`).join('\n');
     const ev = s.evidence || [];
     const said = ev.filter(e => /stated by Quinn|observed by quinn/i.test(e.source || '') || /^person-/.test(e.id || '')).slice(-8).map(e => `- ${text(e.observation, 300)}`).join('\n');
     const known = ev.filter(e => !/stated by Quinn/i.test(e.source || '')).slice(-12).map(e => `- ${text(e.observation, 200)}`).join('\n');
@@ -524,7 +536,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const p = resolveProvider('cloud');
     const r = await llm.messages.create({ provider: p.provider, model: p.model, max_tokens: 1400, temperature: 0.4,
       system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; retired tasks stay retired unless materially new relevant evidence permits reopening, and superseded scopes additionally require new applicable owner authorization; propose distinct useful work instead; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
-      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nDurable task dispositions (not a recent-run window):\n${retirement || '- (none)'}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${actionSummary(a)} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
+      messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nDurable task dispositions (not a recent-run window):\n${retirement || '- (none)'}${refusedLast ? `\n\nMoves refused last cycle, before they started (do not propose these or close variants; propose genuinely different work):\n${refusedLast}` : ''}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${actionSummary(a)} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
     const raw = typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
     const j = JSON.parse(String(raw).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1'));
     const moves = (Array.isArray(j.moves) ? j.moves : []).map(m => ({ task: text(m?.task, 1500), why: text(m?.why, 300), stream: streamName(m?.stream) })).filter(m => m.task.length >= 20).slice(0, max);
