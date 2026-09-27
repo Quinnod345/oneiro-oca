@@ -11,6 +11,20 @@ import { createActionRetries, actionObservation, terminalObservation, actionHost
 import { CHARTER_CLASSES } from '../user-controls.js';
 
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const APP_ACCOUNT_PREREQUISITE = /\b(?:application_id|app store id)\b/i;
+const APP_NOT_CONNECTED = /\bnot connected to (?:your|the|this) (?:ad )?account\b/i;
+
+// A provider prerequisite is still a failed action and must remain in agent_actions so retries stay
+// suppressed. It is not evidence that act_reversible itself failed, though: keep it out of the
+// capability track record so external validation wording cannot manufacture a self-build defect.
+function riskOutcome(result, observation) {
+  const detail = terminalObservation(observation, 1500);
+  const externalPrerequisite = result === 'failure' && /^BLOCKED:/i.test(detail)
+    && APP_ACCOUNT_PREREQUISITE.test(detail) && APP_NOT_CONNECTED.test(detail);
+  return externalPrerequisite
+    ? { result: 'not_attempted', note: 'External app/account prerequisite blocked completion; action history retains the failure for retry suppression.' }
+    : { result, note: '' };
+}
 export const YES = /^\s*(y|yes|yep|yeah|ok|okay|approve[d]?|allow(ed)?|do it|go( ahead)?|sure|post it|send it|ship it|👍|✅)\b/i;
 export const NO = /^\s*(n|no|nope|don'?t|do not|stop|deny|denied|decline[d]?|cancel|❌|👎)\b/i;
 
@@ -127,7 +141,8 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     const { rows: [a] } = await pool.query(`UPDATE agent_actions SET outcome = $2, observation = $3, observed_at = to_timestamp($4 / 1000.0) WHERE id = $1 AND decision = 'proceed' AND outcome IS NULL RETURNING *`,
       [actionId, result, JSON.stringify(saved), clock()]);
     if (!a) throw new Error('no proceeding action by that id awaits an outcome');
-    if (risk) await risk.observe(`act:${actionId}`, { result, evidence: [{ id: `act-${String(actionId).slice(0, 8)}`, source: `actuator action ${actionId}: ${a.url || a.host}`, observation: `${a.class} on ${a.host}: ${terminalObservation(observation, 800) || result}` }] }).catch(e => log.warn?.('[actuator] observe:', e.message));
+    const tracked = riskOutcome(result, observation);
+    if (risk) await risk.observe(`act:${actionId}`, { ...tracked, evidence: [{ id: `act-${String(actionId).slice(0, 8)}`, source: `actuator action ${actionId}: ${a.url || a.host}`, observation: `${a.class} on ${a.host}: ${terminalObservation(observation, 800) || result}` }] }).catch(e => log.warn?.('[actuator] observe:', e.message));
     log.log?.(`[actuator] ${a.class} on ${a.host} for #${a.chain_id}: ${result}`);
     return { actionId, result };
   }
