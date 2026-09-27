@@ -103,6 +103,8 @@ Useful endpoints: `/oca/health`, `/oca/hunger`, `/oca/worth`, `/oca/risk`, `/oca
 
 Environment: `ONEIRO_LOCAL_REASONER_URL`, `ONEIRO_LOCAL_REASONER_TRANSPORT=ollama`, `ONEIRO_OCA_THINKER_MODEL`, `OCA_STRATEGY_PROVIDER`/`OCA_STRATEGY_MODEL`, `OCA_ENABLE_AUTONOMOUS_ACTIONS` (the master switch, off by default), `ONEIRO_EMBED_ALLOW_HASH_FALLBACK` (off: a blip in the embedder stores no vector rather than a wrong one).
 
+Agents run in their own lane, separate from the thinker. The thinker and planner use the inference policy (`OCA_CODEX_MODEL`, default `gpt-6-astra`, at the controls' effort). Deployed agents use `OCA_AGENT_MODEL` and `OCA_AGENT_THINKING` (a gateway model such as `openai/gpt-6-sol`, and a thinking level such as `xhigh`). Pursuit work uses `OCA_PURSUIT_MODEL` and `OCA_PURSUIT_EFFORT`. The self-build Codex coder uses `OCA_SELF_BUILD_MODEL`, `OCA_SELF_BUILD_EFFORT` and `OCA_SELF_BUILD_SANDBOX`. Unset values keep the defaults, so changing an agent's model never changes how the thinker thinks.
+
 ## Layout
 
 ```

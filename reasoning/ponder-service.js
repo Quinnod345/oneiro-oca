@@ -11,7 +11,7 @@ import hypothesis from '../hypothesis/engine.js';
 import { simulate, evaluateSimulation } from '../simulation/engine.js';
 import { on } from '../event-bus.js';
 import { createSelfBuild } from './self-build.js';
-import { runCodex, codexAvailable } from '../codex-cli.js';
+import { runCodex, codexAvailable, selfBuildCodexOptions } from '../codex-cli.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 export const userControls = createUserControls(pool);
@@ -67,7 +67,7 @@ export const riskJournal = createRiskJournal({ pool, worth: worthLedger, feel: e
   affect: () => { try { return emotion.getState(); } catch { return {}; } } });
 riskRef.current = riskJournal;
 export const selfBuild = createSelfBuild({ pool, queue: ponderQueue, worth: worthLedger, risk: riskJournal, controls: userControls,
-  runner: codexAvailable() ? runCodex : null, llm, provider: strategyDeps.provider, model: strategyDeps.model, inferenceMode: () => getInferencePolicy().mode });
+  runner: codexAvailable() ? (prompt, options) => runCodex(prompt, selfBuildCodexOptions(options)) : null, llm, provider: strategyDeps.provider, model: strategyDeps.model, inferenceMode: () => getInferencePolicy().mode });
 selfBuildRef.current = selfBuild;
 
 // A prediction the engine committed to for a want, settled by the world, becomes evidence on that want.
