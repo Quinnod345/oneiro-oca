@@ -502,3 +502,16 @@ test('a held sign-in approval cannot follow a tab to another host',async()=>acce
   assert.equal(needs[0].host,'accounts.google.com');assert.equal(needs[0].status,'held');
   assert.equal(trace.length,1,'the original approval is not authorization for a different host');
 }));
+
+test('pursuit work runs in its own agent lane: the configured model and effort reach Codex with full access, and no effort means the runner default',async()=>fixture(async({pool,queue,chain,root})=>{
+  const seen=[];
+  const runner=async(prompt,options)=>{seen.push(options);return {threadId:null,text:JSON.stringify({summary:'Nothing yet.',nextStep:'Keep looking.',remainingQuestions:[],sources:[]})};};
+  await pool.query(`UPDATE thought_chains SET status='awaiting_evidence', ponder_state=jsonb_set(ponder_state,'{result}','{"status":"needs_evidence","missingEvidence":["Anything"]}') WHERE id=$1`,[chain.chain_id]);
+  await queue.setContinuous(chain.chain_id,true);
+  const lane=createPursuitWork({pool,queue,runner,root:join(root,'work-lane'),sourceRoots:[root],model:'gpt-6-sol',effort:'xhigh'});
+  await lane.init();assert.deepEqual((await lane.keepWorking()).started,[chain.chain_id]);await lane.runNext();
+  assert.equal(seen[0].model,'gpt-6-sol');assert.equal(seen[0].reasoningEffort,'xhigh');assert.equal(seen[0].sandbox,'danger-full-access');
+  const plain=createPursuitWork({pool,queue,runner,root:join(root,'work-plain'),sourceRoots:[root],model:'gpt-6-sol',effort:'',clock:()=>Date.now()+24*3600_000});
+  await plain.init();assert.deepEqual((await plain.keepWorking()).started,[chain.chain_id]);await plain.runNext();
+  assert.equal(seen.length,2);assert.equal('reasoningEffort' in seen[1],false,'no configured effort leaves runCodex its default');
+}));

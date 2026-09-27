@@ -5,6 +5,7 @@ import {
   buildCodexArgs,
   buildCodexEnvironment,
   parseCodexEvent,
+  selfBuildCodexOptions,
 } from '../codex-cli.js';
 
 test('Codex child environment strips metered provider credentials', () => {
@@ -82,4 +83,14 @@ test('structured Codex result excludes preceding user-visible progress messages'
     const result=await runCodex('test',{workingDirectory:dir,env:{...process.env,ONEIRO_CODEX_CLI:cli}});
     assert.deepEqual(JSON.parse(result.text),{summary:'Evidence found'});
   } finally { await rm(dir,{recursive:true,force:true}); }
+});
+
+test('self-build coder options come from the self-build lane, never the thinker policy', () => {
+  const asked = { workingDirectory: '/tmp/w', sandbox: 'workspace-write', timeoutMs: 1000 };
+  assert.deepEqual(selfBuildCodexOptions(asked, {}), asked, 'unset variables change nothing');
+  assert.deepEqual(selfBuildCodexOptions(asked, { OCA_SELF_BUILD_MODEL: 'gpt-6-sol', OCA_SELF_BUILD_EFFORT: 'XHigh', OCA_SELF_BUILD_SANDBOX: 'danger-full-access' }),
+    { ...asked, model: 'gpt-6-sol', reasoningEffort: 'xhigh', sandbox: 'danger-full-access' });
+  assert.equal(selfBuildCodexOptions(asked, { OCA_SELF_BUILD_EFFORT: 'ludicrous' }).reasoningEffort, undefined);
+  assert.deepEqual(selfBuildCodexOptions(asked, { OCA_SELF_BUILD_MODEL: 'bad model; rm -rf', OCA_SELF_BUILD_SANDBOX: 'yolo' }), asked, 'invalid values are ignored');
+  assert.equal(selfBuildCodexOptions(asked, { OCA_SELF_BUILD_MODEL: 'gpt-6-sol' }).sandbox, 'workspace-write');
 });

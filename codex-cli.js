@@ -47,6 +47,17 @@ export function buildCodexEnvironment(env = process.env) {
 }
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+export const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
+
+// Self-build's Codex coder is an agent, not the thinker: its model and sandbox come from the environment
+// (OCA_SELF_BUILD_MODEL, OCA_SELF_BUILD_EFFORT, OCA_SELF_BUILD_SANDBOX), never from the inference policy the
+// thinker uses. Unset or invalid values leave the caller's options as they are.
+export function selfBuildCodexOptions(options = {}, env = process.env) {
+  const model = String(env.OCA_SELF_BUILD_MODEL || '').trim(), sandbox = String(env.OCA_SELF_BUILD_SANDBOX || '').trim();
+  const effort = String(env.OCA_SELF_BUILD_EFFORT || '').trim().toLowerCase();
+  return { ...options, ...(/^[A-Za-z0-9._:-]{1,64}$/.test(model) ? { model } : {}), ...(REASONING_EFFORTS.includes(effort) ? { reasoningEffort: effort } : {}),
+    ...(SANDBOX_MODES.includes(sandbox) ? { sandbox } : {}) };
+}
 
 // The engine's one browser, offered to every Codex run as a read-only MCP tool server. Codex spawns MCP
 // servers outside its command sandbox, so this is how a sandboxed slice reaches Aside. Read tools only —

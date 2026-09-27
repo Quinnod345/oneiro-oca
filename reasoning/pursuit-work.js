@@ -204,6 +204,8 @@ export async function verifyWorkSources(candidates, { roots, workRoot, startedAt
 export function createPursuitWork({ pool, queue, runner = runCodex,
   root = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work',
   sourceRoots = ['/Users/quinnodonnell'], model = process.env.OCA_PURSUIT_MODEL || 'gpt-6-astra',
+  // Pursuit work is an agent lane: its effort is its own (OCA_PURSUIT_EFFORT), not the thinker's. Empty keeps runCodex's default.
+  effort = process.env.OCA_PURSUIT_EFFORT || '',
   asideTool = callAsideTool, clock = Date.now, leaseMs = 90_000, canStart = async () => true, risk = null, asks = null } = {}) {
   const aborts = new Map();
   // Risk decisions are best-effort records around a person-fired slice; a journal error never blocks the work.
@@ -354,7 +356,7 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
       }
       const access = createAccessLifecycle(priorNeeds, clock);
       const observedPages = []; let asideCalls = 0, asideActions = 0;
-      const result = await runner(prompt, { workingDirectory: directory, model: run.model, persistent: true,
+      const result = await runner(prompt, { workingDirectory: directory, model: run.model, persistent: true, ...(effort ? { reasoningEffort: effort } : {}),
         threadId: prior.rows[0]?.thread_id || null, sandbox: 'danger-full-access', timeoutMs: 10 * 60_000,
         signal: ctl.signal, outputSchema: workSchema,
         onEvent: async event => {
