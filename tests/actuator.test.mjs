@@ -159,6 +159,26 @@ test('terminal failure evidence survives noisy logs in persistence, risk evidenc
   }
 }));
 
+test('an external Meta app-account prerequisite stays a failed action without becoming an act_reversible defect', async () => database(async pool => {
+  const h = retryHarness(pool);
+  const meta = h.act();
+  const candidate = { chainId: 83, class: 'submit', host: 'adsmanager.facebook.com', url: 'https://adsmanager.facebook.com/adsmanager/manage/campaigns',
+    description: 'Save the existing unpublished InnerEcho app promotion draft' };
+  const action = await meta.authorize(candidate);
+  assert.equal(action.decision, 'proceed');
+  await meta.observe({ actionId: action.actionId, result: 'failure', observation: 'BLOCKED: Meta needs App Store ID 6683282892 connected as a valid `application_id` for this ad account. InnerEcho: Mental Health is not connected to your ad account. Missing or Invalid Field in Promoted Objects (#1815437).' });
+  const stored = (await meta.recent()).find(a => a.id === action.actionId);
+  assert.equal(stored.outcome, 'failure', 'the action remains failed so an equivalent commit cannot repeat');
+  assert.equal(h.observations.at(-1).result, 'not_attempted', 'an external account prerequisite does not lower the engine capability record');
+  assert.match(h.observations.at(-1).note, /External app\/account prerequisite/);
+  assert.equal((await h.act().authorize(candidate)).decision, 'refuse', 'retry suppression still sees the failed action');
+
+  const runtime = h.act();
+  const engineFailure = await runtime.authorize({ ...candidate, chainId: 84, host: 'example.com', url: 'https://example.com/settings', description: 'Save the existing account settings' });
+  await runtime.observe({ actionId: engineFailure.actionId, result: 'failure', observation: 'BLOCKED: actuator returned an invalid response schema.' });
+  assert.equal(h.observations.at(-1).result, 'failure', 'engine defects remain capability failures');
+}));
+
 test('target-specific recovery is read independently, consumed once, and cannot bypass charter or risk', async () => database(async pool => {
   await storedAction(pool, instagramFailures[0]);
   const h = retryHarness(pool), candidate = requestOf(instagramFailures[1]);
