@@ -51,6 +51,7 @@ test('a daily pull stores every source it can read and says why for the ones it 
       if (r.path === '/v1/salesReports') {
         if (r.query['filter[reportType]'] === 'SALES' && r.query['filter[reportDate]'] === isoDay(now - 86_400_000)) return { ok: true, status: 200, bodyBase64: gzipSync(SALES).toString('base64') };
         if (r.query['filter[reportType]'] === 'SUBSCRIPTION_EVENT') return { ok: false, status: 400, body: { errors: [{ detail: 'Invalid version' }] } };
+        if (r.query['filter[reportType]'] === 'SUBSCRIPTION' && r.query['filter[version]'] !== '1_5') return { ok: false, status: 400, body: { errors: [{ detail: 'Please include the version parameter. The latest version for this report is 1_5.' }] } };
         return { ok: false, status: 404, body: { errors: [] } };
       }
       if (r.path === '/inApps/v1/notifications/history') {
@@ -64,7 +65,8 @@ test('a daily pull stores every source it can read and says why for the ones it 
   const m = createAppleMetrics({ pool, apple, clock: () => now, log: quiet, settingsPath });
   await m.init();
   const out = await m.pull();
-  assert.equal(out.asc_sales, 2); assert.equal(out.asc_subscriptions, 0); assert.match(out.asc_subscription_events.error, /Invalid version/);
+  assert.equal(out.asc_sales, 2); assert.equal(out.asc_subscriptions, 0, 'the version Apple named was used, and the reports that came back were empty'); assert.match(out.asc_subscription_events.error, /Invalid version/);
+  assert.ok(calls.some(c => c.query?.['filter[reportType]'] === 'SUBSCRIPTION' && c.query['filter[version]'] === '1_5'), 'retried with the version Apple asked for');
   assert.equal(out.storekit_notification, 2, 'both pages'); assert.equal(out.ads, 'Apple Ads isn\'t set up yet');
   assert.ok(calls.every(c => !c.method || ['GET', 'POST'].includes(c.method)) && calls.filter(c => c.path === '/v1/salesReports').every(c => c.query['filter[vendorNumber]'] === '12345678'));
   const { rows } = await pool.query(`SELECT source, count(*)::int AS n FROM apple_metrics GROUP BY source ORDER BY source`);

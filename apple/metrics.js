@@ -101,6 +101,8 @@ export function adsReportRows(report, entity) {
 // alert: how drift the broker's reconciler found reaches Quinn (a notice), once per finding.
 export function createAppleMetrics({ pool, apple, clock = Date.now, log = console, settingsPath = SETTINGS_PATH, tickMs = 3600_000, everyMs = 20 * 3600_000, after = null, alert = null } = {}) {
   let timer = null, running = null;
+  // Sales and Trends report versions. The subscription reports need one; Apple says which when it changes.
+  const versions = { SUBSCRIPTION: '1_4', SUBSCRIPTION_EVENT: '1_4' };
   async function init() { await pool.query(await readFile(new URL('../migrations/065_apple_metrics.sql', import.meta.url), 'utf8')); }
   async function settings() {
     try { return JSON.parse(await readFile(settingsPath, 'utf8')); } catch { return {}; }
@@ -136,8 +138,13 @@ export function createAppleMetrics({ pool, apple, clock = Date.now, log = consol
       let rows = 0, lastError = null;
       for (let back = 1; back <= 4; back++) {
         const day = isoDay(clock() - back * DAY);
-        const r = await apple.call({ api: 'asc', method: 'GET', path: '/v1/salesReports',
-          query: { 'filter[frequency]': 'DAILY', 'filter[reportDate]': day, 'filter[reportSubType]': 'SUMMARY', 'filter[reportType]': reportType, 'filter[vendorNumber]': String(s.vendorNumber) } });
+        const ask = () => apple.call({ api: 'asc', method: 'GET', path: '/v1/salesReports',
+          query: { 'filter[frequency]': 'DAILY', 'filter[reportDate]': day, 'filter[reportSubType]': 'SUMMARY', 'filter[reportType]': reportType,
+            'filter[vendorNumber]': String(s.vendorNumber), ...(versions[reportType] ? { 'filter[version]': versions[reportType] } : {}) } });
+        let r = await ask();
+        // Apple names the version it wants when a report needs one; use it, and remember it for the next days.
+        const wanted = r?.ok ? null : /latest version for this report is ([0-9_]+)/.exec(JSON.stringify(r?.body || ''))?.[1];
+        if (wanted && wanted !== versions[reportType]) { versions[reportType] = wanted; r = await ask(); }
         // No report yet for a day is Apple's 404, not a failure.
         if (!r?.ok) { if (r?.status !== 404) lastError = r?.error || `Apple answered ${r?.status}: ${text(JSON.stringify(r?.body), 300)}`; continue; }
         if (!r.bodyBase64) continue;

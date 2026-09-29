@@ -179,6 +179,13 @@ export function appleRouter({ apple, metrics, growth }) {
   const router = Router();
   const route = h => async (req, res) => { try { res.json(await h(req)); } catch (e) { res.status(400).json({ error: e.message }); } };
   router.get('/oca/apple', route(async () => ({ broker: await apple.status(), metrics: await metrics.summary(), proposals: await growth.recent(50) })));
-  router.post('/oca/apple/pull', route(async () => { const pulled = await metrics.pull(); return { pulled, growth: await growth.run() }; }));
+  // A pull with the growth loop after it can take minutes (drafting review replies), so it runs in the background;
+  // GET /oca/apple shows what it found.
+  let pulling = null;
+  router.post('/oca/apple/pull', route(async () => {
+    if (pulling) return { running: true };
+    pulling = metrics.pull().catch(e => ({ error: e.message })).finally(() => { pulling = null; });
+    return { started: true, see: '/oca/apple' };
+  }));
   return router;
 }
