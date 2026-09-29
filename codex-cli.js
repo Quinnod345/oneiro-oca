@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASIDE_TOOL_NAMES } from './aside-mcp.js';
+import { APPLE_TOOL_NAMES } from './apple-mcp.js';
 
 const DEFAULT_WORKING_DIRECTORY = '/Users/quinnodonnell/oneiro/runtime/workspace';
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -74,6 +75,19 @@ export function asideMcpArgs({ server = ASIDE_MCP_SERVER, node = process.execPat
   ];
 }
 
+// Apple's APIs, through the Apple broker, offered beside Aside. Every tool is pre-approved for the same reason:
+// the broker, running as its own account, is the boundary, and it decides every write.
+export const APPLE_MCP_SERVER = new URL('./apple-mcp.js', import.meta.url).pathname;
+export function appleMcpArgs({ server = APPLE_MCP_SERVER, node = process.execPath } = {}) {
+  return [
+    '-c', `mcp_servers.apple.command=${JSON.stringify(node)}`,
+    '-c', `mcp_servers.apple.args=${JSON.stringify([server])}`,
+    '-c', 'mcp_servers.apple.startup_timeout_sec=30',
+    '-c', 'mcp_servers.apple.tool_timeout_sec=600',   // a report download can take minutes
+    ...APPLE_TOOL_NAMES.flatMap(t => ['-c', `mcp_servers.apple.tools.${t}.approval_mode="approve"`]),
+  ];
+}
+
 export function buildCodexArgs({
   workingDirectory = DEFAULT_WORKING_DIRECTORY,
   model = '',
@@ -102,7 +116,7 @@ export function buildCodexArgs({
   // --ignore-user-config drops ~/.codex/config.toml, so the effort the engine wants is stated explicitly.
   const effort = String(reasoningEffort || '').trim().toLowerCase();
   if (REASONING_EFFORTS.includes(effort)) args.push('--config', `model_reasoning_effort="${effort}"`);
-  if (aside) args.push(...asideMcpArgs());
+  if (aside) args.push(...asideMcpArgs(), ...appleMcpArgs());
   if (outputSchemaPath) args.push('--output-schema', outputSchemaPath);
   if (threadId) {
     if (!/^[a-f0-9-]{36}$/i.test(threadId)) throw new Error('Invalid Codex session ID');
