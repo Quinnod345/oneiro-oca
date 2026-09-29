@@ -148,6 +148,12 @@ test('every payment asks on the phone with Approve and Deny; only a tap on Quinn
     asks.useApprovals(ap2); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'purchase the icon pack for the site', cost: 19 });
     now += APPROVAL_WINDOW_MS + 61_000; await ap2.tick(); return r; })();
   assert.equal((await approvalOf(e.askId)).settled, 'expired');
+  // and one the gateway no longer has can never be decided: settled at once
+  const f = await (async () => { const g3 = fakeGateway(); const ap3 = createPaymentApprovals({ pool, gateway: g3, deciders: ['phone-1'], clock: () => now, log: silent });
+    asks.useApprovals(ap3); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'buy the font license for the site', cost: 29 });
+    g3.snapshots.clear(); const get = g3.call; g3.call = async (m, p) => { if (m === 'approval.get') throw new Error('gateway approval.get: approval not found'); return get(m, p); };
+    await ap3.tick(); return r; })();
+  assert.equal((await approvalOf(f.askId)).settled, 'expired');
   assert.ok((await asks.open()).some(o => o.id === e.askId), 'still open');
 
   // 9. a payment is never held back by the daily cap (3 here, long since passed); an ordinary ask is
