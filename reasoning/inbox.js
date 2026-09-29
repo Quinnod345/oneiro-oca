@@ -171,13 +171,14 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return queue.setContinuous(id, on === true);
   }
 
-  // Answering an ask that an agent raised also puts the answer in that agent's session, so it continues.
+  // Answering an ask also puts the answer in the session of every agent waiting on it, so each continues. That
+  // includes an agent that joined an ask the engine raised for it, such as a held payment, which names no session.
   async function answerAsk({ id, reply = 'done', via = 'the app' }) {
     if (!asks) throw new Error('asks are not available');
     const row = await asks.answer(Number(id), reply);
-    if (agents && row?.metadata?.sessionKey) {
-      const { rows } = await pool.query('SELECT id FROM agent_deployments WHERE ask_id = $1 LIMIT 1', [Number(id)]);
-      if (rows[0]) await agents.relay(rows[0].id, reply, { via }).catch(e => log.warn?.('[inbox] relay to agent:', e.message));
+    if (agents) {
+      const { rows } = await pool.query(`SELECT id FROM agent_deployments WHERE ask_id = $1 AND status IN ('waiting_person', 'standing', 'running', 'done') ORDER BY created_at`, [Number(id)]);
+      for (const d of rows) await agents.relay(d.id, reply, { via }).catch(e => log.warn?.('[inbox] relay to agent:', e.message));
     }
     return row;
   }

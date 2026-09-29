@@ -47,7 +47,15 @@ const ONLY_CLOSES = /^(close|dismiss|cancel|×|x|✕|✖|close (dialog|modal|pan
 const VIEW_NOUN = /\b(filter|filters|date|dates|range|period|view|column|columns|sort|search|selection|picker|dialog|panel|menu|popup|modal|chart|graph|table|preview|drawer|tooltip|dropdown|tab|tabs|query|breakdown|series|legend|comparison|zoom|sidebar|overlay|notification|banner|tour|hint|tip|all|selected)\b/i;
 const CREDENTIAL_FIELD = /pass|pwd|card|cvc|cvv|ccnum|iban|routing|ssn|social.?security|otp|one.?time|2fa|totp|secret|token|api.?key|pin\b/i;
 
-const SPEND = /\b(pay|purchase|buy|check ?out|place order|order now|subscribe|start trial|upgrade|downgrade|donate|tip|book|reserve|boost|promote|add (card|payment))\b/i;
+// Money. A control that pays, orders, subscribes, books or funds something is a spend; so is a button that shows a
+// price, and so is every committing step on a checkout, payment or billing page. Each waits for Quinn's yes.
+const SPEND = /\b(pay|purchase|buy|check ?out|place (your |the |my )?order|(submit|complete|confirm|finish) (your |the |my |this )?(order|purchase|payment)|(make|send|authorize|confirm) (a |the )?payment|order now|pre-?order|subscribe|start (your |my |a )?(free )?trial|try( \w+)? free|(get|go|unlock) (premium|pro|plus|gold)|upgrade|downgrade|renew|donate|tip|book|reserve|rent|boost|promote|top ?up|add (card|payment|funds|credit|money))\b/i;
+const PRICE = /[$€£¥]\s?\d|\d\s?(usd|eur|gbp)\b|\/\s?(mo|month|yr|year)\b/i;
+const CHECKOUT = /check-?out|\/cart\b|\/basket\b|\/pay(ment)?s?\b|\/billing\b|\/purchase|\/order|\/subscribe|\/upgrade|\/buy\b|\b(payment|billing|your cart|shopping cart|place (your )?order|review (your )?order|order summary)\b/i;
+export const onCheckout = c => CHECKOUT.test(`${c.pageUrl || ''} ${c.pageTitle || ''}`.replace(/_/g, ' '));   // billing_hub, payment_settings
+// A task handed to Aside's agent that buys, orders, subscribes, books, boosts or funds something is a spend, whatever
+// class it was given.
+export const TASK_SPEND = /\b(buy|purchase|pay|check ?out|place (an |the |your |my )?order|order (a|an|the|some|\d)|pre-?order|subscribe to|start (a |the |my )?(paid |free )?trial|upgrade (to|the|my|our|his)|renew|donate|tip (the|a|them|him|her)|book (a|an|the)|reserve (a|an|the)|rent (a|an|the)|boost|promote (the |a |this |our )?(post|app|listing|page|tweet|video|reel|ad)|top ?up|add (a |the )?(card|payment method|funds|credit)|(set|raise|increase|change|lower) (the |a |its |our )?(daily |monthly |lifetime |total )?budget|bid)\b/i;
 const DESTROY = /\b(delete|destroy|erase|close account|deactivate|cancel subscription|sign ?out|log ?out|unsubscribe|revoke|archive|block|report|disable|remove (account|member|user|seat))\b/i;
 const PUBLISH = /\b(post|share|publish|tweet|repost|retweet|comment|reply|go live)\b/i;
 const MESSAGE = /\b(send|invite|message|dm|email)\b/i;
@@ -72,7 +80,9 @@ export function interactionPolicy(kind, c = {}) {
   }
   if (kind === 'enter') {
     if (c.formHasCredential) return refuse('Enter would submit a sign-in form: use aside_sign_in, which signs in with the saved login');
-    if (COMMIT_VERB.test(String(c.formSubmitName || ''))) return commit(commitClass(c.formSubmitName));
+    const submit = String(c.formSubmitName || '');
+    if (SPEND.test(submit) || PRICE.test(submit) || (c.inForm && onCheckout(c))) return commit('spend');
+    if (COMMIT_VERB.test(submit)) return commit(commitClass(submit));
     return { allowed: true };
   }
   if (kind === 'select') return String(c.tag || '').toLowerCase() === 'select' ? { allowed: true } : refuse('not a <select>; click the option instead');
@@ -80,9 +90,11 @@ export function interactionPolicy(kind, c = {}) {
   if (c.inputType === 'file') return refuse('a file input: use aside_do with the file paths, which uploads through the actuator');
   if (c.href && !/^https?:/i.test(c.href) && !/^[/#?]/.test(c.href)) return refuse(`a ${String(c.href).split(':')[0]}: link; use aside_do to message someone`);
   if (c.submit && c.formHasCredential) return refuse('it submits a sign-in form: use aside_sign_in, which signs in with the saved login');
-  if (COMMIT_VERB.test(name)) return commit(commitClass(name));
-  if (EITHER_VERB.test(name) && !VIEW_NOUN.test(name) && !ONLY_CLOSES.test(name)) return commit(DESTROY.test(name) || /\b(delete|remove|discard)\b/i.test(name) ? 'destroy' : 'submit');
-  if (c.submit) return commit('submit');
+  if (SPEND.test(name) || ((c.role === 'button' || c.submit) && PRICE.test(name))) return commit('spend');
+  const checkout = onCheckout(c);
+  if (COMMIT_VERB.test(name)) return commit(checkout ? 'spend' : commitClass(name));
+  if (EITHER_VERB.test(name) && !VIEW_NOUN.test(name) && !ONLY_CLOSES.test(name)) return commit(checkout ? 'spend' : DESTROY.test(name) || /\b(delete|remove|discard)\b/i.test(name) ? 'destroy' : 'submit');
+  if (c.submit) return commit(checkout ? 'spend' : 'submit');
   return { allowed: true };
 }
 
@@ -261,13 +273,13 @@ const TOOLS = [
   { name: 'aside_snapshot_tab', description: `Look at an open tab: title, URL, visible text and every control you can work, each with a ref (r1, r2, …) and its state. Do this before acting and whenever the page may have changed. ${LOOK}`,
     inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, maxChars: { type: 'integer' } }, required: ['targetId'], additionalProperties: false } },
   { name: 'aside_click', description: `Click a control by ref. Viewing controls (filters, dates, tabs, menus, pages) just work. A control that commits something — post, submit, save, pay, send, delete — is decided by the engine under Quinn's charter: pass pursuit and purpose; it proceeds, is held for one yes from Quinn (you get the ask to quote), or is refused with the reason. ${LOOK}`,
-    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'ref'], additionalProperties: false } },
+    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, cost: { type: 'number', description: 'dollars, when the step pays for something (a payment always asks Quinn; stating the cost lets him see it)' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'ref'], additionalProperties: false } },
   { name: 'aside_type', description: `Type into a text field by ref (replaces its content). Never into password, code or payment fields — sign in with aside_sign_in instead. enter=true submits; a form that commits something goes through the engine like aside_click (pass pursuit and purpose). ${LOOK}`,
-    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' }, enter: { type: 'boolean' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'ref', 'text'], additionalProperties: false } },
+    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' }, enter: { type: 'boolean' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, cost: { type: 'number', description: 'dollars, when the step pays for something (a payment always asks Quinn; stating the cost lets him see it)' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'ref', 'text'], additionalProperties: false } },
   { name: 'aside_select', description: `Choose an option in a <select> control by ref, by option value or label. For custom dropdowns, click the control and then click the option. ${LOOK}`,
     inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, value: { type: 'string' } }, required: ['targetId', 'ref', 'value'], additionalProperties: false } },
   { name: 'aside_press', description: `Press a key on the tab: Escape, Tab, arrows, PageUp/PageDown, Home, End, Enter (Enter on a committing form goes through the engine; pass pursuit and purpose). ${LOOK}`,
-    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, key: { type: 'string' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'key'], additionalProperties: false } },
+    inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, key: { type: 'string' }, pursuit: { type: 'integer', description: 'the pursuit #id this serves (required when the step commits something)' }, purpose: { type: 'string', description: 'why, in a sentence' }, cost: { type: 'number', description: 'dollars, when the step pays for something (a payment always asks Quinn; stating the cost lets him see it)' }, approval: { type: 'integer', description: 'the ask id Quinn answered yes to, when retrying a held action' } }, required: ['targetId', 'key'], additionalProperties: false } },
   { name: 'aside_scroll', description: `Scroll a tab: to a control by ref, or by direction (down/up/bottom/top). ${LOOK}`,
     inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, ref: { type: 'string' }, direction: { type: 'string', enum: ['down', 'up', 'bottom', 'top'] } }, required: ['targetId'], additionalProperties: false } },
   { name: 'aside_sign_in', description: 'Sign in on a tab that shows a sign-in page, with Quinn\'s saved login (Aside\'s agent autofills it; no password reaches you). Decided by the engine under the charter. Returns whether the tab is now signed in.',
@@ -345,10 +357,11 @@ export async function callAsideTool(name, args = {}) {
       if (!TARGET.test(id)) throw new Error('a tab is named by its targetId from aside_tabs');
       const key = String(args.key || ''); if (!KEYS.has(key)) throw new Error(`key must be one of ${[...KEYS].join(', ')}`);
       if (key === 'Enter') {
-        const r = await aside.repl(`const p6 = await attachBrowserTab(${JSON.stringify(id)}); console.log(JSON.stringify(await p6.evaluate(() => { const a = document.activeElement, f = a && a.closest && a.closest('form'); const sub = f && f.querySelector('button:not([type="button"]),input[type="submit"]'); return { formHasCredential: !!(f && f.querySelector('input[type="password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"]')), formSubmitName: sub ? String(sub.getAttribute('aria-label') || sub.value || sub.textContent).replace(/\\s+/g, ' ').trim().slice(0, 60) : '' }; })));`);
-        const e = interactionPolicy('enter', r.json || {}); if (!e.allowed) return refused('press Enter', { ref: '', role: 'form', name: r.json?.formSubmitName || '' }, e.why);
+        const r = await aside.repl(`const p6 = await attachBrowserTab(${JSON.stringify(id)}); console.log(JSON.stringify(await p6.evaluate(() => { const a = document.activeElement, f = a && a.closest && a.closest('form'); const sub = f && f.querySelector('button:not([type="button"]),input[type="submit"]'); return { inForm: !!f, formHasCredential: !!(f && f.querySelector('input[type="password"],input[autocomplete^="cc-"],input[autocomplete="one-time-code"]')), formSubmitName: sub ? String(sub.getAttribute('aria-label') || sub.value || sub.textContent).replace(/\\s+/g, ' ').trim().slice(0, 60) : '' }; })));`);
+        const t = await tabUrl(id);
+        const e = interactionPolicy('enter', { ...(r.json || {}), pageUrl: t.url, pageTitle: t.title }); if (!e.allowed) return refused('press Enter', { ref: '', role: 'form', name: r.json?.formSubmitName || '' }, e.why);
         if (e.commit) {
-          const t = await tabUrl(id); const c = { role: 'form', name: r.json?.formSubmitName || 'the form' };
+          const c = { role: 'form', name: r.json?.formSubmitName || 'the form' };
           const g = await gate(args, { cls: e.commit, url: t.url, control: `form "${c.name}"`, description: `submit "${c.name}" on ${t.title || hostOf(t.url)}` });
           return g.proceed ? committed(id, g, 'press Enter', c, `await p.keyboard.press('Enter');`) : heldOrRefused('press Enter', c, g);
         }
@@ -383,8 +396,9 @@ export async function callAsideTool(name, args = {}) {
       } catch (e) { await report(g.actionId, 'failure', e.message); throw e; }
     }
     case 'aside_do': {
-      const cls = String(args.class || ''); const task = String(args.task || '').trim();
+      const declared = String(args.class || ''); const task = String(args.task || '').trim();
       if (task.length < 10) throw new Error('say exactly what to do');
+      const cls = declared !== 'spend' && declared !== 'sign_in' && TASK_SPEND.test(`${task} ${args.purpose || ''}`) ? 'spend' : declared;
       const url = String(args.url || ''); const files = Array.isArray(args.files) ? args.files.map(String) : [];
       for (const f of files) if (!f.startsWith(WORKSPACE) || f.includes('..')) throw new Error(`files must be under ${WORKSPACE}`);
       const g = await gate(args, { cls, url: consoleOf(task, url), control: 'Aside agent', description: `${task.slice(0, 600)}${files.length ? ` (files: ${files.map(f => f.split('/').pop()).join(', ')})` : ''}` });

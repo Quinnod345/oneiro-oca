@@ -47,7 +47,10 @@ export async function pushAlert({ nodeId, title, body, openclawCli = process.env
 
 export function createAsks({ pool, risk, clock = Date.now, log = console,
   imessage = process.env.OCA_OWNER_IMESSAGE || null, pushNode = process.env.OCA_OWNER_PUSH_NODE || null,
-  notify = true, perDay = Number(process.env.OCA_ASKS_PER_DAY) || 40, dedupeMs = 12 * 3600_000, deliverers = null } = {}) {
+  notify = true, perDay = Number(process.env.OCA_ASKS_PER_DAY) || 40, dedupeMs = 12 * 3600_000, deliverers = null, approvals = null } = {}) {
+  // Payments ask on the phone with Approve and Deny (payment-approvals.js), wired after the gateway exists.
+  let paymentApprovals = approvals;
+  const useApprovals = a => { paymentApprovals = a; };
 
   async function init() {
     await pool.query(`CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, message TEXT NOT NULL, category TEXT DEFAULT 'thought',
@@ -96,7 +99,9 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
   }
 
   // Ask once per (want, need) per dedupe window, at most perDay a day, only when the gate says proceed.
-  async function ask({ chainId, kind, host = '', detail = '', want = '', stakes = [], sessionKey = null, agent = null }) {
+  // payment: { title, description, detail } for a payment. It opens an approval on Quinn's phone, which replaces the
+  // plain push, and it's never held back by the daily cap.
+  async function ask({ chainId, kind, host = '', detail = '', want = '', stakes = [], sessionKey = null, agent = null, payment = null }) {
     const original = asksForSecret(detail) ? text(detail, 300) : null;
     if (original) detail = safeSecretAsk(detail);
     const rewrite = original ? { rewritten: 'secret request', original } : {};
@@ -108,7 +113,7 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     const message = composeAsk({ kind, host, want, chainId, detail, agent });
     // Past the daily cap the phone stays quiet, but the ask is still recorded: the app shows it, and an agent
     // waiting on it is still answered from there. A question is never dropped.
-    if (n >= perDay) {
+    if (n >= perDay && !payment) {
       const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'normal', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id`,
         [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: 'held', held: `daily cap of ${perDay}`, delivered: [], failed: [], at: clock(), ...rewrite, ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
       return { asked: false, id: row.id, why: `daily cap of ${perDay} reached; recorded for the app`, message };
@@ -123,14 +128,17 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     }
     const proceed = !decision || decision.decision === 'proceed';
     const delivered = [], failed = [];
+    const approval = proceed && payment && paymentApprovals ? await paymentApprovals.request(payment).catch(() => null) : null;
+    if (approval) delivered.push('approval');
     if (proceed) {
       for (const [name, send] of Object.entries(channels)) {
-        if (!send) continue;
+        if (!send || (approval && name === 'push')) continue;   // the approval is the phone's notification
         try { await send(message); delivered.push(name); } catch (e) { failed.push(`${name}: ${text(e.message, 120)}`); }
       }
     }
     const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'high', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id, created_at`,
-      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock(), ...rewrite, ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
+      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock(), ...rewrite,
+        ...(payment ? { payment: true } : {}), ...(approval ? { approval } : {}), ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
     if (risk && decision?.decision === 'proceed') {
       try { await risk.observe(id, { result: delivered.length ? 'success' : 'failure', evidence: [{ id: `ask-${row.id}`, source: 'ask runtime: delivery result', observation: `Ask #${row.id} ${delivered.length ? `delivered via ${delivered.join(', ')}` : 'recorded but no channel delivered'}${failed.length ? `; failed: ${failed.join('; ')}` : ''}.` }] }); }
       catch (e) { log.warn?.('[asks] outcome not journaled:', e.message); }
@@ -151,5 +159,5 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     return rows.map(r => ({ id: r.id, message: r.message, at: r.created_at, chainId: r.metadata?.chainId ?? null, kind: r.metadata?.kind, host: r.metadata?.host, detail: r.metadata?.detail || '', delivered: r.metadata?.delivered || [], sessionKey: r.metadata?.sessionKey || null, agent: r.metadata?.agent || null }));
   }
 
-  return { init, ask, answer, open, recent, composeAsk, channels: () => Object.entries(channels).filter(([, f]) => f).map(([n]) => n) };
+  return { init, ask, answer, open, recent, composeAsk, useApprovals, channels: () => Object.entries(channels).filter(([, f]) => f).map(([n]) => n) };
 }
