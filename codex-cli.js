@@ -88,12 +88,18 @@ export function appleMcpArgs({ server = APPLE_MCP_SERVER, node = process.execPat
   ];
 }
 
+// A plain answer, not a working session. The engine's own model calls (think, plan, classify, review) read what
+// they're given and reply. With a shell, code mode, a browser and tool servers, a thorough model opens the files and
+// pages named in its prompt, and a ten-second answer turns into a three-minute investigation that times out.
+export const ANSWER_ONLY_DISABLED = ['shell_tool', 'code_mode_host', 'browser_use', 'browser_use_external', 'computer_use', 'multi_agent',
+  'apps', 'plugins', 'image_generation', 'memories', 'skill_search', 'goals', 'sleep_tool'];
+
 export function buildCodexArgs({
   workingDirectory = DEFAULT_WORKING_DIRECTORY,
   model = '',
   sandbox = 'read-only',
   persistent = false, threadId = null, outputSchemaPath = null,
-  reasoningEffort = '', aside = true,
+  reasoningEffort = '', aside = true, answerOnly = false,
 } = {}) {
   const args = [
     'exec',
@@ -116,7 +122,8 @@ export function buildCodexArgs({
   // --ignore-user-config drops ~/.codex/config.toml, so the effort the engine wants is stated explicitly.
   const effort = String(reasoningEffort || '').trim().toLowerCase();
   if (REASONING_EFFORTS.includes(effort)) args.push('--config', `model_reasoning_effort="${effort}"`);
-  if (aside) args.push(...asideMcpArgs(), ...appleMcpArgs());
+  if (answerOnly) args.push(...ANSWER_ONLY_DISABLED.flatMap(feature => ['--disable', feature]));
+  else if (aside) args.push(...asideMcpArgs(), ...appleMcpArgs());
   if (outputSchemaPath) args.push('--output-schema', outputSchemaPath);
   if (threadId) {
     if (!/^[a-f0-9-]{36}$/i.test(threadId)) throw new Error('Invalid Codex session ID');
@@ -161,6 +168,7 @@ export function runCodex(prompt, {
   persistent = false, threadId = null, outputSchema = null,
   reasoningEffort = process.env.OCA_CODEX_REASONING_EFFORT || process.env.ONEIRO_CODEX_REASONING_EFFORT || '',
   aside = !/^(0|false|no|off)$/i.test(String(process.env.OCA_CODEX_ASIDE || '')),
+  answerOnly = false,
   env = process.env,
 } = {}) {
   const codexCLI = resolveCodexCLI(env);
@@ -168,7 +176,7 @@ export function runCodex(prompt, {
   const outputSchemaPath = schemaDir ? join(schemaDir, 'response.json') : null;
   if (outputSchemaPath) writeFileSync(outputSchemaPath, JSON.stringify(outputSchema), { mode: 0o600 });
   let args;
-  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath, reasoningEffort, aside }); }
+  try { args = buildCodexArgs({ workingDirectory, model, sandbox, persistent, threadId, outputSchemaPath, reasoningEffort, aside, answerOnly }); }
   catch (error) { if (schemaDir) rmSync(schemaDir, { recursive: true, force: true }); throw error; }
   const childEnv = buildCodexEnvironment(env);
   const timeout = clampTimeout(timeoutMs);

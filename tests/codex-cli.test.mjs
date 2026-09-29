@@ -54,6 +54,10 @@ test('every Codex run is offered Aside as read-only MCP tools, auto-approved, an
   assert.ok(!buildCodexArgs({ aside: false }).some(a => a.includes('mcp_servers.aside')));
   for (const t of ['apple_call', 'apple_status', 'apple_ads_setup']) assert.ok(args.includes(`mcp_servers.apple.tools.${t}.approval_mode="approve"`), `Apple tool ${t} is offered beside Aside`);
   assert.ok(!buildCodexArgs({ aside: false }).some(a => a.includes('mcp_servers.apple')));
+  // A plain answer has no tools at all: no shell, no code mode, no browser, no tool servers.
+  const answer = buildCodexArgs({ answerOnly: true });
+  for (const f of ['shell_tool', 'code_mode_host', 'browser_use', 'computer_use', 'multi_agent']) assert.ok(answer.join(' ').includes(`--disable ${f}`), f);
+  assert.ok(!answer.some(a => a.includes('mcp_servers.')), 'no tool servers for a plain answer');
   const resumed = buildCodexArgs({ threadId: '11111111-2222-3333-4444-555555555555', persistent: true, sandbox: 'workspace-write' });
   assert.equal(resumed[1], 'resume'); assert.ok(resumed.some(a => a.startsWith('mcp_servers.aside.command=')));
 });
