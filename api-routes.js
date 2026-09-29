@@ -25,6 +25,7 @@ import { registerMobileCompanionRoutes } from './mobile-companion.js';
 import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
 import { createActuator } from './reasoning/actuator.js';
+import { createAppleBroker } from './apple/broker.js';
 import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
@@ -63,7 +64,9 @@ const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAg
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
 // The actuator: every committing step an agent takes on the world is decided here, under the person's charter.
-const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue, llm, aside: asideBrowser });
+// Apple Ads budgets live in the Apple broker; what they commit this month counts against the same charter cap.
+const appleBroker = createAppleBroker();
+const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue, llm, aside: asideBrowser, externalSpend: appleBroker.committedSpend });
 actuator.init().catch(e => console.error('[actuator] init:', e.message));
 ocaRouter.use(actuator.router);
 // The board: the orchestrator's account of each pursuit — workstreams it named, milestones, what it set up —

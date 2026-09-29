@@ -52,6 +52,8 @@ test('every Codex run is offered Aside as read-only MCP tools, auto-approved, an
   assert.ok(args.some(a => /^mcp_servers\.aside\.args=\["\/.*aside-mcp\.js"\]$/.test(a)));
   for (const t of ['aside_read', 'aside_search', 'aside_snapshot', 'aside_open', 'aside_tabs']) assert.ok(args.includes(`mcp_servers.aside.tools.${t}.approval_mode="approve"`), t);
   assert.ok(!buildCodexArgs({ aside: false }).some(a => a.includes('mcp_servers.aside')));
+  for (const t of ['apple_call', 'apple_status', 'apple_ads_setup']) assert.ok(args.includes(`mcp_servers.apple.tools.${t}.approval_mode="approve"`), `Apple tool ${t} is offered beside Aside`);
+  assert.ok(!buildCodexArgs({ aside: false }).some(a => a.includes('mcp_servers.apple')));
   const resumed = buildCodexArgs({ threadId: '11111111-2222-3333-4444-555555555555', persistent: true, sandbox: 'workspace-write' });
   assert.equal(resumed[1], 'resume'); assert.ok(resumed.some(a => a.startsWith('mcp_servers.aside.command=')));
 });
