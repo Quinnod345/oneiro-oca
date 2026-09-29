@@ -751,3 +751,15 @@ test('the planner\'s own "keep this pursuit moving" prompt is never a retired sc
   const d = await h.deploy('Improve the App Store screenshots and first line of the listing');
   assert.ok(d.id, 'a concrete move is not vetoed by the cadence prompt'); assert.equal(h.comparisonCalls, 0, 'and costs no comparison');
 }));
+
+test('a Codex failure rests Codex only when the account is out, and only until the reset it names', async () => {
+  const { codexRestUntil, lighterEffort } = await import('../llm.js');
+  const now = Date.parse('2026-09-29T05:00:00Z');
+  assert.equal(codexRestUntil('Codex CLI timed out after 180 seconds', now), 0, 'a slow call is not an outage');
+  assert.equal(codexRestUntil('Codex CLI exited 1: ERROR: stream disconnected', now), 0);
+  assert.equal(codexRestUntil("You've hit your usage limit. Try again in 2h 13m.", now), now + (2 * 60 + 13) * 60_000);
+  assert.equal(codexRestUntil('usage limit reached; try again in 4 days 1 hour 3 minutes', now), now + ((4 * 24 + 1) * 60 + 3) * 60_000);
+  assert.equal(codexRestUntil('Not logged in', now), now + 5 * 60_000, 'no reset named: a short rest');
+  assert.equal(lighterEffort('medium', 'high'), 'medium'); assert.equal(lighterEffort('xhigh', 'high'), 'high', 'never more than the policy');
+  assert.equal(lighterEffort(undefined, 'high'), 'high');
+});

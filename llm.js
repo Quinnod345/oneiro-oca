@@ -52,8 +52,36 @@ const inferencePolicy = {
 };
 const inferenceStats = { calls: { local: 0, codex: 0, anthropic: 0, openai: 0 }, crossovers: [], lastUsed: null, lastUsedAt: null };
 let codexDownUntil = 0;
-const CODEX_BACKOFF_MS = 15 * 60 * 1000;
+// A Codex failure sends that one step to the local model. Codex itself rests only when the account can't serve at
+// all (a usage limit, or signed out), and only until the reset Codex names. A slow call or a dropped connection is
+// not an outage, so the next step tries Codex again.
 const CODEX_OUT = /usage limit|not logged|unauthori|rate limit|quota|exited \d+|ENOENT|timed out|ECONN|network|aborted/i;
+const CODEX_UNAVAILABLE = /usage limit|not logged|unauthori|rate limit|quota|\b429\b/i;
+const CODEX_DEFAULT_REST_MS = 5 * 60 * 1000;
+const UNIT_MS = { s: 1e3, sec: 1e3, second: 1e3, m: 60e3, min: 60e3, minute: 60e3, h: 3600e3, hr: 3600e3, hour: 3600e3, d: 86400e3, day: 86400e3 };
+export function codexRestUntil(message, now = Date.now()) {
+  const m = String(message || '');
+  if (!CODEX_UNAVAILABLE.test(m)) return 0;
+  // "try again in 2h 13m", "try again in 4 days 1 hour 3 minutes", "try again in 45 seconds"
+  const rel = /try again in\s+([^.;|]+)/i.exec(m);
+  if (rel) {
+    let ms = 0;
+    for (const [, n, unit] of rel[1].matchAll(/(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/gi)) {
+      ms += Number(n) * (UNIT_MS[unit.toLowerCase().replace(/s$/, '')] ?? UNIT_MS[unit.toLowerCase()] ?? 0);
+    }
+    if (ms > 0) return now + ms;
+  }
+  // "try again at 2026-09-29T05:15:00Z" or "try again at Oct 1st, 2026 10:48 AM"
+  const at = /try again (?:at|after)\s+([^.;|]+)/i.exec(m);
+  if (at) { const t = Date.parse(at[1].replace(/(\d+)(st|nd|rd|th)/, '$1')); if (Number.isFinite(t) && t > now) return t; }
+  return now + CODEX_DEFAULT_REST_MS;
+}
+// What a failed Codex step was, so a slow or failing caller can be found: who asked, and how big the prompt was.
+function describeStep(params) {
+  const system = typeof params?.system === 'string' ? params.system : Array.isArray(params?.system) ? params.system.map(b => b?.text || '').join(' ') : '';
+  const chars = JSON.stringify(params?.messages || []).length + system.length;
+  return `${String(params?.label || system).replace(/\s+/g, ' ').trim().slice(0, 70) || 'unlabelled step'} (${chars} chars)`;
+}
 const LOCAL_DOWN = /circuit open|fetch failed|ECONN|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|timed out|aborted|socket hang up|HTTP 5\d\d/i;
 
 export function setInferencePolicy({ mode, cloudModel, cloudEffort } = {}) {
@@ -177,7 +205,7 @@ const messages = {
         // Auto: a local backend that is down is not a reason for the engine to stop thinking.
         if (inferencePolicy.mode === 'auto' && LOCAL_DOWN.test(String(e.message)) && codexAvailable() && Date.now() >= codexDownUntil) {
           noteCrossover('local', 'codex', e.message);
-          try { return await cloud(); } catch (e2) { if (CODEX_OUT.test(String(e2.message))) codexDownUntil = Date.now() + CODEX_BACKOFF_MS; throw e; }
+          try { return await cloud(); } catch (e2) { const rest = codexRestUntil(e2.message); if (rest) codexDownUntil = rest; throw e; }
         }
         throw e;
       }
@@ -189,12 +217,14 @@ const messages = {
     }
 
     if (effectiveBackend === 'codex') {
-      // Codex out (usage limit, sign-in, transport): the same step runs locally, and Codex rests for a while.
+      // Codex failed on this step: the step runs locally. Codex rests only when the account itself is out.
       if (Date.now() < codexDownUntil) { noteCrossover('codex', 'local', `Codex resting until ${new Date(codexDownUntil).toISOString()}`); return await local(); }
       try { return await cloud(); }
       catch (e) {
         if (!CODEX_OUT.test(String(e.message))) throw e;
-        codexDownUntil = Date.now() + CODEX_BACKOFF_MS;
+        const rest = codexRestUntil(e.message);
+        if (rest) codexDownUntil = rest;
+        console.warn(`[llm] codex failed on ${describeStep(params)}: ${String(e.message).slice(0, 200)}`);
         noteCrossover('codex', 'local', e.message);
         return await local();
       }
@@ -285,6 +315,12 @@ async function callOpenAI(params) {
   };
 }
 
+const EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+export function lighterEffort(requested, policy) {
+  const r = EFFORTS.indexOf(String(requested || '').toLowerCase()), p = EFFORTS.indexOf(String(policy || '').toLowerCase());
+  return r >= 0 && (p < 0 || r < p) ? EFFORTS[r] : policy;
+}
+
 async function callCodex(params, options = {}) {
   const prompt = buildTextPrompt(params);
   const requestedModel = String(params?.model || '').trim();
@@ -292,7 +328,8 @@ async function callCodex(params, options = {}) {
   const model = requestedModel.startsWith('gpt-') ? requestedModel : inferencePolicy.cloudModel;
   const result = await runCodex(prompt, {
     workingDirectory: process.env.ONEIRO_CODEX_WORKSPACE || '/Users/quinnodonnell/oneiro/runtime/workspace',
-    model, reasoningEffort: inferencePolicy.cloudEffort,
+    // A step may ask for less effort than the policy's (a yes/no classification needs less than planning), never more.
+    model, reasoningEffort: lighterEffort(params?.reasoningEffort, inferencePolicy.cloudEffort),
     sandbox: 'read-only', signal: options.signal, outputSchema: options.responseSchema,
   });
 
