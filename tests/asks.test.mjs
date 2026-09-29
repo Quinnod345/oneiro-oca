@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { createAsks, composeAsk, pushAlert } from '../reasoning/asks.js';
+import { createAsks, composeAsk, pushAlert, asksForSecret } from '../reasoning/asks.js';
 import { createProposal, appraise, OWNER_KEY } from '../motivation/risk.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -82,3 +82,25 @@ test('the phone is a delivery channel only when a paired node is configured; a p
   await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/usr/bin/false' }));
   await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/bin/echo' }), /gateway:/);
 });
+
+test('an ask never has the person send a code or password: the request becomes the step, and open ones are rewritten on start', async () => database(async pool => {
+  for (const d of ['Send the current six-digit GitHub authenticator code now.', 'Please provide your App Store Connect password', 'What is the verification code Apple texted you?',
+    'Share the OpenAI API key so I can check usage', 'Reply with the 6-digit code from your authenticator app']) assert.ok(asksForSecret(d), d);
+  for (const d of ['Please complete App Store Connect sign-in in Aside; the saved-login attempt is blocked by local Apple Passwords authorization.',
+    'Enter the six-digit code in the GitHub prompt in Aside, then reply done.', 'Oneiro wants to save new promotional text on appstoreconnect.apple.com. OK? Reply yes or no.',
+    'What usefulness score from 0 to 1 would you give the pricing comparison?']) assert.ok(!asksForSecret(d), d);
+  const now = 30 * 86400000, sent = [];
+  const asks = createAsks({ pool, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } });
+  await asks.init();
+  // an open ask from before the rule is rewritten when the engine starts
+  await pool.query(`INSERT INTO notifications (message, category, metadata) VALUES ('Oneiro''s agent on #27 asks: Send the current six-digit GitHub authenticator code now.', 'ask', $1)`,
+    [JSON.stringify({ chainId: 27, kind: 'question', detail: 'Send the current six-digit GitHub authenticator code now.', agent: '#27 research' })]);
+  await asks.init();
+  const [old] = await asks.open();
+  assert.match(old.message, /^Oneiro's agent on #27 asks: A sign-in wants a code or password\. Enter it yourself where it is asked, in Aside, never in a reply; then reply "done"\./);
+  // a new request for a code is sent as the step, and says what the agent asked
+  const r = await asks.ask({ chainId: 28, kind: 'question', detail: 'Reply with the 6-digit code from your authenticator app' });
+  assert.match(r.message, /never in a reply/); assert.match(sent[0], /never in a reply/); assert.match(sent[0], /The agent asked: “Reply with the 6-digit code/);
+  const { rows: [row] } = await pool.query('SELECT metadata FROM notifications WHERE id = $1', [r.id]);
+  assert.equal(row.metadata.rewritten, 'secret request'); assert.match(row.metadata.original, /6-digit code/);
+}));
