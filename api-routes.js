@@ -74,7 +74,8 @@ ocaRouter.use(actuator.router);
 // Apple's numbers, pulled daily through the broker (reads only), then the growth loop's proposals, each decided by
 // the broker: dry-run until Quinn switches it live. /oca/apple shows all three.
 const appleGrowth = createAppleGrowth({ pool, apple: appleBroker, llm, asks });
-const appleMetrics = createAppleMetrics({ pool, apple: appleBroker, after: () => appleGrowth.run() });
+const appleMetrics = createAppleMetrics({ pool, apple: appleBroker, after: () => appleGrowth.run(),
+  alert: ({ chainId, detail }) => (chainId ? asks.ask({ chainId, kind: 'notice', detail }) : null) });
 Promise.all([appleMetrics.init(), appleGrowth.init()]).then(() => appleMetrics.start()).catch(e => console.error('[apple] init:', e.message));
 ocaRouter.use(appleRouter({ apple: appleBroker, metrics: appleMetrics, growth: appleGrowth }));
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => appleMetrics.stop());
