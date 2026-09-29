@@ -64,7 +64,10 @@ export function createPaymentApprovals({ pool, gateway, deciders = [], clock = D
         const lapsed = clock() > Number(ap.expiresAt || 0) + 60_000;
         let snap = null;
         try { snap = unwrap(await gateway.call('approval.get', { id: ap.id }, { timeout: 20_000 }))?.approval ?? null; }
-        catch (e) { if (lapsed) await settle(a.id, { settled: 'expired' }); else log.warn?.(`[payments] ask #${a.id}: approval.get failed:`, text(e.message, 160)); continue; }
+        catch (e) {   // gone from the gateway can never be decided; anything else is retried until the window lapses
+          if (lapsed || /not.?found/i.test(e.message)) await settle(a.id, { settled: 'expired' }); else log.warn?.(`[payments] ask #${a.id}: approval.get failed:`, text(e.message, 160));
+          continue;
+        }
         if (!snap || snap.status === 'pending') { if (lapsed) await settle(a.id, { settled: 'expired' }); continue; }
         const decision = snap.decision, resolver = snap.resolver || null;
         if (decision !== APPROVE && decision !== DENY) { await settle(a.id, { settled: 'expired', status: snap.status ?? null }); continue; }
