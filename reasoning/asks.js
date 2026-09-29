@@ -10,6 +10,16 @@ import { OWNER_KEY } from '../motivation/risk.js';
 const run = promisify(execFile);
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
+// An ask never has the person hand over a secret: a one-time code, a password, a recovery code, a key or a
+// token. Those go only into the page that asks for them, typed by the person in Aside, never into a reply that
+// lands in a transcript. An agent's request for one is rewritten into the step the person can safely take.
+const SECRET = /\b(?:2fa|two[- ]factor|mfa|otp|totp|one[- ]time (?:pass(?:word|code)?|code)|(?:authenticat(?:or|ion)|verification|security|sign[- ]?in|log[- ]?in|confirmation|access|backup|recovery|sms)\s+codes?|(?:six|6|eight|8)[- ]digit|passcodes?|passwords?|passphrases?|recovery keys?|api keys?|secret keys?|private keys?|access tokens?|auth(?:entication)? tokens?|bearer tokens?|client secrets?|\.p8\b)/i;
+const HAND_OVER = /\b(?:send|give|share|provide|tell|text|message|forward|paste|reply with|respond with|dm|email|read (?:me|out))\b|\bwhat(?:'s| is| are) (?:your|the)\b/i;
+export function asksForSecret(detail) { const d = String(detail || ''); return SECRET.test(d) && HAND_OVER.test(d); }
+export function safeSecretAsk(detail) {
+  return `A sign-in wants a code or password. Enter it yourself where it is asked, in Aside, never in a reply; then reply "done". (The agent asked: “${text(detail, 200)}”)`;
+}
+
 // What the engine says for each kind of need. Only observed fields are interpolated.
 export function composeAsk({ kind, host, want, chainId, detail, agent }) {
   const pursuit = `#${chainId}${want ? ` (${text(want, 60)})` : ''}`;
@@ -42,6 +52,17 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
   async function init() {
     await pool.query(`CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, message TEXT NOT NULL, category TEXT DEFAULT 'thought',
       priority TEXT DEFAULT 'normal', read BOOLEAN DEFAULT false, reply TEXT, replied_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now(), metadata JSONB NOT NULL DEFAULT '{}'::jsonb)`);
+    // An open ask written before the secret rule gets the same rewrite, so none is left asking for a code.
+    const { rows } = await pool.query(`SELECT id, metadata FROM notifications WHERE category = 'ask' AND replied_at IS NULL AND NOT (metadata ? 'rewritten')`);
+    for (const r of rows) {
+      const m = r.metadata || {};
+      if (!asksForSecret(m.detail)) continue;
+      const detail = safeSecretAsk(m.detail);
+      await pool.query(`UPDATE notifications SET message = $2, metadata = metadata || $3::jsonb WHERE id = $1`, [r.id,
+        composeAsk({ kind: m.kind || 'question', host: m.host || '', chainId: m.chainId, detail, agent: m.agent }),
+        JSON.stringify({ detail: text(detail, 300), rewritten: 'secret request', original: text(m.detail, 300) })]);
+      log.log?.(`[asks] #${r.id} asked for a secret; it now asks for the step instead`);
+    }
   }
 
   // Delivery channels, each best-effort and journaled by name. The notification row is not a channel: it is the record.
@@ -76,6 +97,9 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
 
   // Ask once per (want, need) per dedupe window, at most perDay a day, only when the gate says proceed.
   async function ask({ chainId, kind, host = '', detail = '', want = '', stakes = [], sessionKey = null, agent = null }) {
+    const original = asksForSecret(detail) ? text(detail, 300) : null;
+    if (original) detail = safeSecretAsk(detail);
+    const rewrite = original ? { rewritten: 'secret request', original } : {};
     const key = `${kind}:${host || text(detail, 60)}`;
     const { rows: dupes } = await pool.query(`SELECT id FROM notifications WHERE category = 'ask' AND metadata ->> 'key' = $1 AND (metadata ->> 'chainId')::int = $2
       AND created_at > to_timestamp($3 / 1000.0) AND replied_at IS NULL LIMIT 1`, [key, chainId, clock() - dedupeMs]);
@@ -86,7 +110,7 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     // waiting on it is still answered from there. A question is never dropped.
     if (n >= perDay) {
       const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'normal', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id`,
-        [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: 'held', held: `daily cap of ${perDay}`, delivered: [], failed: [], at: clock(), ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
+        [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: 'held', held: `daily cap of ${perDay}`, delivered: [], failed: [], at: clock(), ...rewrite, ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
       return { asked: false, id: row.id, why: `daily cap of ${perDay} reached; recorded for the app`, message };
     }
     const id = `ask:${chainId}:${key}:${new Date(clock()).toISOString().slice(0, 13)}`.slice(0, 200);
@@ -106,7 +130,7 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
       }
     }
     const { rows: [row] } = await pool.query(`INSERT INTO notifications (message, category, priority, metadata, created_at) VALUES ($1, 'ask', 'high', $2::jsonb, to_timestamp($3 / 1000.0)) RETURNING id, created_at`,
-      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock(), ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
+      [message, JSON.stringify({ chainId, kind, host, detail: text(detail, 300), key, decision: decision?.decision || 'proceed', delivered, failed, at: clock(), ...rewrite, ...(sessionKey ? { sessionKey, agent } : {}) }), clock()]);
     if (risk && decision?.decision === 'proceed') {
       try { await risk.observe(id, { result: delivered.length ? 'success' : 'failure', evidence: [{ id: `ask-${row.id}`, source: 'ask runtime: delivery result', observation: `Ask #${row.id} ${delivered.length ? `delivered via ${delivered.join(', ')}` : 'recorded but no channel delivered'}${failed.length ? `; failed: ${failed.join('; ')}` : ''}.` }] }); }
       catch (e) { log.warn?.('[asks] outcome not journaled:', e.message); }

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
-import { randomBytes } from 'node:crypto';
-import { createActuator, isCoursework, YES, NO } from '../reasoning/actuator.js';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { createActuator, isCoursework, guardedConsole, budgetCommitment, YES, NO } from '../reasoning/actuator.js';
 import { createAsks } from '../reasoning/asks.js';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
@@ -164,8 +164,11 @@ test('an external Meta app-account prerequisite stays a failed action without be
   const meta = h.act();
   const candidate = { chainId: 83, class: 'submit', host: 'adsmanager.facebook.com', url: 'https://adsmanager.facebook.com/adsmanager/manage/campaigns',
     description: 'Save the existing unpublished InnerEcho app promotion draft' };
-  const action = await meta.authorize(candidate);
-  assert.equal(action.decision, 'proceed');
+  assert.equal((await meta.authorize(candidate)).decision, 'ask', 'Meta\'s ads console waits for Quinn\'s yes, whatever the charter grants');
+  // The attempt Quinn approved, replayed as stored, then observed failing on Meta's prerequisite.
+  const action = { actionId: randomUUID() };
+  await storedAction(pool, { id: action.actionId, chain_id: candidate.chainId, class: candidate.class, host: candidate.host, url: candidate.url, control: '', description: candidate.description,
+    decision: 'proceed', why: 'approved by Quinn (ask #55)', outcome: null, observation: null, created_at: new Date(), observed_at: null });
   await meta.observe({ actionId: action.actionId, result: 'failure', observation: 'BLOCKED: Meta needs App Store ID 6683282892 connected as a valid `application_id` for this ad account. InnerEcho: Mental Health is not connected to your ad account. Missing or Invalid Field in Promoted Objects (#1815437).' });
   const stored = (await meta.recent()).find(a => a.id === action.actionId);
   assert.equal(stored.outcome, 'failure', 'the action remains failed so an equivalent commit cannot repeat');
@@ -277,4 +280,54 @@ test('route aliases, unrelated recovery sources, changed metadata and missing mo
   h.options.llm = null;
   assert.equal((await h.act().authorize({ ...candidate, retryEvidence: { source: h.page.url, quote } })).decision, 'refuse');
   assert.equal(h.asks.length, 0);
+}));
+
+test('Apple and Meta consoles always ask; other ad consoles ask unless a costed spend; a daily budget counts what it commits through the month', async () => database(async pool => {
+  const now = Date.parse('2026-09-28T12:00:00');   // local noon; September has 30 days, so 3 days are left
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const charter = normalizeCharter({ ramp: 0, publish: { granted: true }, submit: { granted: true }, spend: { granted: true, monthlyCap: 500 } });
+  const controls = { get: async () => ({ askOwner: true, autonomousActions: false, charter }) };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controls.get() });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const sent = [];
+  const asks = createAsks({ pool, risk, clock: () => now, log: silent, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
+  let external = 0, externalFails = false;
+  const act = createActuator({ pool, risk, asks, controls, queue, clock: () => now, log: silent,
+    externalSpend: async () => { if (externalFails) throw new Error('broker offline'); return external; } }); await act.init();
+  const id = (await queue.enqueue({ seed: 'Grow InnerEcho', doneWhen: 'a profitable month', stakes: [{ entityKey: 'person:quinn', share: 1 }] }, { origin: { kind: 'explicit', by: 'quinn' } })).chain_id;
+  const why = async r => (await act.recent()).find(x => x.id === r.actionId).why;
+
+  assert.equal(guardedConsole('appstoreconnect.apple.com').owner, 'Apple'); assert.equal(guardedConsole('app.searchads.apple.com').owner, 'Apple');
+  assert.equal(guardedConsole('www.facebook.com', 'https://www.facebook.com/adsmanager/manage').owner, 'Meta'); assert.equal(guardedConsole('www.facebook.com', 'https://www.facebook.com/getinnerecho'), null);
+  assert.equal(guardedConsole('ads.x.com').always, false); assert.equal(guardedConsole('www.instagram.com'), null); assert.equal(guardedConsole('apps.apple.com'), null);
+
+  // 1. Apple: a granted class still asks, and says why; signing in is not a commitment
+  const p = await act.authorize({ chainId: id, class: 'publish', host: 'appstoreconnect.apple.com', url: 'https://appstoreconnect.apple.com/apps/1/distribution', description: 'save new promotional text' });
+  assert.equal(p.decision, 'ask'); assert.match(await why(p), /Apple's console/); assert.match(p.question, /save new promotional text on appstoreconnect\.apple\.com/);
+  const done = async r => { assert.equal(r.decision, 'proceed', r.why); await act.observe({ actionId: r.actionId, result: 'success', observation: 'done' }); return r; };
+  await done(await act.authorize({ chainId: id, class: 'sign_in', host: 'appstoreconnect.apple.com', description: 'sign in to App Store Connect' }));
+  // 2. Meta: even a costed spend under the cap asks; an ordinary page is not the ads console
+  assert.equal((await act.authorize({ chainId: id, class: 'spend', host: 'adsmanager.facebook.com', description: 'publish the InnerEcho campaign', cost: 40 })).decision, 'ask');
+  assert.equal((await act.authorize({ chainId: id, class: 'submit', host: 'www.facebook.com', url: 'https://www.facebook.com/adsmanager/manage/campaigns', description: 'save the campaign draft' })).decision, 'ask');
+  await done(await act.authorize({ chainId: id, class: 'publish', host: 'www.facebook.com', url: 'https://www.facebook.com/getinnerecho', description: 'post the launch note to the page' }));
+  // 3. other ad consoles: an uncosted save asks; a costed spend goes through the cap
+  const x = await act.authorize({ chainId: id, class: 'submit', host: 'ads.x.com', description: 'save the campaign settings' });
+  assert.equal(x.decision, 'ask'); assert.match(await why(x), /ad console/);
+  await done(await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 }));
+  // 4. a daily budget commits its increase for every day left, today included
+  assert.deepEqual(budgetCommitment({ dailyBudget: 20, now }), { daysLeft: 3, increase: 20, committed: 60 });
+  assert.deepEqual(budgetCommitment({ dailyBudget: 15, previousDailyBudget: 20, now }), { daysLeft: 3, increase: 0, committed: 0 });
+  const b = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the daily budget', dailyBudget: 20, previousDailyBudget: 10 });
+  await done(b); assert.equal(Number((await act.recent()).find(r => r.id === b.actionId).cost), 30);
+  const lower = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'lower the daily budget', dailyBudget: 5, previousDailyBudget: 20 });
+  await done(lower);   // a lower budget commits nothing new
+  // 5. spend outside the engine (the Apple broker) counts against the same cap; unreadable means ask
+  external = 430;
+  const big = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise another daily budget', dailyBudget: 15 });
+  assert.equal(big.decision, 'ask'); assert.match(await why(big), /\$45\.00 would take this month's spend to \$535\.00, past the \$500 cap/);
+  assert.match(big.question, /a daily budget of \$15\.00, \$45\.00 committed through the end of the month/);
+  assert.equal(await act.monthSpend(), 490);
+  externalFails = true;
+  const blind = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost one more post', cost: 5 });
+  assert.equal(blind.decision, 'ask'); assert.match(await why(blind), /could not be read/);
 }));

@@ -1,8 +1,9 @@
 // The actuator: the one place an agent's action on the world is decided. Every committing step — signing in,
 // publishing, submitting a form, uploading, spending, messaging, deleting — comes here first, from the Aside
 // tools or any other hand the engine grows. The person's charter (user-controls) is what they fired in
-// advance: a granted class proceeds after `ramp` one-tap approvals of that class; an ungranted class, or spend
-// past the monthly cap, asks for that one action. The risk gate still appraises and journals every attempt and
+// advance: a granted class proceeds after `ramp` one-tap approvals of that class; an ungranted class, spend past
+// the monthly cap, or any committing step on Apple's or Meta's consoles asks for that one action. Ad budgets
+// count as what they commit through the month. The risk gate still appraises and journals every attempt and
 // still refuses what a constraint forbids. What happened is observed afterwards, from the page, not the plan.
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -33,15 +34,44 @@ export const NO = /^\s*(n|no|nope|don'?t|do not|stop|deny|denied|decline[d]?|can
 export const COURSEWORK_HOSTS = /(^|\.)(instructure\.com|canvas\.[a-z.]+|pearson\.com|pearsoned\.com|mylabmastering\.com|mathxl\.com|mheducation\.com|webassign\.net|gradescope\.com|blackboard\.com|brightspace\.com|d2l\.com|moodle\.[a-z.]+|yellowdig\.app|yellowdig\.com|turnitin\.com|proctorio\.com|respondus\.com|cengage\.com|wiley\.com|wileyplus\.com|quizlet\.com|chegg\.com|psu\.edu)$/i;
 export function isCoursework(host) { return COURSEWORK_HOSTS.test(String(host || '').toLowerCase().replace(/:\d+$/, '')); }
 
-export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console, llm = null, aside = null } = {}) {
+// Where money or a public store listing is one click away, what a control commits can't be read off its name:
+// a "Save" on a budget page spends, and a "Submit" on App Store Connect publishes to the store. So on Apple's
+// and Meta's consoles every committing class asks Quinn, whatever the charter grants. On other ad consoles
+// everything except an explicitly costed spend asks; that spend is still bounded by the monthly cap. The list
+// lives in code, not in the charter, so no settings change can quietly shorten it.
+export function guardedConsole(host, url = '') {
+  const h = String(host || '').toLowerCase().replace(/:\d+$/, '');
+  let path = ''; try { path = new URL(url).pathname.toLowerCase(); } catch {}
+  if (/(^|\.)(appstoreconnect|developer|ads|app-ads|searchads)\.apple\.com$/.test(h)) return { owner: 'Apple', always: true };
+  if (/(^|\.)(business|adsmanager)\.facebook\.com$/.test(h) || (/(^|\.)facebook\.com$/.test(h) && /^\/(adsmanager|ads\/)/.test(path))) return { owner: 'Meta', always: true };
+  if (/^ads\.[a-z0-9-]+\.[a-z.]+$/.test(h)) return { owner: 'an ad network', always: false };
+  return null;
+}
+
+// An ad budget is a standing commitment, not a one-off cost: a daily budget keeps spending every day until it
+// changes. It counts as what it commits through the end of the month (its increase over the budget it
+// replaces, times the days left, today included), so one monthly cap bounds recurring and one-off spend alike.
+export function budgetCommitment({ dailyBudget, previousDailyBudget = 0, now = Date.now() }) {
+  const d = new Date(now);
+  const daysLeft = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate() + 1;
+  const increase = Math.max(0, (Number(dailyBudget) || 0) - (Number(previousDailyBudget) || 0));
+  return { daysLeft, increase, committed: Math.round(increase * daysLeft * 100) / 100 };
+}
+
+// externalSpend: spend this month that the engine does not record as actions but that counts against the same
+// cap, such as the Apple broker's committed Ads budgets. If it can't be read, the cap can't be checked.
+export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console, llm = null, aside = null, externalSpend = null } = {}) {
   const retries = createActionRetries({ llm, aside, log });
   async function init() { await pool.query(await readFile(new URL('../migrations/063_agent_actions.sql', import.meta.url), 'utf8')); }
   const monthStart = () => { const d = new Date(clock()); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
-  async function monthSpend() {
+  async function spendThisMonth() {
     const { rows: [r] } = await pool.query(`SELECT COALESCE(sum(cost), 0)::float AS n FROM agent_actions WHERE class = 'spend' AND decision = 'proceed'
       AND COALESCE(outcome, 'success') <> 'failure' AND created_at >= to_timestamp($1 / 1000.0)`, [monthStart()]);
-    return r.n;
+    if (!externalSpend) return { total: r.n, unknown: false };
+    try { return { total: r.n + (Number(await externalSpend()) || 0), unknown: false }; }
+    catch (e) { log.warn?.('[actuator] external spend unavailable:', text(e.message, 160)); return { total: r.n, unknown: true }; }
   }
+  async function monthSpend() { return (await spendThisMonth()).total; }
   async function rampDone(cls) {
     const { rows: [r] } = await pool.query(`SELECT count(*)::int AS n FROM agent_actions WHERE class = $1 AND decision = 'proceed' AND outcome = 'success'`, [cls]);
     return r.n;
@@ -56,10 +86,16 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     return { state: 'unclear', ask: a };
   }
 
-  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null } = {}) {
+  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, dailyBudget = null, previousDailyBudget = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null } = {}) {
     if (!CHARTER_CLASSES.includes(cls)) throw new Error(`an action class is one of ${CHARTER_CLASSES.join(', ')}`);
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what the action is');
     const id = randomUUID();
+    // A daily budget is charged as what it commits through the month's end; a stated cost can only add to that.
+    const commitment = cls === 'spend' && Number(dailyBudget) > 0 ? budgetCommitment({ dailyBudget, previousDailyBudget, now: clock() }) : null;
+    const spendCost = Math.max(Number(cost) || 0, commitment?.committed || 0);
+    const costWords = commitment
+      ? `a daily budget of $${Number(dailyBudget).toFixed(2)}${Number(previousDailyBudget) > 0 ? ` (was $${Number(previousDailyBudget).toFixed(2)})` : ''}, $${commitment.committed.toFixed(2)} committed through the end of the month`
+      : `cost $${spendCost.toFixed(2)}`;
     const want = queue ? await queue.get(Number(chainId)) : { want: { status: 'active' } };
     const candidate = { chainId: Number(chainId) || 0, class: cls, host, url, control, description };
     let retry = { eligible: true };
@@ -80,7 +116,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
         }
         await db.query(`INSERT INTO agent_actions (id, chain_id, class, host, url, control, description, cost, decision, why, ask_id, approved_by_ask, created_at, observation)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, to_timestamp($13 / 1000.0), $14)`,
-        [id, Number(chainId) || 0, cls, text(host, 200), text(url, 1000), text(control, 200), text(description, 2000), Number(cost) || 0, decision, text(why, 500), extra.askId || null, extra.approvedBy || null, clock(), JSON.stringify({ actionRetry: 1, detail: '', recovery: decision === 'proceed' ? retry.recovery || null : null, recoveryFacts: decision === 'proceed' ? retry.recoveryFacts || [] : [], recoveryEvidence: decision === 'proceed' ? retry.recoveryEvidence || [] : [] })]);
+        [id, Number(chainId) || 0, cls, text(host, 200), text(url, 1000), text(control, 200), text(description, 2000), spendCost, decision, text(why, 500), extra.askId || null, extra.approvedBy || null, clock(), JSON.stringify({ actionRetry: 1, detail: '', recovery: decision === 'proceed' ? retry.recovery || null : null, recoveryFacts: decision === 'proceed' ? retry.recoveryFacts || [] : [], recoveryEvidence: decision === 'proceed' ? retry.recoveryEvidence || [] : [] })]);
         if (db !== pool) await db.query('COMMIT');
       } catch (e) { if (db !== pool) await db.query('ROLLBACK'); throw e; }
       finally { if (db !== pool) db.release(); }
@@ -103,16 +139,22 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     // Does this action need the person's yes?
     let needs = null;
     if (!approvedBy) {
-      if (!grant.granted) needs = `the charter does not grant ${cls}`;
+      const guarded = cls === 'sign_in' ? null : guardedConsole(host, url);
+      if (guarded && (guarded.always || cls !== 'spend')) {
+        needs = guarded.always
+          ? `${host} is ${guarded.owner}'s console, where a click can publish or spend: every ${cls} there needs Quinn's yes, whatever the charter grants`
+          : `${host} is an ad console, where a ${cls} can change spend without stating it: it needs Quinn's yes (a costed spend goes through the monthly cap)`;
+      } else if (!grant.granted) needs = `the charter does not grant ${cls}`;
       else if (cls === 'spend') {
-        const spent = await monthSpend(), cap = Number(grant.monthlyCap) || 0;
-        if (!(Number(cost) > 0)) needs = 'a spend must state its cost';
-        else if (spent + Number(cost) > cap) needs = `$${Number(cost).toFixed(2)} would take this month's spend to $${(spent + Number(cost)).toFixed(2)}, past the $${cap} cap`;
+        const { total: spent, unknown } = await spendThisMonth(), cap = Number(grant.monthlyCap) || 0;
+        if (!(spendCost > 0) && !(commitment && commitment.increase === 0)) needs = 'a spend must state its cost';
+        else if (unknown) needs = 'this month\'s spend outside the engine could not be read, so the cap cannot be checked';
+        else if (spent + spendCost > cap) needs = `$${spendCost.toFixed(2)} would take this month's spend to $${(spent + spendCost).toFixed(2)}, past the $${cap} cap`;
       }
       if (!needs && (charter.ramp || 0) > 0 && (await rampDone(cls)) < charter.ramp) needs = `the first ${charter.ramp === 1 ? '' : `${charter.ramp} `}${cls} action${charter.ramp === 1 ? '' : 's'} need${charter.ramp === 1 ? 's' : ''} one yes from Quinn`;
     }
     if (needs) {
-      const question = `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}${cls === 'spend' ? ` (cost $${Number(cost).toFixed(2)})` : ''}. OK? Reply yes or no.`;
+      const question = `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}${cls === 'spend' ? ` (${costWords})` : ''}. OK? Reply yes or no.`;
       let askId = null;
       if (asks) {
         const r = await asks.ask({ chainId: Number(chainId), kind: 'question', detail: question, want: want.want?.description || '', stakes: want.want?.stakes || [], sessionKey, agent }).catch(e => ({ error: e.message }));

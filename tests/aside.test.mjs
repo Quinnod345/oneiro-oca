@@ -150,3 +150,39 @@ test('a retry refusal stops Aside delegation, forwards recovery evidence, and le
     assert.match(messages.find(m => m.id === 2).result.content[0].text, /no other browser/, 'read reached the browser adapter independently of retry suppression');
   } finally { await new Promise(r => server.close(r)); }
 });
+
+test('Apple work in the browser says why the Apple API could not take it; a task that names a console is gated as that console', async () => {
+  const { createServer } = await import('node:http');
+  const { spawn } = await import('node:child_process');
+  const { mkdtemp } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const log = join(await mkdtemp(join(tmpdir(), 'apple-fallback-')), 'fallback.jsonl');
+  const requests = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    requests.push({ path: req.url, body: JSON.parse(body) });
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ decision: 'ask', askId: 9, question: 'Oneiro wants to … OK? Reply yes or no.', why: 'console' }));
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  try {
+    const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env,
+      OCA_ENGINE_URL: `http://127.0.0.1:${server.address().port}`, OCA_ASIDE_CLI: '/nowhere/aside', OCA_APPLE_FALLBACK_LOG: log } });
+    let out = ''; child.stdout.on('data', d => { out += d; });
+    for (const [id, name, args] of [
+      [1, 'aside_do', { pursuit: 27, class: 'submit', task: 'Raise the Apple Ads daily budget for the InnerEcho campaign to $15.' }],
+      [2, 'aside_do', { pursuit: 27, class: 'submit', task: 'Raise the Apple Ads daily budget for the InnerEcho campaign to $15.', whyNotApi: 'the Apple Ads API user has not been set up yet' }],
+      [3, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the saved Meta ads draft for InnerEcho.' }],
+      [4, 'aside_read', { url: 'https://appstoreconnect.apple.com/trends/insights', whyNotApi: 'reports key not provisioned' }],
+    ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+    child.stdin.end(); await new Promise(r => child.on('close', r));
+    const messages = out.trim().split('\n').map(l => JSON.parse(l));
+    const first = JSON.parse(messages.find(m => m.id === 1).result.content[0].text);
+    assert.equal(first.held, true); assert.match(first.why, /Apple API first/);
+    assert.equal(requests.length, 2, 'the reasonless Apple step never reached the actuator');
+    assert.equal(requests[0].body.host, 'app-ads.apple.com'); assert.match(requests[0].body.description, /\[browser, not the Apple API: the Apple Ads API user has not been set up yet\]/);
+    assert.equal(requests[1].body.host, 'adsmanager.facebook.com', 'a Meta ads task with no URL is still gated as the Meta console');
+    const noted = JSON.parse((await readFile(log, 'utf8')).trim());
+    assert.equal(noted.tool, 'aside_read'); assert.equal(noted.whyNotApi, 'reports key not provisioned');
+  } finally { await new Promise(r => server.close(r)); }
+});

@@ -12,6 +12,7 @@
 //
 // Protocol: MCP over stdio, newline-delimited JSON-RPC 2.0 (initialize, tools/list, tools/call, ping).
 import { createInterface } from 'node:readline';
+import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { terminalObservation } from './reasoning/action-retries.js';
 import { createAside, validateUrl } from './aside.js';
@@ -192,10 +193,35 @@ async function engine(path, body) {
   if (!res.ok) throw new Error(j.error || `actuator ${res.status}`);
   return j;
 }
+// Apple work goes through the Apple API first (App Store Connect, Apple Ads, App Store Server); the browser is
+// the fallback. A committing step on Apple's consoles therefore says why the API couldn't take it, and the
+// reason is recorded with the action so the API path can be revisited when Apple adds what was missing.
+const APPLE_CONSOLE = /(^|\.)(appstoreconnect|developer|ads|app-ads|searchads)\.apple\.com$/i;
+const APPLE_API_FIRST = 'This is Apple\'s console. Apple work goes through the Apple API first (App Store Connect, Apple Ads, App Store Server); use the browser only when the API can\'t do this step, and retry with whyNotApi saying why: an outage after retries, a feature the API lacks, or a step only Quinn can take. The reason is recorded so the API path can be revisited.';
+// The console a task works in, when the task names one but gives no URL: the gate has to see it either way.
+export function consoleOf(task = '', url = '') {
+  if (hostOf(url)) return url;
+  const t = String(task);
+  if (/apple (search )?ads\b|searchads|app-ads\.apple\.com|ads\.apple\.com/i.test(t)) return 'https://app-ads.apple.com/';
+  if (/app ?store ?connect|appstoreconnect\.apple\.com|developer\.apple\.com/i.test(t)) return 'https://appstoreconnect.apple.com/';
+  if (/ads ?manager|business\.facebook\.com|\b(meta|facebook|instagram) ads\b|\bboost(ed|ing)?\b/i.test(t)) return 'https://adsmanager.facebook.com/';
+  return url;
+}
+// Reading an Apple console in the browser is the fallback too: noted (with the reason, when given) for the same review.
+async function noteAppleRead(tool, url, args) {
+  if (!APPLE_CONSOLE.test(hostOf(url))) return;
+  const line = JSON.stringify({ at: new Date().toISOString(), tool, url, pursuit: Number(args.pursuit) || null, whyNotApi: String(args.whyNotApi || '').slice(0, 300) || null });
+  await appendFile(process.env.OCA_APPLE_FALLBACK_LOG || `${WORKSPACE}apple-browser-fallback.jsonl`, line + '\n').catch(() => {});
+}
 async function gate(args, { cls, url, control = '', description }) {
   const pursuit = Number(args.pursuit);
   if (!Number.isInteger(pursuit) || pursuit < 1) return { held: true, why: `This ${cls} action needs the pursuit it serves: pass pursuit (the #id from your brief) and purpose.` };
   const purpose = String(args.purpose || '').trim();
+  if (cls !== 'sign_in' && APPLE_CONSOLE.test(hostOf(url))) {
+    const whyNotApi = String(args.whyNotApi || '').trim();
+    if (whyNotApi.length < 12) return { held: true, why: APPLE_API_FIRST };
+    description = `${description} [browser, not the Apple API: ${whyNotApi.slice(0, 300)}]`;
+  }
   const d = await engine('/oca/act/authorize', { chainId: pursuit, class: cls, host: hostOf(url), url, control, description: purpose ? `${purpose} (${description})` : description,
     cost: Number(args.cost) || 0, approval: args.approval || null, retryEvidence: args.retryEvidence || null });
   if (d.decision === 'proceed') return { proceed: true, actionId: d.actionId };
@@ -252,6 +278,10 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { targetId: { type: 'string' }, url: { type: 'string' } }, required: ['targetId', 'url'], additionalProperties: false } },
 ];
 // Recovery is evidence, never an approval override. Reads remain ungated.
+const WHY_NOT_API = { type: 'string', description: 'On Apple\'s consoles (App Store Connect, Apple Ads): why the Apple API can\'t do this step. Required there for a committing step.' };
+for (const tool of TOOLS.filter(t => t.inputSchema.properties.pursuit || ['aside_read', 'aside_snapshot', 'aside_open', 'aside_go'].includes(t.name))) {
+  if (tool.name !== 'aside_sign_in') tool.inputSchema.properties.whyNotApi = WHY_NOT_API;
+}
 for (const tool of TOOLS.filter(t => t.inputSchema.properties.pursuit)) {
   tool.inputSchema.properties.retryEvidence = { type: 'object', description: 'For a suppressed retry: a source the engine can re-read and an exact quote demonstrating changed supported route or target state. One observed state permits at most one attempt.',
     properties: { source: { type: 'string' }, quote: { type: 'string' } }, required: ['source', 'quote'], additionalProperties: false };
@@ -262,14 +292,15 @@ const KEYS = new Set(['Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'Arr
 export async function callAsideTool(name, args = {}) {
   const id = String(args.targetId || '');
   switch (name) {
-    case 'aside_read': { const r = await aside.readPage(validateUrl(args.url), { maxChars: MAX(args.maxChars) }); return withBlock({ title: r.title, url: r.url, source: r.source, text: r.text, targetId: await tabIdFor(r.url) }); }
+    case 'aside_read': { await noteAppleRead(name, args.url, args); const r = await aside.readPage(validateUrl(args.url), { maxChars: MAX(args.maxChars) }); return withBlock({ title: r.title, url: r.url, source: r.source, text: r.text, targetId: await tabIdFor(r.url) }); }
     case 'aside_search': { const r = await aside.search(String(args.query || '').slice(0, 400), { maxChars: MAX(args.maxChars) }); return { query: r.query, url: r.url, source: r.source, text: r.text }; }
     case 'aside_snapshot': {
+      await noteAppleRead(name, args.url, args);
       const o = await aside.openUrl(validateUrl(args.url)); const tab = await tabIdFor(o.url);
       if (!tab) return withBlock({ title: o.title, url: o.url, source: `Aside browser: ${o.url}`, note: 'opened; list aside_tabs to find its targetId' });
       return { ...(await view(tab, '', { maxChars: MAX(args.maxChars) })), targetId: tab };
     }
-    case 'aside_open': { const r = await aside.openUrl(validateUrl(args.url)); return withBlock({ title: r.title, url: r.url, targetId: await tabIdFor(r.url) }); }
+    case 'aside_open': { await noteAppleRead(name, args.url, args); const r = await aside.openUrl(validateUrl(args.url)); return withBlock({ title: r.title, url: r.url, targetId: await tabIdFor(r.url) }); }
     case 'aside_tabs': {
       const r = await aside.repl(`const lt2 = await listBrowserTabs(); console.log(JSON.stringify(lt2.map(t => ({ targetId: t.targetId, active: t.active, title: t.title, url: t.url }))));`);
       return { tabs: Array.isArray(r.json) ? r.json : [] };
@@ -334,6 +365,7 @@ export async function callAsideTool(name, args = {}) {
     case 'aside_go': {
       if (!TARGET.test(id)) throw new Error('a tab is named by its targetId from aside_tabs');
       const url = String(args.url || '');
+      if (url !== 'back') await noteAppleRead(name, url, args);
       const action = url === 'back' ? `await p.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});` : `await p.goto(${JSON.stringify(validateUrl(url))}, { waitUntil: 'domcontentloaded' }).catch(() => {}); await sleep(1500);`;
       return { action: { kind: 'go', url }, ...(await view(id, action)) };
     }
@@ -355,7 +387,7 @@ export async function callAsideTool(name, args = {}) {
       if (task.length < 10) throw new Error('say exactly what to do');
       const url = String(args.url || ''); const files = Array.isArray(args.files) ? args.files.map(String) : [];
       for (const f of files) if (!f.startsWith(WORKSPACE) || f.includes('..')) throw new Error(`files must be under ${WORKSPACE}`);
-      const g = await gate(args, { cls, url, control: 'Aside agent', description: `${task.slice(0, 600)}${files.length ? ` (files: ${files.map(f => f.split('/').pop()).join(', ')})` : ''}` });
+      const g = await gate(args, { cls, url: consoleOf(task, url), control: 'Aside agent', description: `${task.slice(0, 600)}${files.length ? ` (files: ${files.map(f => f.split('/').pop()).join(', ')})` : ''}` });
       if (!g.proceed) return heldOrRefused(cls, null, g);
       try {
         const r = await aside.delegate(`${task}${url ? `\nWhere: ${url}` : ''}${files.length ? `\nFiles to use, in order: ${files.join(', ')}` : ''}\n${DELEGATE_RULES}`, { timeout: 15 * 60_000, permission: files.length ? 'full-access' : null });
