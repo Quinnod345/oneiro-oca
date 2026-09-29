@@ -26,6 +26,8 @@ import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
 import { createActuator } from './reasoning/actuator.js';
 import { createAppleBroker } from './apple/broker.js';
+import { createAppleMetrics } from './apple/metrics.js';
+import { createAppleGrowth, appleRouter } from './apple/growth.js';
 import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
@@ -69,6 +71,13 @@ const appleBroker = createAppleBroker();
 const actuator = createActuator({ pool, risk: riskJournal, asks, controls: userControls, queue: ponderQueue, llm, aside: asideBrowser, externalSpend: appleBroker.committedSpend });
 actuator.init().catch(e => console.error('[actuator] init:', e.message));
 ocaRouter.use(actuator.router);
+// Apple's numbers, pulled daily through the broker (reads only), then the growth loop's proposals, each decided by
+// the broker: dry-run until Quinn switches it live. /oca/apple shows all three.
+const appleGrowth = createAppleGrowth({ pool, apple: appleBroker, llm, asks });
+const appleMetrics = createAppleMetrics({ pool, apple: appleBroker, after: () => appleGrowth.run() });
+Promise.all([appleMetrics.init(), appleGrowth.init()]).then(() => appleMetrics.start()).catch(e => console.error('[apple] init:', e.message));
+ocaRouter.use(appleRouter({ apple: appleBroker, metrics: appleMetrics, growth: appleGrowth }));
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => appleMetrics.stop());
 // The board: the orchestrator's account of each pursuit — workstreams it named, milestones, what it set up —
 // kept by a model that reads the pursuit's history; the map in the app reads it at /oca/orchestra.
 // Operations: the orchestrator's work measured week over week from its journals (runs that went wrong, runs
