@@ -46,7 +46,7 @@ test('a standing permission is the person firing a class in advance: it proceeds
   assert.equal(appraise(plain, { lookup, controls: { autonomousActions: false, charter: { publish: { granted: true } } } }).decision, 'prepare_artifact', 'no standing named: nothing changes');
 });
 
-test('the actuator: granted classes proceed after the ramp; ungranted classes and spend past the cap ask; a yes fires that one action, a no refuses; coursework is never submitted; outcomes are observed', async () => database(async pool => {
+test('the actuator: granted classes proceed after the ramp; ungranted classes and every payment ask; a yes fires that one action, a no refuses; coursework is never submitted; outcomes are observed', async () => database(async pool => {
   let now = 40 * 86400000;
   const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
   let charter = normalizeCharter({ ramp: 1, message: { granted: false } });
@@ -77,9 +77,13 @@ test('the actuator: granted classes proceed after the ramp; ungranted classes an
   const m1 = await act.authorize({ chainId: id, class: 'message', host: 'www.instagram.com', description: 'DM @someone about a collaboration' });
   assert.equal(m1.decision, 'ask'); await asks.answer(m1.askId, 'no');
   assert.equal((await act.authorize({ chainId: id, class: 'message', host: 'www.instagram.com', description: 'DM @someone about a collaboration', approval: m1.askId })).decision, 'refuse');
-  // 4. spend: within the cap proceeds (after its own ramp), past the cap asks
+  // 4. spend: every payment asks, even well inside the cap; his yes fires that one payment; past the cap the question says so
   charter = normalizeCharter({ ramp: 0, spend: { granted: true, monthlyCap: 50 } });
-  const s1 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 });
+  const s0 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 });
+  assert.equal(s0.decision, 'ask'); assert.match(s0.question, /\(cost \$30\.00\)\. Are you sure you want to go through with this\? Reply yes or no\.$/);
+  assert.match((await act.recent()).find(r => r.id === s0.actionId).why, /every payment waits for Quinn's yes/);
+  await asks.answer(s0.askId, 'yes');
+  const s1 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30, approval: s0.askId });
   assert.equal(s1.decision, 'proceed'); await act.observe({ actionId: s1.actionId, result: 'success', observation: 'boost scheduled' });
   const s2 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost it again', cost: 30 });
   assert.equal(s2.decision, 'ask'); assert.match((await act.recent()).find(r => r.id === s2.actionId).why, /past the \$50 cap/);
@@ -282,7 +286,7 @@ test('route aliases, unrelated recovery sources, changed metadata and missing mo
   assert.equal(h.asks.length, 0);
 }));
 
-test('Apple and Meta consoles always ask; other ad consoles ask unless a costed spend; a daily budget counts what it commits through the month', async () => database(async pool => {
+test('Apple and Meta consoles always ask; every payment asks; a daily budget counts what it commits through the month, and lowering it asks nothing', async () => database(async pool => {
   const now = Date.parse('2026-09-28T12:00:00');   // local noon; September has 30 days, so 3 days are left
   const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
   const charter = normalizeCharter({ ramp: 0, publish: { granted: true }, submit: { granted: true }, spend: { granted: true, monthlyCap: 500 } });
@@ -310,15 +314,16 @@ test('Apple and Meta consoles always ask; other ad consoles ask unless a costed 
   assert.equal((await act.authorize({ chainId: id, class: 'spend', host: 'adsmanager.facebook.com', description: 'publish the InnerEcho campaign', cost: 40 })).decision, 'ask');
   assert.equal((await act.authorize({ chainId: id, class: 'submit', host: 'www.facebook.com', url: 'https://www.facebook.com/adsmanager/manage/campaigns', description: 'save the campaign draft' })).decision, 'ask');
   await done(await act.authorize({ chainId: id, class: 'publish', host: 'www.facebook.com', url: 'https://www.facebook.com/getinnerecho', description: 'post the launch note to the page' }));
-  // 3. other ad consoles: an uncosted save asks; a costed spend goes through the cap
+  // 3. other ad consoles: an uncosted save asks; a costed spend asks too, like every payment, and his yes fires it
   const x = await act.authorize({ chainId: id, class: 'submit', host: 'ads.x.com', description: 'save the campaign settings' });
   assert.equal(x.decision, 'ask'); assert.match(await why(x), /ad console/);
-  await done(await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 }));
+  const approved = async request => { const q = await act.authorize(request); assert.equal(q.decision, 'ask', 'a payment asks first'); await asks.answer(q.askId, 'yes'); return done(await act.authorize({ ...request, approval: q.askId })); };
+  await approved({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 });
   // 4. a daily budget commits its increase for every day left, today included
   assert.deepEqual(budgetCommitment({ dailyBudget: 20, now }), { daysLeft: 3, increase: 20, committed: 60 });
   assert.deepEqual(budgetCommitment({ dailyBudget: 15, previousDailyBudget: 20, now }), { daysLeft: 3, increase: 0, committed: 0 });
-  const b = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the daily budget', dailyBudget: 20, previousDailyBudget: 10 });
-  await done(b); assert.equal(Number((await act.recent()).find(r => r.id === b.actionId).cost), 30);
+  const b = await approved({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the daily budget', dailyBudget: 20, previousDailyBudget: 10 });
+  assert.equal(Number((await act.recent()).find(r => r.id === b.actionId).cost), 30);
   const lower = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'lower the daily budget', dailyBudget: 5, previousDailyBudget: 20 });
   await done(lower);   // a lower budget commits nothing new
   // 5. spend outside the engine (the Apple broker) counts against the same cap; unreadable means ask
