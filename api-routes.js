@@ -31,6 +31,7 @@ import { createAppleGrowth, appleRouter } from './apple/growth.js';
 import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
+import { createPaymentApprovals } from './reasoning/payment-approvals.js';
 import { aside as asideBrowser } from './aside.js';
 
 export const ocaRouter = Router();
@@ -1564,6 +1565,19 @@ const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: 
     entities: q => entityContextForText(q, { limit: 8 }),
   } });
 const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks, agents });
+// Every payment asks on Quinn's iPhone with Approve and Deny. Only a decision made on his phone counts: the paired
+// device the engine pushes to, and any other listed in OCA_PAYMENT_APPROVER_DEVICES (comma-separated gateway device ids).
+const paymentApprovals = createPaymentApprovals({ pool, gateway,
+  deciders: [process.env.OCA_OWNER_PUSH_NODE, ...String(process.env.OCA_PAYMENT_APPROVER_DEVICES || '').split(',')].map(s => String(s || '').trim()).filter(Boolean),
+  onDecision: ({ askId, approved }) => inbox.answerAsk({ id: askId, via: 'iPhone',
+    reply: approved ? `Approved on iPhone (ask #${askId}).` : `Denied on iPhone (ask #${askId}). Don't make this payment.` }),
+  onUntrusted: async ({ askId, decision, resolver }) => {
+    const { rows: [a] } = await pool.query('SELECT metadata FROM notifications WHERE id = $1', [askId]);
+    if (a) await asks.ask({ chainId: a.metadata?.chainId, kind: 'notice',
+      detail: `a payment approval (ask #${askId}) was answered "${decision}" by ${resolver ? `${resolver.kind} ${String(resolver.id || '').slice(0, 12)}` : 'an unknown client'}, not your iPhone, so Oneiro ignored it. The payment still waits for you: reply yes or no to ask #${askId}.` });
+  } });
+asks.useApprovals(paymentApprovals);
+paymentApprovals.start();
 // The person answers an ask (or just clears it): { reply? }
 ocaRouter.post('/oca/inbox/asks/:id/answer', async (req, res) => {
   try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done', via: req.body?.via || 'the app' })); } catch (e) { res.status(400).json({ error: e.message }); }

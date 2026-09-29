@@ -76,6 +76,15 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     const { rows: [r] } = await pool.query(`SELECT count(*)::int AS n FROM agent_actions WHERE class = $1 AND decision = 'proceed' AND outcome = 'success'`, [cls]);
     return r.n;
   }
+  // The notification for a payment. The phone shows about 250 characters, so the cost and the question go last and
+  // always survive; the description gives way.
+  function paymentPrompt({ description, host, spendCost, dailyBudget, costWords }) {
+    const on = host ? ` on ${host}` : '';
+    const title = dailyBudget ? `Approve a $${Number(dailyBudget).toFixed(2)}/day budget${on}?` : spendCost > 0 ? `Approve $${spendCost.toFixed(2)}${on}?` : `Approve a payment${on}?`;
+    const tail = ` (${costWords}). Are you sure you want to go through with this?`;
+    const lead = `Oneiro wants to ${text(description, 400)}${on}`, room = Math.max(60, 250 - tail.length);
+    return { title: text(title, 80), description: (lead.length > room ? `${lead.slice(0, room - 1).trimEnd()}…` : lead) + tail };
+  }
   // The person's answer to an approval ask, read from the ask itself.
   async function approvalOf(askId) {
     const { rows: [a] } = await pool.query(`SELECT id, reply, replied_at, metadata FROM notifications WHERE id = $1 AND category = 'ask'`, [askId]);
@@ -95,7 +104,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     const spendCost = Math.max(Number(cost) || 0, commitment?.committed || 0);
     const costWords = commitment
       ? `a daily budget of $${Number(dailyBudget).toFixed(2)}${Number(previousDailyBudget) > 0 ? ` (was $${Number(previousDailyBudget).toFixed(2)})` : ''}, $${commitment.committed.toFixed(2)} committed through the end of the month`
-      : `cost $${spendCost.toFixed(2)}`;
+      : spendCost > 0 ? `cost $${spendCost.toFixed(2)}` : 'the cost wasn\'t stated';
     const want = queue ? await queue.get(Number(chainId)) : { want: { status: 'active' } };
     const candidate = { chainId: Number(chainId) || 0, class: cls, host, url, control, description };
     let retry = { eligible: true };
@@ -165,7 +174,10 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
         : `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}. OK? Reply yes or no.`;
       let askId = null;
       if (asks) {
-        const r = await asks.ask({ chainId: Number(chainId), kind: 'question', detail: question, want: want.want?.description || '', stakes: want.want?.stakes || [], sessionKey, agent }).catch(e => ({ error: e.message }));
+        // A payment asks on the phone with Approve and Deny; everything else asks as before.
+        const payment = cls === 'spend' ? { ...paymentPrompt({ description, host, spendCost, dailyBudget: commitment ? dailyBudget : null, costWords }),
+          detail: `${question}\nWhy it asks: ${needs}` } : null;
+        const r = await asks.ask({ chainId: Number(chainId), kind: 'question', detail: question, want: want.want?.description || '', stakes: want.want?.stakes || [], sessionKey, agent, payment }).catch(e => ({ error: e.message }));
         askId = r?.id ?? null;
       }
       return record('ask', needs, { askId, question });

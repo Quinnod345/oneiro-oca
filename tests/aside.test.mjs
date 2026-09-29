@@ -109,6 +109,17 @@ test('the tool boundary: looking is free; a committing control is classified for
   commits('click', { role: 'button', name: 'Send' }, 'message');
   commits('click', { role: 'button', name: 'Continue', submit: true, inForm: true }, 'submit');
   assert.equal(commitClass('Reply'), 'publish'); assert.equal(commitClass('Buy now'), 'spend'); assert.equal(commitClass('Save'), 'submit');
+  // money: every way a page can take a payment is a spend, so it asks Quinn — the words on the control, a price on a
+  // button, and any committing step on a checkout, payment or billing page
+  for (const name of ['Place your order', 'Submit order', 'Complete purchase', 'Confirm payment', 'Start your free trial', 'Try Premium free', 'Get Pro', 'Renew', 'Top up', 'Add funds', 'Rent', 'Pre-order'])
+    commits('click', { role: 'button', name }, 'spend');
+  commits('click', { role: 'button', name: '$4.99' }, 'spend'); commits('click', { role: 'button', name: 'Continue — 9,99 EUR' }, 'spend'); commits('click', { role: 'button', name: 'Continue', submit: true, inForm: true, pageUrl: 'https://x.com/i/premium/checkout' }, 'spend');
+  commits('click', { role: 'button', name: 'Confirm', pageTitle: 'Review your order' }, 'spend'); commits('click', { role: 'button', name: 'Save', pageUrl: 'https://business.facebook.com/billing_hub/payment_settings' }, 'spend');
+  commits('enter', { role: 'textbox', name: 'Coupon', inForm: true, formSubmitName: 'Apply', pageUrl: 'https://shop.example/checkout' }, 'spend'); commits('enter', { role: 'textbox', name: 'Name', inForm: true, formSubmitName: 'Pay $12.98' }, 'spend');
+  view('click', { role: 'link', name: 'Widget $19.99', href: '/p/1' }); view('click', { role: 'button', name: 'Bookmark' }); view('click', { role: 'tab', name: 'Billing', pageUrl: 'https://x.com/settings' });
+  const { TASK_SPEND } = await import('../aside-mcp.js');
+  for (const t of ['Buy the domain innerecho.app on Namecheap', 'Boost the launch post for 3 days', 'Raise the daily budget to $20', 'Order a hoodie in size M', 'Add a card to the ads account']) assert.ok(TASK_SPEND.test(t), t);
+  for (const t of ['Post the carousel with a tip about journaling', 'Reply to the review about the upgrade prompt', 'Publish the Facebook page bio']) assert.ok(!TASK_SPEND.test(t), t);
   // never through a click: credential forms (aside_sign_in), file inputs and mailto (aside_do), disabled controls
   no('click', { role: 'button', name: 'Continue', submit: true, inForm: true, formHasCredential: true }, /aside_sign_in/); no('click', { role: 'file', name: 'Upload', inputType: 'file' }, /aside_do/);
   no('click', { role: 'link', name: 'Email us', href: 'mailto:x@y' }, /aside_do/); no('click', { role: 'button', name: 'Apply', disabled: true }, /disabled/);
