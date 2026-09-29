@@ -98,7 +98,8 @@ export function adsReportRows(report, entity) {
 }
 
 // after: what runs once a pull has read Apple (the growth loop), so its moves always see fresh numbers.
-export function createAppleMetrics({ pool, apple, clock = Date.now, log = console, settingsPath = SETTINGS_PATH, tickMs = 3600_000, everyMs = 20 * 3600_000, after = null } = {}) {
+// alert: how drift the broker's reconciler found reaches Quinn (a notice), once per finding.
+export function createAppleMetrics({ pool, apple, clock = Date.now, log = console, settingsPath = SETTINGS_PATH, tickMs = 3600_000, everyMs = 20 * 3600_000, after = null, alert = null } = {}) {
   let timer = null, running = null;
   async function init() { await pool.query(await readFile(new URL('../migrations/065_apple_metrics.sql', import.meta.url), 'utf8')); }
   async function settings() {
@@ -205,10 +206,33 @@ export function createAppleMetrics({ pool, apple, clock = Date.now, log = consol
   }
 
   async function due() {
-    const { rows: [r] } = await pool.query(`SELECT max(last_ok_at) AS at FROM apple_pulls WHERE source <> 'broker'`);
+    const { rows: [r] } = await pool.query(`SELECT max(last_ok_at) AS at FROM apple_pulls WHERE source NOT IN ('broker', 'drift_alert')`);
     return !r?.at || clock() - new Date(r.at).getTime() >= everyMs;
   }
-  async function tick() { try { if (apple.installed?.() !== false && await due()) await pull(); } catch (e) { log.warn?.('[apple] pull:', e.message); } }
+  // The broker's reconciler runs every half hour on its own; what it found outside the broker (a budget raised,
+  // a campaign resumed or added, a campaign it paused to hold the caps) reaches Quinn once, as a notice.
+  async function watchDrift() {
+    if (!alert) return 0;
+    const status = await apple.status().catch(() => null);
+    const drift = status?.ads?.drift || [];
+    if (!drift.length) return 0;
+    const { rows: [r] } = await pool.query(`SELECT last_ok_at FROM apple_pulls WHERE source = 'drift_alert'`);
+    const since = r?.last_ok_at ? new Date(r.last_ok_at).getTime() : 0;
+    const fresh = drift.filter(d => Date.parse(d.at) > since);
+    if (!fresh.length) return 0;
+    const s = await settings();
+    await alert({ chainId: Number(s.pursuit) || null, detail: `Apple Ads changed outside the Apple broker: ${fresh.map(d => `${d.campaign}: ${d.change} (${d.action})`).join('; ')}` });
+    await pool.query(`INSERT INTO apple_pulls (source, last_ok_at, rows) VALUES ('drift_alert', to_timestamp($1 / 1000.0), $2)
+      ON CONFLICT (source) DO UPDATE SET last_ok_at = EXCLUDED.last_ok_at, rows = EXCLUDED.rows`, [Math.max(...fresh.map(d => Date.parse(d.at))), fresh.length]);
+    return fresh.length;
+  }
+  async function tick() {
+    try {
+      if (apple.installed?.() === false) return;
+      await watchDrift();
+      if (await due()) await pull();
+    } catch (e) { log.warn?.('[apple] pull:', e.message); }
+  }
   function start() { if (!timer) { timer = setInterval(tick, tickMs); timer.unref?.(); setTimeout(tick, 60_000).unref?.(); } }
   function stop() { if (timer) clearInterval(timer); timer = null; }
 
@@ -218,5 +242,5 @@ export function createAppleMetrics({ pool, apple, clock = Date.now, log = consol
     return { pulls, counts };
   }
 
-  return { init, pull, tick, start, stop, summary, salesReports, adsReports, notifications };
+  return { init, pull, tick, start, stop, summary, watchDrift, salesReports, adsReports, notifications };
 }

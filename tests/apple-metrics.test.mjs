@@ -78,3 +78,19 @@ test('a daily pull stores every source it can read and says why for the ones it 
   const none = createAppleMetrics({ pool, apple: { installed: () => false, status: async () => ({ ok: false, error: 'the Apple broker is not installed yet' }) }, clock: () => now, log: quiet, settingsPath });
   assert.deepEqual(await none.pull(), { broker: 'the Apple broker is not installed yet' });
 }));
+
+test('what the broker\'s reconciler found outside it reaches Quinn once', async () => database(async pool => {
+  const now = Date.parse('2026-09-28T15:00:00Z');
+  const dir = await mkdtemp(join(tmpdir(), 'apple-drift-'));
+  const settingsPath = join(dir, 'settings.json');
+  await writeFile(settingsPath, JSON.stringify({ pursuit: 27 }));
+  let drift = [{ at: '2026-09-28T14:30:00Z', campaign: 'US', change: 'daily budget raised from $10.00 to $30.00', action: 'paused' }];
+  const alerts = [];
+  const m = createAppleMetrics({ pool, apple: { installed: () => true, status: async () => ({ ok: true, ads: { drift } }) }, clock: () => now, log: quiet, settingsPath, alert: a => { alerts.push(a); } });
+  await m.init();
+  assert.equal(await m.watchDrift(), 1);
+  assert.deepEqual(alerts, [{ chainId: 27, detail: 'Apple Ads changed outside the Apple broker: US: daily budget raised from $10.00 to $30.00 (paused)' }]);
+  assert.equal(await m.watchDrift(), 0, 'once');
+  drift = [...drift, { at: '2026-09-28T15:00:00Z', campaign: 'UK', change: 'resumed', action: 'reported' }];
+  assert.equal(await m.watchDrift(), 1); assert.match(alerts[1].detail, /UK: resumed \(reported\)$/);
+}));
