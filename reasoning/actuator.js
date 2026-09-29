@@ -1,9 +1,9 @@
 // The actuator: the one place an agent's action on the world is decided. Every committing step — signing in,
 // publishing, submitting a form, uploading, spending, messaging, deleting — comes here first, from the Aside
 // tools or any other hand the engine grows. The person's charter (user-controls) is what they fired in
-// advance: a granted class proceeds after `ramp` one-tap approvals of that class; an ungranted class, spend past
-// the monthly cap, or any committing step on Apple's or Meta's consoles asks for that one action. Ad budgets
-// count as what they commit through the month. The risk gate still appraises and journals every attempt and
+// advance: a granted class proceeds after `ramp` one-tap approvals of that class; an ungranted class, any payment
+// at all, or any committing step on Apple's or Meta's consoles asks for that one action. Ad budgets count as what
+// they commit through the month. The risk gate still appraises and journals every attempt and
 // still refuses what a constraint forbids. What happened is observed afterwards, from the page, not the plan.
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -146,15 +146,23 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
           : `${host} is an ad console, where a ${cls} can change spend without stating it: it needs Quinn's yes (a costed spend goes through the monthly cap)`;
       } else if (!grant.granted) needs = `the charter does not grant ${cls}`;
       else if (cls === 'spend') {
-        const { total: spent, unknown } = await spendThisMonth(), cap = Number(grant.monthlyCap) || 0;
-        if (!(spendCost > 0) && !(commitment && commitment.increase === 0)) needs = 'a spend must state its cost';
-        else if (unknown) needs = 'this month\'s spend outside the engine could not be read, so the cap cannot be checked';
-        else if (spent + spendCost > cap) needs = `$${spendCost.toFixed(2)} would take this month's spend to $${(spent + spendCost).toFixed(2)}, past the $${cap} cap`;
+        // Every payment waits for Quinn's yes, whatever the charter grants (Quinn, 2026-09-29). The monthly cap no
+        // longer lets anything through on its own; it only frames the question. Lowering a budget commits nothing new.
+        const lowersOnly = commitment && commitment.increase === 0 && !(Number(cost) > 0);
+        if (!lowersOnly) {
+          const { total: spent, unknown } = await spendThisMonth(), cap = Number(grant.monthlyCap) || 0;
+          if (!(spendCost > 0)) needs = 'a spend must state its cost';
+          else if (unknown) needs = 'this month\'s spend outside the engine could not be read, so the cap cannot be checked';
+          else if (spent + spendCost > cap) needs = `$${spendCost.toFixed(2)} would take this month's spend to $${(spent + spendCost).toFixed(2)}, past the $${cap} cap`;
+          else needs = `every payment waits for Quinn's yes ($${spent.toFixed(2)} spent this month)`;
+        }
       }
       if (!needs && (charter.ramp || 0) > 0 && (await rampDone(cls)) < charter.ramp) needs = `the first ${charter.ramp === 1 ? '' : `${charter.ramp} `}${cls} action${charter.ramp === 1 ? '' : 's'} need${charter.ramp === 1 ? 's' : ''} one yes from Quinn`;
     }
     if (needs) {
-      const question = `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}${cls === 'spend' ? ` (${costWords})` : ''}. OK? Reply yes or no.`;
+      const question = cls === 'spend'
+        ? `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''} (${costWords}). Are you sure you want to go through with this? Reply yes or no.`
+        : `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}. OK? Reply yes or no.`;
       let askId = null;
       if (asks) {
         const r = await asks.ask({ chainId: Number(chainId), kind: 'question', detail: question, want: want.want?.description || '', stakes: want.want?.stakes || [], sessionKey, agent }).catch(e => ({ error: e.message }));
