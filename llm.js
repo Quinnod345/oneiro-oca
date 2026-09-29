@@ -331,6 +331,8 @@ async function callCodex(params, options = {}) {
     // A step may ask for less effort than the policy's (a yes/no classification needs less than planning), never more.
     model, reasoningEffort: lighterEffort(params?.reasoningEffort, inferencePolicy.cloudEffort),
     sandbox: 'read-only', signal: options.signal, outputSchema: options.responseSchema,
+    // A model call answers from its prompt: no shell, no browser, no tool servers.
+    answerOnly: true,
   });
 
   return {
