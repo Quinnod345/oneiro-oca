@@ -32,6 +32,7 @@ import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
 import { createPaymentApprovals } from './reasoning/payment-approvals.js';
+import { mergeTarget } from './reasoning/dedupe.js';
 import { createJudgeNotifier } from './reasoning/judge-notifier.js';
 import { pushAlert } from './reasoning/asks.js';
 import { aside as asideBrowser } from './aside.js';
@@ -96,7 +97,7 @@ agentsReady.then(() => board.init()).then(() => board.start()).catch(e => consol
 ocaRouter.use(board.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => board.stop());
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
-ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }));
+ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork, agents }));
 registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
 
 // ============================================================
@@ -1551,9 +1552,21 @@ ocaRouter.post('/oca/self-build/introspect', async (_req, res) => {
   try { res.json(await selfBuild.introspect()); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // A person hands the engine a want about itself. Body: { seed, doneWhen?, evidence?: [{id, source, observation}] }
+// Self-wants: one per problem. A near-copy of an open self-want (however its "distinct from #37" clause is worded)
+// is merged into that want as evidence instead of opening another; past MAX_SELF_WANTS open, even a new problem
+// joins its closest open one. 32 overlapping self-wants had piled up before this (2026-09-30).
+const MAX_SELF_WANTS = 8;
 ocaRouter.post('/oca/self-build/want', async (req, res) => {
   try {
     const { seed, doneWhen, evidence = [], priority = 0.7 } = req.body || {};
+    if (typeof seed !== 'string' || seed.trim().length < 10) throw new Error('say what the engine should fix');
+    const open = (await ponderQueue.hunger()).wants.filter(w => w.origin?.kind === 'self' && w.want?.status === 'active');
+    const merge = mergeTarget(open, seed, { describe: w => w.want?.description || w.seed || '', max: MAX_SELF_WANTS });
+    if (merge) {
+      await ponderQueue.addEvidence(merge.target.chain_id, [{ id: `merged-self-want-${Date.now().toString(36)}`, source: 'a further report of this problem, merged instead of filed as its own want',
+        observation: String(seed).slice(0, 1500) }, ...(Array.isArray(evidence) ? evidence : [])]);
+      return res.status(200).json({ merged: true, into: merge.target.chain_id, why: merge.why === 'same' ? 'the same problem is already open' : `${open.length} self-wants are open; this joined the closest` });
+    }
     const chain = await ponderQueue.enqueue({ seed, doneWhen: doneWhen || 'The change is merged to main and its tests pass in isolation.', topic: 'OCA engine', learning: false, priority, evidence,
       stakes: [{ entityKey: 'project:oca-engine', share: 2 }] }, { origin: { kind: 'self', source: 'person', by: 'quinn', fingerprint: `person:${Date.now().toString(36)}` } });
     selfBuild.tick({ force: true }).catch(() => {});   // a person handing it a want is a reason to look now
@@ -1626,6 +1639,10 @@ ocaRouter.get('/oca/inbox', async (_req, res) => {
   try { res.json(await inbox.list()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Body: { kind: 'artifact'|'note'|'entity', id | entityKey, usefulness (useless|meh|useful|great|[0,1]) | rating (-1|0|1), note?, by? }
+// Take an item out of Judge without a verdict: { kind: 'artifact'|'note', id, reason? }
+ocaRouter.post('/oca/inbox/dismiss', async (req, res) => {
+  try { res.json(await inbox.dismiss(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
 ocaRouter.post('/oca/inbox/rate', async (req, res) => {
   try { res.json(await inbox.rate(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
 });

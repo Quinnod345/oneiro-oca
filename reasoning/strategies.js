@@ -121,6 +121,16 @@ export const STRATEGIES = [
     available: deps => !!deps.llm && typeof deps.writeArtifact === 'function',
     describe: () => 'Draft a concrete deliverable for this want into the engine\'s own work directory; only a person\'s rating makes it count.',
     async run(ctx) {
+      // One deliverable waiting for Quinn's verdict at a time. Drafting another while one waits is how #28 put the
+      // same pricing plan in front of him in half a dozen versions. After a week unrated, it may draft again.
+      const receipts = new Set((ctx.state.want?.receipts || []).map(r => r.receiptId));
+      const waiting = (ctx.state.commitments || []).filter(c => c.kind === 'artifact' && c.path
+        && !receipts.has(`rated-artifact-${String(c.path).split('/').pop()}`) && (Date.now() - Number(c.at || 0)) < 7 * 86400_000);
+      if (waiting.length) {
+        const last = waiting.at(-1);
+        return { status: 'needs_evidence', stopReason: 'awaiting_verdict', conclusion: `Waiting for Quinn's verdict on "${text(last.title, 100)}" before drafting another deliverable`,
+          missingEvidence: [`A person's rating of the artifact "${text(last.title, 80)}" (usefulness in [0,1])`] };
+      }
       let a;
       try {
         a = await generateJson(ctx, { schema: artifactSchema, maxTokens: 1200,
