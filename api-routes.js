@@ -32,6 +32,8 @@ import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createGateway } from './gateway.js';
 import { createPaymentApprovals } from './reasoning/payment-approvals.js';
+import { createJudgeNotifier } from './reasoning/judge-notifier.js';
+import { pushAlert } from './reasoning/asks.js';
 import { aside as asideBrowser } from './aside.js';
 
 export const ocaRouter = Router();
@@ -1159,12 +1161,22 @@ ocaRouter.post('/oca/intend/complete', async (req, res) => {
 // EVALUATION
 // ============================================================
 
+// The Chinese Room meter takes over 30 seconds to compute, longer than any app waits. It's computed in the
+// background and served from the last result; a request only waits when there has never been one.
+let crmCache = null, crmRunning = null;
+function refreshCrm() {
+  if (!crmRunning) crmRunning = import('./evaluation/chinese-room-meter.js')
+    .then(crm => crm.default.compute())
+    .then(result => { result.mlp_status = { available: false, reason: 'legacy_activity_predictor_not_comparable' }; crmCache = { result, at: Date.now() }; return result; })
+    .finally(() => { crmRunning = null; });
+  return crmRunning;
+}
+setTimeout(() => refreshCrm().catch(e => console.warn('[crm] first compute:', e.message)), 30_000).unref?.();
+setInterval(() => refreshCrm().catch(e => console.warn('[crm] refresh:', e.message)), 10 * 60_000).unref?.();
 ocaRouter.get('/oca/crm', async (req, res) => {
   try {
-    const crm = await import('./evaluation/chinese-room-meter.js');
-    const result = await crm.default.compute();
-    result.mlp_status = { available: false, reason: 'legacy_activity_predictor_not_comparable' };
-    res.json(result);
+    if (crmCache) { if (Date.now() - crmCache.at > 10 * 60_000) refreshCrm().catch(() => {}); return res.json({ ...crmCache.result, computedAt: crmCache.at }); }
+    res.json(await refreshCrm());
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1578,6 +1590,13 @@ const paymentApprovals = createPaymentApprovals({ pool, gateway,
   } });
 asks.useApprovals(paymentApprovals);
 paymentApprovals.start();
+// A push to the phone when something new lands in Judge; a tap opens Judge in the app.
+if (process.env.OCA_OWNER_PUSH_NODE) {
+  const judgeNotifier = createJudgeNotifier({ list: () => inbox.list(),
+    push: ({ title, body }) => pushAlert({ nodeId: process.env.OCA_OWNER_PUSH_NODE, title, body }),
+    statePath: `${process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work'}/../judge-notified.json` });
+  judgeNotifier.start();
+}
 // The person answers an ask (or just clears it): { reply? }
 ocaRouter.post('/oca/inbox/asks/:id/answer', async (req, res) => {
   try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done', via: req.body?.via || 'the app' })); } catch (e) { res.status(400).json({ error: e.message }); }
