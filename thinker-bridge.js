@@ -12,7 +12,8 @@ import diag from './diagnostic-log.js';
 import { riskJournal, ponderQueue } from './reasoning/ponder-service.js';
 import { classifyShell } from './motivation/risk.js';
 import { createHash } from 'crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, readFile } from 'node:fs/promises';
+import { sameWriting } from './reasoning/dedupe.js';
 import { NoticeRateLimiter, normalizeNoticeIntent } from './notice-policy.js';
 import aside from './aside.js';
 import {
@@ -308,8 +309,25 @@ async function keepPrivateWriting({ title, content } = {}) {
   const slug = String(title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'untitled';
   const path = join(THINKER_WRITING_ROOT, `${day}-${slug}.md`);
   await mkdir(THINKER_WRITING_ROOT, { recursive: true, mode: 0o700 });
+  // A note it already wrote in the last two weeks isn't written again in new words (four pricing notes and three
+  // "I'm stuck" notes piled up in Judge that way); the earlier note stands.
+  const twin = await recentTwin({ title, body }, day);
+  if (twin) return twin;
   await writeFile(path, `# ${String(title || 'Untitled').trim()}\n\n_Written by the thinker on ${new Date().toISOString()}; held for a person, never sent._\n\n${body}\n`, { mode: 0o600 });
   return path;
+}
+
+async function recentTwin(piece, today) {
+  let names = [];
+  try { names = (await readdir(THINKER_WRITING_ROOT)).filter(n => n.endsWith('.md')).sort().reverse().slice(0, 80); } catch { return null; }
+  const since = new Date(Date.parse(today) - 14 * 86400_000).toISOString().slice(0, 10);
+  for (const name of names) {
+    if (name.slice(0, 10) < since) break;
+    const md = await readFile(join(THINKER_WRITING_ROOT, name), 'utf8').catch(() => '');
+    const title = (md.match(/^# (.+)$/m) || [])[1] || '', body = md.replace(/^# .+\n+(_[^\n]*_\n+)?/, '');
+    if (sameWriting(piece, { title, body })) return join(THINKER_WRITING_ROOT, name);
+  }
+  return null;
 }
 
 async function noteAutonomousBlocked(kind, detail = '') {

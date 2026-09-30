@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-export function createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork }) {
+export function createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork, agents = null }) {
   const router = Router();
 // Ponder — current evidence-bound engine, never the legacy unconsumed queue.
 router.get('/ponder/request/:requestId', async (req, res) => {
@@ -28,7 +28,13 @@ for (const action of ['evidence', 'outcome', 'cancel', 'retry']) {
         const result = action === 'evidence' ? await ponderQueue.addEvidence(req.params.id, req.body?.evidence)
         : action === 'outcome' ? await ponderQueue.outcome(req.params.id, req.body || {})
         : action === 'retry' ? await ponderQueue.retry(req.params.id) : await ponderQueue.cancel(req.params.id);
-      if (action === 'cancel') await pursuitWork?.cancel(req.params.id);
+      if (action === 'cancel') {
+        await pursuitWork?.cancel(req.params.id);
+        // A closed want has no work left: its live agents stop too (four kept running on #28 after it closed).
+        for (const d of await agents?.list({ chainId: Number(req.params.id), live: true }).catch(() => []) ?? []) {
+          if (d.kind !== 'talker') await agents.cancel(d.id).catch(() => {});
+        }
+      }
       res.json(result);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });

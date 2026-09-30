@@ -197,9 +197,9 @@ test('evidence that meets a want mid-review is applied on a later poll, never dr
   await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence' WHERE id = $1`, [chain.chain_id]);
   await agents.poll(); a = await agents.get(d.id); assert.equal(a.report.evidenceApplied, true, 'applied once the review ended');
   assert.ok((await queue.get(chain.chain_id)).evidence.some(e => /twenty-nine/.test(e.observation)));
-  // two agents, one need
-  const d1 = await agents.deploy(chain.chain_id, { kind: 'research', task: 'ask-first A', firedBy: 'engine' });
-  const d2 = await agents.deploy(chain.chain_id, { kind: 'research', task: 'ask-first B', firedBy: 'engine' });
+  // two agents on different work, one need (identical tasks would be refused as duplicate work)
+  const d1 = await agents.deploy(chain.chain_id, { kind: 'research', task: 'ask-first: draft the onboarding email sequence', firedBy: 'engine' });
+  const d2 = await agents.deploy(chain.chain_id, { kind: 'research', task: 'ask-first: audit the paywall analytics events', firedBy: 'engine' });
   await agents.poll();
   const [a1, a2] = [await agents.get(d1.id), await agents.get(d2.id)];
   assert.equal(a1.status, 'waiting_person'); assert.equal(a2.status, 'waiting_person');

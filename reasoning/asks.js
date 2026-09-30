@@ -3,6 +3,7 @@
 // never from model prose, sent only to its own person under their standing permission (the askOwner
 // control) and appraised like any other action. Every ask is recorded as a notification the app shows,
 // so the phone has it even when no other channel does. Deduplicated per want and need; capped per day.
+import { sameThing } from './dedupe.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { OWNER_KEY } from '../motivation/risk.js';
@@ -109,6 +110,14 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     const { rows: dupes } = await pool.query(`SELECT id FROM notifications WHERE category = 'ask' AND metadata ->> 'key' = $1 AND (metadata ->> 'chainId')::int = $2
       AND created_at > to_timestamp($3 / 1000.0) AND replied_at IS NULL LIMIT 1`, [key, chainId, clock() - dedupeMs]);
     if (dupes.length) return { asked: false, why: 'already asked', id: dupes[0].id };
+    // The same question in other words is still the same question: join the open one on this want. Payments are
+    // exempt, so a yes to one purchase can never stand in for another.
+    if (!payment && (kind === 'question' || kind === 'notice')) {
+      const { rows: open } = await pool.query(`SELECT id, metadata FROM notifications WHERE category = 'ask' AND replied_at IS NULL
+        AND (metadata ->> 'chainId')::int = $1 AND NOT (metadata ? 'payment') AND created_at > to_timestamp($2 / 1000.0)`, [chainId, clock() - 3 * 86400_000]);
+      const twin = open.find(r => r.metadata?.kind === kind && sameThing(r.metadata?.detail, detail));
+      if (twin) return { asked: false, why: 'already asked', id: twin.id };
+    }
     const { rows: [{ n }] } = await pool.query(`SELECT count(*)::int AS n FROM notifications WHERE category = 'ask' AND created_at > to_timestamp($1 / 1000.0)`, [clock() - 24 * 3600_000]);
     const message = composeAsk({ kind, host, want, chainId, detail, agent });
     // Past the daily cap the phone stays quiet, but the ask is still recorded: the app shows it, and an agent

@@ -2,6 +2,7 @@
 // action here is a rating or a receipt — the only signals that teach the engine anything: a rated artifact
 // or note moves the worth of the capability that made it, an observed receipt moves a want, and the
 // Chinese Room Meter's creativity dimension is made of nothing but these.
+import { words, overlap, jaccard } from './dedupe.js';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -94,10 +95,45 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     return rows.filter(r => !/^outcome:ponder-/.test(r.key)).map(r => ({ kind: 'entity', entityKey: r.key, worth: r.state?.worth ?? null, confidence: r.state?.confidence ?? null, rated: r.state?.rated ?? 0, observed: r.state?.observed ?? 0 }));
   }
 
+  // Items set aside without a verdict: duplicates, or work on something Quinn has closed. A dismissal is not a
+  // rating, so it teaches the ledger nothing; it only takes the item out of Judge.
+  let dismissReady = null;
+  function ensureDismissed() {
+    dismissReady ??= pool.query(`CREATE TABLE IF NOT EXISTS inbox_dismissed (kind TEXT NOT NULL, id TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '',
+      by TEXT NOT NULL DEFAULT 'quinn', at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (kind, id))`).catch(e => { dismissReady = null; throw e; });
+    return dismissReady;
+  }
+  async function dismissed() {
+    await ensureDismissed();
+    const { rows } = await pool.query(`SELECT kind, id FROM inbox_dismissed`);
+    return new Set(rows.map(r => `${r.kind}:${r.id}`));
+  }
+  async function dismiss({ kind, id, reason = '', by = 'quinn' }) {
+    if (!['artifact', 'note'].includes(kind) || typeof id !== 'string' || !id) throw new Error('dismiss an artifact or a note by its id');
+    await ensureDismissed();
+    await pool.query(`INSERT INTO inbox_dismissed (kind, id, reason, by) VALUES ($1, $2, $3, $4) ON CONFLICT (kind, id) DO NOTHING`, [kind, id, text(reason, 300), text(by, 60)]);
+    return { kind, id, dismissed: true };
+  }
+
+  // Near-copies collapse into their newest version: the same title, or largely the same body (deliverables only
+  // within one want). Judge shows one card; the others ride along as `similar` and leave with its verdict.
+  function collapse(items) {
+    const cache = new Map(), w = (i, f) => { const k = `${i.kind}:${i.id}:${f}`; if (!cache.has(k)) cache.set(k, words(f === 'title' ? i.title : String(i.body || '').slice(0, 4000))); return cache.get(k); };
+    const same = (x, y) => (overlap(w(x, 'title'), w(y, 'title')) >= 0.6 && w(x, 'title').size >= 2)
+      || (String(x.body || '').length > 200 && String(y.body || '').length > 200 && jaccard(w(x, 'body'), w(y, 'body')) >= 0.4);
+    const groups = [];
+    for (const i of items) {
+      const g = groups.find(g => g.head.kind === i.kind && (i.kind !== 'artifact' || g.head.chainId === i.chainId) && same(g.head, i));
+      if (g) g.rest.push(i); else groups.push({ head: i, rest: [] });
+    }
+    return groups.map(g => (g.rest.length ? { ...g.head, similar: g.rest.map(r => ({ kind: r.kind, id: r.id, title: r.title })) } : g.head));
+  }
+
   async function list() {
     const rows = await activeWants();
-    const [a, n, e, open, byWant] = await Promise.all([artifacts(rows), notes(), entities(), asks ? asks.open().catch(() => []) : [], agentsByWant()]);
-    return { at: clock(), toRate: [...a, ...n].sort((x, y) => (y.at || 0) - (x.at || 0)), wants: wantsOf(rows, byWant), entities: e, asks: open, agentSlots: agents ? await agents.slots().catch(() => null) : null, agentsLive: agents ? await agents.liveCount().catch(() => 0) : 0 };
+    const [a, n, e, open, byWant, gone] = await Promise.all([artifacts(rows), notes(), entities(), asks ? asks.open().catch(() => []) : [], agentsByWant(), dismissed().catch(() => new Set())]);
+    const toRate = collapse([...a, ...n].filter(i => !gone.has(`${i.kind}:${i.id}`)).sort((x, y) => (y.at || 0) - (x.at || 0)));
+    return { at: clock(), toRate, wants: wantsOf(rows, byWant), entities: e, asks: open, agentSlots: agents ? await agents.slots().catch(() => null) : null, agentsLive: agents ? await agents.liveCount().catch(() => 0) : 0 };
   }
 
   // A person's verdict on a deliverable: a receipt on its want. "Useful" or better is progress; anything
@@ -134,8 +170,12 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
   }
 
   async function rate(input = {}) {
-    if (input.kind === 'artifact') return { kind: 'artifact', id: input.id, want: await rateArtifact(input) };
-    if (input.kind === 'note') return { kind: 'note', id: input.id, worth: await rateNote(input) };
+    // A verdict on a card covers its near-copies too: they leave Judge with it, dismissed, not rated.
+    const similar = input.kind === 'artifact' || input.kind === 'note'
+      ? ((await list().catch(() => ({ toRate: [] }))).toRate.find(i => i.kind === input.kind && i.id === input.id)?.similar || []) : [];
+    const settleSimilar = async () => { for (const s of similar) await dismiss({ kind: s.kind, id: s.id, reason: `a near-copy of ${input.kind} ${input.id}, which was rated`, by: input.by || 'quinn' }).catch(() => {}); };
+    if (input.kind === 'artifact') { const want = await rateArtifact(input); await settleSimilar(); return { kind: 'artifact', id: input.id, want }; }
+    if (input.kind === 'note') { const worth = await rateNote(input); await settleSimilar(); return { kind: 'note', id: input.id, worth }; }
     if (input.kind === 'entity') return { kind: 'entity', entityKey: input.entityKey, worth: await rateEntity(input) };
     throw new Error('rate an artifact, a note, or an entity');
   }
@@ -182,5 +222,5 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     }
     return row;
   }
-  return { list, rate, progress, want, continuous, answerAsk, artifacts: async () => artifacts(await activeWants()), notes };
+  return { list, rate, dismiss, progress, want, continuous, answerAsk, artifacts: async () => artifacts(await activeWants()), notes };
 }

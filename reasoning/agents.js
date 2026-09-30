@@ -12,6 +12,7 @@
 // Contract with an agent: every reply ends with a fenced block tagged `oca` — {"status": "working" |
 // "needs_person" | "done" | "failed", ...}. Messages from the engine start with [thinker]; anything else in
 // the session is the person.
+import { sameThing } from './dedupe.js';
 import { actionSummary } from './action-retries.js';
 import { randomUUID } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
@@ -165,6 +166,12 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     // A builder is the engine repairing itself (self-build runs one at a time); it never waits behind pursuit work.
     if (!standing && kind !== 'builder' && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
     if (kind !== 'talker') {
+      // Never two agents on the same work: an agent already live on this want with the same task keeps it.
+      if (!standing) {
+        const { rows: live } = await pool.query(`SELECT id, task FROM agent_deployments WHERE chain_id = $1 AND status = ANY($2)`, [row.id, LIVE]);
+        const twin = live.find(d => sameThing(d.task, task || row.state.want?.description || row.seed));
+        if (twin) return { id: null, decision: 'duplicate', why: `agent ${String(twin.id).slice(0, 8)} is already doing this`, twin: twin.id };
+      }
       const eligibility = await dispositions.eligible(row.id, task || row.state.want?.description || row.seed, row.state);
       if (!eligibility.eligible) return { id: null, decision: 'retired', why: eligibility.why, disposition: eligibility.disposition };
     }
