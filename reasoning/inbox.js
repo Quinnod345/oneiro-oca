@@ -231,8 +231,8 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     const { rows: [action] } = await pool.query(`SELECT class, host, url, description, cost FROM agent_actions WHERE ask_id = $1 ORDER BY created_at DESC LIMIT 1`, [ask.id]);
     const chainId = Number(ask.metadata?.chainId);
     if (!action || !chainId) return { started: false, why: 'the held action is not on record, so there is nothing to carry out' };
-    const task = `Quinn approved ask #${ask.id} after the agent that asked had ended. Do exactly the action he approved, once, `
-      + `and nothing else: a ${action.class} on ${action.host || action.url || 'the site it names'}`
+    const task = `Quinn approved ask #${ask.id} after the agent that asked had ended. Carry out the action he approved, once, `
+      + `and nothing beyond it (any check written into it protects his intent; a difference that doesn't change his outcome is not a reason to stop): a ${action.class} on ${action.host || action.url || 'the site it names'}`
       + `${Number(action.cost) > 0 ? ` costing $${Number(action.cost).toFixed(2)}` : ''}, passing approval=${ask.id}. The action: ${action.description}`;
     try {
       const d = await agents.deploy(chainId, { kind: 'executor', task, firedBy: 'person' });

@@ -162,6 +162,22 @@ test('a retry refusal stops Aside delegation, forwards recovery evidence, and le
   } finally { await new Promise(r => server.close(r)); }
 });
 
+test('a spend word is a spend unless the task lists it as something not to do', async () => {
+  const { spendWord } = await import('../aside-mcp.js');
+  for (const [t, word] of [
+    ['Publish the carousel with no crop, filter, music, boost, Facebook cross-post, or other changes.', null],
+    ['Post it with no boost.', null],
+    ['Publish it without a boost or promotion', null],
+    ['Publish the Day 1 carousel.', null],
+    ['Boost the launch post for 3 days', 'Boost'],
+    ["Don't boost it yet; boost it tomorrow for $5", 'boost'],
+    ['Without changing the caption, raise the daily budget to $20', 'raise the daily budget'],
+    ['Post it organically, never paid. Then boost the best one.', 'boost'],
+    ['Do not add a card, then subscribe to Pro', 'subscribe to'],
+    ['No need to wait: buy the domain now', 'buy'],
+  ]) assert.equal(spendWord(t), word, t);
+});
+
 test('a task that reads like spending is gated as a spend, and the ask names the word that made it one', async () => {
   const { createServer } = await import('node:http');
   const { spawn } = await import('node:child_process');
@@ -178,8 +194,8 @@ test('a task that reads like spending is gated as a spend, and the ask names the
       OCA_ENGINE_URL: `http://127.0.0.1:${server.address().port}`, OCA_ASIDE_CLI: '/nowhere/aside' } });
     let out = ''; child.stdout.on('data', d => { out += d; });
     for (const [id, name, args] of [
-      [1, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 1 carousel using the five supplied files, with no crop, filter, music, boost, Facebook cross-post, or other changes.' }],
-      [2, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 2 carousel using the five supplied files exactly as given.' }],
+      [1, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 1 carousel, then boost it for three days.' }],
+      [2, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 1 carousel using the five supplied files, with no crop, filter, music, boost, Facebook cross-post, or other changes.' }],
     ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
     child.stdin.end(); await new Promise(r => child.on('close', r));
     assert.equal(requests[0].body.class, 'spend'); assert.equal(requests[0].body.flagged, 'boost');
