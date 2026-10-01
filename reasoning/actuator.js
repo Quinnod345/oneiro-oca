@@ -80,7 +80,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
   // always survive; the description gives way.
   function paymentPrompt({ description, host, spendCost, dailyBudget, costWords }) {
     const on = host ? ` on ${host}` : '';
-    const title = dailyBudget ? `Approve a $${Number(dailyBudget).toFixed(2)}/day budget${on}?` : spendCost > 0 ? `Approve $${spendCost.toFixed(2)}${on}?` : `Approve a payment${on}?`;
+    const title = dailyBudget ? `Approve a $${Number(dailyBudget).toFixed(2)}/day budget${on}?` : spendCost > 0 ? `Approve $${spendCost.toFixed(2)}${on}?` : `Approve a possible payment${on}?`;
     const tail = ` (${costWords}). Are you sure you want to go through with this?`;
     const lead = `Oneiro wants to ${text(description, 400)}${on}`, room = Math.max(60, 250 - tail.length);
     return { title: text(title, 80), description: (lead.length > room ? `${lead.slice(0, room - 1).trimEnd()}…` : lead) + tail };
@@ -95,7 +95,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     return { state: 'unclear', ask: a };
   }
 
-  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, dailyBudget = null, previousDailyBudget = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null } = {}) {
+  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, dailyBudget = null, previousDailyBudget = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null, flagged = null } = {}) {
     if (!CHARTER_CLASSES.includes(cls)) throw new Error(`an action class is one of ${CHARTER_CLASSES.join(', ')}`);
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what the action is');
     const id = randomUUID();
@@ -104,7 +104,8 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     const spendCost = Math.max(Number(cost) || 0, commitment?.committed || 0);
     const costWords = commitment
       ? `a daily budget of $${Number(dailyBudget).toFixed(2)}${Number(previousDailyBudget) > 0 ? ` (was $${Number(previousDailyBudget).toFixed(2)})` : ''}, $${commitment.committed.toFixed(2)} committed through the end of the month`
-      : spendCost > 0 ? `cost $${spendCost.toFixed(2)}` : 'the cost wasn\'t stated';
+      : spendCost > 0 ? `cost $${spendCost.toFixed(2)}`
+      : flagged ? `no price was given; it asks because the task says "${text(flagged, 40)}"` : 'no price was given';
     const want = queue ? await queue.get(Number(chainId)) : { want: { status: 'active' } };
     const candidate = { chainId: Number(chainId) || 0, class: cls, host, url, control, description };
     let retry = { eligible: true };

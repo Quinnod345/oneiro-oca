@@ -10,8 +10,16 @@
 //
 // The first answer wins. The gateway keeps an approval open for ten minutes at most; after that, or once he has
 // answered in Messages or the app, the phone's prompt is gone and the ask is settled the way he answered it.
+//
+// The engine reads a decision from the gateway's history of closed approvals, never from approval.get. An open
+// approval is visible only to the devices it was sent to, so approval.get answers the engine "approval not found"
+// from the moment it exists. Reading that as "gone" settled every approval as expired seconds after it was sent, and
+// a tap on the phone was never seen (2026-09-29 to 2026-10-01). The history carries each decision with the device
+// that made it.
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 export const APPROVAL_WINDOW_MS = 600_000;
+// An approval missing from the history this long after its window has left no trace; it can no longer be decided.
+export const LOST_AFTER_MS = 600_000;
 export const APPROVE = 'allow-once';
 export const DENY = 'deny';
 
@@ -47,6 +55,13 @@ export function createPaymentApprovals({ pool, gateway, deciders = [], clock = D
     return { id: r.id, requestedAt: at, expiresAt: Number(r.expiresAtMs) || at + APPROVAL_WINDOW_MS, route: r.deliveryRoute || null };
   }
 
+  // The plugin approvals the gateway has closed (allowed, denied or expired), by id, each with who decided it.
+  async function closedApprovals() {
+    const r = unwrap(await gateway.call('approval.history', { kind: 'plugin', limit: 50 }, { timeout: 20_000 }));
+    const items = Array.isArray(r?.items) ? r.items : [];
+    return new Map(items.filter(i => i?.id).map(i => [String(i.id), i]));
+  }
+
   // Reads back every open approval. A decision from his phone answers the ask; one from anywhere else is ignored and
   // reported. An ask he already answered another way keeps that answer, and its prompt is taken off the phone.
   async function tick() {
@@ -54,6 +69,7 @@ export function createPaymentApprovals({ pool, gateway, deciders = [], clock = D
     try {
       const { rows } = await pool.query(`SELECT id, replied_at, metadata FROM notifications WHERE category = 'ask'
         AND metadata->'approval'->>'id' IS NOT NULL AND metadata->'approval'->>'settled' IS NULL ORDER BY id LIMIT 20`);
+      let closed = null;
       for (const a of rows) {
         const ap = a.metadata.approval;
         if (a.replied_at) {
@@ -61,14 +77,15 @@ export function createPaymentApprovals({ pool, gateway, deciders = [], clock = D
           await gateway.call('approval.resolve', { id: ap.id, kind: 'plugin', decision: DENY }, { timeout: 20_000 }).catch(() => {});
           continue;
         }
-        const lapsed = clock() > Number(ap.expiresAt || 0) + 60_000;
-        let snap = null;
-        try { snap = unwrap(await gateway.call('approval.get', { id: ap.id }, { timeout: 20_000 }))?.approval ?? null; }
-        catch (e) {   // gone from the gateway can never be decided; anything else is retried until the window lapses
-          if (lapsed || /not.?found/i.test(e.message)) await settle(a.id, { settled: 'expired' }); else log.warn?.(`[payments] ask #${a.id}: approval.get failed:`, text(e.message, 160));
+        if (closed === null) {
+          try { closed = await closedApprovals(); }
+          catch (e) { log.warn?.('[payments] approval history unavailable; will read again next pass:', text(e.message, 160)); return; }
+        }
+        const snap = closed.get(String(ap.id));
+        if (!snap) {   // still open on the phone; only long past its window, with no record at all, is it lost
+          if (clock() > Number(ap.expiresAt || 0) + LOST_AFTER_MS) await settle(a.id, { settled: 'expired', status: 'missing' });
           continue;
         }
-        if (!snap || snap.status === 'pending') { if (lapsed) await settle(a.id, { settled: 'expired' }); continue; }
         const decision = snap.decision, resolver = snap.resolver || null;
         if (decision !== APPROVE && decision !== DENY) { await settle(a.id, { settled: 'expired', status: snap.status ?? null }); continue; }
         if (resolver?.kind !== 'device' || !trusted.has(String(resolver.id))) {
