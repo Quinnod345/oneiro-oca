@@ -162,6 +162,31 @@ test('a retry refusal stops Aside delegation, forwards recovery evidence, and le
   } finally { await new Promise(r => server.close(r)); }
 });
 
+test('a task that reads like spending is gated as a spend, and the ask names the word that made it one', async () => {
+  const { createServer } = await import('node:http');
+  const { spawn } = await import('node:child_process');
+  const requests = [];
+  const server = createServer(async (req, res) => {
+    let body = ''; for await (const chunk of req) body += chunk;
+    requests.push({ path: req.url, body: JSON.parse(body) });
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ decision: 'ask', askId: 37, question: 'Oneiro wants to … Reply yes or no.', why: 'a spend must state its cost' }));
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  try {
+    const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env,
+      OCA_ENGINE_URL: `http://127.0.0.1:${server.address().port}`, OCA_ASIDE_CLI: '/nowhere/aside' } });
+    let out = ''; child.stdout.on('data', d => { out += d; });
+    for (const [id, name, args] of [
+      [1, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 1 carousel using the five supplied files, with no crop, filter, music, boost, Facebook cross-post, or other changes.' }],
+      [2, 'aside_do', { pursuit: 27, class: 'publish', task: 'Publish the Day 2 carousel using the five supplied files exactly as given.' }],
+    ]) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }) + '\n');
+    child.stdin.end(); await new Promise(r => child.on('close', r));
+    assert.equal(requests[0].body.class, 'spend'); assert.equal(requests[0].body.flagged, 'boost');
+    assert.equal(requests[1].body.class, 'publish'); assert.equal(requests[1].body.flagged, undefined);
+  } finally { await new Promise(r => server.close(r)); }
+});
+
 test('Apple work in the browser says why the Apple API could not take it; a task that names a console is gated as that console', async () => {
   const { createServer } = await import('node:http');
   const { spawn } = await import('node:child_process');

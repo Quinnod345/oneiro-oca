@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { createActuator } from '../reasoning/actuator.js';
 import { createAsks } from '../reasoning/asks.js';
 import { createInbox } from '../reasoning/inbox.js';
-import { createPaymentApprovals, APPROVE, DENY, APPROVAL_WINDOW_MS } from '../reasoning/payment-approvals.js';
+import { createPaymentApprovals, APPROVE, DENY, APPROVAL_WINDOW_MS, LOST_AFTER_MS } from '../reasoning/payment-approvals.js';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -30,7 +30,9 @@ async function database(run) {
   } finally { if (pool) await pool.end(); await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); await admin.end(); }
 }
 
-// A gateway that records every call and answers approval.get from a table the test fills in, the way Quinn's tap would.
+// A gateway that records every call and behaves like the real one: an open approval is invisible to the engine
+// (approval.get answers "approval not found", because only the phone it was sent to may read it), and a closed one
+// shows up in approval.history with who decided it, the way Quinn's tap would leave it.
 function fakeGateway() {
   const calls = [], snapshots = new Map();
   let n = 0, deliver = true;
@@ -38,6 +40,7 @@ function fakeGateway() {
     calls, snapshots,
     noRoute() { deliver = false; },
     decide(id, decision, resolver) { snapshots.set(id, { id, status: decision === DENY ? 'denied' : 'allowed', decision, resolvedAtMs: 1, resolver }); },
+    expire(id) { snapshots.set(id, { id, status: 'expired', resolvedAtMs: 1, resolver: { kind: 'system' } }); },
     async call(method, params) {
       calls.push({ method, params });
       if (method === 'plugin.approval.request') {
@@ -46,7 +49,8 @@ function fakeGateway() {
         snapshots.set(id, { id, status: 'pending' });
         return { status: 'accepted', id, deliveryRoute: 'forwarder', createdAtMs: 0, expiresAtMs: 0 };
       }
-      if (method === 'approval.get') return { approval: snapshots.get(params.id) ?? null };
+      if (method === 'approval.get') throw new Error('gateway approval.get: approval not found');
+      if (method === 'approval.history') return { items: [...snapshots.values()].filter(s => s.status !== 'pending').reverse() };
       if (method === 'approval.resolve') { snapshots.set(params.id, { id: params.id, status: 'denied', decision: DENY, resolver: { kind: 'device', id: 'this-mac' } }); return { ok: true }; }
       throw new Error(`unexpected ${method}`);
     },
@@ -93,12 +97,18 @@ test('every payment asks on the phone with Approve and Deny; only a tap on Quinn
   assert.match(longReq.description, /…\s\(cost \$240\.00\)\. Are you sure you want to go through with this\?$/);
   // a daily budget says so in the title
   const budget = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the promoted-post daily budget', dailyBudget: 20, previousDailyBudget: 10 });
-  assert.equal(requests().at(-1).params.title, 'Approve a $20.00/day budget on ads.x.com?');
+  assert.equal(requests().at(-1).params.title, 'Approve a possible payment on ads.x.com?'.replace('a possible payment', 'a $20.00/day budget'));
+  // a step with no price that only reads like spending says so, and names the word that made it ask
+  await act.authorize({ chainId: id, class: 'spend', host: 'www.instagram.com', description: 'publish the Day 1 carousel with no crop, filter, music or boost', flagged: 'boost' });
+  assert.equal(requests().at(-1).params.title, 'Approve a possible payment on www.instagram.com?');
+  assert.match(requests().at(-1).params.description, /\(no price was given; it asks because the task says "boost"\)\. Are you sure you want to go through with this\?$/);
 
-  // 2. waiting: nothing is decided, and the held step stays held
-  await approvals.tick();
+  // 2. waiting: nothing is decided, and the held step stays held. The gateway hides an open approval from the
+  //    engine; that is "still open", never "gone" (it used to settle every approval as expired within seconds).
+  await approvals.tick(); await approvals.tick();
   assert.equal(decided.length, 0); assert.equal((await approvalOf(a.askId)).settled, undefined);
   assert.equal((await act.authorize({ ...pay, approval: a.askId })).decision, 'ask');
+  assert.ok(!gateway.calls.some(c => c.method === 'approval.get'), 'decisions are read from the history');
 
   // 3. a decision from anywhere but his phone is ignored and reported: here, a client on this Mac approving
   gateway.decide('plugin:1', APPROVE, { kind: 'device', id: 'mac-cli' });
@@ -143,16 +153,17 @@ test('every payment asks on the phone with Approve and Deny; only a tap on Quinn
   const d = await act.authorize({ chainId: id, class: 'spend', host: 'www.etsy.com', description: 'purchase the journal mockup template', cost: 9 });
   assert.equal(pushed.length, 1); assert.equal(await approvalOf(d.askId), undefined);
 
-  // 8. an approval nobody answered lapses after its window; the ask stays open for Messages and the app
+  // 8. an approval nobody answered lapses when the gateway closes it; the ask stays open for Messages and the app
   const e = await (async () => { const g2 = fakeGateway(); const ap2 = createPaymentApprovals({ pool, gateway: g2, deciders: ['phone-1'], clock: () => now, log: silent });
     asks.useApprovals(ap2); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'purchase the icon pack for the site', cost: 19 });
-    now += APPROVAL_WINDOW_MS + 61_000; await ap2.tick(); return r; })();
+    now += APPROVAL_WINDOW_MS + 1000; g2.expire((await approvalOf(r.askId)).id); await ap2.tick(); return r; })();
   assert.equal((await approvalOf(e.askId)).settled, 'expired');
-  // and one the gateway no longer has can never be decided: settled at once
+  // and one that left no record at all is still waited on through its window, then given up well after it
   const f = await (async () => { const g3 = fakeGateway(); const ap3 = createPaymentApprovals({ pool, gateway: g3, deciders: ['phone-1'], clock: () => now, log: silent });
     asks.useApprovals(ap3); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'buy the font license for the site', cost: 29 });
-    g3.snapshots.clear(); const get = g3.call; g3.call = async (m, p) => { if (m === 'approval.get') throw new Error('gateway approval.get: approval not found'); return get(m, p); };
-    await ap3.tick(); return r; })();
+    g3.snapshots.clear(); await ap3.tick();
+    assert.equal((await approvalOf(r.askId)).settled, undefined, 'not given up while it could still be answered');
+    now += APPROVAL_WINDOW_MS + LOST_AFTER_MS + 1000; await ap3.tick(); return r; })();
   assert.equal((await approvalOf(f.askId)).settled, 'expired');
   assert.ok((await asks.open()).some(o => o.id === e.askId), 'still open');
 
@@ -179,4 +190,30 @@ test('an answer reaches every agent waiting on the ask, even one that joined an 
   await inbox.answerAsk({ id: 41, reply: 'Approved on iPhone (ask #41).', via: 'iPhone' });
   assert.deepEqual(answered, [[41, 'Approved on iPhone (ask #41).']]);
   assert.deepEqual(relayed, [['dep-a', 'Approved on iPhone (ask #41).', 'iPhone'], ['dep-b', 'Approved on iPhone (ask #41).', 'iPhone']]);
+});
+
+test('a yes to a payment whose agent is gone sends a fresh executor to do exactly that action, citing the approval', async () => {
+  const deployed = [];
+  let deployFails = null;
+  const pool = { query: async (sql, params) => {
+    if (/FROM agent_deployments WHERE ask_id/.test(sql)) return { rows: [] };
+    if (/FROM agent_actions WHERE ask_id/.test(sql)) return { rows: params[0] === 37 ? [{ class: 'spend', host: 'www.instagram.com', description: 'Publish the Day 1 carousel with no crop, filter, music or boost', cost: 0 }] : [] };
+    return { rows: [] };
+  } };
+  const asks = { answer: async (id, reply) => ({ id, reply, metadata: { chainId: 27, payment: id !== 50 } }) };
+  const agents = { relay: async () => {}, deploy: async (chainId, opts) => { if (deployFails) throw new Error(deployFails); deployed.push([chainId, opts]); return { id: 'dep-new' }; } };
+  const inbox = createInbox({ pool, queue: {}, worth: {}, workRoot: '/tmp', asks, agents, log: silent });
+
+  const yes = await inbox.answerAsk({ id: 37, reply: 'yes' });
+  assert.deepEqual(yes.followUp, { started: true, agent: 'dep-new' });
+  assert.equal(deployed.length, 1); const [chainId, opts] = deployed[0];
+  assert.equal(chainId, 27); assert.equal(opts.kind, 'executor'); assert.equal(opts.firedBy, 'person');
+  assert.match(opts.task, /approval=37/); assert.match(opts.task, /Day 1 carousel/); assert.match(opts.task, /once/);
+
+  assert.equal((await inbox.answerAsk({ id: 37, reply: 'no' })).followUp, undefined, 'a no starts nothing');
+  assert.equal((await inbox.answerAsk({ id: 50, reply: 'yes' })).followUp, undefined, 'only a payment is carried out this way');
+  assert.equal(deployed.length, 1);
+  assert.deepEqual((await inbox.answerAsk({ id: 38, reply: 'yes' })).followUp, { started: false, why: 'the held action is not on record, so there is nothing to carry out' });
+  deployFails = 'all 6 agent slots are busy; raise agentSlots or wait';
+  assert.deepEqual((await inbox.answerAsk({ id: 37, reply: 'Approved on iPhone (ask #37).' })).followUp, { started: false, why: deployFails }, 'why it could not start is said, not swallowed');
 });

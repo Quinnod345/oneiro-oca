@@ -225,7 +225,7 @@ async function noteAppleRead(tool, url, args) {
   const line = JSON.stringify({ at: new Date().toISOString(), tool, url, pursuit: Number(args.pursuit) || null, whyNotApi: String(args.whyNotApi || '').slice(0, 300) || null });
   await appendFile(process.env.OCA_APPLE_FALLBACK_LOG || `${WORKSPACE}apple-browser-fallback.jsonl`, line + '\n').catch(() => {});
 }
-async function gate(args, { cls, url, control = '', description }) {
+async function gate(args, { cls, url, control = '', description, flagged = null }) {
   const pursuit = Number(args.pursuit);
   if (!Number.isInteger(pursuit) || pursuit < 1) return { held: true, why: `This ${cls} action needs the pursuit it serves: pass pursuit (the #id from your brief) and purpose.` };
   const purpose = String(args.purpose || '').trim();
@@ -235,7 +235,7 @@ async function gate(args, { cls, url, control = '', description }) {
     description = `${description} [browser, not the Apple API: ${whyNotApi.slice(0, 300)}]`;
   }
   const d = await engine('/oca/act/authorize', { chainId: pursuit, class: cls, host: hostOf(url), url, control, description: purpose ? `${purpose} (${description})` : description,
-    cost: Number(args.cost) || 0, approval: args.approval || null, retryEvidence: args.retryEvidence || null });
+    cost: Number(args.cost) || 0, approval: args.approval || null, retryEvidence: args.retryEvidence || null, ...(flagged ? { flagged } : {}) });
   if (d.decision === 'proceed') return { proceed: true, actionId: d.actionId };
   if (d.decision === 'ask') return { held: true, askId: d.askId, question: d.question, why: `${d.why}. The engine asked Quinn (ask #${d.askId}). End your turn with needs_person using exactly this question: "${d.question}". When he answers yes, retry this same action with approval=${d.askId}.` };
   return { refused: true, why: d.why };
@@ -405,10 +405,13 @@ export async function callAsideTool(name, args = {}) {
     case 'aside_do': {
       const declared = String(args.class || ''); const task = String(args.task || '').trim();
       if (task.length < 10) throw new Error('say exactly what to do');
-      const cls = declared !== 'spend' && declared !== 'sign_in' && TASK_SPEND.test(`${task} ${args.purpose || ''}`) ? 'spend' : declared;
+      // A task that reads like spending is a spend whatever class it declared; the word that made it one goes with
+      // the ask, so Quinn can see why a step with no price asks him at all.
+      const flagged = declared !== 'spend' && declared !== 'sign_in' ? TASK_SPEND.exec(`${task} ${args.purpose || ''}`)?.[0] || null : null;
+      const cls = flagged ? 'spend' : declared;
       const url = String(args.url || ''); const files = Array.isArray(args.files) ? args.files.map(String) : [];
       for (const f of files) if (!f.startsWith(WORKSPACE) || f.includes('..')) throw new Error(`files must be under ${WORKSPACE}`);
-      const g = await gate(args, { cls, url: consoleOf(task, url), control: 'Aside agent', description: `${task.slice(0, 600)}${files.length ? ` (files: ${files.map(f => f.split('/').pop()).join(', ')})` : ''}` });
+      const g = await gate(args, { cls, flagged, url: consoleOf(task, url), control: 'Aside agent', description: `${task.slice(0, 600)}${files.length ? ` (files: ${files.map(f => f.split('/').pop()).join(', ')})` : ''}` });
       if (!g.proceed) return heldOrRefused(cls, null, g);
       try {
         const r = await aside.delegate(`${task}${url ? `\nWhere: ${url}` : ''}${files.length ? `\nFiles to use, in order: ${files.join(', ')}` : ''}\n${DELEGATE_RULES}`, { timeout: 15 * 60_000, permission: files.length ? 'full-access' : null });

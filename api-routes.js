@@ -34,6 +34,7 @@ import { createGateway } from './gateway.js';
 import { createPaymentApprovals } from './reasoning/payment-approvals.js';
 import { mergeTarget } from './reasoning/dedupe.js';
 import { createJudgeNotifier } from './reasoning/judge-notifier.js';
+import { createImessageKeeper, imessageHost, portOpen } from './reasoning/imessage-keeper.js';
 import { pushAlert } from './reasoning/asks.js';
 import { aside as asideBrowser } from './aside.js';
 
@@ -48,7 +49,9 @@ ocaRouter.use('/oca/ui', async (_req, res, next) => {
 });
 ocaRouter.use(userWorkspace.router);
 // The engine may ask its person for what it observed it needs — under their standing permission, only to them.
-const asks = createAsks({ pool, risk: riskJournal });
+// Texts go out only through Messages on the work Mac; the keeper (below) says when that line is down.
+let imessageKeeper = null;
+const asks = createAsks({ pool, risk: riskJournal, imessageReady: () => imessageKeeper?.ready() ?? true });
 asks.init().catch(e => console.warn('[asks] init:', e.message));
 const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, risk: riskJournal, asks, canStart: async () => !(await userControls.get()).queuePaused });
 const pursuitWorkReady = pursuitWork.init().then(() => pursuitWork.start());
@@ -1603,6 +1606,14 @@ const paymentApprovals = createPaymentApprovals({ pool, gateway,
   } });
 asks.useApprovals(paymentApprovals);
 paymentApprovals.start();
+// The iMessage line to Quinn: restarted when the work Mac is back, and he hears once when texts pause and resume.
+if (process.env.OCA_OWNER_IMESSAGE) {
+  imessageKeeper = createImessageKeeper({ gateway,
+    reachable: async () => { const host = await imessageHost(); return host ? portOpen(host, 22) : false; },
+    push: ({ title, body }) => (process.env.OCA_OWNER_PUSH_NODE ? pushAlert({ nodeId: process.env.OCA_OWNER_PUSH_NODE, title, body }) : Promise.reject(new Error('no phone is paired'))),
+    statePath: `${process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work'}/../imessage-keeper.json` });
+  imessageKeeper.start();
+}
 // A push to the phone when something new lands in Judge; a tap opens Judge in the app.
 if (process.env.OCA_OWNER_PUSH_NODE) {
   const judgeNotifier = createJudgeNotifier({ list: () => inbox.list(),

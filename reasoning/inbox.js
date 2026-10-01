@@ -3,6 +3,7 @@
 // or note moves the worth of the capability that made it, an observed receipt moves a want, and the
 // Chinese Room Meter's creativity dimension is made of nothing but these.
 import { words, overlap, jaccard } from './dedupe.js';
+import { YES } from './actuator.js';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -216,11 +217,32 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
   async function answerAsk({ id, reply = 'done', via = 'the app' }) {
     if (!asks) throw new Error('asks are not available');
     const row = await asks.answer(Number(id), reply);
-    if (agents) {
-      const { rows } = await pool.query(`SELECT id FROM agent_deployments WHERE ask_id = $1 AND status IN ('waiting_person', 'standing', 'running', 'done') ORDER BY created_at`, [Number(id)]);
-      for (const d of rows) await agents.relay(d.id, reply, { via }).catch(e => log.warn?.('[inbox] relay to agent:', e.message));
+    if (!agents) return row;
+    const { rows } = await pool.query(`SELECT id FROM agent_deployments WHERE ask_id = $1 AND status IN ('waiting_person', 'standing', 'running', 'done') ORDER BY created_at`, [Number(id)]);
+    for (const d of rows) await agents.relay(d.id, reply, { via }).catch(e => log.warn?.('[inbox] relay to agent:', e.message));
+    if (rows.length || !row.metadata?.payment || !YES.test(reply)) return row;
+    return { ...row, followUp: await carryOut(row) };
+  }
+
+  // A yes to a held payment whose agent is gone (it ended, failed, or was lost in a restart) still gets acted on: a
+  // fresh executor does exactly the action that was held, once, citing the approval. Without this, an answer that
+  // came after the agent left changed nothing, and nobody said so.
+  async function carryOut(ask) {
+    const { rows: [action] } = await pool.query(`SELECT class, host, url, description, cost FROM agent_actions WHERE ask_id = $1 ORDER BY created_at DESC LIMIT 1`, [ask.id]);
+    const chainId = Number(ask.metadata?.chainId);
+    if (!action || !chainId) return { started: false, why: 'the held action is not on record, so there is nothing to carry out' };
+    const task = `Quinn approved ask #${ask.id} after the agent that asked had ended. Do exactly the action he approved, once, `
+      + `and nothing else: a ${action.class} on ${action.host || action.url || 'the site it names'}`
+      + `${Number(action.cost) > 0 ? ` costing $${Number(action.cost).toFixed(2)}` : ''}, passing approval=${ask.id}. The action: ${action.description}`;
+    try {
+      const d = await agents.deploy(chainId, { kind: 'executor', task, firedBy: 'person' });
+      if (!d?.id) return { started: false, why: d?.why || d?.decision || 'no agent could start' };
+      log.log?.(`[inbox] ask #${ask.id} was approved after its agent ended; executor ${String(d.id).slice(0, 8)} carries it out`);
+      return { started: true, agent: d.id };
+    } catch (e) {
+      log.warn?.(`[inbox] ask #${ask.id} was approved, but no agent could carry it out:`, e.message);
+      return { started: false, why: e.message };
     }
-    return row;
   }
   return { list, rate, dismiss, progress, want, continuous, answerAsk, artifacts: async () => artifacts(await activeWants()), notes };
 }

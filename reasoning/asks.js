@@ -48,7 +48,8 @@ export async function pushAlert({ nodeId, title, body, openclawCli = process.env
 
 export function createAsks({ pool, risk, clock = Date.now, log = console,
   imessage = process.env.OCA_OWNER_IMESSAGE || null, pushNode = process.env.OCA_OWNER_PUSH_NODE || null,
-  notify = true, perDay = Number(process.env.OCA_ASKS_PER_DAY) || 40, dedupeMs = 12 * 3600_000, deliverers = null, approvals = null } = {}) {
+  notify = true, perDay = Number(process.env.OCA_ASKS_PER_DAY) || 40, dedupeMs = 12 * 3600_000, deliverers = null, approvals = null,
+  imessageReady = () => true } = {}) {
   // Payments ask on the phone with Approve and Deny (payment-approvals.js), wired after the gateway exists.
   let paymentApprovals = approvals;
   const useApprovals = a => { paymentApprovals = a; };
@@ -72,17 +73,14 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
   // Delivery channels, each best-effort and journaled by name. The notification row is not a channel: it is the record.
   const openclawCli = process.env.OCA_OPENCLAW_CLI || '/opt/homebrew/bin/openclaw';
   const channels = deliverers || {
-    // iMessage to the person's own handle. Through OpenClaw's iMessage channel when it is there — so the
-    // ask lands in the standing conversation the person's agent keeps, with its context — else straight
-    // through Messages on this Mac. Needs OCA_OWNER_IMESSAGE.
+    // iMessage to the person's own handle, only ever through OpenClaw's iMessage channel: Messages on the work Mac,
+    // in the standing conversation his agent keeps. When that line is down the text fails and the push and the app
+    // carry the ask. Never through Messages on this Mac, which is signed into his own iCloud account: the text lands
+    // in his own thread, where nothing answers it. Needs OCA_OWNER_IMESSAGE.
     imessage: imessage ? async message => {
-      try {
-        const { stdout } = await run(openclawCli, ['message', 'send', '--channel', 'imessage', '--target', imessage, '-m', message, '--json'], { timeout: 30000, env: { ...process.env, NO_COLOR: '1' } });
-        if (/"ok"\s*:\s*false|"error"/i.test(stdout) && !/"ok"\s*:\s*true/i.test(stdout)) throw new Error(`openclaw: ${stdout.slice(0, 160)}`);
-        return;
-      } catch (e) { if (process.env.OCA_ASK_IMESSAGE_DIRECT === '0') throw e; }
-      const script = `tell application "Messages"\n  set targetService to 1st service whose service type = iMessage\n  set targetBuddy to participant ${JSON.stringify(imessage)} of targetService\n  send ${JSON.stringify(message)} to targetBuddy\nend tell`;
-      await run('osascript', ['-e', script], { timeout: 15000 });
+      if (!imessageReady()) throw new Error('the work Mac is offline, so texts are paused');
+      const { stdout } = await run(openclawCli, ['message', 'send', '--channel', 'imessage', '--target', imessage, '-m', message, '--json'], { timeout: 30000, env: { ...process.env, NO_COLOR: '1' } });
+      if (/"ok"\s*:\s*false|"error"/i.test(stdout) && !/"ok"\s*:\s*true/i.test(stdout)) throw new Error(`openclaw: ${stdout.slice(0, 160)}`);
     } : null,
     // The phone, through APNs. Needs OCA_OWNER_PUSH_NODE (the paired iOS node id in the gateway).
     push: pushNode ? async message => { await pushAlert({ nodeId: pushNode, title: 'Oneiro needs you', body: message }); } : null,
@@ -141,7 +139,10 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
     if (approval) delivered.push('approval');
     if (proceed) {
       for (const [name, send] of Object.entries(channels)) {
-        if (!send || (approval && name === 'push')) continue;   // the approval is the phone's notification
+        if (!send) continue;
+        // One alert per ask on his phone. For a payment that's the approval (or, with no route to one, the push);
+        // otherwise a text that reached Messages already buzzed it, so the plain push goes out only when it didn't.
+        if (name === 'push' && (approval || (!payment && delivered.includes('imessage')))) continue;
         try { await send(message); delivered.push(name); } catch (e) { failed.push(`${name}: ${text(e.message, 120)}`); }
       }
     }
@@ -165,7 +166,10 @@ export function createAsks({ pool, risk, clock = Date.now, log = console,
 
   async function open() {
     const { rows } = await pool.query(`SELECT id, message, created_at, metadata FROM notifications WHERE category = 'ask' AND replied_at IS NULL ORDER BY created_at DESC LIMIT 20`);
-    return rows.map(r => ({ id: r.id, message: r.message, at: r.created_at, chainId: r.metadata?.chainId ?? null, kind: r.metadata?.kind, host: r.metadata?.host, detail: r.metadata?.detail || '', delivered: r.metadata?.delivered || [], sessionKey: r.metadata?.sessionKey || null, agent: r.metadata?.agent || null }));
+    // A payment says so, with its phone approval (id, when its window closes, how it settled), so the app can offer
+    // Approve and Deny on it, and find it from the approval notification he tapped.
+    return rows.map(r => ({ id: r.id, message: r.message, at: r.created_at, chainId: r.metadata?.chainId ?? null, kind: r.metadata?.kind, host: r.metadata?.host, detail: r.metadata?.detail || '', delivered: r.metadata?.delivered || [], sessionKey: r.metadata?.sessionKey || null, agent: r.metadata?.agent || null,
+      payment: r.metadata?.payment === true, approval: r.metadata?.approval ? { id: r.metadata.approval.id, expiresAt: r.metadata.approval.expiresAt ?? null, settled: r.metadata.approval.settled ?? null } : null }));
   }
 
   return { init, ask, answer, open, recent, composeAsk, useApprovals, channels: () => Object.entries(channels).filter(([, f]) => f).map(([n]) => n) };
