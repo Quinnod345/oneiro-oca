@@ -488,7 +488,9 @@ async function retirementHarness(pool, { maxTurns = 12 } = {}) {
       ownerSupersedes: input.currentOwner.some(e => /fresh.start|retire|do not audit/.test(e.observation)),
       ownerSupersession: input.currentOwner.filter(e => /fresh.start|retire|do not audit/.test(e.observation)).slice(-1).map(cite),
       materialEvidence: input.newEvidence.filter(e => /August 2026 production usage:|September 2026 production usage:/.test(e.observation)).map(cite),
-      ownerPermission: input.newOwner.filter(e => /Reopen the historical August 2026 AI cost reconciliation/.test(e.observation)).slice(-1).map(cite),
+      // A permission that waits on a condition ("if records become available") is cited only once the facts meet it.
+      ownerPermission: input.newOwner.filter(e => /Reopen the historical August 2026 AI cost reconciliation/.test(e.observation)
+        && (!/\bif\b/.test(e.observation) || input.newEvidence.some(x => /August 2026 production usage:/.test(x.observation)))).slice(-1).map(cite),
     });
   } } };
   const options = { pool, gateway: gw, llm, clock: () => now, maxTurns, continuityIntervalMs: 1,
@@ -574,7 +576,10 @@ test('fresh-start supersession requires both relevant evidence and new applicabl
   await h.evidence('August 2026 production usage: verified paid-cohort token counts and invoice totals are now available.');
   assert.equal((await h.deploy()).decision, 'retired', 'new relevant records alone cannot override the owner');
   await h.evidence('Keep improving the product and measure prospective costs going forward.', { owner: true });
-  assert.equal((await h.deploy(undefined, { firedBy: 'person' })).decision, 'retired', 'firedBy and general encouragement are not scope-specific authorization');
+  assert.equal((await h.deploy()).decision, 'retired', 'general encouragement is not scope-specific authorization');
+  const sent = await h.deploy(undefined, { firedBy: 'person' });
+  assert.ok(sent.id, 'an agent Quinn sends himself is his decision; the engine\'s retirement does not overrule it');
+  await h.agents.cancel(sent.id).catch(() => {});
   // A separate prospective task remains available while the historical scope is retired.
   assert.ok((await h.deploy('Set up prospective AI cost measurement for new users')).id);
   await h.agents.poll();
@@ -582,15 +587,24 @@ test('fresh-start supersession requires both relevant evidence and new applicabl
   h.restart(); assert.ok((await h.deploy()).id, 'both new facts and applicable owner permission permit reopening');
 }));
 
-test('owner permission alone cannot reopen superseded work; later owner supersession tightens ordinary exhaustion', async () => database(async pool => {
+test('a conditional owner permission waits for its condition; later owner supersession tightens ordinary exhaustion', async () => database(async pool => {
   const h = await retirementHarness(pool);
   const first = await h.deploy(); await h.agents.poll();
   await h.evidence('Use the fresh-start launch plan; do not audit historical August costs.', { owner: true });
   assert.equal((await h.deploy()).decision, 'retired');
   assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'superseded', 'owner change after retirement persists');
   await h.evidence('Reopen the historical August 2026 AI cost reconciliation if relevant records become available.', { owner: true });
-  assert.equal((await h.deploy()).decision, 'retired', 'permission without new evidence is insufficient');
+  assert.equal((await h.deploy()).decision, 'retired', 'a permission that waits on records does not reopen before they exist');
   h.restart(); assert.deepEqual((await h.cycle()).started, []);
+}));
+
+test('Quinn\'s unconditional go-ahead reopens retired work by itself, without new facts', async () => database(async pool => {
+  const h = await retirementHarness(pool);
+  const first = await h.deploy(); await h.agents.poll();
+  assert.equal((await h.raw(first.id)).report.taskDisposition.status, 'exhausted');
+  h.restart(); assert.deepEqual((await h.cycle()).started, [], 'retired while nothing new is known');
+  await h.evidence('Reopen the historical August 2026 AI cost reconciliation now; just do it.', { owner: true });
+  h.restart(); assert.ok((await h.deploy()).id, 'his word is enough');
 }));
 
 test('legacy terminal outcomes are backfilled without a recent window and failed semantic checks fail closed', async () => database(async pool => {

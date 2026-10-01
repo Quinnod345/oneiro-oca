@@ -56,6 +56,24 @@ export const onCheckout = c => CHECKOUT.test(`${c.pageUrl || ''} ${c.pageTitle |
 // A task handed to Aside's agent that buys, orders, subscribes, books, boosts or funds something is a spend, whatever
 // class it was given.
 export const TASK_SPEND = /\b(buy|purchase|pay|check ?out|place (an |the |your |my )?order|order (a|an|the|some|\d)|pre-?order|subscribe to|start (a |the |my )?(paid |free )?trial|upgrade (to|the|my|our|his)|renew|donate|tip (the|a|them|him|her)|book (a|an|the)|reserve (a|an|the)|rent (a|an|the)|boost|promote (the |a |this |our )?(post|app|listing|page|tweet|video|reel|ad)|top ?up|add (a |the )?(card|payment method|funds|credit)|(set|raise|increase|change|lower) (the |a |its |our )?(daily |monthly |lifetime |total )?budget|bid)\b/i;
+/// The first word in a task that makes it a spend, leaving out ones the task lists as things not to do: "with no crop,
+/// filter, music, boost, Facebook cross-post" is an organic post, not a payment. Only a bare item in a list after "no",
+/// "without", "never", "not", "nor" or "excluding" counts as negated. "Without changing the caption, raise the daily budget
+/// to $20" and "don't boost it yet; boost it tomorrow" are still spends, and any doubt stays a spend.
+export function spendWord(task) {
+  const re = new RegExp(TASK_SPEND.source, 'gi');
+  for (let m; (m = re.exec(task));) if (!negatedListItem(task, m.index, m.index + m[0].length)) return m[0];
+  return null;
+}
+function negatedListItem(text, start, end) {
+  if (!/^\s*(,|\bor\b|\band\b|\bnor\b|\)|[.;:!?]|$)/i.test(text.slice(end))) return false;   // an item ends here
+  const clause = text.slice(Math.max(0, start - 160), start).split(/[.;:!?\n]|\b(?:then|but)\b/i).pop();
+  const neg = [...clause.matchAll(/\b(no|without|never|not|excluding|nor)\b/gi)].pop();
+  if (!neg) return false;
+  const items = clause.slice(neg.index + neg[0].length).split(/,|\bor\b|\band\b|\bnor\b/i).map(x => x.trim()).filter(Boolean);
+  return items.every(x => x.split(/\s+/).length <= 4);   // short items: a list of things, not a sentence
+}
+
 const DESTROY = /\b(delete|destroy|erase|close account|deactivate|cancel subscription|sign ?out|log ?out|unsubscribe|revoke|archive|block|report|disable|remove (account|member|user|seat))\b/i;
 const PUBLISH = /\b(post|share|publish|tweet|repost|retweet|comment|reply|go live)\b/i;
 const MESSAGE = /\b(send|invite|message|dm|email)\b/i;
@@ -407,7 +425,7 @@ export async function callAsideTool(name, args = {}) {
       if (task.length < 10) throw new Error('say exactly what to do');
       // A task that reads like spending is a spend whatever class it declared; the word that made it one goes with
       // the ask, so Quinn can see why a step with no price asks him at all.
-      const flagged = declared !== 'spend' && declared !== 'sign_in' ? TASK_SPEND.exec(`${task} ${args.purpose || ''}`)?.[0] || null : null;
+      const flagged = declared !== 'spend' && declared !== 'sign_in' ? spendWord(`${task} ${args.purpose || ''}`) : null;
       const cls = flagged ? 'spend' : declared;
       const url = String(args.url || ''); const files = Array.isArray(args.files) ? args.files.map(String) : [];
       for (const f of files) if (!f.startsWith(WORKSPACE) || f.includes('..')) throw new Error(`files must be under ${WORKSPACE}`);
