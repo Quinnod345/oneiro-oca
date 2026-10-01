@@ -256,7 +256,7 @@ const WORKSPACE = '/Users/quinnodonnell/oneiro/runtime/workspace/';
 // into the sign-in or verification step that asked for it, never into a message, post or reply to anyone.
 const DELEGATE_RULES = 'Rules: do exactly this and nothing beyond it. If a sign-in is needed, sign in with the saved password for the site (Aside\'s password manager; Apple sites included). '
   + 'If it asks for a verification code, get it yourself and enter it: for a text or iMessage code call imessage.waitForCode() (Aside\'s Messages skill); for an email code read it from Gmail (google-gmail skill); '
-  + 'if Apple offers to send the code to a trusted device, choose the text-message option instead. Enter a code only into the sign-in or verification step that asked for it, never into a message, post or reply. '
+  + 'if Apple offers to send the code to a trusted device, choose the text-message option instead. Enter a code only into the sign-in or verification step that asked for it, never into a message, post or reply, and never write a password, code, key or token into a file or note. '
   + 'Never create an account, change a password or security setting, or solve a CAPTCHA or bot check. If a CAPTCHA appears, stop. Never submit graded coursework. '
   + 'End your answer with one line: DONE: <what the page showed at the end> or BLOCKED: <exactly what is needed>.';
 const refused = (kind, c, why) => ({ refused: true, action: kind, ref: c.ref, control: `${c.role} "${c.name}"`, why, instead: 'This is for the person: say exactly which control and why, so the engine can ask them.' });
