@@ -60,8 +60,10 @@ export function budgetCommitment({ dailyBudget, previousDailyBudget = 0, now = D
 
 // externalSpend: spend this month that the engine does not record as actions but that counts against the same
 // cap, such as the Apple broker's committed Ads budgets. If it can't be read, the cap can't be checked.
-export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console, llm = null, aside = null, externalSpend = null } = {}) {
+export function createActuator({ pool, risk = null, asks = null, controls, queue = null, clock = Date.now, log = console, llm = null, aside = null, externalSpend = null, authorizationBudgetMs = 45_000 } = {}) {
   const retries = createActionRetries({ llm, aside, log });
+  const retryBudget = Math.min(55_000, Math.max(1, Number(authorizationBudgetMs) || 45_000));
+  const ensureLive = signal => { if (signal?.aborted) throw Object.assign(new Error('authorization request ended before a decision'), { name: 'AbortError' }); };
   async function init() { await pool.query(await readFile(new URL('../migrations/063_agent_actions.sql', import.meta.url), 'utf8')); }
   const monthStart = () => { const d = new Date(clock()); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
   async function spendThisMonth() {
@@ -95,7 +97,9 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     return { state: 'unclear', ask: a };
   }
 
-  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, dailyBudget = null, previousDailyBudget = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null, flagged = null } = {}) {
+  async function authorize({ chainId, class: cls, host = '', url = '', control = '', description, cost = 0, dailyBudget = null, previousDailyBudget = 0, approval = null, sessionKey = null, agent = null, retryEvidence = null, flagged = null } = {}, { signal = null } = {}) {
+    ensureLive(signal);
+    const retryDeadline = Date.now() + retryBudget;
     if (!CHARTER_CLASSES.includes(cls)) throw new Error(`an action class is one of ${CHARTER_CLASSES.join(', ')}`);
     if (typeof description !== 'string' || description.trim().length < 5) throw new Error('say what the action is');
     const id = randomUUID();
@@ -114,28 +118,35 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
       // check and claim are locked, so concurrent controllers cannot duplicate a recovered attempt
       // or exhaust the pool while waiting on each other's evidence checks.
       if (decision === 'proceed' && retry.recovery) why += `; one recovery attempt after ${retry.recoveryEvidence[0].failedActionId}`;
-      const db = decision === 'proceed' ? await pool.connect() : pool;
+      ensureLive(signal);
+      const guarded = retry.snapshot !== undefined;
+      const transactional = guarded || !!signal;
+      const db = transactional ? await pool.connect() : pool;
       try {
-        if (decision === 'proceed') {
-          await db.query('BEGIN');
+        if (transactional) await db.query('BEGIN');
+        if (guarded) {
           await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`action:${candidate.chainId}:${cls}:${actionHost(host)}`]);
+          ensureLive(signal);
           if (!await retries.unchanged(db, candidate, retry.snapshot)) {
             decision = 'refuse';
             why = 'Retry suppressed: action history changed during authorization. Read the latest action outcome before trying again.';
           }
         }
+        ensureLive(signal);
         await db.query(`INSERT INTO agent_actions (id, chain_id, class, host, url, control, description, cost, decision, why, ask_id, approved_by_ask, created_at, observation)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, to_timestamp($13 / 1000.0), $14)`,
         [id, Number(chainId) || 0, cls, text(host, 200), text(url, 1000), text(control, 200), text(description, 2000), spendCost, decision, text(why, 500), extra.askId || null, extra.approvedBy || null, clock(), JSON.stringify({ actionRetry: 1, detail: '', recovery: decision === 'proceed' ? retry.recovery || null : null, recoveryFacts: decision === 'proceed' ? retry.recoveryFacts || [] : [], recoveryEvidence: decision === 'proceed' ? retry.recoveryEvidence || [] : [] })]);
-        if (db !== pool) await db.query('COMMIT');
-      } catch (e) { if (db !== pool) await db.query('ROLLBACK'); throw e; }
-      finally { if (db !== pool) db.release(); }
+        ensureLive(signal);
+        if (transactional) await db.query('COMMIT');
+      } catch (e) { if (transactional) await db.query('ROLLBACK'); throw e; }
+      finally { if (transactional) db.release(); }
       log.log?.(`[actuator] ${cls} on ${host || '—'} for #${chainId}: ${decision}${extra.askId ? ` (ask #${extra.askId})` : ''} — ${text(why, 140)}`);
       return { decision, actionId: id, why, ...extra };
     };
     if (!want || want.want?.status !== 'active') return record('refuse', 'no active pursuit is named; an action serves a pursuit');
     if (cls !== 'sign_in' && isCoursework(host)) return record('refuse', `${host} is a course or assessment site: graded work is submitted by Quinn himself, never by the engine`);
-    retry = await retries.check(pool, candidate, retryEvidence);
+    retry = await retries.check(pool, candidate, retryEvidence, { deadline: retryDeadline, signal });
+    ensureLive(signal);
     if (!retry.eligible) return record('refuse', retry.why);
     const charter = (await controls.get()).charter || {};
     const grant = charter[cls] || { granted: false };
@@ -216,7 +227,20 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
 
   const router = Router();
   const route = h => async (req, res) => { try { res.json(await h(req)); } catch (e) { res.status(400).json({ error: e.message }); } };
-  router.post('/oca/act/authorize', route(req => authorize(req.body || {})));
+  router.post('/oca/act/authorize', async (req, res) => {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const close = () => { if (!res.writableEnded) abort(); };
+    req.once('aborted', abort); res.once('close', close);
+    try {
+      const result = await authorize(req.body || {}, { signal: controller.signal });
+      if (!controller.signal.aborted) res.json(result);
+    } catch (e) {
+      if (!controller.signal.aborted) res.status(400).json({ error: e.message });
+    } finally {
+      req.removeListener('aborted', abort); res.removeListener('close', close);
+    }
+  });
   router.post('/oca/act/observe', route(req => observe(req.body || {})));
   router.get('/oca/act', route(async () => ({ charter: (await controls.get()).charter, monthSpend: await monthSpend(), actions: await recent() })));
   return { init, authorize, observe, recent, monthSpend, router };

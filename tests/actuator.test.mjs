@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
+import express from 'express';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { createActuator, isCoursework, guardedConsole, budgetCommitment, YES, NO } from '../reasoning/actuator.js';
 import { createAsks } from '../reasoning/asks.js';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
@@ -109,6 +111,11 @@ async function storedAction(pool, a) {
   [a.id, a.chain_id, a.class, a.host, a.url, a.control, a.description, a.decision, a.why, a.outcome, a.observation, a.created_at, a.observed_at]);
 }
 const silent = { log() {}, warn() {} };
+async function serve(router) {
+  const app = express(); app.use(express.json()); app.use(router);
+  const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  return { url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(resolve => server.close(resolve)) };
+}
 function retryHarness(pool) {
   const h = { asks: [], decisions: [], observations: [], reads: [], page: null, judge: null, charter: normalizeCharter({ ramp: 0 }) };
   h.options = { pool, controls: { get: async () => ({ charter: h.charter }) }, log: silent,
@@ -117,7 +124,7 @@ function retryHarness(pool) {
     aside: { readPage: async source => { h.reads.push(source); if (!h.page) throw new Error('offline'); return h.page; } },
     llm: { messages: { create: async req => {
       const input = JSON.parse(req.messages[0].content);
-      if (h.judge) return JSON.stringify(h.judge(input));
+      if (h.judge) return JSON.stringify(await h.judge(input));
       return JSON.stringify({ relation: 'equivalent', recovered: !!input.recovery && input.recovery.text.includes('SUPPORTED RECOVERY:'), recoveryQuote: input.recovery?.text.split('\n').find(s => s.startsWith('SUPPORTED RECOVERY:')) || '', reason: 'fixture comparison' });
     } } } };
   h.act = () => createActuator(h.options);
@@ -255,6 +262,95 @@ test('unavailable or ungrounded semantic comparison fails closed without a permi
   h.options.llm = null;
   assert.equal((await h.act().authorize(candidate)).decision, 'refuse');
   assert.equal(h.asks.length, 0);
+}));
+
+test('the Aside boundary gets a prompt fail-closed refusal when semantic retry classification exceeds its budget', { timeout: 5000 }, async () => database(async pool => {
+  const previous = { id: randomUUID(), chain_id: 94, class: 'publish', host: 'github.com', url: 'https://github.com/example/site', control: 'Aside agent',
+    description: 'Publish the prepared article from the existing branch', decision: 'proceed', why: 'under the charter (publish)', outcome: null, observation: null,
+    created_at: new Date(), observed_at: null };
+  await storedAction(pool, previous);
+  const h = retryHarness(pool); h.options.authorizationBudgetMs = 80;
+  let judgeStartedAt = 0;
+  h.judge = async () => { judgeStartedAt = Date.now(); await new Promise(resolve => setTimeout(resolve, 400)); return { relation: 'uncertain' }; };
+  const act = h.act(), endpoint = await serve(act.router);
+  try {
+    const child = spawn(process.execPath, [new URL('../aside-mcp.js', import.meta.url).pathname], { env: { ...process.env,
+      OCA_ENGINE_URL: endpoint.url, OCA_ASIDE_CLI: '/nowhere/aside' } });
+    let out = ''; child.stdout.on('data', d => { out += d; });
+    child.stdin.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'aside_do', arguments: {
+      pursuit: 94, class: 'publish', url: 'https://github.com/example/site/tree/article',
+      task: 'Correct the verified article path and finish the same publication.'
+    } } }) + '\n');
+    await new Promise(resolve => child.on('close', resolve));
+    const response = JSON.parse(out.trim()).result;
+    const commit = JSON.parse(response.content[0].text);
+    assert.equal(response.isError, false);
+    assert.equal(commit.refused, true, 'the refusal prevents Aside from reaching its missing delegation adapter');
+    assert.ok(Date.now() - judgeStartedAt < 250, 'authorization returns before the deferred 400 ms judge and far inside Aside\'s 60 second timeout');
+    assert.match(commit.why, /authorization safety budget expired/);
+    assert.equal(h.decisions.length, 0, 'uncertain equivalence never reaches risk or external delegation');
+    const rows = await act.recent();
+    assert.equal(rows.filter(a => a.decision === 'proceed').length, 1, 'only the original action may proceed');
+    assert.equal(rows.filter(a => a.decision === 'refuse').length, 1, 'the timely fail-closed decision is auditable');
+  } finally { await endpoint.close(); }
+}));
+
+test('pending retry classification re-reads concurrent success and failure through /oca/act/observe', { timeout: 5000 }, async () => {
+  for (const result of ['success', 'failure']) await database(async pool => {
+    const previous = { id: randomUUID(), chain_id: result === 'success' ? 95 : 96, class: 'publish', host: 'github.com', url: 'https://github.com/example/site', control: 'Aside agent',
+      description: 'Publish the prepared article from the existing branch', decision: 'proceed', why: 'under the charter (publish)', outcome: null, observation: null,
+      created_at: new Date(), observed_at: null };
+    await storedAction(pool, previous);
+    const h = retryHarness(pool); h.options.authorizationBudgetMs = 2000;
+    let releaseJudge, markStarted;
+    const started = new Promise(resolve => { markStarted = resolve; });
+    h.judge = async () => { markStarted(); return new Promise(resolve => { releaseJudge = resolve; }); };
+    const act = h.act(), endpoint = await serve(act.router);
+    try {
+      const authorization = fetch(`${endpoint.url}/oca/act/authorize`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        chainId: previous.chain_id, class: previous.class, host: previous.host, url: 'https://github.com/example/site/tree/article',
+        description: 'Correct the verified article path and finish the same publication.'
+      }) }).then(r => r.json());
+      await started;
+      const observation = result === 'success' ? 'The article is published at the requested route.' : 'The publication failed because the requested route still returns 404.';
+      const observed = await fetch(`${endpoint.url}/oca/act/observe`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actionId: previous.id, result, observation }) });
+      assert.equal(observed.status, 200, 'outcome reconciliation stays available while classification is pending');
+      releaseJudge({ relation: 'uncertain' });
+      const decision = await authorization;
+      assert.doesNotMatch(decision.why, /outcome unknown|awaits its outcome/i);
+      if (result === 'success') assert.equal(decision.decision, 'proceed', 'the settled success follows the existing terminal-success retry rule');
+      else {
+        assert.equal(decision.decision, 'refuse');
+        assert.match(decision.why, /requested route still returns 404/);
+      }
+    } finally { await endpoint.close(); }
+  });
+});
+
+test('an aborted HTTP authorization cannot insert a late refusal row', { timeout: 5000 }, async () => database(async pool => {
+  const previous = { id: randomUUID(), chain_id: 97, class: 'publish', host: 'github.com', url: 'https://github.com/example/site', control: 'Aside agent',
+    description: 'Publish the prepared article from the existing branch', decision: 'proceed', why: 'under the charter (publish)', outcome: null, observation: null,
+    created_at: new Date(), observed_at: null };
+  await storedAction(pool, previous);
+  const h = retryHarness(pool); h.options.authorizationBudgetMs = 2000;
+  let releaseJudge, markStarted;
+  const started = new Promise(resolve => { markStarted = resolve; });
+  h.judge = async () => { markStarted(); return new Promise(resolve => { releaseJudge = resolve; }); };
+  const act = h.act(), endpoint = await serve(act.router);
+  try {
+    const controller = new AbortController();
+    const request = fetch(`${endpoint.url}/oca/act/authorize`, { method: 'POST', signal: controller.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      chainId: previous.chain_id, class: previous.class, host: previous.host, url: 'https://github.com/example/site/tree/article',
+      description: 'Correct the verified article path and finish the same publication.'
+    }) }).catch(error => error);
+    await started; controller.abort();
+    await new Promise(resolve => setTimeout(resolve, 25));
+    releaseJudge({ relation: 'uncertain' });
+    await request; await new Promise(resolve => setTimeout(resolve, 75));
+    const rows = await act.recent();
+    assert.deepEqual(rows.map(a => a.id), [previous.id], 'the disconnected caller leaves no late authorization record');
+  } finally { await endpoint.close(); }
 }));
 
 test('simultaneous authorizations with a single database connection claim only one equivalent action', { timeout: 10000 }, async () => database(async pool => {
