@@ -137,6 +137,9 @@ export const providerNotice = why => (/usage limit|quota|rate.?limit|\b429\b|lim
   ? "Codex hit its usage limit, so agents are paused. They try again on their own in an hour."
   : "Codex stopped answering, so agents are paused. They try again on their own in an hour.");
 
+/** A chat line as a person would read it back: no report block, no relay prefix. Pure. */
+export const chatWords = m => (m.role === 'assistant' ? withoutReport(m.text) : String(m.text || '').replace(RELAYED, ''));
+
 export function createAgents({ pool, host, queue, risk = null, asks = null, aside = null, llm = null, nameLlm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
   roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000,
@@ -836,7 +839,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       try {
         const t = await host.transcript(r.session_key, { steps: false });
         const said = (t.messages || []).filter(m => (m.role === 'user' || m.role === 'assistant') && !String(m.text || '').startsWith(THINKER));
-        if (said.length) chats.push({ chainId: r.chain_id, title: r.title, messages: said.map(m => ({ role: m.role, text: m.role === 'assistant' ? withoutReport(m.text) : m.text, at: m.at ?? null })) });
+        if (said.length) chats.push({ chainId: r.chain_id, title: r.title, messages: said.map(m => ({ role: m.role, text: chatWords(m), at: m.at ?? null })) });
       } catch (e) { chats.push({ chainId: r.chain_id, title: r.title, unreadable: text(e.message, 200), messages: [] }); }
     }
     return { chats };

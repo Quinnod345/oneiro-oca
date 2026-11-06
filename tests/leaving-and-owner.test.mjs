@@ -6,7 +6,7 @@ import { plainTurnFailure, createAgentHost } from '../agent-host/index.js';
 import { composeDeliverable } from '../reasoning/deliverables.js';
 import { createInbox } from '../reasoning/inbox.js';
 import { waitingOnModel } from '../reasoning/board.js';
-import { providerNotice } from '../reasoning/agents.js';
+import { chatWords, providerNotice } from '../reasoning/agents.js';
 
 test('agents hear the configured owner, or "the person" when nobody is configured', async () => {
   process.env.OCA_LOCAL_CONFIG = '/nonexistent/local.json';
@@ -72,4 +72,16 @@ test("a provider's trouble reads as what happened and what comes next, with noth
     assert.match(providerNotice(why), /agents are paused\. They try again on their own in an hour\.$/);
     assert.doesNotMatch(providerNotice(why), /Deployments|stream|credits/);
   }
+});
+
+test('exported chats read as what was said, whoever owns the install', () => {
+  for (const prefix of ['[Quinn, via Oneiro] ', '[the person, via Oneiro] ', '[Ana, via the pursuit conversation] ']) assert.equal(chatWords({ role: 'user', text: `${prefix}How long?` }), 'How long?');
+  assert.equal(chatWords({ role: 'user', text: 'typed straight into the thread' }), 'typed straight into the thread');
+});
+
+test('with the owner named Quinn, what agents hear is unchanged', async () => {
+  process.env.OCA_OWNER_NAME = 'Quinn';
+  const { forOwner } = await import('../reasoning/local-config.js');
+  try { assert.equal(forOwner("[Quinn, via Oneiro] ask Quinn's approval"), "[Quinn, via Oneiro] ask Quinn's approval"); }
+  finally { delete process.env.OCA_OWNER_NAME; }
 });
