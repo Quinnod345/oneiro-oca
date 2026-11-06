@@ -718,7 +718,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   }
   // Where Quinn can open an agent's thread, and what was said in it.
   async function link(id) { const d = await get(id); return { id: d.id, ...(await host.link?.(d.sessionKey).catch(() => null) || {}) }; }
-  async function messages(id, { steps = false } = {}) { const d = await get(id); const t = await host.transcript(d.sessionKey, { steps }); return { id: d.id, kind: d.kind, name: d.name, displayName: d.displayName, status: d.status, messages: (t.messages || []).map(m => (m.role === 'assistant' && typeof m.text === 'string' ? { ...m, text: withoutReport(m.text) } : m)).filter(m => m.role !== 'assistant' || typeof m.text !== 'string' || m.text), active: t.active }; }
+  async function messages(id, { steps = false } = {}) { const d = await get(id); const t = await host.transcript(d.sessionKey, { steps }); const failure = await host.lastFailure?.(d.sessionKey).catch(() => null) ?? null; return { failure, id: d.id, kind: d.kind, name: d.name, displayName: d.displayName, status: d.status, messages: (t.messages || []).map(m => (m.role === 'assistant' && typeof m.text === 'string' ? { ...m, text: withoutReport(m.text) } : m)).filter(m => m.role !== 'assistant' || typeof m.text !== 'string' || m.text), active: t.active }; }
   async function list({ chainId = null, live = false, limit = 50 } = {}) {
     const { rows } = await pool.query(`SELECT * FROM agent_deployments WHERE ($1::int IS NULL OR chain_id = $1) ${live ? `AND status = ANY($3)` : ''} ORDER BY created_at DESC LIMIT $2`, live ? [chainId, limit, [...LIVE, 'standing']] : [chainId, limit]);
     return rows.map(rowOf);
@@ -818,6 +818,20 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   router.post('/oca/inbox/want/:id/talker', route(req => talker(Number(req.params.id))));
   router.get('/oca/inbox/want/:id/threads', route(req => threads(Number(req.params.id))));
   router.get('/oca/chats', route(req => chats({ limit: req.query.limit })));
+  // Every pursuit's conversation, for taking with you. A thread that can't be read says so rather than vanishing.
+  router.get('/oca/chats/export', route(async () => {
+    const { rows } = await pool.query(`SELECT d.id, d.chain_id, d.session_key, COALESCE(c.ponder_state #>> '{continuity,board,headline}', c.ponder_state #>> '{want,description}', c.seed) AS title
+      FROM agent_deployments d JOIN thought_chains c ON c.id = d.chain_id WHERE d.kind = 'talker' ORDER BY d.chain_id, d.created_at`);
+    const chats = [];
+    for (const r of rows) {
+      try {
+        const t = await host.transcript(r.session_key, { steps: false });
+        const said = (t.messages || []).filter(m => (m.role === 'user' || m.role === 'assistant') && !String(m.text || '').startsWith(THINKER));
+        if (said.length) chats.push({ chainId: r.chain_id, title: r.title, messages: said.map(m => ({ role: m.role, text: m.role === 'assistant' ? withoutReport(m.text) : m.text, at: m.at ?? null })) });
+      } catch (e) { chats.push({ chainId: r.chain_id, title: r.title, unreadable: text(e.message, 200), messages: [] }); }
+    }
+    return { chats };
+  }));
 
   return { init, deploy, nameOf, poll, plan, talker, relay, cancel, list, get, link, messages, threads, chats, waitFor, liveCount, slots, pausedUntil: () => (providerBackoffUntil > clock() ? providerBackoffUntil : null), available: () => host.available(), start, stop, router, composeBrief, parseReport };
 }

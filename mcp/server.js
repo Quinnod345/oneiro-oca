@@ -19,6 +19,7 @@
 // folders (OCA_ENGINE_AGENT_DIRS), it offers only the tools that read.
 //
 // Protocol: MCP over stdio, newline-delimited JSON-RPC 2.0 (initialize, tools/list, tools/call, ping).
+import { forOwner } from '../reasoning/local-config.js';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -161,7 +162,7 @@ export async function handle(req, handlers = createHandlers(), { engineThread = 
     case 'initialize': return reply({ protocolVersion: req.params?.protocolVersion || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'oca', title: 'Oneiro engine', version: '1.0.0' },
       instructions: 'The Oneiro engine (OCA): wants, agents, asks and verdicts. Read freely. Anything that speaks for Quinn must carry his own words. Payments are never decided here.' });
     case 'ping': return reply({});
-    case 'tools/list': return reply({ tools: engineThread ? TOOLS.filter(t => READ_TOOLS.has(t.name)) : TOOLS });
+    case 'tools/list': return reply({ tools: JSON.parse(forOwner(JSON.stringify(engineThread ? TOOLS.filter(t => READ_TOOLS.has(t.name)) : TOOLS))) });
     case 'tools/call': {
       const name = req.params?.name, h = handlers[name];
       if (!h) return fail(-32602, `unknown tool ${name}`);

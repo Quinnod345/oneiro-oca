@@ -124,10 +124,10 @@ test('nothing in Judge can approve a payment: its answer box, an agent\'s thread
   const w = await world(pool);
   const inbox = createInbox({ pool, queue: null, worth: null, workRoot: tmpdir(), asks: w.asks, clock: () => w.now, log: silent });
   const pay = { chainId: w.id, class: 'spend', host: 'www.sweetwater.com', description: 'buy the piano book', cost: 24.99 };
-  // the answer box (POST /oca/inbox/asks/:id/answer): a typed yes closes the ask and pays nothing
+  // the answer box (POST /oca/inbox/asks/:id/answer): a typed yes is refused outright, and the ask stays open for the phone
   const a = await w.act.authorize(pay);
-  await inbox.answerAsk({ id: a.askId, reply: 'yes, approve it', via: 'Oneiro' });
-  assert.equal((await w.act.authorize({ ...pay, approval: a.askId })).decision, 'refuse');
+  await assert.rejects(inbox.answerAsk({ id: a.askId, reply: 'yes, approve it', via: 'Oneiro' }), /only approved from your phone/);
+  assert.notEqual((await w.act.authorize({ ...pay, approval: a.askId })).decision, 'proceed');
   // the agent's thread (POST /oca/agents/:id/say relays through the same answer): even the real code, typed into the app
   const b = await w.act.authorize({ ...pay, description: 'buy the second book', cost: 19.99 });
   await w.asks.answer(b.askId, `APPROVE ${w.code()}`);

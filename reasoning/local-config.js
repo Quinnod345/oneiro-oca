@@ -17,6 +17,10 @@ export function localConfig({ path = process.env.OCA_LOCAL_CONFIG || join(homedi
 export const workspaceDir = (...parts) => join(process.env.ONEIRO_WORKSPACE || join(homedir(), 'oneiro', 'runtime', 'workspace'), ...parts);
 export const imessageHost = () => process.env.OCA_IMESSAGE_HOST || localConfig().imessageHost || null;
 export const ownerImessage = () => process.env.OCA_OWNER_IMESSAGE || localConfig().ownerImessage || null;
+// Who the agents work for. The engine's prompts were written for one person, so this is applied where text leaves for an
+// agent or a model, and only the name changes.
+export const ownerName = () => process.env.OCA_OWNER_NAME || localConfig().ownerName || 'the person';
+export const forOwner = s => { const name = ownerName(); return name === 'Quinn' ? s : String(s ?? '').replace(/\bQuinn\b/g, name); };
 // The engine's standing pursuit about its own code. Off unless this Mac's owner asked for it.
 export const standingSelf = () => localConfig().standingSelf === true;
 

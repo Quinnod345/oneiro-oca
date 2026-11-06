@@ -63,7 +63,7 @@ export function createImessageInbox({ imessage, asks, inbox, payments, wants = a
       const live = target.approval && !target.approval.settled;
       return reply(live ? `That's a payment (ask #${target.id}): reply with the APPROVE or DENY code from its text.` : `That payment (ask #${target.id}) has closed; Oneiro will ask again if it still needs it.`);
     }
-    await inbox.answerAsk({ id: target.id, reply: text(m.text, 500), via: 'Messages' });
+    await inbox.answerAsk({ id: target.id, reply: text(m.text, 500), via: 'Messages', fromPhone: true });
     return reply(`Got it — passed to ${target.chainId ? `#${target.chainId}` : 'the engine'} (ask #${target.id}).`);
   }
 

@@ -5,12 +5,24 @@
 //          T3 runs it on Codex, so it shows up in Codex too.
 // A session is placed when it is created (by its kind, OCA_T3_KINDS, default "talker") and stays where it was put.
 // If T3 Code is not running, a conversation is placed on Codex instead, so nothing waits on a desktop app.
+import { forOwner } from '../reasoning/local-config.js';
 import { readFile } from 'node:fs/promises';
 import { createCodexHost } from './codex-host.js';
 import { createT3Host } from './t3-host.js';
 
 const KINDS = ['research', 'talker', 'builder', 'executor'];
 export const kindOfKey = key => (String(key).match(/-(research|talker|builder|executor)-/) || [])[1] || null;
+
+/** A failed turn in words a person can act on. Pure. */
+export function plainTurnFailure(error, status = 'error') {
+  const e = String(error || '');
+  if (status === 'lost') return 'The engine restarted during this reply, so it was lost. Send it again.';
+  if (/usage limit|quota|rate.?limit|\b429\b|limit reached|too many requests/i.test(e)) return "Codex hit its usage limit, so this got no reply. Send it again once the limit resets.";
+  if (/not signed in|unauthori[sz]ed|\b401\b|login|expired token|authentication/i.test(e)) return "Codex isn't signed in, so this got no reply. Run codex login in Terminal, then send it again.";
+  if (/network|fetch failed|ENOTFOUND|ECONN|disconnected|timed? ?out|unreachable/i.test(e)) return "Codex lost its connection, so this got no reply. Check this Mac is online, then send it again.";
+  const said = e.replace(/\s+/g, ' ').trim().slice(0, 200);
+  return said ? `Codex couldn't answer this: ${said} Send it again.` : "Codex couldn't answer this. Send it again.";
+}
 
 export function createAgentHost({ pool, codex = null, t3 = null, t3Kinds = (process.env.OCA_T3_KINDS ?? 'talker').split(',').map(s => s.trim()).filter(Boolean),
   log = console, ...options } = {}) {
@@ -32,12 +44,25 @@ export function createAgentHost({ pool, codex = null, t3 = null, t3Kinds = (proc
     return hosts[r?.host] || codex;
   };
 
+  const owned = opts => {
+    const out = { ...opts };
+    for (const k of ['message', 'brief', 'instructions', 'system', 'systemPrompt', 'developerInstructions']) if (typeof out[k] === 'string') out[k] = forOwner(out[k]);
+    return out;
+  };
+  // Why the thread's latest turn got no reply, if it didn't. A later turn that worked clears it, and so does the person
+  // stopping one themselves.
+  async function lastFailure(sessionKey) {
+    const { rows: [r] } = await pool.query(`SELECT status, error, completed_at FROM agent_runs WHERE session_key = $1 ORDER BY started_at DESC LIMIT 1`, [sessionKey]);
+    if (!r || !['error', 'lost'].includes(r.status)) return null;
+    return { why: plainTurnFailure(r.error, r.status), at: r.completed_at };
+  }
+
   async function createSession(opts) {
     const kind = opts.kind || kindOfKey(opts.key);
     if (kind && !KINDS.includes(kind)) throw new Error(`unknown agent kind ${kind}`);
     const wantsT3 = t3 && kind && t3Kinds.includes(kind);
     const host = wantsT3 && (await t3.available().catch(() => false)) ? t3 : codex;
-    const r = await host.createSession(opts);
+    const r = await host.createSession(owned(opts));
     return { ...r, host: host.kind };
   }
 
@@ -47,7 +72,8 @@ export function createAgentHost({ pool, codex = null, t3 = null, t3Kinds = (proc
     // Agents need Codex; T3 Code only carries conversations and is optional.
     available: opts => codex.available(opts),
     createSession,
-    turn: async opts => (await hostOfSession(opts.sessionKey)).turn(opts),
+    turn: async opts => (await hostOfSession(opts.sessionKey)).turn(owned(opts)),
+    lastFailure,
     wait: async (runId, opts) => (await hostOfRun(runId)).wait(runId, opts),
     transcript: async (key, opts) => (await hostOfSession(key)).transcript(key, opts),
     history: async key => (await hostOfSession(key)).history(key),

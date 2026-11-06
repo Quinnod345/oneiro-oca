@@ -93,6 +93,20 @@ const SELF_SUMMARY_FILTER = `NOT (source_type = 'abstraction' AND concept ~* '(v
     finally { client.release(); }
   }
   const newestFirst = (a, b) => new Date(b.recorded_at) - new Date(a.recorded_at) || b.id - a.id;
+  // Everything a person's Memory shows, for taking with them. The same records as browsing, with the engine's own notes left out.
+  router.get('/oca/ui/memory-export', wrap(async (req, res) => {
+    const results = await readMemory(async client => {
+      const rows = [];
+      for (const kind of ['experience', 'knowledge']) {
+        const m = memoryKinds[kind];
+        const quiet = kind === 'experience' ? `AND ${NARRATION_FILTER}` : `AND ${SELF_SUMMARY_FILTER}`;
+        const { rows: found } = await client.query(`SELECT '${kind}' AS kind, ${m.fields} FROM ${m.table} WHERE forgotten_at IS NULL ${quiet} ORDER BY ${m.time} DESC, id DESC LIMIT 20000`);
+        rows.push(...found);
+      }
+      return rows;
+    });
+    res.json({ results });
+  }));
   // Browsing needs no query: the Memory page opens on the newest experiences and claims instead of an empty box.
   router.get('/oca/ui/memory-recent', wrap(async (req, res) => {
     const kinds = memoryKind(req.query.kind ?? 'all', { all: true });

@@ -79,14 +79,16 @@ export function composeDeliverable({ chainId, want = '', doneWhen = '', agentId 
   const brief = block(report.brief);
   if (brief) parts.push(brief);
   else parts.push(`## What it found\n\n${block(report.summary, 4000) || 'The agent finished without a summary.'}`);
+  // An agent's brief often has its own Sources. These are the ones Oneiro can show it quoted, so they get their own name.
+  const heading = /^#{1,6}\s*sources\b/im.test(brief || '') ? '## What it quoted' : '## Sources';
   if (sources.length) {
-    parts.push(`## Sources\n\n${sources.map((e, i) => {
+    parts.push(`${heading}\n\n${sources.map((e, i) => {
       const src = /^https?:\/\//i.test(e.source) ? `<${line(e.source, 500)}>` : `\`${line(e.source, 500)}\``;
       const quote = line(e.quote, 600);
       return `${i + 1}. ${src}${isVerified(e) ? ' (re-read and confirmed by Oneiro)' : ''}\n   ${line(e.observation, 800)}${quote ? `\n   > ${quote}` : ''}`;
     }).join('\n')}`);
   } else {
-    parts.push('## Sources\n\nThe agent cited no sources it could quote, so treat this as its account, not as checked fact.');
+    parts.push(`${heading}\n\nThe agent cited no sources it could quote, so treat this as its account, not as checked fact.`);
   }
   if (line(report.nextStep)) parts.push(`## Next step\n\n${line(report.nextStep, 600)}`);
   const open = (report.remaining || []).map(x => line(x, 300)).filter(Boolean);

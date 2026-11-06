@@ -347,10 +347,16 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
 
   // Answering an ask also puts the answer in the session of every agent waiting on it, so each continues. That
   // includes an agent that joined an ask the engine raised for it, such as a held payment, which names no session.
-  async function answerAsk({ id, reply, via = 'the app' }) {
+  async function answerAsk({ id, reply, via = 'the app', fromPhone = false }) {
     if (!asks) throw new Error('asks are not available');
     // An answer is the person's words. Clearing an ask without answering it is dismissAsk, which says nothing for them.
     if (typeof reply !== 'string' || !reply.trim()) throw new Error('Say what your answer is, or dismiss the question instead.');
+    // Only the code texted back from the phone can approve a payment. Anything reaching this from the app or a local
+    // process may deny one and nothing else, so a typed yes can't close the ask or reach a waiting agent.
+    if (!fromPhone) {
+      const { rows: [held] } = await pool.query(`SELECT metadata FROM notifications WHERE id = $1`, [Number(id)]);
+      if (held?.metadata?.payment && !/^\s*(no|deny|denied)\s*$/i.test(reply)) throw new Error('A payment is only approved from your phone, by texting its code back. Nothing here can approve one. You can deny it.');
+    }
     const row = await asks.answer(Number(id), reply);
     // "Looks done, confirm?" belongs to the finish watch: a yes finishes the pursuit, anything else leaves it open.
     if (row.metadata?.kind === 'finish' && finish) return { ...row, finish: await finish.answered(row, reply, { via }) };

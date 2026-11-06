@@ -13,6 +13,7 @@
 // GET /oca/since?at=<ms or ISO date>. The app also polls it for notifications, with the header
 // `X-Oneiro-Notifier: app` (channels/mac-notify.js), so it can tell a new ask or a finished pursuit apart from
 // what it has already shown.
+import { waitingOnModel } from './board.js';
 import { Router } from 'express';
 import { agentNameFromTask } from './agent-names.js';
 import { clipText } from './clip.js';
@@ -48,7 +49,7 @@ export function classify(rows) {
     const p = pursuitOf(r);
     if (r.status === 'cancelled' || p.wantStatus === 'cancelled') continue;
     if (p.wantStatus === 'sated' || r.status === 'resolved') out.finished.push(p);
-    else if (FAILED.includes(r.status)) out.failed.push(p);
+    else if (FAILED.includes(r.status) && !waitingOnModel({ status: r.status, state: { result: { error: r.result_error } } })) out.failed.push(p);
     else out.moved.push(p);
   }
   return out;
@@ -57,7 +58,7 @@ export function classify(rows) {
 export function createSince({ pool, inbox = null, night = null, clock = Date.now, log = console } = {}) {
   async function digest(sinceMs) {
     const since = new Date(sinceMs);
-    const { rows } = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want, ponder_state #>> '{continuity,board,headline}' AS headline
+    const { rows } = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want, ponder_state #>> '{result,error}' AS result_error, ponder_state #>> '{continuity,board,headline}' AS headline
       FROM thought_chains WHERE ponder_state IS NOT NULL AND ponder_state -> 'deleted' IS NULL AND updated_at > $1 ORDER BY updated_at DESC LIMIT 200`, [since]);
     const sorted = classify(rows);
     // Agent runs that ended since then. A missing table (an engine without agents) is just no runs.
@@ -90,7 +91,7 @@ export function createSince({ pool, inbox = null, night = null, clock = Date.now
   // out and says so in `missing`, so a short trail can't pass for a quiet one.
   async function trail(sinceMs, limit = TRAIL_LIMIT) {
     const since = new Date(sinceMs), missing = [], rows = [];
-    const named = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want, ponder_state #>> '{continuity,board,headline}' AS headline
+    const named = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want, ponder_state #>> '{result,error}' AS result_error, ponder_state #>> '{continuity,board,headline}' AS headline
       FROM thought_chains WHERE ponder_state IS NOT NULL AND ponder_state -> 'deleted' IS NULL AND NOT seed ILIKE '[verification fixture%'`);
     const nameOf = new Map(named.rows.map(r => [r.id, text(r.headline || r.want?.description || r.seed, 120)]));
     const changed = classify(named.rows.filter(r => r.updated_at > since));

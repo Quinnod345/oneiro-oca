@@ -1631,7 +1631,7 @@ const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot
 // texts back APPROVE or DENY with it (reasoning/payment-approvals.js). The decision answers the ask and reaches the
 // agent waiting on it.
 const paymentApprovals = createPaymentApprovals({ pool,
-  onDecision: ({ askId, approved }) => inbox.answerAsk({ id: askId, via: 'Messages',
+  onDecision: ({ askId, approved }) => inbox.answerAsk({ id: askId, via: 'Messages', fromPhone: true,
     reply: approved ? `Approved in Messages with its code (ask #${askId}).` : `Denied in Messages (ask #${askId}). Don't make this payment.` }),
   // A closed window asks once more while the want is active. It only texts a new code: Quinn still has to answer it.
   onExpired: ({ askId }) => asks.reissueExpired(askId) });

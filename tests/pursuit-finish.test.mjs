@@ -689,7 +689,7 @@ test('a payment has one instruction: its text has no "reply yes", and a plain ye
     assert.doesNotMatch(open.message + open.detail, /reply yes|yes or no|reply here|open Oneiro/i, 'and the card says the same');
 
     // the rule: nothing but the texted code approves it
-    await w.inbox.answerAsk({ id: askId, reply: 'yes', via: 'Messages' });
+    await w.inbox.answerAsk({ id: askId, reply: 'yes', via: 'Messages', fromPhone: true });
     const { rows: [row] } = await pool.query(`SELECT metadata FROM notifications WHERE id = $1`, [askId]);
     assert.notEqual(row.metadata.approval.settled, 'allow-once', 'a plain yes approves nothing');
 

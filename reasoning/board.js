@@ -11,6 +11,7 @@
 // GET /oca/orchestra       the orchestrator and every pursuit, for the map
 // GET /oca/orchestra/:id   one pursuit in full: streams, agents, what it set up, milestones, schedule, history
 // POST /oca/orchestra/:id/review   ask the board keeper to look again now
+import { ownerName } from './local-config.js';
 import { readFile } from 'node:fs/promises';
 import { Router } from 'express';
 import { agentNameFromTask } from './agent-names.js';
@@ -31,6 +32,11 @@ const LIVE = ['queued', 'running'];
 //   signed_out  Codex runs, but isn't signed in to ChatGPT: `codex login` fixes it.
 //   missing     the codex binary isn't where the engine looks for it.
 //   down        Codex's app-server didn't start or stopped answering: restarting the engine starts it again.
+// A review that couldn't reach a model didn't fail at anything: nothing has been tried yet, and nothing about the pursuit
+// needs a new approach. Pure.
+const MODEL_DOWN = /fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|socket hang up|no model|model[^.]{0,40}(unreachable|unavailable|isn.t (running|answering)|not found)|inference[^.]{0,40}(down|unreachable|unavailable|failed)|circuit/i;
+export const waitingOnModel = row => ['failed', 'stalled'].includes(row?.status) && MODEL_DOWN.test(String(row?.state?.result?.error || ''));
+
 export function agentsHealth(up, status = null) {
   if (up === null || up === undefined) return null;
   if (up) return { state: 'up', why: null, fix: null, command: null };
@@ -131,7 +137,7 @@ export function createBoard({ pool, llm = null, asks = null, agents = null, cont
       const children = s.standing === 'self' ? await selfWantsOf() : [];
       const schedule = (Array.isArray(s.continuity?.schedule) ? s.continuity.schedule : []).map(x => `- ${x.at}: ${text(x.task, 220)}`).join('\n');
       const said = (s.evidence || []).filter(e => /stated by Quinn|observed by quinn/i.test(e.source || '')).slice(-6).map(e => `- ${text(e.observation, 260)}`).join('\n');
-      const system = `You keep the board for one pursuit of a cognitive engine that works for Quinn. The engine deploys agents on the pursuit; you read its whole history and write down, for Quinn to see at a glance:
+      const system = `You keep the board for one pursuit of a cognitive engine that works for ${ownerName()}. The engine deploys agents on the pursuit; you read its whole history and write down, for Quinn to see at a glance:
 - streams: the workstreams (categories of work) the orchestrator runs for this pursuit — 2 to 6, short names (1–3 words) named for what the work is FOR, not for the kind of activity: "Pricing", "Content", "Distribution", "Measurement", "Costs", "Reliability" — never "Research", "Tasks" or "General". Keep the existing names unless one is clearly wrong. For each: aim (what it is for, one line), state (active | waiting | blocked | done), standing (one line: where it stands now, concrete, with numbers where the history has them).
 - labels: EVERY run id listed below (the 8-character id at the start of each line) filed under exactly one of your streams. Do not skip any.
 - made: what the pursuit SET UP that lasts and exists now because of it — a live listing, a published post, a changed account setting (a bio link), a finished asset kit (images, video), a tracker or sheet in use, a merged fix. Only what the history shows was actually done; never plans. NOT findings, verifications, analyses, research notes or documents that only record what was learned. what (short, concrete), where (URL or file path from the history), stream, at (ISO date).
@@ -161,7 +167,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
       // Nothing has happened on it yet, so there is nothing to file or report: it gets a name and no invented workstreams.
       const nameOnly = !runs.length && !acts.length && !merges.length && !children.length;
       const answer = nameOnly
-        ? await ask('You name one pursuit of a cognitive engine that works for Quinn: 2–5 plain words a person would use. Never the words OCA, thinker or engine internals; call the system Oneiro. Return JSON only: {"headline":"…"}', `Pursuit: ${text(want.description || row.seed, 700)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 500)}`)
+        ? await ask('You name one pursuit of a cognitive engine that works for ' + ownerName() + ': 2–5 plain words a person would use. Never the words OCA, thinker or engine internals; call the system Oneiro. Return JSON only: {"headline":"…"}', `Pursuit: ${text(want.description || row.seed, 700)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 500)}`)
         : await ask(system, user);
       const board = parseBoard(nameOnly ? { headline: JSON.parse(String(answer).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')).headline } : answer, { runIds: runs.map(r => r.id), now: clock() });
       // A name is how you find something, so a pursuit keeps the first one it was given: no later review renames it. Only a
@@ -257,7 +263,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     const work = runs.filter(r => r.kind !== 'talker');
     return {
       chainId: row.id, headline: board?.headline || null, description: text(want.description || row.seed, 600), doneWhen: text(want.doneWhen || s.doneWhen || '', 500),
-      measured: Number(want.progress) || 0, receipts: (want.receipts || []).length, status: row.status, wantStatus: want.status || null, origin, topic: text(s.topic, 80) || null,
+      measured: Number(want.progress) || 0, receipts: (want.receipts || []).length, status: row.status, waitingOnModel: waitingOnModel(row), wantStatus: want.status || null, origin, topic: text(s.topic, 80) || null,
       standing: s.standing || null, parent: origin === 'self' && selfId && selfId !== row.id ? selfId : (s.origin?.parentChainId || null), continuous: s.continuous === true,
       lastThought: c.lastThought || null, lastThoughtAt: c.lastThoughtAt || null, progress: board?.progress || null,
       next: schedule[0] ? { at: schedule[0].at, task: text(schedule[0].task, 400) } : null,

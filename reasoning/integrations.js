@@ -310,7 +310,7 @@ export function createIntegrations({ pool, run = defaultRunner(), clock = Date.n
       try {
         const { stdout } = await run(['exec', signInTask({ provider, account: acct, url: site })], { timeoutMs: jobTimeoutMs });
         outcome = outcomeOf(stdout);
-      } catch (e) { outcome = { kind: 'failed', line: `Aside couldn't finish the sign-in: ${scrub(e.message, 200)}` }; }
+      } catch (e) { outcome = { kind: 'failed', line: e.killed || /timed? ?out/i.test(e.message) ? "Aside ran out of time on the sign-in. Open Aside, then press Connect again." : "Aside couldn't finish the sign-in. Check that it's open, then press Connect again." }; }
       try {
         let found = null;
         if (provider === 'other') {
