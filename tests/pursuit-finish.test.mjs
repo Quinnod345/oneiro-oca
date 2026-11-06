@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { recordOutcome, createWant } from '../motivation/hunger.js';
 import { saveDeliverable, normalizeCard, deliveryHold, finishCandidate, liveVerdict, composeDeliverable, previewOf, splitFooter } from '../reasoning/deliverables.js';
 import { createDeliverableCards, cardProblem } from '../reasoning/deliverable-cards.js';
-import { createFinishWatch, observeWitness, pathIn, testCommand } from '../reasoning/finish-watch.js';
+import { createFinishWatch, finishedMemory, observeWitness, pathIn, testCommand } from '../reasoning/finish-watch.js';
 import { createPursuitLife, DELETE_KEEP_MS } from '../reasoning/pursuit-life.js';
 import { createAgents, parseReport, withoutReport } from '../reasoning/agents.js';
 import { createAsks, composeAsk } from '../reasoning/asks.js';
@@ -747,3 +747,9 @@ test('a person can rename a pursuit; a blank name is refused in words', async ()
     await assert.rejects(w.life.rename(id, '   '), /Give it a name/);
   } finally { await w.stop?.(); }
 }));
+
+test('what a person finished is written in plain words for Memory, by its short name', () => {
+  const line = finishedMemory({ seed: 'raw seed', state: { continuity: { board: { headline: 'Sourdough' } }, want: { description: 'Find a recipe', doneWhen: 'I have baked it.' } } }, 'the brief was rated useful.');
+  assert.equal(line, 'Finished "Sourdough". The finish line was: I have baked it. What showed it: the brief was rated useful.');
+  assert.equal(finishedMemory({ seed: 'raw seed', state: {} }), 'Finished "raw seed".');
+});

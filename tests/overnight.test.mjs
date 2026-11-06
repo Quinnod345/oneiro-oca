@@ -51,7 +51,7 @@ function fakeModel(over = {}) {
 const noIntegrations = { list: async () => ({ integrations: [] }), mailRecent: async () => ({ accounts: [], messages: [] }) };
 const noChannel = { readCalendar: async () => { throw new Error('no calendar in this test'); }, threadStatus: async () => { throw new Error('no thread in this test'); }, openReplyDraft: async () => { throw new Error('nothing may open'); }, addEvent: async () => { throw new Error('nothing may be added'); } };
 async function night(pool, dir, over = {}) {
-  const n = createOvernight({ pool, integrations: noIntegrations, model: fakeModel(), channel: noChannel, vault: join(dir, 'vault'), power: async () => AC, helper: async () => ({ state: 'on', why: 'on', command: null }), log: silent, ...over });
+  const n = createOvernight({ pdfTool: null, pool, integrations: noIntegrations, model: fakeModel(), channel: noChannel, vault: join(dir, 'vault'), power: async () => AC, helper: async () => ({ state: 'on', why: 'on', command: null }), log: silent, ...over });
   await n.init();
   return n;
 }
@@ -782,4 +782,19 @@ test('a machine with no company configured filters nothing by accident, and a br
     process.env.OCA_COMPANY_WORDS = saved;
     if (savedPath === undefined) delete process.env.OCA_LOCAL_CONFIG; else process.env.OCA_LOCAL_CONFIG = savedPath;
   }
+});
+
+test('a PDF is read when the tool is here, and says plainly how to get the tool when it is not', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'night-pdf-'));
+  try {
+    await writeFile(join(dir, 'plan.pdf'), 'not really a pdf');
+    await writeFile(join(dir, 'tool.sh'), '#!/bin/sh\nprintf "the plan for spring"\n', { mode: 0o755 });
+    const read = await listFiles([dir], { pdfTool: join(dir, 'tool.sh') });
+    const pdf = read.items.find(i => i.title === 'plan.pdf');
+    assert.equal(await pdf.load(), 'the plan for spring');
+    assert.deepEqual(read.problems, []);
+    const without = await listFiles([dir], { pdfTool: null });
+    assert.equal(without.items.find(i => i.title === 'plan.pdf'), undefined);
+    assert.match(without.problems.join(' '), /1 PDF left unread: .*brew install poppler/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

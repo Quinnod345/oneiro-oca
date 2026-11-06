@@ -46,7 +46,7 @@ import { mergeTarget } from './reasoning/dedupe.js';
 import { createJudgeNotifier, judgeText } from './reasoning/judge-notifier.js';
 import { createImessageKeeper, imessageHost, portOpen } from './reasoning/imessage-keeper.js';
 import { aside as asideBrowser } from './aside.js';
-import { workspaceDir } from './reasoning/local-config.js';
+import { standingSelf, workspaceDir } from './reasoning/local-config.js';
 import { homedir } from 'node:os';
 
 export const ocaRouter = Router();
@@ -101,7 +101,7 @@ const agents = createAgents({ pool, host: agentHost, queue: ponderQueue, risk: r
   // Every finished agent run on a person's pursuit leaves a readable brief, attached to the pursuit (reasoning/deliverables.js).
   deliver: x => saveDeliverable({ pool, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work'), ...x }),
   model: process.env.OCA_AGENT_MODEL || null, thinkingLevel: process.env.OCA_AGENT_THINKING || 'high', agentId: process.env.OCA_AGENT_ID || 'main',
-  roots: [homedir()], ensureSelf: true });
+  roots: [homedir()], ensureSelf: standingSelf() });
 const agentsReady = agentHost.init().then(() => agents.init()).then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
@@ -1678,6 +1678,7 @@ const deliverableCards = createDeliverableCards({ pool, channel: overnight.chann
 ocaRouter.use(deliverableCards.router);
 // Finishing: the engine looks at what it can check and asks "looks done?"; only the person's yes finishes a pursuit.
 const finishWatch = createFinishWatch({ pool, queue: ponderQueue, inbox, asks, agents,
+  remember: content => episodic.store({ eventType: 'pursuit_finished', content }),
   calendar: async ({ from, to }) => {
     const out = [];
     for (const a of await nightAccounts()) out.push(...(await overnight.channel.readCalendar({ account: a.account, from, to })).events);

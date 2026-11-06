@@ -82,7 +82,13 @@ export async function observeWitness({ kind, detail, doneWhen = '', since = 0, n
   return miss('only a person can show this one');
 }
 
-export function createFinishWatch({ pool, queue, inbox, asks, agents = null, calendar = null, run = runner, clock = Date.now, log = console, tickMs = 10 * 60_000, perTick = 3, recentMs = 14 * 86_400_000 } = {}) {
+export const finishedMemory = (row, evidence = '') => {
+  const s = row.state || {}, name = text(s.continuity?.board?.headline || s.want?.description || row.seed, 200).replace(/[.\s]+$/, '');
+  const line = text(s.want?.doneWhen || s.doneWhen || '', 300).replace(/[.\s]+$/, '');
+  return `Finished "${name}".${line ? ` The finish line was: ${line}.` : ''}${evidence ? ` What showed it: ${text(evidence, 400).replace(/[.\s]+$/, "")}.` : ''}`;
+};
+
+export function createFinishWatch({ pool, queue, inbox, asks, agents = null, calendar = null, remember = null, run = runner, clock = Date.now, log = console, tickMs = 10 * 60_000, perTick = 3, recentMs = 14 * 86_400_000 } = {}) {
   const chain = async id => (await pool.query(`SELECT id, seed, status, updated_at, ponder_state AS state FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL`, [Number(id)])).rows[0] || null;
   const note = (id, fields) => pool.query(`UPDATE thought_chains SET ponder_state = ponder_state || jsonb_build_object('finishWatch', COALESCE(ponder_state -> 'finishWatch', '{}'::jsonb) || $2::jsonb) WHERE id = $1`, [id, JSON.stringify(fields)]);
 
@@ -148,6 +154,8 @@ export function createFinishWatch({ pool, queue, inbox, asks, agents = null, cal
     const evidence = (text(observation, 700) || text(s.finishWatch?.evidence, 700)).replace(/[.\s]+$/, '');
     await inbox.progress({ chainId: row.id, progress: 1, criterionMet: true, by, observation: `${by} confirmed the finish line is met${via ? `, in ${via}` : ''}${evidence ? `: ${evidence}` : ''}.` });
     await note(row.id, { status: 'confirmed', confirmedAt: clock(), by: text(by, 60) });
+    // What a person finished is what Memory is for. A write that fails can't undo the finish, so it only logs.
+    await remember?.(finishedMemory(row, evidence))?.catch?.(e => log.warn?.(`[finish] #${row.id} memory:`, e.message));
     const open = askId ?? s.finishWatch?.askId;
     if (open) await asks.answer(Number(open), 'yes').catch(() => {});
     for (const d of await agents?.list({ chainId: row.id, live: true }).catch(() => []) ?? []) {

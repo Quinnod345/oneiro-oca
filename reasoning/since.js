@@ -37,7 +37,7 @@ export function parseSince(raw, now = Date.now()) {
 // One pursuit row as the digest shows it.
 function pursuitOf(r) {
   const want = r.want || {};
-  return { chainId: r.id, title: text(want.description || r.seed, 160), status: r.status, wantStatus: want.status || null,
+  return { chainId: r.id, title: text(r.headline || want.description || r.seed, 160), status: r.status, wantStatus: want.status || null,
     progress: Number.isFinite(Number(want.progress)) ? Number(want.progress) : null, at: iso(r.updated_at) };
 }
 
@@ -57,7 +57,7 @@ export function classify(rows) {
 export function createSince({ pool, inbox = null, night = null, clock = Date.now, log = console } = {}) {
   async function digest(sinceMs) {
     const since = new Date(sinceMs);
-    const { rows } = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want
+    const { rows } = await pool.query(`SELECT id, seed, status, updated_at, (ponder_state->'want') - 'receipts' AS want, ponder_state #>> '{continuity,board,headline}' AS headline
       FROM thought_chains WHERE ponder_state IS NOT NULL AND ponder_state -> 'deleted' IS NULL AND updated_at > $1 ORDER BY updated_at DESC LIMIT 200`, [since]);
     const sorted = classify(rows);
     // Agent runs that ended since then. A missing table (an engine without agents) is just no runs.

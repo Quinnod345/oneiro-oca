@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AGE_RULE, CARD_AGE_MS, createCards, matchesSubject, proposeCards, withoutScaffolding } from '../reasoning/overnight-cards.js';
+import { AGE_RULE, CARD_AGE_MS, createCards, matchesSubject, plainWhy, proposeCards, withoutScaffolding } from '../reasoning/overnight-cards.js';
 import { createOvernight } from '../reasoning/overnight.js';
 import { checkSlot, createGoogleChannel, dateFromKey, findSlot, parseChip } from '../reasoning/overnight-google.js';
 
@@ -455,3 +455,48 @@ test('a mail card is never proposed for an automated sender', async () => {
   for (const from of ['Julius Brussee <notifications@github.com>', 'noreply@example.com', 'no-reply@x.io', '"Bank" <alerts@bank.com>', 'do-not-reply@a.b', 'notifications+abc@x.com']) assert.equal(isAutomatedSender(from), true, from);
   for (const from of ['Julius Brussee <julius@example.com>', 'newsome@example.com', 'alert.person@x.com', '']) assert.equal(isAutomatedSender(from), false, from);
 });
+
+test('work waiting in automated mail is offered as a to-do, never a reply, and comes before the calendar', async () => {
+  let asked = '';
+  const chat = async ({ user }) => { asked = user; return JSON.stringify({ cards: [] }); };
+  const day = 86_400_000, soon = new Date(Date.now() + day).toISOString(), over = new Date(Date.now() - 9 * day).toISOString();
+  await proposeCards({ chat, calendarAccount: 'me@x.com', notes: [
+    { id: 1, source: 'calendar', title: 'Dentist', summary: 'Dentist on Tuesday.', date: soon, ref: {} },
+    { id: 2, source: 'calendar', title: 'Old party', summary: 'A party long gone.', date: over, ref: {} },
+    { id: 3, source: 'mail', needsReply: true, title: 'PR 12 review', summary: 'A reviewer asked for changes.', ref: { from: 'A Reviewer <notifications@github.com>' } },
+    { id: 4, source: 'mail', needsReply: true, title: 'Lunch', summary: 'Sam asks about lunch.', ref: { from: 'Sam <sam@friends.example>' } },
+  ] });
+  assert.match(asked, /\[3\] mail to_do automated from/);
+  assert.match(asked, /\[4\] mail needs_reply from/);
+  assert.doesNotMatch(asked, /\[3\] mail[^\n]*needs_reply/);
+  assert.doesNotMatch(asked, /Old party/, 'an event long over has nothing left to prepare for');
+  assert.ok(asked.indexOf('[3]') < asked.indexOf('[1]'), 'work comes before the calendar');
+});
+
+test('a calendar block for work seen in automated mail is a real candidate', async () => {
+  const out = await proposeCards({ calendarAccount: 'me@x.com',
+    notes: [{ id: 3, source: 'mail', needsReply: true, title: 'PR 12 review comments', summary: 'A reviewer asked for changes to the retry boundary on PR 12.', ref: { from: 'A Reviewer <notifications@github.com>' } }],
+    chat: async () => JSON.stringify({ cards: [{ kind: 'calendar_block', note_ids: [3], title: 'Answer the review comments on PR 12', why: 'A reviewer asked for changes.', body: 'Time to change the retry boundary on PR 12.', minutes: 30 }] }) });
+  assert.equal(out.candidates.length, 1);
+  assert.equal(out.candidates[0].kind, 'calendar_block');
+  assert.deepEqual(out.dropped, []);
+});
+
+test("a card's reason never speaks the prompt's language", () => {
+  assert.equal(plainWhy('A reviewer asked for changes.', [{ title: 'PR 12' }]), 'A reviewer asked for changes.');
+  assert.equal(plainWhy('Note 25 is marked to_do and shows changes are needed.', [{ title: 'PR 12 review' }]), 'From what came in overnight: PR 12 review.');
+  assert.equal(plainWhy('this is a to_do', []), 'From what came in overnight.');
+  assert.equal(plainWhy('A note 5 minutes long.', [{ title: 'x' }]), 'From what came in overnight: x.', 'a false alarm only costs the fancier wording');
+});
+
+test("a morning's blocks each get their own time, and a later night leaves the earlier one's time alone", () => database(async (pool, dir) => {
+  const w = fakeChannel();
+  const cards = createCards({ pool, channel: w.channel, vault: () => dir, log: silent });
+  const block = n => blockCandidate({ title: `Block ${n}`, dedupeKey: `block:${n}:2026-11` });
+  const { ready } = await cards.stage({ runId: null, candidates: [block('one'), block('two')], calendar: { events: [], unreadable: [] } });
+  assert.equal(ready.length, 2);
+  assert.notEqual(ready[0].payload.start, ready[1].payload.start);
+  assert.ok(new Date(ready[0].payload.end) <= new Date(ready[1].payload.start), 'one after the other, not overlapping');
+  const next = await cards.stage({ runId: null, candidates: [block('three')], calendar: { events: [], unreadable: [] } });
+  assert.ok(ready.every(c => new Date(c.payload.end) <= new Date(next.ready[0].payload.start)), 'still held the next night');
+}));

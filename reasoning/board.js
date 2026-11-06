@@ -40,7 +40,7 @@ export function agentsHealth(up, status = null) {
     return { state: 'signed_out', why: 'Codex is running, but it isn\u2019t signed in to ChatGPT, so no agent can start.', fix: 'Run codex login in Terminal, then sign in with your ChatGPT account.', command: 'codex login' };
   if (/ENOENT|not found|no such file/i.test(why))
     return { state: 'missing', why: 'The engine can\u2019t find the Codex app on this Mac, so no agent can start.', fix: 'Install Codex (brew install codex), then restart the engine.', command: 'brew install codex' };
-  return { state: 'down', why: `Codex isn\u2019t answering, so no agent can start${why && why !== 'not checked' ? ` (${why})` : ''}.`, fix: 'Restart the engine; it starts Codex again.', command: null };
+  return { state: 'down', why: `Codex isn\u2019t answering, so no agent can start${why && why !== 'not checked' ? ` (${why})` : ''}.`, fix: 'Restart the engine; it starts Codex again. If Codex still won\u2019t start, reinstall it, then restart the engine.', command: 'brew reinstall codex' };
 }
 
 // A stream name as the board keeps it: short, title-cased, no punctuation games.

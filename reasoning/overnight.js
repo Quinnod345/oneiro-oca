@@ -101,6 +101,10 @@ const TEXT_EXT = new Set(['.txt', '.text', '.md', '.markdown', '.mdown', '.org',
 const RICH_EXT = new Set(['.doc', '.docx', '.rtf', '.odt']);   // macOS's textutil reads these
 const BOILERPLATE = new Set(['license', 'licence', 'copying', 'notice', 'authors', 'contributors', 'changelog', 'changes', 'history', 'patents', 'codeowners', 'code_of_conduct', 'contributing', 'third_party_notices', 'thirdpartynotices']);
 const MAX_FILE_BYTES = 2_000_000;
+const MAX_PDF_BYTES = 50_000_000;
+const PDF_PAGES = '12';
+// launchd's PATH doesn't reach Homebrew, so the usual places are checked by name. Poppler's pdftotext reads the text in a PDF.
+export const findPdfTool = () => ['/opt/homebrew/bin/pdftotext', '/usr/local/bin/pdftotext', '/usr/bin/pdftotext'].find(existsSync) || null;
 const MAX_FILES_VISITED = 20_000;
 // sys/stat.h's SF_DATALESS: the file's contents aren't on this disk. It's the only test that means "cloud-only": no
 // blocks alone also fits a small file stored inline or compressed into its metadata, and that one reads fine.
@@ -129,7 +133,7 @@ export function icloudLine(folder, cloud, local = 0) {
 
 // Everything eligible under the chosen folders, newest first. A folder macOS won't let the engine read is a problem to
 // report: an unreadable folder must never look like an empty one.
-export async function listFiles(folders, { exclude = [], dataless = isDataless, statFile = stat } = {}) {
+export async function listFiles(folders, { exclude = [], dataless = isDataless, statFile = stat, pdfTool = findPdfTool() } = {}) {
   const items = [], problems = []; let pdfs = 0, visited = 0;
   const cloudOnly = new Map(), localHere = new Map();
   const isExcluded = p => exclude.some(x => p === x || p.startsWith(x + sep));
@@ -154,11 +158,11 @@ export async function listFiles(folders, { exclude = [], dataless = isDataless, 
       if (entry.isDirectory()) { await walk(full, root); continue; }
       if (!entry.isFile() || isExcluded(full)) continue;
       const ext = extname(entry.name).toLowerCase();
-      if (ext === '.pdf') { pdfs++; continue; }
-      if (!TEXT_EXT.has(ext) && !RICH_EXT.has(ext)) continue;
+      if (ext === '.pdf' && !pdfTool) { pdfs++; continue; }
+      if (ext !== '.pdf' && !TEXT_EXT.has(ext) && !RICH_EXT.has(ext)) continue;
       if (BOILERPLATE.has(basename(entry.name, extname(entry.name)).toLowerCase().replace(/-/g, '_'))) continue;
       const info = await statFile(full).catch(() => null);
-      if (!info || info.size === 0 || info.size > MAX_FILE_BYTES) continue;
+      if (!info || info.size === 0 || info.size > (ext === '.pdf' ? MAX_PDF_BYTES : MAX_FILE_BYTES)) continue;
       // Its contents live in iCloud, not on this Mac. A background read of it fails (EDEADLK), so it would take a turn
       // from a real document every night. No blocks is only the cheap first check; the flag decides.
       if (info.blocks === 0 && await dataless(full)) { cloudOnly.set(root, (cloudOnly.get(root) || 0) + 1); continue; }
@@ -166,6 +170,8 @@ export async function listFiles(folders, { exclude = [], dataless = isDataless, 
       items.push({ source: 'files', key: `files|${full}|${info.mtimeMs}|${info.size}`, title: entry.name, location: pretty(full), date: new Date(info.mtimeMs).toISOString(), ref: {},
         load: async () => {
           // A file that can't be opened must say why: reading it as empty hid exactly that. Binary really is nothing to read.
+          // A scan has no text in it, and reads as empty: nothing to judge, the same as any other empty file.
+          if (ext === '.pdf') return await runCommand(pdfTool, ['-q', '-l', PDF_PAGES, '-enc', 'UTF-8', full, '-'], 30_000);
           if (RICH_EXT.has(ext)) return await runCommand('textutil', ['-convert', 'txt', '-stdout', full], 20_000);
           const bytes = await readFile(full);
           return bytes.includes(0) ? '' : bytes.toString('utf8');
@@ -174,7 +180,7 @@ export async function listFiles(folders, { exclude = [], dataless = isDataless, 
   }
   for (const folder of folders) await walk(folder, folder);
   for (const [root, n] of cloudOnly) problems.push(icloudLine(pretty(root), n, localHere.get(root) || 0));
-  if (pdfs) problems.push(`${plural(pdfs, 'PDF')} left unread: Oneiro can't read PDFs yet. Save what matters as text if you want it included.`);
+  if (pdfs) problems.push(`${plural(pdfs, 'PDF')} left unread: reading PDFs takes one small tool. Run brew install poppler, and the next night reads them.`);
   return { items: items.sort((a, b) => b.date.localeCompare(a.date)), problems };
 }
 
@@ -222,7 +228,7 @@ export function plainStoredProblems(problems) {
 const withPlainProblems = report => (report?.problems ? { ...report, problems: plainStoredProblems(report.problems) } : report);
 
 // ---- the engine's night ---------------------------------------------------------------------------------------------
-export function createOvernight({ pool, integrations, model = createNightModel(), run = defaultRunner(), openInAside = null, channel = createGoogleChannel({ run, openInAside }), aside = null, vault = DEFAULT_VAULT, notify = null, clock = Date.now, log = console,
+export function createOvernight({ pdfTool = findPdfTool(), pool, integrations, model = createNightModel(), run = defaultRunner(), openInAside = null, channel = createGoogleChannel({ run, openInAside }), aside = null, vault = DEFAULT_VAULT, notify = null, clock = Date.now, log = console,
   power = () => readPower(), helper = () => readHelper(), budgets = BUDGETS, tickMs = 60_000, itemTimeoutMs = ITEM_TIMEOUT_MS, writeTimeoutMs = WRITE_TIMEOUT_MS, heartbeatMs = 15_000,
   launchModel = () => startOllama({ exec: (cmd, args) => runCommand(cmd, args, 15_000) }), modelStartWaitMs = 30_000, modelStartPollMs = 1_500, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   const vaultRoot = () => vault;
@@ -364,7 +370,7 @@ export function createOvernight({ pool, integrations, model = createNightModel()
         if (source === 'mail') items = await readMail(accounts, r, away);
         else if (source === 'calendar') items = await readCalendars(accounts, r, shared, away);
         else if (!s.folders.length) r.problems.push('Files is on but no folder is chosen. Pick one in Night.');
-        else { const f = await listFiles(s.folders, { exclude: [resolve(vault)] }); items = f.items; r.problems.push(...f.problems); }
+        else { const f = await listFiles(s.folders, { exclude: [resolve(vault)], pdfTool }); items = f.items; r.problems.push(...f.problems); }
         const fresh = await unseen(items);
         r.listed = items.length;
         // Newest first, so a backlog gives up its oldest; for a calendar, what's coming soonest.
@@ -451,7 +457,7 @@ export function createOvernight({ pool, integrations, model = createNightModel()
       await stage('preparing cards', 'Drafting and checking the morning cards');
       if (modelOk && !halted && left() > 60_000) {
         const { rows } = await pool.query(`SELECT * FROM night_notes WHERE created_at >= $1 ORDER BY created_at DESC, id DESC LIMIT 40`, [new Date(clock() - 36 * 3_600_000)]);
-        const notes = rows.map(r => ({ id: r.id, source: r.source, title: r.title, summary: r.summary, needsReply: r.needs_reply, ref: r.ref || {} }));
+        const notes = rows.map(r => ({ id: r.id, source: r.source, title: r.title, summary: r.summary, date: r.item_date, needsReply: r.needs_reply, ref: r.ref || {} }));
         const proposed = await proposeCards({ chat: model.chat, notes, calendarAccount: s.calendar ? shared.account : null, timeoutMs: Math.min(WRITE_TIMEOUT_MS, Math.max(30_000, left())) });
         if (proposed.failed) report.problems.push(`No new cards tonight: ${proposed.failed}. It tries again next night.`);
         const staged = await cards.stage({ runId: id, candidates: proposed.candidates, calendar: shared.error ? { error: shared.error } : shared });

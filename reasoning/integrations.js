@@ -262,7 +262,7 @@ export function createIntegrations({ pool, run = defaultRunner(), clock = Date.n
       for (const a of r.accounts) {
         const out = a.signedOut
           ? { status: 'needs_sign_in', detail: `${PROVIDERS[provider].name} says this session has expired. Connect it again to sign back in.` }
-          : { status: 'connected', detail: provider === 'google' ? `Signed in as Google account ${a.uid}.` : `Signed in.` };
+          : { status: 'connected', detail: `Signed in.` };
         try { const row = await upsert(provider, a, out); if (row) seen.push(row.account); }
         catch (e) { log.warn?.(`[integrations] ${provider}: skipped an account Aside listed: ${e.message}`); }
       }

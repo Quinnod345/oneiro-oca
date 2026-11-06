@@ -17,6 +17,8 @@ export function localConfig({ path = process.env.OCA_LOCAL_CONFIG || join(homedi
 export const workspaceDir = (...parts) => join(process.env.ONEIRO_WORKSPACE || join(homedir(), 'oneiro', 'runtime', 'workspace'), ...parts);
 export const imessageHost = () => process.env.OCA_IMESSAGE_HOST || localConfig().imessageHost || null;
 export const ownerImessage = () => process.env.OCA_OWNER_IMESSAGE || localConfig().ownerImessage || null;
+// The engine's standing pursuit about its own code. Off unless this Mac's owner asked for it.
+export const standingSelf = () => localConfig().standingSelf === true;
 
 // A pattern that matches nothing when no company is set, so an empty config never filters anything by accident.
 export function companyPattern() {

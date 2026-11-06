@@ -103,7 +103,7 @@ The knowledge base is a portrait of this person: what they are doing, deciding, 
 - junk: true when it has no lasting value for this person: idle noise, newsletters, marketing, automated notifications, third-party material such as licences, dependency files, generated output, documentation shipped with a download.
 - sensitive: true when it is private enough to leave out entirely: medical details, money and account details, passwords, secrets or sign-in codes, intimate personal content. When true, keep the sensitive detail out of the summary and title.
 - Never copy a raw identifier (Social Security number, card number, password, passport number, sign-in code) into the summary or title. If one appears, set sensitive to true.
-- needs_reply: true only for mail a real person sent that asks this person to reply, decide or do something.`;
+- needs_reply: true for mail that asks this person to reply, decide or do something, or that shows work now waiting on them, like a review asking for changes or a failed build on their own project. Not for a sale, a newsletter, a sign-in alert or anything that only reports news.`;
 const FOR_KIND = {
   mail: `\n\nThis item is an email's sender, subject and short preview, not the whole message. Most mail is junk unless it records something this person did or owes. Keep mail a real person sent them. Say who it is from and what it asks; never guess at what the full message says.`,
   calendar: `\n\nThis item is a calendar entry: something the person committed to, with a time. Keep it unless it is contentless (an empty busy block, a holiday feed). Say who, when and where exactly as written and add nothing.`,

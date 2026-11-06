@@ -146,15 +146,15 @@ export function createAgents({ pool, host, queue, risk = null, asks = null, asid
     await pool.query(await readFile(new URL('../migrations/072_agent_names.sql', import.meta.url), 'utf8'));
     if (ensureSelf) await selfPursuit().catch(e => log.warn?.('[agents] self pursuit:', e.message));
   }
-  // The engine's one standing pursuit about itself. Quinn asked for it: the only time it sits is when it is
-  // thinking over itself. Idle capacity goes here; its moves are fixes the engine files against its own code.
-  const SELF_SEED = 'Keep getting better at pursuing Quinn\'s wants: find where I fail, waste runs, repeat myself, stall, or ask Quinn for something I could have done — and fix it in my own code.';
+  // The engine's one standing pursuit about itself. Idle capacity goes here; its moves are fixes the engine files against
+  // its own code. It's opt-in (standingSelf in the local config): nobody installing this should find it waiting for them.
+  const SELF_SEED = 'Keep getting better at pursuing my person\'s wants: find where I fail, waste runs, repeat myself, stall, or ask for something I could have done — and fix it in my own code.';
   async function selfPursuit() {
     const { rows } = await pool.query(`SELECT id FROM thought_chains WHERE ponder_state ->> 'standing' = 'self' AND ponder_state #>> '{want,status}' = 'active' ORDER BY id LIMIT 1`);
     if (rows[0]) return rows[0].id;
     if (!queue?.enqueue) return null;
     const c = await queue.enqueue({ seed: SELF_SEED, doneWhen: 'Never finished: each week at least one of my own fixes is merged, and fewer agent runs fail, repeat, or stall than the week before.',
-      topic: 'OCA engine', learning: false, priority: 0.6, continuous: true }, { origin: { kind: 'explicit', by: 'quinn' } });
+      topic: 'OCA engine', learning: false, priority: 0.6, continuous: true }, { origin: { kind: 'explicit', by: 'owner' } });
     await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence', ponder_state = ponder_state || '{"standing":"self"}'::jsonb WHERE id = $1`, [c.chain_id]);
     log.log?.(`[agents] standing self pursuit is #${c.chain_id}`);
     return c.chain_id;
