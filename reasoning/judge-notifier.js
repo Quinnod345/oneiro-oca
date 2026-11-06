@@ -10,6 +10,8 @@ import { dirname } from 'node:path';
 export const JUDGE_TITLE = 'Ready for your verdict';
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 export const judgeKey = item => `${item.kind}:${item.id}`;
+// The same news as a text to his phone.
+export const judgeText = body => `Oneiro: ${body} — rate it in the Oneiro app.`;
 
 // The push body: one item by its title, several as a count with the newest named.
 export function judgeMessage(items) {

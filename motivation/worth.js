@@ -43,7 +43,12 @@ export function createSignal({ id, entityKey, kind, at = Date.now(), ...payload 
     case 'rated': {
       if (![-1, 0, 1].includes(payload.rating)) throw new Error('a rating is -1, 0 or 1');
       if (typeof payload.by !== 'string' || !payload.by.trim()) throw new Error('a rating names who rated');
-      return { ...signal, rating: payload.rating, by: payload.by, about: String(payload.about || '').slice(0, 500) };
+      // A person can change their mind: `supersedes` names the rating this one replaces, which stays in the journal but
+      // stops counting. `retraction` takes a rating back with nothing in its place. `usefulness` keeps the word they chose.
+      return { ...signal, rating: payload.rating, by: payload.by, about: String(payload.about || '').slice(0, 500),
+        ...(typeof payload.supersedes === 'string' && payload.supersedes ? { supersedes: payload.supersedes } : {}),
+        ...(payload.retraction === true ? { retraction: true } : {}),
+        ...(Number.isFinite(payload.usefulness) ? { usefulness: payload.usefulness } : {}) };
     }
     case 'observed': {
       if (!(payload.outcome in OBSERVED_OUTCOMES)) throw new Error(`observed outcome must be one of ${Object.keys(OBSERVED_OUTCOMES).join(', ')}`);
@@ -67,9 +72,11 @@ export function projectWorth(key, signals, now = Date.now()) {
   // Declared priors replace the uninformative Beta(1,1) base instead of being diluted by it.
   let alpha = 0, beta = 0, evidence = 0, rated = 0, observed = 0, priors = 0, lastSignalAt = null;
   const constraints = [];
+  const replaced = new Set(signals.filter(s => s.supersedes).map(s => s.supersedes));
   for (const s of [...signals].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id))) {
     if (s.entityKey !== key) continue;
     lastSignalAt = Math.max(lastSignalAt ?? s.at, s.at);
+    if (replaced.has(s.id) || s.retraction) continue;   // a changed or retracted rating stays on record and stops counting
     if (s.kind === 'constraint') { constraints.push({ id: s.id, rule: s.rule, reason: s.reason }); continue; }
     if (s.kind === 'prior') { alpha += s.worth * s.weight; beta += (1 - s.worth) * s.weight; priors++; continue; }
     const age = Math.max(0, now - s.at) / DAY;

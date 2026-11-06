@@ -16,7 +16,7 @@ export async function forceConnection() {
   // Get two random, semantically distant memories
   const { rows: memories } = await pool.query(
     `SELECT id, content, embedding FROM episodic_memory 
-     WHERE embedding IS NOT NULL 
+     WHERE embedding IS NOT NULL AND forgotten_at IS NULL 
      ORDER BY RANDOM() LIMIT 20`
   );
   
@@ -127,7 +127,7 @@ export async function crossDomainTransfer(sourceDomain, targetDomain) {
   // Get a principle from source domain
   const { rows: principles } = await pool.query(
     `SELECT concept, confidence FROM semantic_memory 
-     WHERE category = $1 AND confidence > 0.5
+     WHERE category = $1 AND confidence > 0.5 AND forgotten_at IS NULL
      ORDER BY RANDOM() LIMIT 1`,
     [sourceDomain]
   );
@@ -181,6 +181,7 @@ export async function dream(durationMinutes = 2) {
     `SELECT id, content, importance_score, timestamp
        FROM episodic_memory
       WHERE timestamp > NOW() - INTERVAL '24 hours'
+        AND forgotten_at IS NULL
         AND importance_score >= 0.45
         AND length(trim(content)) > 30
       ORDER BY importance_score DESC, timestamp DESC

@@ -11,7 +11,7 @@ async function ensureSchema() {
       id          SERIAL PRIMARY KEY,
       timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       source      TEXT NOT NULL,           -- 'quinn', 'oneiro', 'tool', 'system', 'trader', 'crypto'
-      channel     TEXT,                    -- 'telegram', 'openclaw', 'robinhood', 'crypto', etc
+      channel     TEXT,                    -- 'telegram', 'imessage', 'robinhood', 'crypto', etc
       content     TEXT NOT NULL,
       metadata    JSONB DEFAULT '{}',
       embedding   VECTOR(1536),

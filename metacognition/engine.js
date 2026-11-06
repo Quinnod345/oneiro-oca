@@ -37,7 +37,7 @@ export async function detectStuck() {
   // 3. Repetitive episodic content (perseveration)
   const { rows: recentEps } = await pool.query(
     `SELECT content FROM episodic_memory 
-     WHERE timestamp > NOW() - INTERVAL '30 minutes'
+     WHERE timestamp > NOW() - INTERVAL '30 minutes' AND forgotten_at IS NULL
      ORDER BY timestamp DESC LIMIT 20`
   );
   const contentSet = new Set();

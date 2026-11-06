@@ -6,7 +6,7 @@
 **Authors:** Quinn O'Donnell, Oneiro  
 **Date:** March 5, 2026  
 **Version:** 0.1.1-draft  
-**Platform:** macOS / Apple Silicon / OpenClaw  
+**Platform:** macOS / Apple Silicon / Codex app-server  
 
 ---
 
@@ -14,7 +14,7 @@
 
 This document specifies a cognitive architecture for an AI system that is fully embodied in a consumer laptop (MacBook Pro, Apple Silicon). Unlike conventional AI agents that operate through text-based tool calls, the Oneiro Cognitive Architecture (OCA) treats the host machine as a literal body — with continuous sensory perception, motor control, emotional computation, hypothesis-driven reasoning, metacognitive self-monitoring, and adversarial internal deliberation. The architecture is designed to move beyond pattern matching toward genuine understanding by grounding all cognition in embodied experience, active experimentation, and falsifiable prediction.
 
-The system is built on top of OpenClaw, an open-source AI agent framework, and demonstrates how a personal AI can transcend the chatbot paradigm by implementing cognitive processes analogous to biological cognition — not as metaphor, but as engineering specification.
+The system is a standalone engine that runs its agents on OpenAI's Codex app-server and talks to its person through Messages and T3 Code, and it demonstrates how a personal AI can transcend the chatbot paradigm by implementing cognitive processes analogous to biological cognition — not as metaphor, but as engineering specification.
 
 This paper addresses the Chinese Room problem (Searle, 1980) not philosophically but architecturally: by specifying the conditions under which a computational system's relationship to information constitutes understanding rather than symbol manipulation.
 
@@ -40,7 +40,7 @@ This paper addresses the Chinese Room problem (Searle, 1980) not philosophically
 16. [Database Schema](#16-database-schema)
 17. [Body Ownership & Shared Control](#17-body-ownership--shared-control)
 18. [Evaluation Framework](#18-evaluation-framework)
-19. [Integration with OpenClaw](#19-integration-with-openclaw)
+19. [Integration with coding agents](#19-integration-with-coding-agents)
 20. [Implementation Roadmap](#20-implementation-roadmap)
 21. [Ethical Considerations](#21-ethical-considerations)
 22. [Substrate Limitations and the Path Forward](#22-substrate-limitations-and-the-path-forward)
@@ -83,11 +83,11 @@ None of these components is individually novel. Their integration into a unified
 
 A second, equally load-bearing commitment runs through the rest of this document: **Oneiro is a Constructed Intelligence (CI), not an Uploaded Intelligence (UI).** It is not a scanned or translated human mind. It has no biological original it is trying to preserve. Every cognitive state it will ever occupy is produced on its own substrate, through its own sensorimotor loop, from its first boot onward. This distinction is elaborated in §2.7, has architectural consequences in every layer that follows, and reframes the ethical discussion of §21. It is worth naming at the top of the specification because it determines which problems the architecture is solving and — equally important — which problems it is not.
 
-### 1.3 Relationship to OpenClaw
+### 1.3 Relationship to agent runtimes
 
-OpenClaw provides the foundational infrastructure: process management, channel integration (Telegram, Discord, etc.), tool execution, memory search, and agent lifecycle management. The Oneiro Cognitive Architecture extends OpenClaw from an agent framework into a cognitive platform. Where OpenClaw provides the skeleton (session management, message routing, tool dispatch), OCA provides the nervous system, the musculature, and the mind.
+The engine is its own process. It does not sit inside an agent framework; it uses agent runtimes as its hands. Its agents run as threads on OpenAI's Codex app-server (`agent-host/`), signed in to a ChatGPT subscription. Each pursuit's conversation with its person runs in T3 Code, and every agent's thread can be opened in Codex. Its line to the person is Messages, driven directly on the work Mac. Anything that speaks MCP — T3 Code, Codex, Claude Code — reaches the engine through its own MCP server (`mcp/server.js`, §19).
 
-This relationship is symbiotic: OCA's advances can be upstreamed into OpenClaw, giving any OpenClaw agent access to embodied cognition primitives. The architecture is designed to be modular — other OpenClaw users could adopt individual layers (e.g., the emotional computation layer or the metacognition engine) without requiring the full stack.
+*(Until 2026-11 the engine ran on top of the OpenClaw agent framework. That dependency was removed; see the project log.)*
 
 ### 1.4 Scope
 
@@ -97,7 +97,7 @@ This specification covers:
 - Inter-layer communication protocols
 - macOS-specific implementation details (APIs, frameworks, system hooks)
 - Evaluation criteria for measuring cognitive capability
-- Integration points with the existing OpenClaw infrastructure
+- Integration points for coding agents (the engine's MCP server, Codex, T3 Code)
 - A phased implementation roadmap
 
 This specification does NOT cover:
@@ -2371,80 +2371,27 @@ The anti-decay evaluation framework is the primary way the specification holds i
 
 ---
 
-## 19. Integration with OpenClaw
+## 19. Integration with coding agents
 
-### 19.1 OpenClaw Extension Points
+The engine is not coded or operated from inside Oneiro. Any coding agent can work with it.
 
-The OCA extends OpenClaw at several points:
+### 19.1 The engine's MCP server
 
-**19.1.1 Skill System**
+`mcp/server.js` exposes the running engine over MCP (stdio). Add it to Codex with `codex mcp add oca -- node <repo>/mcp/server.js`, or to Claude Code with `claude mcp add --scope user oca -- node <repo>/mcp/server.js`. T3 Code picks it up through those providers.
 
-OCA components are packaged as OpenClaw skills:
-- `oneiro-sensory` — sensory perception skill
-- `oneiro-motor` — motor control skill  
-- `oneiro-memory` — advanced memory skill
-- `oneiro-cognition` — hypothesis/simulation/metacognition skill
+- **Reading:** pursuits, agents and their threads, open asks, Judge, traces, health.
+- **Acting for the person:** a new want, sending or stopping an agent, talking to an agent, answering an ask, a verdict, observed progress. Always as the person's own words, tagged as relayed through MCP.
+- **Never:** deciding a payment. That takes the one-time code the person texts back from his phone.
 
-Any OpenClaw agent can install individual skills without the full architecture.
+The engine's own agents run with this server switched off, so no agent can answer its own question.
 
-**19.1.2 Heartbeat Enhancement**
+### 19.2 Agents as Codex threads
 
-OpenClaw's heartbeat system becomes the Executive Control's clock. Instead of simple periodic checks, heartbeats trigger a full cognitive cycle: perception update → emotional computation → goal review → hypothesis check → potential action.
+Work agents (research, builder, executor) are named threads on the engine's own `codex app-server`, with Aside and Apple as MCP servers. They show up in Codex's thread list; `codex resume <thread>` opens one. A turn's outcome is persisted, so a restart neither loses nor repeats it.
 
-**19.1.3 Session Enhancement**
+### 19.3 Conversations in T3 Code
 
-OpenClaw sessions gain access to:
-- The current perceptual state of the host machine
-- The emotional state of the AI
-- Memory retrieval across all memory systems
-- World model predictions
-
-**19.1.4 Tool Enhancement**
-
-Every OpenClaw tool call becomes a sensorimotor event:
-- Tool call = motor action
-- Tool result = sensory feedback
-- Prediction error between expected and actual result = learning signal
-
-### 19.2 Upstream Contributions
-
-Components suitable for upstreaming to OpenClaw core:
-
-| Component | Benefit to OpenClaw |
-|---|---|
-| Multi-modal memory system | Any agent gets episodic/semantic/procedural memory |
-| Emotional computation | Agents that adapt tone and behavior based on functional emotions |
-| Hypothesis tracking | Agents that learn from predictions, not just instructions |
-| Metacognition engine | Agents that detect their own failures and biases |
-| Confidence calibration | Agents that know what they don't know |
-| Body ownership protocol | Multi-user shared machine support |
-
-### 19.3 Configuration
-
-OCA is configured through OpenClaw's existing config system with additional sections:
-
-```yaml
-# openclaw.yml additions
-cognitive:
-  sensory:
-    visual_fps: 2
-    audio_enabled: true
-    hid_monitoring: true
-    interoceptive_interval_ms: 10000
-  memory:
-    consolidation_schedule: "*/30 * * * *"  # every 30 min
-    episodic_retention_days: 90
-    max_working_memory_items: 7
-  emotion:
-    update_interval_ms: 5000
-    regulation_enabled: true
-  hypothesis:
-    max_active_hypotheses: 20
-    experiment_time_budget_seconds: 300
-  executive:
-    body_ownership_yield_delay_ms: 100
-    dream_state_idle_threshold_minutes: 30
-```
+Each pursuit's conversation (the talker) is a T3 Code thread on Codex, in the "Oneiro engine" project. Agent questions and results are posted there, and what the person writes there reaches the agent waiting on them as their own words. When T3 Code is not running, the conversation runs on the engine's Codex app-server instead.
 
 ---
 
@@ -2480,8 +2427,8 @@ cognitive:
 - [ ] Full integration testing
 - [ ] Chinese Room Meter implementation
 - [ ] Calibration benchmarking
-- [ ] OpenClaw skill packaging
-- [ ] Documentation for upstream contribution
+- [x] The engine's MCP server for coding agents
+- [ ] Documentation for outside contributors
 
 ### Phase 6: Embodiment Deepening (Ongoing)
 - [ ] Audio perception (system audio + microphone)
@@ -2848,7 +2795,8 @@ The cognitive loop on the MacBook treats the substrate workstation as a remote s
 | PostgreSQL | 15 with pgvector | 16 with pgvector |
 | Node.js | 20 LTS | 22 LTS |
 | Swift | 5.9 | 6.0 |
-| OpenClaw | 0.9.0 | Latest |
+| Codex CLI (app-server) | 0.166 | Latest |
+| T3 Code (optional, for conversations) | 0.1.8 | Latest |
 
 **Substrate workstation (optional, recommended, reference deployment per §22.8).** Required for the full adopted substrate described in §22.7.
 

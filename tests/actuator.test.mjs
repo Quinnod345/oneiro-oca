@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createActuator, isCoursework, guardedConsole, budgetCommitment, YES, NO } from '../reasoning/actuator.js';
 import { createAsks } from '../reasoning/asks.js';
+import { createPaymentApprovals } from '../reasoning/payment-approvals.js';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -56,11 +57,14 @@ test('the actuator: granted classes proceed after the ramp; ungranted classes an
   const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controls.get() });
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const sent = [];
-  const asks = createAsks({ pool, risk, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
+  const asks = createAsks({ pool, risk, clock: () => now, log: { log() {}, warn() {} }, deliverers: { imessage: async m => { sent.push(m); } } }); await asks.init();
+  const payments = createPaymentApprovals({ pool, clock: () => now, log: { log() {}, warn() {} }, onDecision: ({ askId, approved }) => asks.answer(askId, approved ? 'Approved with its code' : 'Denied') });
+  asks.useApprovals(payments);
+  const codeIn = m => (m.match(/APPROVE ([A-Z0-9]{6})/) || [])[1];
   const act = createActuator({ pool, risk, asks, controls, queue, clock: () => now, log: { log() {}, warn() {} } }); await act.init();
   const chain = await queue.enqueue({ seed: 'Launch InnerEcho on Instagram', doneWhen: 'the carousel is live', stakes: [{ entityKey: 'person:quinn', share: 1 }] }, { origin: { kind: 'explicit', by: 'quinn' } });
   const id = chain.chain_id;
-  // 1. the first publish asks once (ramp); the ask is a real push with the exact question
+  // 1. the first publish asks once (ramp); the ask is a real text with the exact question
   const a1 = await act.authorize({ chainId: id, class: 'publish', host: 'www.instagram.com', description: 'post the 5-slide carousel' });
   assert.equal(a1.decision, 'ask'); assert.ok(a1.askId); assert.match(a1.question, /^Oneiro wants to post the 5-slide carousel on www\.instagram\.com\. OK\? Reply yes or no\.$/); assert.equal(sent.length, 1);
   // not yet answered: still waiting
@@ -82,11 +86,20 @@ test('the actuator: granted classes proceed after the ramp; ungranted classes an
   // 4. spend: every payment asks, even well inside the cap; his yes fires that one payment; past the cap the question says so
   charter = normalizeCharter({ ramp: 0, spend: { granted: true, monthlyCap: 50 } });
   const s0 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 });
-  assert.equal(s0.decision, 'ask'); assert.match(s0.question, /\(cost \$30\.00\)\. Are you sure you want to go through with this\? Reply yes or no\.$/);
+  assert.equal(s0.decision, 'ask'); assert.match(s0.question, /\(cost \$30\.00\)\. Are you sure you want to go through with this\?$/);
   assert.match((await act.recent()).find(r => r.id === s0.actionId).why, /every payment waits for Quinn's yes/);
-  await asks.answer(s0.askId, 'yes');
+  // a payment's text carries its code; a typed "yes" anywhere else (or posted to the engine) pays nothing
+  const code = codeIn(sent.at(-1)); assert.match(code, /^[A-Z2-9]{6}$/);
+  assert.equal((await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30, approval: s0.askId })).decision, 'ask', 'still waiting for the code');
+  assert.deepEqual(await payments.decide({ approved: true, code, from: 'quinn@icloud' }), { ok: true, askId: s0.askId, approved: true });
   const s1 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30, approval: s0.askId });
   assert.equal(s1.decision, 'proceed'); await act.observe({ actionId: s1.actionId, result: 'success', observation: 'boost scheduled' });
+  assert.equal((await payments.decide({ approved: true, code, from: 'quinn@icloud' })).ok, false, 'a code works once');
+  // a plain yes to a payment ask closes it without paying
+  const sY = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost a smaller post', cost: 5 });
+  await asks.answer(sY.askId, 'yes');
+  const refused = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost a smaller post', cost: 5, approval: sY.askId });
+  assert.equal(refused.decision, 'refuse'); assert.match(refused.why, /without Quinn's approval code/);
   const s2 = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost it again', cost: 30 });
   assert.equal(s2.decision, 'ask'); assert.match((await act.recent()).find(r => r.id === s2.actionId).why, /past the \$50 cap/);
   assert.equal((await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'no cost stated' })).decision, 'ask', 'a spend must state its cost');
@@ -390,7 +403,9 @@ test('Apple and Meta consoles always ask; every payment asks; a daily budget cou
   const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controls.get() });
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const sent = [];
-  const asks = createAsks({ pool, risk, clock: () => now, log: silent, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
+  const asks = createAsks({ pool, risk, clock: () => now, log: silent, deliverers: { imessage: async m => { sent.push(m); } } }); await asks.init();
+  const payments = createPaymentApprovals({ pool, clock: () => now, log: silent, onDecision: ({ askId, approved }) => asks.answer(askId, approved ? 'Approved with its code' : 'Denied') });
+  asks.useApprovals(payments);
   let external = 0, externalFails = false;
   const act = createActuator({ pool, risk, asks, controls, queue, clock: () => now, log: silent,
     externalSpend: async () => { if (externalFails) throw new Error('broker offline'); return external; } }); await act.init();
@@ -413,7 +428,9 @@ test('Apple and Meta consoles always ask; every payment asks; a daily budget cou
   // 3. other ad consoles: an uncosted save asks; a costed spend asks too, like every payment, and his yes fires it
   const x = await act.authorize({ chainId: id, class: 'submit', host: 'ads.x.com', description: 'save the campaign settings' });
   assert.equal(x.decision, 'ask'); assert.match(await why(x), /ad console/);
-  const approved = async request => { const q = await act.authorize(request); assert.equal(q.decision, 'ask', 'a payment asks first'); await asks.answer(q.askId, 'yes'); return done(await act.authorize({ ...request, approval: q.askId })); };
+  const approved = async request => { const q = await act.authorize(request); assert.equal(q.decision, 'ask', 'a payment asks first');
+    const code = (sent.at(-1).match(/APPROVE ([A-Z0-9]{6})/) || [])[1]; assert.ok(code, 'its text carries its code');
+    assert.equal((await payments.decide({ approved: true, code, from: 'quinn@icloud' })).ok, true); return done(await act.authorize({ ...request, approval: q.askId })); };
   await approved({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 30 });
   // 4. a daily budget commits its increase for every day left, today included
   assert.deepEqual(budgetCommitment({ dailyBudget: 20, now }), { daysLeft: 3, increase: 20, committed: 60 });

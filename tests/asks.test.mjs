@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { createAsks, composeAsk, pushAlert, asksForSecret } from '../reasoning/asks.js';
+import { createAsks, composeAsk, asksForSecret } from '../reasoning/asks.js';
 import { createProposal, appraise, OWNER_KEY } from '../motivation/risk.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -74,13 +74,15 @@ test('a sign-in wall is observed from the page, not inferred; tooling friction i
   assert.equal(classifyFriction('Slice x completed with 0 verified sources; evidence applied: false. tooling: 12 Aside reads yielded no verifiable rows.'), 'defect');
 });
 
-test('the phone is a delivery channel only when a paired node is configured; a push is judged by the gateway\'s answer', async () => {
+test('texts go only through the iMessage line on the work Mac; there is no phone push', async () => {
   const stub = { query: async () => ({ rows: [] }) };
-  assert.deepEqual(createAsks({ pool: stub, imessage: null, pushNode: null, notify: false }).channels(), []);
-  assert.deepEqual(createAsks({ pool: stub, imessage: null, pushNode: 'node-1', notify: false }).channels(), ['push']);
-  // a non-JSON or not-ok answer from the gateway is a failed delivery, never a silent success
-  await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/usr/bin/false' }));
-  await assert.rejects(() => pushAlert({ nodeId: 'node-1', title: 't', body: 'b', openclawCli: '/bin/echo' }), /gateway:/);
+  assert.deepEqual(createAsks({ pool: stub, imessage: null, notify: false }).channels(), []);
+  const sent = [];
+  const line = { send: async m => { sent.push(m); } };
+  let up = true;
+  const asks = createAsks({ pool: stub, imessage: line, notify: false, imessageReady: () => up });
+  assert.deepEqual(asks.channels(), ['imessage']);
+  assert.ok(!asks.channels().includes('push'));
 });
 
 test('an ask never has the person send a code or password: the request becomes the step, and open ones are rewritten on start', async () => database(async pool => {
@@ -90,7 +92,7 @@ test('an ask never has the person send a code or password: the request becomes t
     'Enter the six-digit code in the GitHub prompt in Aside, then reply done.', 'Oneiro wants to save new promotional text on appstoreconnect.apple.com. OK? Reply yes or no.',
     'What usefulness score from 0 to 1 would you give the pricing comparison?']) assert.ok(!asksForSecret(d), d);
   const now = 30 * 86400000, sent = [];
-  const asks = createAsks({ pool, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } });
+  const asks = createAsks({ pool, clock: () => now, log: { log() {}, warn() {} }, deliverers: { imessage: async m => { sent.push(m); } } });
   await asks.init();
   // an open ask from before the rule is rewritten when the engine starts
   await pool.query(`INSERT INTO notifications (message, category, metadata) VALUES ('Oneiro''s agent on #27 asks: Send the current six-digit GitHub authenticator code now.', 'ask', $1)`,

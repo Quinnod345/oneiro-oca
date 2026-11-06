@@ -87,7 +87,7 @@ A blind-judge protocol (`scripts/judge-pack.mjs`, `scripts/judge.mjs`) renders a
 
 ## Running it
 
-Requirements: Node 22+, PostgreSQL 16 with pgvector, an Ollama endpoint for local inference (this deployment runs it on a second machine over Tailscale), and a BGE-large embedding server on `:7801` (`ONEIRO_EMBED_URL`). Optional: the Codex CLI for hard reasoning steps; the engine falls back to the local model when it is unavailable.
+Requirements: Node 22+, PostgreSQL 16 with pgvector, an Ollama endpoint for local inference (this deployment runs it on a second machine over Tailscale), a BGE-large embedding server on `:7801` (`ONEIRO_EMBED_URL`), and the Codex CLI signed in to ChatGPT (`codex login`): the engine's agents are threads on its own `codex app-server`. Optional: T3 Code, where each pursuit's conversation lives; without it, conversations run on Codex too.
 
 ```bash
 npm install
@@ -103,7 +103,21 @@ Useful endpoints: `/oca/health`, `/oca/hunger`, `/oca/worth`, `/oca/risk`, `/oca
 
 Environment: `ONEIRO_LOCAL_REASONER_URL`, `ONEIRO_LOCAL_REASONER_TRANSPORT=ollama`, `ONEIRO_OCA_THINKER_MODEL`, `OCA_STRATEGY_PROVIDER`/`OCA_STRATEGY_MODEL`, `OCA_ENABLE_AUTONOMOUS_ACTIONS` (the master switch, off by default), `ONEIRO_EMBED_ALLOW_HASH_FALLBACK` (off: a blip in the embedder stores no vector rather than a wrong one).
 
-Agents run in their own lane, separate from the thinker. The thinker and planner use the inference policy (`OCA_CODEX_MODEL`, default `gpt-6-astra`, at the controls' effort). Deployed agents use `OCA_AGENT_MODEL` and `OCA_AGENT_THINKING` (a gateway model such as `openai/gpt-6-sol`, and a thinking level such as `xhigh`). Pursuit work uses `OCA_PURSUIT_MODEL` and `OCA_PURSUIT_EFFORT`. The self-build Codex coder uses `OCA_SELF_BUILD_MODEL`, `OCA_SELF_BUILD_EFFORT` and `OCA_SELF_BUILD_SANDBOX`. Unset values keep the defaults, so changing an agent's model never changes how the thinker thinks.
+Agents run in their own lane, separate from the thinker. The thinker and planner use the inference policy (`OCA_CODEX_MODEL`, default `gpt-6-astra`, at the controls' effort). Deployed agents use `OCA_AGENT_MODEL` and `OCA_AGENT_THINKING` (a Codex model such as `gpt-6.1-sol`, and an effort such as `xhigh`). Pursuit work uses `OCA_PURSUIT_MODEL` and `OCA_PURSUIT_EFFORT`. The self-build Codex coder uses `OCA_SELF_BUILD_MODEL`, `OCA_SELF_BUILD_EFFORT` and `OCA_SELF_BUILD_SANDBOX`. Unset values keep the defaults, so changing an agent's model never changes how the thinker thinks.
+
+## Agents, conversations and the person
+
+- **Agents** (`agent-host/`): every deployed agent is a Codex thread. Research, builder and executor agents run on the engine's own `codex app-server` (`OCA_CODEX_APP_SERVER_BIN`), with Aside and Apple as MCP servers. They are named `#<pursuit> <kind> · <task>`, so they read clearly in Codex's thread list, and `codex resume <thread>` opens one. Each turn is persisted (`agent_runs`): a turn finished while the engine was down is taken once, and one cut off by a restart continues in the same thread.
+- **Conversations:** each pursuit's talker, the engine's voice for that pursuit, is a T3 Code thread on Codex in the "Oneiro engine" project (`OCA_T3_PROJECT_DIR`, `OCA_T3_KINDS`, `OCA_T3_MODEL`). Agent questions and results are posted there, and what Quinn writes there goes to the agent waiting on him as his own words. `OCA_T3=off` keeps conversations on Codex.
+- **Texts** (`channels/imessage.js`): Oneiro texts Quinn from Messages on the work Mac over SSH (`OCA_OWNER_IMESSAGE`, `OCA_IMESSAGE_HOST`), and reads his replies back from that Mac's Messages (`reasoning/imessage-inbox.js`).
+  - "APPROVE <code>" / "DENY <code>" decides a payment.
+  - A reply answers the newest ask he was texted; "#n" picks one.
+  - "status" lists the pursuits.
+- **Payments** (`reasoning/payment-approvals.js`): every payment waits for Quinn's yes, and only the one-time code in its text, sent back from his phone, gives it. A "yes" typed anywhere else, or posted to the engine, approves nothing.
+- **Coding agents** (`mcp/server.js`): the engine as an MCP server.
+  - Add it with `codex mcp add oca -- node <repo>/mcp/server.js` or `claude mcp add --scope user oca -- node <repo>/mcp/server.js`.
+  - It reads everything and relays Quinn's own words.
+  - It never decides a payment, and the engine's own agents never get it.
 
 ## Layout
 
@@ -116,6 +130,9 @@ simulation/    forward simulation scored by later outcomes
 metacognition/ calibration, stuck detection, bias tracking
 memory/        episodic, semantic, consolidation candidates
 evaluation/    chinese-room-meter.js, benchmark-harness.js, anti-decay.js, results/
+agent-host/    codex-host.js (agents on codex app-server), t3-host.js (conversations in T3 Code), index.js (the router)
+channels/      imessage.js (the line to Quinn on the work Mac), mac-notify.js
+mcp/           server.js (the engine as an MCP server for coding agents)
 cognitive-loop.js   the tick: sense, feel, run the pursuit queue, settle predictions, consolidate, remember
 thinker-bridge.js   the ambient thinker; its actions go through the risk gate
 tests/         the mechanism suite (node --test)

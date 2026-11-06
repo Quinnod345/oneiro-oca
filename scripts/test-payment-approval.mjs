@@ -1,48 +1,37 @@
 #!/usr/bin/env node
-// Sends one test payment approval to your phone and reports what the gateway recorded when you answer it. Nothing is
-// bought and no ask or agent is involved: it's the same notification a real payment raises, so you can check that
-// pressing and holding it shows Approve and Deny, and that your tap comes back as made on your phone.
+// Texts you one test payment approval and reports what comes back. Nothing is bought and no ask or agent is involved:
+// it's the same text a real payment sends, with a one-time code, so you can check that the line to your phone works
+// both ways and that "APPROVE <code>" / "DENY <code>" from your phone is read as yours.
 //
-//   node scripts/test-payment-approval.mjs
+//   OCA_OWNER_IMESSAGE=you@icloud.com node scripts/test-payment-approval.mjs
 //
-// It trusts the same devices the engine does: OCA_OWNER_PUSH_NODE plus OCA_PAYMENT_APPROVER_DEVICES, read from the
-// engine's LaunchAgent when they aren't in the environment.
-import { execFileSync } from 'node:child_process';
-import { homedir } from 'node:os';
-import { createGateway } from '../gateway.js';
-import { createPaymentApprovals, APPROVE } from '../reasoning/payment-approvals.js';
+// It uses the same line the engine does: Messages on the work Mac over SSH (OCA_IMESSAGE_HOST), read back from that
+// Mac's Messages database.
+import { createImessage } from '../channels/imessage.js';
+import { newCode, parseDecision, approvalLine, APPROVAL_WINDOW_MS } from '../reasoning/payment-approvals.js';
 
-function launchAgentEnv(name) {
-  if (process.env[name]) return process.env[name];
-  try {
-    return execFileSync('/usr/libexec/PlistBuddy', ['-c', `Print :EnvironmentVariables:${name}`, `${homedir()}/Library/LaunchAgents/com.oneiro.oca.plist`], { encoding: 'utf8' }).trim();
-  } catch { return ''; }
-}
+const owner = process.env.OCA_OWNER_IMESSAGE;
+if (!owner) { console.error('Set OCA_OWNER_IMESSAGE to your iMessage handle.'); process.exit(2); }
+const line = createImessage({ owner });
+if (!(await line.ping())) { console.error('The work Mac\'s Messages could not be reached over SSH; the line is down.'); process.exit(1); }
 
-const deciders = [launchAgentEnv('OCA_OWNER_PUSH_NODE'), ...launchAgentEnv('OCA_PAYMENT_APPROVER_DEVICES').split(',')].map(s => s.trim()).filter(Boolean);
-const gateway = createGateway();
-const approvals = createPaymentApprovals({ pool: null, gateway, deciders, log: { log() {}, warn: (...a) => console.warn(...a) } });
+const code = newCode();
+const start = await line.latestId();
+await line.send(`Oneiro test: this is a test payment approval; nothing will be bought.\n${approvalLine(code)}`);
+console.log(`Sent. Reply from your phone with APPROVE ${code} or DENY ${code} within 10 minutes…`);
 
-const opened = await approvals.request({
-  title: 'Test: approve $0.01?',
-  description: 'This is a test from Oneiro. Nothing will be bought. Press and hold, then tap Approve or Deny. Are you sure you want to go through with this?',
-  detail: 'A test of payment approvals, started from scripts/test-payment-approval.mjs.',
-});
-if (!opened) { console.error('The gateway could not deliver the approval to a phone. Check that the phone is paired and has notifications on.'); process.exit(1); }
-console.log(`Sent (${opened.route || 'delivered'}). Answer it on your phone within 10 minutes…`);
-
-const until = opened.expiresAt + 60_000;
+const until = Date.now() + APPROVAL_WINDOW_MS;
 while (Date.now() < until) {
-  await new Promise(r => setTimeout(r, 3000));
-  let snap;
-  try { snap = (await gateway.call('approval.get', { id: opened.id }, { timeout: 20_000 }))?.approval; }
-  catch (e) { console.error(`Couldn't read the approval: ${e.message}`); process.exit(1); }
-  if (!snap || snap.status === 'pending') continue;
-  const who = snap.resolver ? `${snap.resolver.kind} ${String(snap.resolver.id || '').slice(0, 12)}` : 'an unknown client';
-  const trusted = snap.resolver?.kind === 'device' && deciders.includes(String(snap.resolver.id));
-  if (!snap.decision) { console.log(`It closed without an answer (${snap.status}).`); process.exit(1); }
-  console.log(`${snap.decision === APPROVE ? 'Approved' : 'Denied'} by ${who}: ${trusted ? 'your phone, so the engine would act on it.' : 'NOT one of your trusted phones, so the engine would ignore it.'}`);
-  process.exit(trusted ? 0 : 2);
+  for (const m of await line.since(start)) {
+    const d = parseDecision(m.text);
+    if (d?.code === code) {
+      console.log(`${d.approved ? 'Approved' : 'Denied'} from ${m.sender} at ${new Date(m.at).toLocaleTimeString()}: the line works both ways.`);
+      await line.send(`Oneiro test: got your ${d.approved ? 'APPROVE' : 'DENY'}. Nothing was bought.`).catch(() => {});
+      process.exit(0);
+    }
+    console.log(`Read "${m.text.slice(0, 60)}" from ${m.sender}: not this test's code, ignored.`);
+  }
+  await new Promise(r => setTimeout(r, 5000));
 }
-console.log('No answer within the window; the notification has been taken off the phone.');
+console.log('No answer within 10 minutes; the code has expired.');
 process.exit(1);

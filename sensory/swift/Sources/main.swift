@@ -35,7 +35,7 @@ struct Config {
     static let audioInterval: TimeInterval = 5.0
     static let idleThreshold: TimeInterval = 30.0
     static let integrationInterval: TimeInterval = 1.0 // unified state write
-    static let screenshotsDir = "/Users/quinnodonnell/.openclaw/workspace/oneiro-core/screenshots"
+    static let screenshotsDir = ProcessInfo.processInfo.environment["ONEIRO_SCREENSHOTS_DIR"] ?? "/Users/quinnodonnell/oneiro/runtime/workspace/oneiro-core/screenshots"
     static let socketPath = "/tmp/oneiro-sensory.sock"
     static let sharedStatePath = "/tmp/oneiro-state/perception.json"
 

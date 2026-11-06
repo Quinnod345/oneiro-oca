@@ -2,6 +2,10 @@ import { createPursuitWork } from './reasoning/pursuit-work.js';
 import { ponderQueue, interestEngine, interestStatus, runPendingPonder, userControls, riskJournal, selfBuild, draftProvider, strategyDeps } from './reasoning/ponder-service.js';
 import { createPursuitDrafts } from './reasoning/pursuit-draft.js';
 import { createAsks } from './reasoning/asks.js';
+import { saveDeliverable } from './reasoning/deliverables.js';
+import { createPursuitLife } from './reasoning/pursuit-life.js';
+import { createFinishWatch } from './reasoning/finish-watch.js';
+import { createDeliverableCards } from './reasoning/deliverable-cards.js';
 import { looksObservable } from './motivation/done-when.js';
 import episodic from './memory/episodic.js';
 import { contextForText as entityContextForText } from './memory/entity-graph.js';
@@ -11,7 +15,7 @@ import { createUserWorkspace } from './user-workspace.js';
 import { createUserOperations } from './user-operations.js';
 import llm, { setInferencePolicy } from './llm.js';
 // OCA API Routes — mounted from api.js (Express) when cognitive-loop runs
-// These endpoints expose the cognitive architecture to OpenClaw and external systems
+// These endpoints expose the cognitive architecture to the Oneiro apps, the engine MCP server (mcp/server.js) and other local clients
 import { Router } from 'express';
 import oca from './index.js';
 import { randomUUID } from 'node:crypto';
@@ -21,7 +25,6 @@ import { pool } from './event-bus.js';
 import benchmarkHarness from './evaluation/benchmark-harness.js';
 import visualMemory from './sensory/screenshot-indexer.js';
 import { thinkerTelemetry } from './thinker-bridge.js';
-import { registerMobileCompanionRoutes } from './mobile-companion.js';
 import { createInbox } from './reasoning/inbox.js';
 import { createAgents } from './reasoning/agents.js';
 import { createActuator } from './reasoning/actuator.js';
@@ -30,15 +33,23 @@ import { createAppleMetrics } from './apple/metrics.js';
 import { createAppleGrowth, appleRouter } from './apple/growth.js';
 import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
-import { createGateway } from './gateway.js';
+import { createAgentHost } from './agent-host/index.js';
 import { createPaymentApprovals } from './reasoning/payment-approvals.js';
+import { asideOpener, createAsideWaker, createIntegrations, defaultRunner } from './reasoning/integrations.js';
+import { createOvernight } from './reasoning/overnight.js';
+import { createImessage } from './channels/imessage.js';
+import { createImessageInbox } from './reasoning/imessage-inbox.js';
+import { macNotify, appListenerMiddleware } from './channels/mac-notify.js';
+import { createSince } from './reasoning/since.js';
+import { agentsHealth } from './reasoning/board.js';
 import { mergeTarget } from './reasoning/dedupe.js';
-import { createJudgeNotifier } from './reasoning/judge-notifier.js';
+import { createJudgeNotifier, judgeText } from './reasoning/judge-notifier.js';
 import { createImessageKeeper, imessageHost, portOpen } from './reasoning/imessage-keeper.js';
-import { pushAlert } from './reasoning/asks.js';
 import { aside as asideBrowser } from './aside.js';
 
 export const ocaRouter = Router();
+// The Mac app says it posts notifications itself (X-Oneiro-Notifier: app); AppleScript banners then stay quiet.
+ocaRouter.use(appListenerMiddleware);
 const userWorkspace = createUserWorkspace({ pool, queue: ponderQueue, runPending: runPendingPonder,
   operations: createUserOperations(oca, benchmarkHarness), llmStatus: () => llm.getStatus(), applyInference: mode => setInferencePolicy({ mode }) });
 let workspaceStartupError = null;
@@ -49,9 +60,11 @@ ocaRouter.use('/oca/ui', async (_req, res, next) => {
 });
 ocaRouter.use(userWorkspace.router);
 // The engine may ask its person for what it observed it needs — under their standing permission, only to them.
-// Texts go out only through Messages on the work Mac; the keeper (below) says when that line is down.
+// Texts go out only through Messages on the work Mac (channels/imessage.js); the keeper (below) says when that line
+// is down, and the Messages inbox (below) reads his replies.
 let imessageKeeper = null;
-const asks = createAsks({ pool, risk: riskJournal, imessageReady: () => imessageKeeper?.ready() ?? true });
+const imessage = process.env.OCA_OWNER_IMESSAGE ? createImessage({ owner: process.env.OCA_OWNER_IMESSAGE }) : null;
+const asks = createAsks({ pool, risk: riskJournal, imessage, imessageReady: () => imessageKeeper?.ready() ?? true });
 asks.init().catch(e => console.warn('[asks] init:', e.message));
 const pursuitWork = createPursuitWork({ pool, queue: ponderQueue, risk: riskJournal, asks, canStart: async () => !(await userControls.get()).queuePaused });
 const pursuitWorkReady = pursuitWork.init().then(() => pursuitWork.start());
@@ -62,14 +75,32 @@ ocaRouter.use('/ponder/:id/work', async (_req, res, next) => {
 });
 ocaRouter.use(pursuitWork.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => pursuitWork.stop());
-// Deployed agents: gateway sessions the thinker opens for a want — research, builders, executors, and one
-// talker per want where the person and the engine speak directly. They carry continuous wants when the
-// gateway is up; Codex slices remain the fallback. Fan-out is bounded by the agentSlots control.
-const gateway = createGateway();
-const agents = createAgents({ pool, gateway, queue: ponderQueue, risk: riskJournal, asks, aside: asideBrowser, llm, controls: userControls,
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => { agentHost.close().catch(() => {}); });
+// Deployed agents: Codex threads the thinker opens for a want — research, builders, executors on the engine's own
+// codex app-server (they show up in Codex), and one talker per want where the person and the engine speak directly,
+// a T3 Code thread on Codex when T3 Code is running. Codex slices remain the fallback. Fan-out is bounded by the
+// agentSlots control.
+// The accounts Oneiro may use (Gmail, Slack, Notion, GitHub, LinkedIn, other sites), all signed in inside Aside.
+// The engine keeps the list and probes it through Aside's site skills; agents are told which accounts are switched on.
+// Aside's daemon can be up with its browser closed. These open it, in the background, when a read can't reach a profile.
+const asideWaker = createAsideWaker({ run: defaultRunner(), open: asideOpener() });
+const asideRun = asideWaker.wrap();
+const integrations = createIntegrations({ pool, run: asideRun, imessageLine: () => ({ configured: Boolean(imessage), ready: imessage ? (imessageKeeper?.ready() ?? null) : null }) });
+integrations.init().then(() => integrations.refresh()).catch(e => console.warn('[integrations] init:', e.message));
+ocaRouter.use(integrations.router);
+// The night: overnight reading filtered on this Mac, notes in ~/Oneiro Knowledge Base, cards for the morning.
+const overnight = createOvernight({ pool, integrations, run: asideRun, aside: asideWaker, notify: macNotify });
+overnight.init().then(() => overnight.startScheduler()).catch(e => console.error('[night] init:', e.message));
+ocaRouter.use(overnight.router);
+for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => overnight.stop());
+const agentHost = createAgentHost({ pool });
+const agents = createAgents({ pool, host: agentHost, queue: ponderQueue, risk: riskJournal, asks, aside: asideBrowser, llm, nameLlm: llm, controls: userControls,
+  accounts: () => integrations.briefLine(),
+  // Every finished agent run on a person's pursuit leaves a readable brief, attached to the pursuit (reasoning/deliverables.js).
+  deliver: x => saveDeliverable({ pool, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', ...x }),
   model: process.env.OCA_AGENT_MODEL || null, thinkingLevel: process.env.OCA_AGENT_THINKING || 'high', agentId: process.env.OCA_AGENT_ID || 'main',
   roots: ['/Users/quinnodonnell'], ensureSelf: true });
-const agentsReady = agents.init().then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
+const agentsReady = agentHost.init().then(() => agents.init()).then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
 // The actuator: every committing step an agent takes on the world is decided here, under the person's charter.
@@ -95,13 +126,12 @@ const operations = createOperations({ pool, queue: ponderQueue });
 agentsReady.then(() => operations.start()).catch(e => console.error('[operations] start:', e.message));
 ocaRouter.use(operations.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => operations.stop());
-const board = createBoard({ pool, llm, asks, agents, controls: userControls, gateway, operations });
+const board = createBoard({ pool, llm, asks, agents, controls: userControls, host: agentHost, operations });
 agentsReady.then(() => board.init()).then(() => board.start()).catch(e => console.error('[board] init:', e.message));
 ocaRouter.use(board.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => board.stop());
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => agents.stop());
 ocaRouter.use(createPonderRouter({ ponderQueue, runPendingPonder, pursuitWork, agents }));
-registerMobileCompanionRoutes(ocaRouter, { pool, oca, thinkerTelemetry });
 
 // ============================================================
 // DREAMS — read-only archive (retired 2026-09-19; wants are the intention layer)
@@ -1459,7 +1489,7 @@ ocaRouter.post('/oca/consolidate', async (req, res) => {
     .finally(() => { apiConsolidating = false; });
 });
 
-// LLM gateway status
+// LLM status
 ocaRouter.get('/oca/llm-status', async (req, res) => {
   try {
     const llm = (await import('./llm.js')).default;
@@ -1535,6 +1565,8 @@ ocaRouter.get('/oca/health', async (_req, res) => {
   } catch (e) { out.inference = { ...(out.inference || {}), reachable: false, probeError: e.message }; }
   try { const controls = await userControls.get(); const h = await ponderQueue.hunger(); out.queue = { paused: controls.queuePaused === true, activeWants: h.wants.length, pressure: h.pressure }; }
   catch (e) { out.queue = { error: e.message }; }
+  // Whether agents can run, and if not whether Codex is down or signed out (the app shows which, with the fix).
+  try { const up = await Promise.race([agentHost.available(), new Promise(r => setTimeout(() => r(null), 5000).unref?.())]); out.agents = up === null ? { state: 'checking', why: 'Still checking Codex.', fix: null, command: null } : agentsHealth(up, agentHost.status()); } catch (e) { out.agents = { state: 'down', why: String(e?.message || e).slice(0, 200), fix: null, command: null }; }
   out.ok = out.database.ok && out.inference?.reachable !== false;
   res.status(out.ok ? 200 : 503).json(out);
 });
@@ -1588,43 +1620,70 @@ const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: 
   controls: async () => ({ autonomousActions: /^(1|true|yes|on)$/i.test(process.env.OCA_ENABLE_AUTONOMOUS_ACTIONS || process.env.ONEIRO_ENABLE_AUTONOMOUS_ACTIONS || '') }),
   memory: {
     episodic: (q, o) => episodic.recall(q, { limit: o?.limit || 12, since: new Date(Date.now() - 90 * 86400000) }),
-    taught: async (q, o) => (await pool.query(`SELECT id, concept, created_at FROM semantic_memory WHERE source_type = 'user_report' AND concept ILIKE $1 ORDER BY created_at DESC LIMIT $2`, [`%${String(q).slice(0, 80)}%`, o?.limit || 6])).rows,
+    taught: async (q, o) => (await pool.query(`SELECT id, concept, created_at FROM semantic_memory WHERE source_type = 'user_report' AND forgotten_at IS NULL AND concept ILIKE $1 ORDER BY created_at DESC LIMIT $2`, [`%${String(q).slice(0, 80)}%`, o?.limit || 6])).rows,
     visual: (q, n) => visualMemory.searchVisualMemory(q, n),
     entities: q => entityContextForText(q, { limit: 8 }),
   } });
 const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks, agents });
-// Every payment asks on Quinn's iPhone with Approve and Deny. Only a decision made on his phone counts: the paired
-// device the engine pushes to, and any other listed in OCA_PAYMENT_APPROVER_DEVICES (comma-separated gateway device ids).
-const paymentApprovals = createPaymentApprovals({ pool, gateway,
-  deciders: [process.env.OCA_OWNER_PUSH_NODE, ...String(process.env.OCA_PAYMENT_APPROVER_DEVICES || '').split(',')].map(s => String(s || '').trim()).filter(Boolean),
-  onDecision: ({ askId, approved }) => inbox.answerAsk({ id: askId, via: 'iPhone',
-    reply: approved ? `Approved on iPhone (ask #${askId}).` : `Denied on iPhone (ask #${askId}). Don't make this payment.` }),
-  onUntrusted: async ({ askId, decision, resolver }) => {
-    const { rows: [a] } = await pool.query('SELECT metadata FROM notifications WHERE id = $1', [askId]);
-    if (a) await asks.ask({ chainId: a.metadata?.chainId, kind: 'notice',
-      detail: `a payment approval (ask #${askId}) was answered "${decision}" by ${resolver ? `${resolver.kind} ${String(resolver.id || '').slice(0, 12)}` : 'an unknown client'}, not your iPhone, so Oneiro ignored it. The payment still waits for you: reply yes or no to ask #${askId}.` });
-  } });
+// Every payment waits for Quinn's yes, given only from his phone: the payment's text carries a one-time code, and he
+// texts back APPROVE or DENY with it (reasoning/payment-approvals.js). The decision answers the ask and reaches the
+// agent waiting on it.
+const paymentApprovals = createPaymentApprovals({ pool,
+  onDecision: ({ askId, approved }) => inbox.answerAsk({ id: askId, via: 'Messages',
+    reply: approved ? `Approved in Messages with its code (ask #${askId}).` : `Denied in Messages (ask #${askId}). Don't make this payment.` }),
+  // A closed window asks once more while the want is active. It only texts a new code: Quinn still has to answer it.
+  onExpired: ({ askId }) => asks.reissueExpired(askId) });
 asks.useApprovals(paymentApprovals);
 paymentApprovals.start();
-// The iMessage line to Quinn: restarted when the work Mac is back, and he hears once when texts pause and resume.
-if (process.env.OCA_OWNER_IMESSAGE) {
-  imessageKeeper = createImessageKeeper({ gateway,
-    reachable: async () => { const host = await imessageHost(); return host ? portOpen(host, 22) : false; },
-    push: ({ title, body }) => (process.env.OCA_OWNER_PUSH_NODE ? pushAlert({ nodeId: process.env.OCA_OWNER_PUSH_NODE, title, body }) : Promise.reject(new Error('no phone is paired'))),
-    statePath: `${process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work'}/../imessage-keeper.json` });
+const pursuitWorkRoot = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work';
+// The iMessage line to Quinn: he hears once on the Mac when texts pause and when they resume, and what he texts back
+// is read and routed (payments by code, answers to asks, "status").
+if (imessage) {
+  imessageKeeper = createImessageKeeper({ line: () => imessage.ping(),
+    reachable: async () => { const host = imessageHost(); return host ? portOpen(host, 22) : false; },
+    tell: macNotify,
+    statePath: `${pursuitWorkRoot}/../imessage-keeper.json` });
   imessageKeeper.start();
+  const imessageInbox = createImessageInbox({ imessage, asks, inbox, payments: paymentApprovals,
+    wants: async () => (await inbox.list().catch(() => ({ wants: [] }))).wants || [],
+    ready: () => imessageKeeper?.ready() ?? true,
+    statePath: `${pursuitWorkRoot}/../imessage-inbox.json` });
+  imessageInbox.start();
 }
-// A push to the phone when something new lands in Judge; a tap opens Judge in the app.
-if (process.env.OCA_OWNER_PUSH_NODE) {
-  const judgeNotifier = createJudgeNotifier({ list: () => inbox.list(),
-    push: ({ title, body }) => pushAlert({ nodeId: process.env.OCA_OWNER_PUSH_NODE, title, body }),
-    statePath: `${process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work'}/../judge-notified.json` });
-  judgeNotifier.start();
-}
+// When something new lands in Judge, Quinn hears it: a Mac notification, and a text.
+const judgeNotifier = createJudgeNotifier({ list: () => inbox.list(),
+  push: async ({ title, body }) => {
+    const sent = [];
+    await macNotify({ title, body }).then(() => sent.push('mac')).catch(() => {});
+    if (imessage && (imessageKeeper?.ready() ?? true)) await imessage.send(judgeText(body)).then(() => sent.push('imessage')).catch(() => {});
+    if (!sent.length) throw new Error('no channel reached Quinn');
+  },
+  statePath: `${pursuitWorkRoot}/../judge-notified.json` });
+judgeNotifier.start();
+// What changed since the person was last here, for the app's Now page and its notifications (reasoning/since.js).
+const sinceDigest = createSince({ pool, inbox, night: overnight });
+ocaRouter.use(sinceDigest.router);
 // The person answers an ask (or just clears it): { reply? }
 ocaRouter.post('/oca/inbox/asks/:id/answer', async (req, res) => {
-  try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply || 'done', via: req.body?.via || 'the app' })); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { res.json(await inbox.answerAsk({ id: req.params.id, reply: req.body?.reply, via: req.body?.via || 'the app' })); } catch (e) { res.status(400).json({ error: e.message }); }
 });
+// A pursuit's life after it starts: pause/resume, archive/restore, export, its deliverables, and dismissing a question.
+const pursuitLife = createPursuitLife({ pool, inbox, agents, pursuitWork, asks });
+ocaRouter.use(pursuitLife.router);
+// A mail draft or calendar block an agent left: the person edits it and presses its one action, through the night's code.
+const nightAccounts = () => overnight.googleAccounts();
+const deliverableCards = createDeliverableCards({ pool, channel: overnight.channel, accounts: nightAccounts });
+ocaRouter.use(deliverableCards.router);
+// Finishing: the engine looks at what it can check and asks "looks done?"; only the person's yes finishes a pursuit.
+const finishWatch = createFinishWatch({ pool, queue: ponderQueue, inbox, asks, agents,
+  calendar: async ({ from, to }) => {
+    const out = [];
+    for (const a of await nightAccounts()) out.push(...(await overnight.channel.readCalendar({ account: a.account, from, to })).events);
+    return out;
+  } });
+inbox.useFinish(finishWatch);
+finishWatch.start();
+ocaRouter.use(finishWatch.router);
 pursuitDrafts.sweep().then(r => { if (r.failed) console.log(`[draft] ${r.failed} draft(s) left mid-flight by a restart marked failed`); }).catch(() => {});
 // Body: { clientRequestId (uuid), text, answers?: [{questionId, answer}], by? } → 202 while drafting; poll GET /oca/inbox/draft/:id?wait=25
 ocaRouter.post('/oca/inbox/draft', async (req, res) => {
@@ -1648,6 +1707,14 @@ ocaRouter.post('/oca/inbox/draft/:id/abandon', async (req, res) => {
 });
 ocaRouter.get('/oca/inbox', async (_req, res) => {
   try { res.json(await inbox.list()); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Take a verdict back with nothing in its place: { kind: 'artifact'|'note', id }. The old one stays on record, replaced.
+ocaRouter.post('/oca/inbox/reopen', async (req, res) => {
+  try { res.json(await inbox.reopen(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Text Quinn a fresh code for a payment. It only sends a code; approving still takes him texting it back.
+ocaRouter.post('/oca/inbox/asks/:id/resend-code', async (req, res) => {
+  try { res.json(await asks.resendCode(req.params.id)); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Body: { kind: 'artifact'|'note'|'entity', id | entityKey, usefulness (useless|meh|useful|great|[0,1]) | rating (-1|0|1), note?, by? }
 // Take an item out of Judge without a verdict: { kind: 'artifact'|'note', id, reason? }

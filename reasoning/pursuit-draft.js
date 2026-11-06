@@ -34,6 +34,7 @@ export const draftSchema = obj({
   priority: { type: 'number', minimum: 0.1, maximum: 1 },
   questions: { type: 'array', maxItems: 3, items: obj({ id: str, question: str, why: str, blocking: { type: 'boolean' } }) },
   duplicateOf: { type: 'array', items: obj({ chainId: { type: 'integer' }, why: str }) },
+  firstStep: str,
   rationale: str,
 });
 
@@ -69,10 +70,10 @@ export function createPursuitDrafts({ pool, llm, worth, queue, strategyDeps = {}
         push({ id: `ep-${r.id}`, tier: 'observed', source: `episodic memory #${r.id} (${type}, ${new Date(r.timestamp || r.created_at || clock()).toISOString()}${r.active_app ? `, app ${r.active_app}` : ''})`,
           observation: text(content, 500), when: r.timestamp || r.created_at || null, retrieval: r.retrieval || 'vector' });
       }
-    }, e => warnings.push(`memory unavailable: ${text(e.message, 80)}`)));
+    }, e => warnings.push("Couldn’t look through what Oneiro already knows just now, so this draft starts without it.")));
     if (memory.taught) jobs.push(within(5000, async () => {
       for (const r of await memory.taught(query, { limit: 6 })) push({ id: `sm-${r.id}`, tier: 'taught', source: `semantic memory #${r.id} (taught by quinn${r.created_at ? `, ${new Date(r.created_at).toISOString()}` : ''})`, observation: text(r.concept || r.content, 400), when: r.created_at || null });
-    }, e => warnings.push(`taught facts unavailable: ${text(e.message, 80)}`)));
+    }, e => warnings.push("Couldn’t check what you’ve taught it just now, so this draft starts without it.")));
     if (memory.visual) jobs.push(within(5000, async () => {
       for (const r of await memory.visual(query, 5)) {
         const parts = [r.front_app && `app ${r.front_app}`, r.window_title && `window "${text(r.window_title, 120)}"`, r.url && `url ${text(r.url, 160)}`].filter(Boolean);
@@ -80,31 +81,31 @@ export function createPursuitDrafts({ pool, llm, worth, queue, strategyDeps = {}
         push({ id: `shot-${r.id}`, tier: 'perceived', source: `screenshot_memory #${r.id} (screen capture ${new Date(r.captured_at || clock()).toISOString()}${r.front_app ? `, front app ${r.front_app}` : ''})`,
           observation: parts.join(', '), detail: text(r.description, 300), when: r.captured_at || null });
       }
-    }, e => warnings.push(`screen memory unavailable: ${text(e.message, 80)}`)));
+    }, e => warnings.push("Couldn’t check what you’ve been looking at recently, so this draft starts without it.")));
     if (sense) jobs.push(within(3000, async () => {
       const s = await sense();
       const parts = [s?.activeApp && `active app ${s.activeApp}`, s?.activeWindow && `window "${text(s.activeWindow, 120)}"`, s?.presence && `presence ${s.presence}`, s?.activity && `activity ${s.activity}`].filter(Boolean);
       if (parts.length) push({ id: 'now', tier: 'observed', source: `perception now (${new Date(clock()).toISOString()})`, observation: parts.join(', '), when: clock() });
-    }, e => warnings.push(`perception unavailable: ${text(e.message, 80)}`)));
+    }, e => warnings.push("Couldn’t check what it’s noticed lately just now, so this draft starts without it.")));
     if (engineRelated && risk?.recent) jobs.push(within(3000, async () => {
       for (const d of (await risk.recent({ limit: 20 })).filter(d => d.outcome?.result === 'failure').slice(0, 5)) {
         const obs = d.outcome?.evidence?.[0]?.observation || d.outcome?.note || '';
         if (obs) push({ id: `risk-${d.id}`.slice(0, 100), tier: 'observed', source: `risk journal decision ${d.id} (observed ${d.outcome.result})`, observation: text(obs, 400), when: d.resolvedAt || null });
       }
-    }, e => warnings.push(`risk journal unavailable: ${text(e.message, 80)}`)));
+    }, e => warnings.push("Couldn’t check its record of past risks just now, so this draft starts without it.")));
     await Promise.all(jobs);
 
     // entities the stakes may name: the ledger's, the active wants', and the entity graph's suggestions
     const known = new Map();
     try { for (const e of (await worth.list()).entities) if (e.key && !/^outcome:ponder-/.test(e.key)) known.set(e.key, { worth: e.worth, confidence: e.confidence, provenance: e.provenance }); }
-    catch (e) { warnings.push(`worth ledger unavailable: ${text(e.message, 80)}`); }
+    catch (e) { warnings.push("Couldn’t check what matters to you just now, so this draft starts without it."); }
     let active = [];
     try {
       const { rows } = await pool.query(`SELECT id, seed, status, updated_at, ponder_state -> 'want' AS want FROM thought_chains WHERE ponder_state IS NOT NULL
         AND (ponder_state #>> '{want,status}' = 'active' OR (status = 'resolved' AND updated_at > now() - interval '30 days')) ORDER BY updated_at DESC LIMIT 100`);
       active = rows;
       for (const r of rows) for (const s of r.want?.stakes || []) if (s?.entityKey && !/^outcome:/.test(s.entityKey) && !known.has(s.entityKey)) known.set(s.entityKey, { worth: null, confidence: 0, provenance: 'stake' });
-    } catch (e) { warnings.push(`wants unavailable: ${text(e.message, 80)}`); }
+    } catch (e) { warnings.push("Couldn’t check your other pursuits just now, so this draft starts without it."); }
     const suggestions = [];
     if (memory.entities) await within(4000, async () => {
       const ctx = await memory.entities(query);
@@ -114,7 +115,7 @@ export function createPursuitDrafts({ pool, llm, worth, queue, strategyDeps = {}
         const key = `${kind}:${name}`;
         if (!known.has(key)) suggestions.push({ entityKey: key, grounding: `entity graph #${e.id} (${text(e.canonical_name || e.entity_key, 80)}, ${e.mention_count || 0} mentions)` });
       }
-    }, e => warnings.push(`entity graph unavailable: ${text(e.message, 80)}`));
+    }, e => warnings.push("Couldn’t check the people and things it knows just now, so this draft starts without it."));
 
     // similar wants: embeddings when the embedder answers, words when it does not — and say which
     let similar = [], retrieval = 'none';
@@ -127,7 +128,7 @@ export function createPursuitDrafts({ pool, llm, worth, queue, strategyDeps = {}
           similar = active.map((r, i) => ({ chainId: r.id, description: text(r.seed, 200), doneWhen: text(r.want?.doneWhen, 200), status: r.status, progress: r.want?.progress || 0, similarity: cosine(q, vectors[i + 1]) }))
             .filter(s => s.similarity >= 0.75).sort((a, b) => b.similarity - a.similarity).slice(0, 5);
           retrieval = 'bge_cosine';
-        } catch (e) { warnings.push(`embedder unreachable; similar wants by word search (${text(e.message, 60)})`); }
+        } catch (e) { warnings.push("Couldn’t compare this with your other pursuits by meaning just now, so it looked for similar ones by their words instead."); }
       }
       if (retrieval === 'none') {
         const words = query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3);
@@ -158,7 +159,7 @@ ${gathered.suggestions.map(s => `- ${s.entityKey} (${s.grounding})`).join('\n') 
 SIMILAR OPEN WANTS (list in duplicateOf if this is the same want):
 ${gathered.similar.map(s => `- #${s.chainId}: ${s.description}`).join('\n') || '- none'}
 
-RULES: description ≤ 40 words, in the person's voice. doneWhen must name a witness (a person, a message log, a test suite, a repo, a file, a sensor, a calendar) and, for count/threshold, a target; never a feeling. stakes only from KNOWN or SUGGESTED keys, at most 6, with shares; never self:* or outcome:*. Ask at most three questions and only when the answer is needed to make the criterion observable; mark those blocking. priority in [0.1, 1], 0.7 is normal. Respond with JSON only.`;
+RULES: description ≤ 40 words, in the person's voice. doneWhen must name a witness (a person, a message log, a test suite, a repo, a file, a sensor, a calendar) and, for count/threshold, a target; when the goal names a number (three books, under $30, five days a week) use count or threshold with that number as the target; never a feeling. stakes only from KNOWN or SUGGESTED keys, at most 6, with shares; never self:* or outcome:*. firstStep is the first concrete thing an agent would do toward it, one sentence in plain words a person would use (no engine terms). Ask at most three questions and only when the answer is needed to make the criterion observable; mark those blocking. priority in [0.1, 1], 0.7 is normal. Respond with JSON only.`;
   }
 
   // ── validation: the model proposes, the engine decides ──
@@ -196,6 +197,7 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
       stakes, priority: { value: clamp(Number(raw.priority) || 0.7, 0.1, 1), authored: 'generated' },
       evidence, questions,
       similar: gathered.similar.map(s => ({ ...s, retrieval: gathered.retrieval, flaggedByModel: duplicateOf.some(d => d.chainId === s.chainId) })),
+      firstStep: { value: text(raw.firstStep, 300), authored: 'generated' },
       rationale: { value: text(raw.rationale, 600), authored: 'generated' },
     };
   }
@@ -320,7 +322,7 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
   }
 
   // ── confirm: a person's edits become a want; only the person's taps become worth ──
-  async function confirm({ draftId, description, doneWhen, priority, stakes = [], newEntities = [], evidenceIds = [], observations = [], draftVerdict = null, by = 'quinn', continuous = true } = {}) {
+  async function confirm({ draftId, description, doneWhen, priority, stakes = [], newEntities = [], evidenceIds = [], observations = [], draftVerdict = null, by = 'quinn', continuous = true, finishLine = null, firstStep = null } = {}) {
     if (!UUID.test(String(draftId || ''))) throw new Error('confirm names its draft');
     const id = String(draftId).toLowerCase();
     const client = await pool.connect();
@@ -339,6 +341,21 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
     const dw = text(doneWhen ?? r.draft?.doneWhen?.value, 400);
     if (desc.length < 5) throw new Error('a want needs a description');
     if (dw.length < 5) throw new Error('a want needs an observable done-when');
+    // The finish line keeps its parts: who or what would show it is done, the number to reach, and the first step.
+    // The person's edits to any part win over the draft's; the sentence stays the one they confirmed.
+    const drafted = r.draft?.doneWhen?.structured || {};
+    const fl = finishLine && typeof finishLine === 'object' ? finishLine : {};
+    const witness = { kind: WITNESS_KINDS.includes(fl.witness?.kind) ? fl.witness.kind : (WITNESS_KINDS.includes(drafted.witness?.kind) ? drafted.witness.kind : 'other'),
+      detail: text(fl.witness?.detail ?? drafted.witness?.detail, 200) };
+    const target = fl.target === null ? null : Number.isFinite(Number(fl.target)) && fl.target !== '' && fl.target !== undefined ? Number(fl.target) : (Number.isFinite(drafted.target) ? drafted.target : null);
+    const check = target !== null && target > 0 ? (CHECKS.includes(fl.check) && fl.check !== 'binary' ? fl.check : (['count', 'threshold'].includes(drafted.check) ? drafted.check : 'count')) : 'binary';
+    const deadlineDays = Number.isInteger(fl.deadlineDays) ? fl.deadlineDays : (Number.isInteger(drafted.deadlineDays) ? drafted.deadlineDays : null);
+    const structured = { statement: dw, witness, check, target: check === 'binary' ? null : target, deadlineDays };
+    if (finishLine) {
+      const shape = doneWhenShape(structured);
+      if (!shape.observable) throw new Error(`The finish line isn't checkable yet: ${shape.why}`);
+    }
+    const step = text(firstStep ?? r.draft?.firstStep?.value, 300);
     const pr = clamp(Number(priority ?? r.draft?.priority?.value ?? 0.7) || 0.7, 0.1, 1);
     const candidates = new Map((r.gathered?.candidates || []).map(c => [c.id, c]));
     const picked = (Array.isArray(evidenceIds) ? evidenceIds : []).map(String);
@@ -373,8 +390,11 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
       try { const u = usefulnessOf(draftVerdict); await worth.record({ id: `rate:draft:${id}`, entityKey: 'self:draft_want', kind: 'rated', rating: ledgerRating(u), by: text(by, 40) || 'quinn', about: desc }); worthSignals.push({ id: `rate:draft:${id}`, entityKey: 'self:draft_want', rating: ledgerRating(u) }); }
       catch (e) { log.warn?.('[draft] verdict not recorded:', e.message); }
     }
+    await pool.query(`UPDATE thought_chains SET ponder_state = ponder_state || jsonb_build_object('finishLine', $2::jsonb) WHERE id = $1`,
+      [chain.chain_id, JSON.stringify({ ...structured, firstStep: step || null, by: text(by, 40) || 'quinn', at: clock() })]);
+    chain.finishLine = { ...structured, firstStep: step || null };
     const changed = ['description', 'doneWhen', 'priority'].filter(k => { const v = k === 'description' ? desc : k === 'doneWhen' ? dw : pr; const d = r.draft?.[k]?.value; return d !== undefined && d !== v; });
-    await set(id, { status: 'confirmed', chain_id: chain.chain_id, confirmed: { sent: { description: desc, doneWhen: dw, priority: pr, stakes: chosen, evidenceIds: picked, observations: evidence.filter(e => e.id.startsWith('person-')).length, newEntities: [...fresh.keys()] }, changed, at: clock() } });
+    await set(id, { status: 'confirmed', chain_id: chain.chain_id, confirmed: { sent: { description: desc, doneWhen: dw, finishLine: structured, firstStep: step || null, priority: pr, stakes: chosen, evidenceIds: picked, observations: evidence.filter(e => e.id.startsWith('person-')).length, newEntities: [...fresh.keys()] }, changed, at: clock() } });
     return { chain, draftId: id, worthSignals, replay: false };
   }
 

@@ -12,7 +12,8 @@ import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
 import { createProposal, ACTION_KINDS } from '../motivation/risk.js';
-import { createGateway, messageText } from '../gateway.js';
+import { createCodexHost } from '../agent-host/codex-host.js';
+import { fakeCodex } from './fixtures/fake-codex.mjs';
 
 const blocked = async () => ({ status: 'needs_evidence', checkpoint: { version: 1, passes: [] }, missingEvidence: ['August pricing', 'Cost per subscriber'] });
 async function database(run) {
@@ -32,7 +33,8 @@ async function database(run) {
   } finally { if (pool) await pool.end(); await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); await admin.end(); }
 }
 
-// A gateway in memory: sessions with transcripts, runs that resolve to a scripted reply per turn.
+// An agent host in memory: sessions with transcripts, runs that resolve to a scripted reply per turn. (The real hosts
+// are tested in agent-host.test.mjs; the runtime against a real Codex host and a scripted app-server further down.)
 function fakeGateway(script = {}) {
   const sessions = new Map(), runs = new Map(); let up = true; const at = () => (script.clock ? script.clock() : Date.now());
   const g = {
@@ -51,7 +53,8 @@ function fakeGateway(script = {}) {
     async transcript(sessionKey) { return { messages: [...(sessions.get(sessionKey)?.messages || [])], pending: 0 }; },
     // the person speaks in the app: the app runs the turn itself
     personSays(sessionKey, text, reply) { const s = sessions.get(sessionKey); s.messages.push({ role: 'user', text, at: at() }); if (reply) s.messages.push({ role: 'assistant', text: reply, at: at() }); },
-    async call(method, params) { g.calls.push([method, params]); return { ok: true }; },
+    async abort(sessionKey) { g.calls.push(['abort', sessionKey]); return { ok: true, interrupted: 0 }; },
+    async link(sessionKey) { return { app: 'Codex', command: `codex resume ${sessionKey}` }; },
   };
   return g;
 }
@@ -68,7 +71,6 @@ test('a report is the last oca block of a reply, validated; no block is no repor
   const made = parseReport(block({ status: 'done', summary: 's', made: [{ what: 'Listing on OBOHITO', where: 'https://obohito.com/app/innerecho' }, 'x', { what: 'ab' }] })).made;
   assert.deepEqual(made, [{ what: 'Listing on OBOHITO', where: 'https://obohito.com/app/innerecho' }]);
   assert.ok(composeBrief({ kind: 'research', chainId: 1, want: 'w' }).includes('"made":[{"what"'), 'the contract asks for what was made');
-  assert.equal(messageText([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }]), 'a\nb');
 });
 
 test('a brief names the pursuit, the role, the task, what is known, and the contract; the engine speaks as [thinker]', () => {
@@ -93,7 +95,7 @@ test('an agent is deployed as a session, works in turns, asks the person through
   const asks = createAsks({ pool, risk, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
   // turn 1: working; turn 2: needs the person; after the person answers (in the app): done with one real quote and one fake
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg, n) => n === 1 ? `Looking.${block({ status: 'working', summary: 'read the listing' })}` : `I need one thing.${block({ status: 'needs_person', question: 'Which store region should I price in?', summary: 'region unknown' })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir], maxTurns: 6 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir], maxTurns: 6 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: dir, clock: () => now, asks, agents });
   const chain = await inbox.want({ description: 'Find the current App Store price of InnerEcho', doneWhen: 'The price is quoted from the listing.' });
@@ -110,7 +112,7 @@ test('an agent is deployed as a session, works in turns, asks the person through
   let a = await agents.get(d.id); assert.equal(a.turns, 2, 'sent on after working');
   await agents.poll();
   a = await agents.get(d.id); assert.equal(a.status, 'waiting_person'); assert.equal(a.question, 'Which store region should I price in?'); assert.ok(a.askId);
-  assert.equal(sent.length, 1); assert.match(sent[0], /agent on #\d+ .* asks: Which store region/); assert.match(sent[0], /answer it in the chat/);
+  assert.equal(sent.length, 1); assert.match(sent[0], /agent on #\d+ .* asks: Which store region/); assert.match(sent[0], /reply here, or open Oneiro/); assert.doesNotMatch(sent[0], /T3 Code/);
   const box = await inbox.list();
   assert.equal(box.asks[0].sessionKey, d.sessionKey, 'the ask carries the session to open'); assert.equal(box.asks[0].kind, 'question');
   assert.equal(box.wants[0].agents.length, 2); assert.equal(box.wants[0].agents.find(x => x.id === d.id).question, a.question); assert.equal(box.agentSlots, 2);
@@ -134,7 +136,7 @@ test('an agent is deployed as a session, works in turns, asks the person through
   const c = await agents.cancel(d2.id); assert.equal(c.status, 'cancelled'); assert.equal(await agents.liveCount(), 0);
 }));
 
-test('the thinker plans: a continuous want with no live agent gets a research agent on the cadence; a talker is standing and what the person tells it is evidence; a closed gateway deploys nothing', async () => database(async pool => {
+test('the thinker plans: a continuous want with no live agent gets a research agent on the cadence; a talker is standing and what the person tells it is evidence; with Codex down nothing deploys', async () => database(async pool => {
   let now = 30 * 86400000;
   const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
   const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 3 };
@@ -143,7 +145,7 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => msg.startsWith('[thinker] You are deployed') && /Your role: talker/.test(msg) ? 'Here for you.' : `w${block({ status: 'working', summary: 'w' })}` });
   const split = { called: 0 };
   const llm = { messages: { create: async () => { split.called++; return { content: [{ type: 'text', text: '{"thought":"Pricing is the lever right now.","moves":[{"task":"Find the US price on the App Store listing and quote it","why":"anchor","stream":"pricing"},{"task":"Find the cost per subscriber from the hosting invoices","why":"margin","stream":"Costs!"}]}' }] }; } } };
-  const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
   const chain = await inbox.want({ description: 'InnerEcho profitability', doneWhen: 'A month nets positive.', continuous: true });
@@ -165,10 +167,10 @@ test('the thinker plans: a continuous want with no live agent gets a research ag
   await agents.poll();
   const want = await queue.get(chain.chain_id);
   assert.ok(want.evidence.some(e => /stated by Quinn/.test(e.source) && /start from scratch/.test(e.observation)));
-  // the gateway goes away: plans and deploys stop, nothing throws
+  // Codex goes away: plans and deploys stop, nothing throws
   gw.setUp(false);
   assert.deepEqual((await agents.plan()).started, []);
-  await assert.rejects(agents.deploy(chain.chain_id, { kind: 'research', task: 'x' }), /gateway is not reachable/);
+  await assert.rejects(agents.deploy(chain.chain_id, { kind: 'research', task: 'x' }), /Codex is not reachable/);
 }));
 
 test('evidence that meets a want mid-review is applied on a later poll, never dropped; a second agent with the same need joins the open ask instead of ringing again', async () => database(async pool => {
@@ -184,7 +186,7 @@ test('evidence that meets a want mid-review is applied on a later poll, never dr
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => /ask-first/.test(msg)
     ? `Need you.${block({ status: 'needs_person', question: 'Which OpenAI account holds the production API key for InnerEcho?', summary: 'x' })}`
     : `Done.${block({ status: 'done', summary: 'priced', evidence: [{ source: join(dir, 'a.txt'), quote: 'yearly plan is priced at twenty-nine ninety-nine', observation: 'yearly' }] })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir] });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir] });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: dir, clock: () => now, asks, agents });
   const chain = await inbox.want({ description: 'Price InnerEcho', doneWhen: 'A yearly price is quoted.' });
@@ -216,7 +218,7 @@ test('a provider limit is not the pursuit\'s failure: deployments pause for an h
   const asks = createAsks({ pool, risk, clock: () => now, log: { log() {}, warn() {} }, deliverers: { push: async m => { sent.push(m); } } }); await asks.init();
   const gw = fakeGateway({ clock: () => (now += 1000), reply: () => 'x' });
   gw.wait = async () => ({ status: 'error', error: { message: "You're out of usage credits. Switch to another model, or manage usage credits at claude.ai" } });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} } });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, asks, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} } });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, asks, agents });
   const chain = await inbox.want({ description: 'Price InnerEcho', doneWhen: 'A price is quoted.', continuous: true });
@@ -233,18 +235,18 @@ test('a provider limit is not the pursuit\'s failure: deployments pause for an h
   const journal = (await risk.recent({ chainId: chain.chain_id })).find(x => x.id === `agent:${d.id}`); assert.equal(journal.outcome.result, 'not_attempted');
 }));
 
-test('a run lost to a gateway restart is recovered from the transcript: the agent\'s newer reply is taken as the turn', async () => database(async pool => {
+test('a run whose wait never resolves is recovered from the transcript: the agent\'s newer reply is taken as the turn', async () => database(async pool => {
   let now = 30 * 86400000;
   const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
   const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false, askOwner: true }) });
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `later${block({ status: 'done', summary: 'recovered' })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => ({ agentSlots: 4 }) }, clock: () => now, log: { log() {}, warn() {} } });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, controls: { get: async () => ({ agentSlots: 4 }) }, clock: () => now, log: { log() {}, warn() {} } });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
   const chain = await inbox.want({ description: 'Recover a lost run', doneWhen: 'The reply is taken from the transcript.' });
   const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 't', firedBy: 'engine' });
-  gw.wait = async () => ({ status: 'timeout' });   // the run id is gone with the restart
+  gw.wait = async () => ({ status: 'timeout' });   // the run id never resolves
   await agents.poll(); assert.equal((await agents.get(d.id)).status, 'running', 'within the grace period nothing is assumed');
   now += 120_000;
   await agents.poll(); assert.equal((await agents.get(d.id)).status, 'done', 'the transcript reply became the turn');
@@ -258,7 +260,7 @@ test('a dated step does not put the pursuit to sleep: work goes on between, and 
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const briefs = [];
   const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => { if (msg.startsWith('[thinker] You are deployed')) briefs.push(msg); return `Planned.${block({ status: 'done', summary: 'launch kit ready', nextStep: 'Publish the Day 1 X post and the Instagram carousel', resumeAt: '2026-10-01T13:00:00Z' })}`; } });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
   const chain = await inbox.want({ description: 'Launch InnerEcho on October 1', doneWhen: 'Day 1 posts are live.', continuous: true });
@@ -284,7 +286,7 @@ test('dated steps form a schedule: a later report adds its step and never swallo
   const plans = [{ nextStep: 'Review October results', resumeAt: '2026-11-01T14:00:00Z' }, { nextStep: 'Publish Day 1', resumeAt: '2026-10-01T13:00:00Z' }];
   let k = 0;
   const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `ok${block({ status: 'done', summary: 's', ...plans[k++ % 2] })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, continuityIntervalMs: 1000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
   const chain = await inbox.want({ description: 'Launch InnerEcho in October', doneWhen: 'A month nets positive.', continuous: true });
@@ -311,7 +313,7 @@ test('the only time the engine sits is when it thinks over itself: idle capacity
   let prompt = '';
   const llm = { messages: { create: async ({ messages }) => { prompt = messages[0].content; return { content: [{ type: 'text', text: '{"thought":"Three agents failed the same way yesterday; that is mine to fix.","moves":[{"task":"Review yesterday\'s failed runs and file one self-want per defect","why":"repeated failure"}]}' }] }; } } };
   const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `ok${block({ status: 'working', summary: 'reviewing' })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, ensureSelf: true, selfGapMs: 60_000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, ensureSelf: true, selfGapMs: 60_000 });
   await agents.init();
   const self = (await pool.query(`SELECT id FROM thought_chains WHERE ponder_state ->> 'standing' = 'self'`)).rows[0].id;
   await agents.init(); assert.equal((await pool.query(`SELECT count(*)::int AS n FROM thought_chains WHERE ponder_state ->> 'standing' = 'self'`)).rows[0].n, 1, 'one standing self pursuit');
@@ -332,137 +334,154 @@ test('the only time the engine sits is when it thinks over itself: idle capacity
 }));
 
 
-const continuationFixture = JSON.parse(await readFile(new URL('./fixtures/active-run-6-queued-7.json', import.meta.url), 'utf8'));
-const capturedDeployment = 'eeb08eb9-b610-496d-86e8-438ad7e678e5';
+test('the pursuit\'s conversation hears what its agents need and found, and Quinn\'s answer there reaches the agent waiting on him', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: (key, msg) => /Your role: talker/.test(msg) || msg.startsWith('[thinker] Agent') ? 'Here.' : /\[Quinn, via/.test(msg) ? `Thanks.${block({ status: 'done', summary: 'priced in the US store' })}` : `Need one thing.${block({ status: 'needs_person', question: 'Which store region?' })}` });
+  const agents = createAgents({ pool, host: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} } });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Price the app', doneWhen: 'A price is quoted.' });
+  const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Find the price', firedBy: 'engine' });
+  await agents.poll(); await new Promise(r => setTimeout(r, 20));
+  assert.equal((await agents.get(d.id)).status, 'waiting_person');
+  const talker = (await agents.list({ chainId: chain.chain_id })).find(x => x.kind === 'talker');
+  assert.ok(talker, 'the conversation was opened for the question');
+  const said = gw.sessions.get(talker.sessionKey).messages.filter(m => m.role === 'user').map(m => m.text);
+  assert.ok(said.some(t => /^\[thinker\] Agent "#\d+ research · Find the price" needs you: Which store region\?/.test(t)), 'the question is posted there');
+  // Quinn answers in the conversation (in T3 Code): the waiting agent gets his words and finishes
+  now += 60_000;
+  gw.personSays(talker.sessionKey, 'Use the US store.', 'Passing that on.');
+  await agents.poll(); await agents.poll(); await new Promise(r => setTimeout(r, 20));
+  const finished = await agents.get(d.id);
+  assert.equal(finished.status, 'done');
+  assert.ok(gw.sessions.get(d.sessionKey).messages.some(m => m.text === '[Quinn, via the pursuit conversation] Use the US store.'));
+  assert.ok(gw.sessions.get(talker.sessionKey).messages.some(m => /^\[thinker\] Agent ".*" finished: priced in the US store/.test(m.text)), 'and the result is posted back');
+  const want = await queue.get(chain.chain_id);
+  assert.ok(want.evidence.some(e => /Use the US store/.test(e.observation)), 'his words are on the want as his');
+}));
 
-// Exercise both real modules and real persistence. Only RPC, time and external delivery are scripted.
-async function continuationHarness(pool, { status = 'running', waitStatus = 'timeout', maxTurns = 6 } = {}) {
-  await pool.query('DELETE FROM agent_deployments');
-  let raw = structuredClone(continuationFixture);
-  const since = raw.inFlightRun.startedAt - 1;
-  let now = raw.messages.at(-1).timestamp + 120_000;
+// The runtime on a real Codex host, against a scripted app-server: only the server, time and delivery are scripted.
+// These carry the guarantees the OpenClaw-era fixtures held (2026-11): a turn still in flight never consumes progress,
+// whatever its partial words say; a turn finished while the engine was down is taken exactly once; a turn cut off by a
+// restart continues in the same thread; an earlier turn's reply is never taken for the current one.
+async function codexHarness(pool, { maxTurns = 12, waiting = false } = {}) {
+  let now = 30 * 86400000;
+  const fake = fakeCodex({ clock: () => now });
   const calls = [], notices = [], outcomes = [], warnings = [];
-  const gateway = createGateway({ runner: async args => {
-    const method = args[2], params = JSON.parse(args.at(-1));
-    if (method === 'chat.history') return JSON.stringify(raw);
-    if (method === 'agent.wait') return JSON.stringify({ status: waitStatus });
-    if (method === 'agent') { calls.push(params); return JSON.stringify({ status: 'accepted', runId: params.idempotencyKey }); }
-    throw new Error(`Unexpected RPC: ${method}`);
-  } });
-  gateway.available = async () => true;
-  // Let parked deployments read every poll, independent of sessions.list change detection.
-  gateway.sessions = undefined;
-  await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, status, run_id, turns, seen_at_ms)
-    VALUES ($1,31,'research','regression','brief',$2,'main',$3,$4,6,$5)`,
-  [capturedDeployment, raw.sessionKey, status, raw.inFlightRun.runId, since]);
-  const options = { pool, gateway, clock: () => now, maxTurns,
+  const makeHost = () => createCodexHost({ pool, connect: fake.connect, restartGapMs: 0, args: [], log: { log() {}, warn: (...a) => warnings.push(a) } });
+  let host = makeHost(); await host.init();
+  const { rows: [c] } = await pool.query(`INSERT INTO thought_chains (seed, status, ponder_state) VALUES ('Price the app', 'awaiting_evidence', $1::jsonb) RETURNING id`,
+    [JSON.stringify({ want: { status: 'active', description: 'Price the app' }, evidence: [], continuity: {} })]);
+  const options = () => ({ pool, host, conversations: false, clock: () => now, maxTurns,
+    queue: { addEvidence: async () => {} },
     asks: { open: async () => [], ask: async args => { notices.push(args); return { id: 1 }; }, answer: async () => {} },
-    risk: { observe: async (...args) => outcomes.push(args) },
-    log: { log() {}, warn: (...args) => { if (!String(args[0]).includes('failed: settled reply')) warnings.push(args); } } };
-  let agents = createAgents(options);
+    risk: { observe: async (...args) => outcomes.push(args), decide: async () => ({ decision: 'proceed' }) },
+    controls: { get: async () => ({ agentSlots: 4 }) },
+    log: { log() {}, warn: (...args) => warnings.push(args) } });
+  let agents = createAgents(options()); await agents.init();
+  const d = await agents.deploy(c.id, { kind: 'research', task: 'Find the price', firedBy: 'person' });
+  const row = async () => (await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [d.id])).rows[0];
+  const thread = () => fake.threads.get(fake.lastThread().id);
+  if (waiting) await pool.query(`UPDATE agent_deployments SET status = 'waiting_person', seen_at_ms = $2 WHERE id = $1`, [d.id, now]);
   return {
-    gateway, calls, notices, outcomes, warnings, since,
-    get raw() { return raw; }, set raw(value) { raw = value; },
-    row: async () => (await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [capturedDeployment])).rows[0],
-    async poll() { await agents.poll(); now += 120_000; assert.deepEqual(warnings, []); },
-    restart() { agents = createAgents(options); },
-    settle(report = 'done', extra = {}) {
-      raw = { ...raw, pendingInputs: { items: [], total: 0 }, inFlightRun: null, sessionInfo: { hasActiveRun: false, status: 'idle' },
-        messages: [{ role: 'assistant', timestamp: now - 1, content: block({ status: report, summary: 'settled reply', question: 'Which region?' }), ...extra }] };
-    },
+    fake, d, row, calls, notices, outcomes, warnings, thread,
+    get now() { return now; }, tick(ms = 120_000) { now += ms; },
+    turnsStarted: () => fake.requests.filter(([m]) => m === 'turn/start').length,
+    async poll() { await agents.poll(); now += 120_000; },
+    async restart() { await host.close(); host = makeHost(); await host.init(); agents = createAgents(options()); await agents.init(); },
   };
 }
 
-test('live :6/:7 fixture and all independent busy signals cannot consume progress after repeated grace periods', async t => database(async pool => {
-  const busyCases = {
-    captured: () => {},
-    'in-flight only': r => { r.pendingInputs = []; r.sessionInfo = { hasActiveRun: false, status: 'idle' }; },
-    'active flag only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo.status = 'idle'; },
-    'running status only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo.hasActiveRun = false; },
-    'queued status only': r => { r.pendingInputs = []; r.inFlightRun = null; r.sessionInfo = { hasActiveRun: false, status: 'queued' }; },
-    'object queue only': r => { r.inFlightRun = null; r.sessionInfo = { hasActiveRun: false, status: 'idle' }; },
-    'total-only queue': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs.items = []; },
-    'items despite zero total': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs.total = 0; },
-    'legacy queue': r => { r.inFlightRun = null; r.sessionInfo = {}; r.pendingInputs = r.pendingInputs.items; },
-  };
-  for (const [name, change] of Object.entries(busyCases)) await t.test(name, async () => {
-    const h = await continuationHarness(pool); change(h.raw);
-    await h.poll();   // first replay the unmodified captured progress entry
-    // Do not let the progress marker mask a broken liveness guard. Each report would otherwise
-    // continue, exhaust the budget, notify the person, or finish the deployment.
-    for (const status of ['working', 'needs_person', 'done', 'failed']) {
-      h.raw.messages.at(-1).openclawStreamFallback = false;
-      h.raw.messages.at(-1).content = block({ status, summary: 'not settled', question: 'Do you know?' });
-      for (let i = 0; i < 3; i++) await h.poll();
-      const row = await h.row();
-      assert.equal(row.status, 'running'); assert.equal(row.turns, 6); assert.equal(row.run_id, `${capturedDeployment}:6`);
-      assert.equal(Number(row.seen_at_ms), h.since);
-      assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
-    }
-    h.settle(); await h.poll(); h.restart(); await h.poll();
-    assert.equal((await h.row()).status, 'done'); assert.equal((await h.row()).turns, 6);
-    assert.equal(h.calls.length, 0); assert.equal(h.notices.length, 0); assert.equal(h.outcomes.length, 1);
+test('a turn still in flight never consumes progress, whatever its partial words say, across repeated grace periods', async t => database(async pool => {
+  for (const status of ['working', 'needs_person', 'done', 'failed']) await t.test(status, async () => {
+    await pool.query('DELETE FROM agent_deployments');
+    const h = await codexHarness(pool);
+    const turn = h.thread().turns.at(-1);
+    h.fake.complete(h.thread().id, turn.id, { text: block({ status, summary: 'not settled', question: 'Do you know?' }), partial: true });
+    for (let i = 0; i < 3; i++) await h.poll();
+    const r = await h.row();
+    assert.equal(r.status, 'running'); assert.equal(r.turns, 1);
+    assert.deepEqual([h.notices, h.outcomes], [[], []]);
+    assert.equal(h.turnsStarted(), 1);
+    // once it settles, it is taken once
+    h.fake.complete(h.thread().id, turn.id, {});
+    await h.poll(); await h.poll();
+    const after = await h.row();
+    assert.equal(after.status, { done: 'done', failed: 'failed', needs_person: 'waiting_person', working: 'running' }[status]);
+    assert.equal(h.notices.length, status === 'needs_person' ? 1 : 0);
+    assert.equal(h.outcomes.length, ['done', 'failed'].includes(status) ? 1 : 0);
+    assert.equal(h.turnsStarted(), status === 'working' ? 2 : 1, 'working is sent on exactly once');
   });
 }));
 
-test('restart recovery accepts settled reports once and rejects stale, mismatched and stream-progress replies', async t => database(async pool => {
-  for (const waitStatus of ['pending', 'timeout']) {
-    for (const status of ['done', 'needs_person', 'failed', 'working']) await t.test(`${waitStatus}: settled ${status}`, async () => {
-      const h = await continuationHarness(pool, { waitStatus, maxTurns: 12 });
-      h.settle(status, { ...continuationFixture.terminal, timestamp: h.since + 1000, content: block({ status, summary: 'settled reply', question: 'Which region?' }) });
-      h.restart(); await h.poll();
-      // A late transcript write must not make the old run look like the continuation's reply.
-      if (status === 'working') h.raw.messages[0].timestamp = Number((await h.row()).seen_at_ms) + 1;
-      h.restart(); await h.poll(); await h.poll();
-      assert.equal(h.calls.length, status === 'working' ? 1 : 0);
-      assert.equal(h.notices.length, status === 'needs_person' ? 1 : 0);
-      assert.equal(h.outcomes.length, ['done', 'failed'].includes(status) ? 1 : 0);
-      assert.equal((await h.row()).status, { done: 'done', failed: 'failed', needs_person: 'waiting_person', working: 'running' }[status]);
-      assert.equal((await h.row()).turns, status === 'working' ? 7 : 6);
-    });
-  }
-  for (const mode of ['legacy', 'restarted run']) await t.test(`recover ${mode}`, async () => {
-    const h = await continuationHarness(pool); h.settle();
-    if (mode === 'restarted run') {
-      h.raw.messages[0].__openclaw = { runId: 'new-run-after-restart', runTerminal: true };
-      h.raw.messages.unshift({ role: 'user', content: '[thinker] Continue.', timestamp: h.since + 1,
-        idempotencyKey: `${capturedDeployment}:6:user`, __openclaw: { runId: 'new-run-after-restart' } });
-    }
-    h.restart(); await h.poll(); h.restart(); await h.poll();
-    assert.equal((await h.row()).status, 'done'); assert.equal(h.outcomes.length, 1);
-    assert.equal(h.calls.length, 0); assert.equal(h.notices.length, 0);
+test('restarts: a turn finished while the engine was down is taken once; one cut off continues in the same thread', async t => database(async pool => {
+  for (const status of ['done', 'needs_person', 'failed', 'working']) await t.test(`finished while down: ${status}`, async () => {
+    await pool.query('DELETE FROM agent_deployments');
+    const h = await codexHarness(pool);
+    const turn = h.thread().turns.at(-1);
+    // the turn finishes while the engine is away: it never hears turn/completed
+    turn.status = 'completed'; turn.items.push({ type: 'agentMessage', id: 'late', text: block({ status, summary: 'settled while down', question: 'Which region?' }), completedAtMs: h.now });
+    await h.restart(); await h.poll(); await h.poll();
+    const r = await h.row();
+    assert.equal(r.status, { done: 'done', failed: 'failed', needs_person: 'waiting_person', working: 'running' }[status]);
+    assert.equal(h.notices.length, status === 'needs_person' ? 1 : 0, 'taken once, not once per poll');
+    assert.equal(h.outcomes.length, ['done', 'failed'].includes(status) ? 1 : 0);
+    assert.equal(h.turnsStarted(), status === 'working' ? 2 : 1);
   });
-  const rejected = {
-    'pre-start reply': h => { h.raw.messages[0].timestamp = h.since - 1; },
-    'at-start reply': h => { h.raw.messages[0].timestamp = h.since; },
-    'invalid timestamp': h => { h.raw.messages[0].timestamp = 'invalid'; },
-    'previous run': h => { h.raw.messages[0].__openclaw = { runId: `${capturedDeployment}:5`, runTerminal: true }; },
-    'explicit nonterminal': h => { h.raw.messages[0].__openclaw = { runId: `${capturedDeployment}:6`, runTerminal: false }; },
-    'unrelated run': h => { h.raw.messages[0].runId = 'unrelated'; },
-    'stream fallback with stopReason stop': h => { Object.assign(h.raw.messages[0], { openclawStreamFallback: true, stopReason: 'stop' }); },
-    commentary: h => { h.raw.messages[0].channel = 'commentary'; },
-    'previous user turn': h => { h.raw.messages.unshift({ role: 'user', timestamp: h.since - 1, content: '[thinker] Continue.' }); },
-    'different user turn key': h => { h.raw.messages.unshift({ role: 'user', timestamp: h.since + 1, content: '[thinker] Continue.', idempotencyKey: `${capturedDeployment}:5:user` }); },
-  };
-  for (const [name, change] of Object.entries(rejected)) await t.test(name, async () => {
-    const h = await continuationHarness(pool); h.settle('working'); change(h);
-    for (let i = 0; i < 3; i++) await h.poll();
-    assert.equal((await h.row()).status, 'running'); assert.equal((await h.row()).turns, 6);
-    assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
+  await t.test('cut off by the server dying', async () => {
+    await pool.query('DELETE FROM agent_deployments');
+    const h = await codexHarness(pool, { maxTurns: 4 });
+    h.fake.crash();
+    await h.poll();
+    const r = await h.row();
+    assert.equal(r.status, 'running'); assert.equal(r.turns, 2, 'one more turn, in the same thread');
+    const said = h.thread().turns.at(-1).items[0].content[0].text;
+    assert.match(said, /restarted while you were working/);
+    assert.equal(new Set(h.fake.requests.filter(([m]) => m === 'turn/start').map(([, p]) => p.threadId)).size, 1);
+    assert.deepEqual([h.notices, h.outcomes], [[], []]);
+  });
+  await t.test('cut off with its budget spent', async () => {
+    await pool.query('DELETE FROM agent_deployments');
+    const h = await codexHarness(pool, { maxTurns: 1 });
+    h.fake.crash();
+    await h.poll();
+    assert.equal((await h.row()).status, 'failed');
+    assert.match((await h.row()).error, /last turn was lost to a restart/);
   });
 }));
 
-test('person-answer and standing-session polling also waits for a settled reply', async t => database(async pool => {
-  for (const status of ['waiting_person', 'standing']) await t.test(status, async () => {
-    const h = await continuationHarness(pool, { status });
-    h.raw.messages.unshift({ role: 'user', timestamp: h.since + 1, content: 'Use the US store.' });
-    h.raw.messages.at(-1).content = block({ status: 'needs_person', question: 'Another question?' });
-    h.raw.messages.at(-1).openclawStreamFallback = false;
-    h.raw.pendingInputs = [];
-    for (let i = 0; i < 3; i++) await h.poll();
-    assert.equal((await h.row()).status, status); assert.equal(Number((await h.row()).seen_at_ms), h.since);
-    assert.deepEqual([h.calls, h.notices, h.outcomes], [[], [], []]);
-  });
+test('an earlier turn\'s reply is never taken for the current run, even after the grace period', async () => database(async pool => {
+  const h = await codexHarness(pool);
+  const first = h.thread().turns.at(-1);
+  h.fake.complete(h.thread().id, first.id, { text: block({ status: 'working', summary: 'step one' }) });
+  await h.poll();   // working → the engine sends it on: turn 2 starts
+  assert.equal((await h.row()).turns, 2);
+  for (let i = 0; i < 4; i++) await h.poll();   // turn 2 is in flight; turn 1's reply is right there in the thread
+  const r = await h.row();
+  assert.equal(r.status, 'running'); assert.equal(r.turns, 2);
+  assert.deepEqual([h.notices, h.outcomes], [[], []]);
+}));
+
+test('waiting on the person: his answer from T3 Code or Codex counts once it has settled, and goes to the agent', async () => database(async pool => {
+  const h = await codexHarness(pool);
+  const first = h.thread().turns.at(-1);
+  h.fake.complete(h.thread().id, first.id, { text: block({ status: 'needs_person', question: 'Which region?' }) });
+  await h.poll();
+  assert.equal((await h.row()).status, 'waiting_person');
+  // he starts answering in another app: the turn is still running there
+  const t = h.fake.external(h.thread().id, 'US store.', '', { status: 'inProgress' });
+  await h.poll(); await h.poll();
+  assert.equal((await h.row()).status, 'waiting_person', 'not before his turn settles');
+  t.status = 'completed'; t.items.push({ type: 'agentMessage', id: 'r', text: block({ status: 'done', summary: 'US price is $4.99' }), completedAtMs: h.now });
+  h.fake.threads.get(h.thread().id).updatedAt += 10;
+  await h.poll(); await h.poll();
+  const r = await h.row();
+  assert.equal(r.status, 'done');
+  assert.equal(r.report.stated, 1, 'what he said is recorded as his');
 }));
 
 // Real PostgreSQL persistence and the controller's public plan/deploy/poll paths. The only
@@ -493,7 +512,7 @@ async function retirementHarness(pool, { maxTurns = 12 } = {}) {
         && (!/\bif\b/.test(e.observation) || input.newEvidence.some(x => /August 2026 production usage:/.test(x.observation)))).slice(-1).map(cite),
     });
   } } };
-  const options = { pool, gateway: gw, llm, clock: () => now, maxTurns, continuityIntervalMs: 1,
+  const options = { pool, host: gw, conversations: false, llm, clock: () => now, maxTurns, continuityIntervalMs: 1,
     risk: { decide: async () => { decisions++; return { decision: 'proceed' }; }, observe: async () => {} },
     log: { log() {}, warn() {} }, slotsDefault: 4 };
   let agents = createAgents(options);
@@ -677,7 +696,7 @@ test('retirement is task-scoped, not a ban on unrelated calculations in the same
   assert.ok((await h.deploy('Reconcile historical office equipment costs for August 2026')).id);
 }));
 
-test('an always-worked pursuit whose review is ready is still worked, and what its agents find is applied; a run the gateway lost fails after the stale limit instead of holding its slot forever', async () => database(async pool => {
+test('an always-worked pursuit whose review is ready is still worked, and what its agents find is applied; a run that never finished fails after the stale limit instead of holding its slot forever', async () => database(async pool => {
   const dir = await mkdtemp(join(tmpdir(), 'oca-agents-'));
   await writeFile(join(dir, 'kit.txt'), 'The launch kit holds five carousel images and two finished reels.\n');
   let now = 30 * 86400000;
@@ -686,7 +705,7 @@ test('an always-worked pursuit whose review is ready is still worked, and what i
   const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
   const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `Checked.${block({ status: 'done', summary: 'kit checked', evidence: [{ source: join(dir, 'kit.txt'), quote: 'five carousel images and two finished reels', observation: 'the kit is complete' }] })}` });
-  const agents = createAgents({ pool, gateway: gw, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir], continuityIntervalMs: 1000, staleTurnMs: 60 * 60_000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} }, roots: [dir], continuityIntervalMs: 1000, staleTurnMs: 60 * 60_000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: dir, clock: () => now, agents });
   const chain = await inbox.want({ description: 'Launch the app well', doneWhen: 'A month nets positive.', continuous: true });
@@ -698,15 +717,15 @@ test('an always-worked pursuit whose review is ready is still worked, and what i
   const done = await agents.get(p.started[0]);
   assert.equal(done.status, 'done'); assert.equal(done.report.evidenceApplied, true, 'what its agent verified reaches the want');
   assert.ok((await queue.get(chain.chain_id)).evidence.some(e => /five carousel images/.test(e.observation)));
-  // a run the gateway lost: its wait never answers and its session never shows a reply
+  // a run that never finished: its wait never answers and its thread never shows a reply
   const lost = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Check the schedule', firedBy: 'engine' });
   gw.sessions.get(lost.sessionKey).messages.length = 0;
-  gw.wait = async () => { throw new Error('openclaw agent.wait: timed out after 26000 ms'); };
+  gw.wait = async () => { throw new Error('codex thread/read: no answer in 60000 ms'); };
   now += 30 * 60_000; await agents.poll();
   assert.equal((await agents.get(lost.id)).status, 'running', 'within the stale limit it is still waited on');
   now += 31 * 60_000; await agents.poll();
   const failed = await agents.get(lost.id);
-  assert.equal(failed.status, 'failed'); assert.match(failed.error, /gateway never answered this run .* no reply after \d+ minutes/);
+  assert.equal(failed.status, 'failed'); assert.match(failed.error, /never finished and its thread shows no reply after \d+ minutes/);
   assert.equal(await agents.liveCount(), 0, 'its slot is free again');
 }));
 
@@ -724,7 +743,7 @@ test('a move refused as a repeat of retired work is said, not dropped: the strat
     return { content: [{ type: 'text', text: JSON.stringify({ thought: 'Costs first.', moves: [{ task: T, why: 'costs', stream: 'Costs' }] }) }] };
   } } };
   const lines = [];
-  const agents = createAgents({ pool, gateway: gw, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log: m => lines.push(m), warn() {} }, continuityIntervalMs: 20 * 60_000 });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, llm, controls: { get: async () => controlsState }, clock: () => now, log: { log: m => lines.push(m), warn() {} }, continuityIntervalMs: 20 * 60_000 });
   await agents.init();
   const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
   const chain = await inbox.want({ description: 'InnerEcho makes a profit', doneWhen: 'A month nets positive.', continuous: true });
@@ -777,3 +796,91 @@ test('a Codex failure rests Codex only when the account is out, and only until t
   assert.equal(lighterEffort('medium', 'high'), 'medium'); assert.equal(lighterEffort('xhigh', 'high'), 'high', 'never more than the policy');
   assert.equal(lighterEffort(undefined, 'high'), 'high');
 });
+
+test('the pursuit chat reads every thread with its last line and never opens a conversation by reading', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => 'On it.' });
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: { log() {}, warn() {} } });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const quiet = await inbox.want({ description: 'Learn the cello', doneWhen: 'A piece is played.' });
+  const chain = await inbox.want({ description: 'Price the app', doneWhen: 'A price is quoted.' });
+  // Reading a pursuit that has no conversation yet does not start one.
+  const before = await agents.threads(quiet.chain_id);
+  assert.equal(before.talker, null);
+  assert.equal(before.agents.length, 0);
+  assert.equal((await agents.list({ chainId: quiet.chain_id })).length, 0, 'reading created nothing');
+  const t = await agents.talker(chain.chain_id);
+  await agents.relay(t.id, 'What does the competition charge?\n- in the US\n- in Europe', { via: 'Oneiro' });
+  assert.ok(gw.sessions.get(t.sessionKey).messages.some(m => m.text === '[Quinn, via Oneiro] What does the competition charge?\n- in the US\n- in Europe'), 'his lines are kept');
+  const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Find the price', firedBy: 'person' });
+  const read = await agents.threads(chain.chain_id);
+  assert.equal(read.chainId, chain.chain_id);
+  assert.match(read.title, /Price the app/);
+  assert.equal(read.talker.id, t.id, 'the conversation comes first');
+  assert.equal(read.talker.kind, 'talker');
+  assert.equal(read.talker.last.role, 'assistant');
+  assert.equal(read.talker.last.text, 'On it.');
+  assert.ok(read.talker.lastReplyAt > 0);
+  assert.equal(read.agents.length, 1);
+  assert.equal(read.agents[0].id, d.id);
+  // The person's own words are shown without the relay prefix.
+  gw.personSays(t.sessionKey, '[Quinn, via Oneiro] And in Europe?');
+  assert.equal((await agents.threads(chain.chain_id)).talker.last.text, 'And in Europe?');
+  // Every pursuit's conversation, the talking one first; the quiet one is listed with no conversation.
+  const { items } = await agents.chats();
+  assert.deepEqual(items.map(x => x.chainId), [chain.chain_id, quiet.chain_id]);
+  assert.equal(items[0].talker.id, t.id);
+  assert.equal(items[0].talker.last.text, 'And in Europe?');
+  assert.equal(items[0].agents, 1);
+  assert.equal(items[1].talker, null);
+  // A thread whose transcript can't be read still lists, without a line.
+  gw.transcript = async () => { throw new Error('rollout missing'); };
+  const broken = await agents.threads(chain.chain_id);
+  assert.equal(broken.talker.last, null);
+  assert.match(broken.talker.unreadable, /rollout missing/);
+  await assert.rejects(agents.threads(999999), /Pursuit not found/);
+}));
+
+test('an agent gets a short written name when it is sent, an old one gets it the first time it is read, and the task stays whole', async () => database(async pool => {
+  let now = 30 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false, askOwner: true }) });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const gw = fakeGateway({ clock: () => (now += 1000), reply: () => `Looking.${block({ status: 'working', summary: 'reading' })}` });
+  const asked = [];
+  let answer = 'Find book prices';
+  const nameLlm = { messages: { create: async m => { asked.push(m.messages[0].content); return answer; } } };
+  const agents = createAgents({ pool, host: gw, conversations: false, queue, risk, nameLlm, controls: { get: async () => ({ agentSlots: 4 }) }, clock: () => now, log: { log() {}, warn() {} } });
+  await agents.init();
+  const inbox = createInbox({ pool, queue, worth, workRoot: tmpdir(), clock: () => now, agents });
+  const chain = await inbox.want({ description: 'Pick a piano book', doneWhen: 'Three books are compared in a message.' });
+  const task = 'Start with the first step Quinn confirmed when he made this pursuit: check current prices and reviews for beginner piano method books under $30';
+  const settle = async () => { for (let i = 0; i < 20 && asked.length && !(await pool.query(`SELECT 1 FROM agent_deployments WHERE name IS NOT NULL`)).rows.length; i++) await new Promise(r => setTimeout(r, 5)); };
+  const d = await agents.deploy(chain.chain_id, { kind: 'research', task, firedBy: 'engine' });
+  assert.equal(d.task, task, 'the full task is kept for "Sent to do"');
+  await settle();
+  assert.equal((await agents.get(d.id)).name, 'Find book prices');
+  assert.match(asked[0], /check current prices/);
+  // Old row, never named: it reads cleanly at once and gets written behind the read, once.
+  answer = 'Recover saved receipts';
+  const before = asked.length;
+  await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, status) VALUES (gen_random_uuid(), $1, 'research', 'Recover the saved artifacts from the failed run on October 6.', 'b', 'k-old', 'main', 'done')`, [chain.chain_id]);
+  const old = (await agents.list({ chainId: chain.chain_id })).find(a => a.sessionKey === 'k-old');
+  assert.equal(old.name, 'Recover the saved artifacts from the failed');
+  for (let i = 0; i < 20 && !(await agents.get(old.id)).name.startsWith('Recover saved'); i++) await new Promise(r => setTimeout(r, 5));
+  assert.equal((await agents.get(old.id)).name, 'Recover saved receipts');
+  assert.equal(asked.length, before + 1);
+  await agents.list({ chainId: chain.chain_id });
+  assert.equal(asked.length, before + 1, 'not asked again');
+  // A model that writes something unusable leaves the clean shortening standing, and a talker is never named.
+  answer = 'Inspect ~/InnerEcho at 2eeae9d3 please';
+  const d2 = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Compare the three best books by teaching approach', firedBy: 'engine' });
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal((await agents.get(d2.id)).name, 'Compare the three best books by teaching');
+  await agents.cancel(d.id); await agents.cancel(d2.id);
+}));

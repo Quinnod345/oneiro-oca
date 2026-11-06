@@ -1,10 +1,12 @@
-// Deployed agents. The thinker holds wants; for a want it deploys as many agents as the work needs, each a
-// gateway session the person can open in the Oneiro app: research agents that work pages in Aside, builders
-// that change the engine's own code in a worktree, executors that act in the world (through the risk gate),
-// and one standing talker per want — the thinker's voice, where the person and the engine talk directly.
+// Deployed agents. The thinker holds wants; for a want it deploys as many agents as the work needs, each a Codex
+// thread (agent-host/): research agents that work pages in Aside, builders that change the engine's own code in a
+// worktree, executors that act in the world (through the risk gate), and one standing talker per want — the
+// thinker's voice, where the person and the engine talk directly. Work agents run on the engine's own
+// `codex app-server` and show up in Codex; the talker is a T3 Code thread (on Codex), so Quinn talks to the engine
+// in T3 Code, and every agent's question and result is posted there too.
 //
-// An agent that needs the person asks in its own session; the engine turns that into an ask (push to the
-// phone, iMessage, Mac notification) that opens the session; the person answers there; the agent continues.
+// An agent that needs the person asks in its own thread; the engine turns that into an ask (iMessage, Mac
+// notification, the pursuit's T3 Code conversation); the person answers in any of them; the agent continues.
 // Nothing an agent says is proof: a report's evidence is verified by the engine re-reading the page or file
 // it quotes; the person's own words in a session are person-stated evidence. Fan-out is bounded by a control
 // the person owns (agentSlots), never by the design.
@@ -12,12 +14,14 @@
 // Contract with an agent: every reply ends with a fenced block tagged `oca` — {"status": "working" |
 // "needs_person" | "done" | "failed", ...}. Messages from the engine start with [thinker]; anything else in
 // the session is the person.
+import { normalizeCard, deliveryHold, holdContext } from './deliverables.js';
 import { sameThing } from './dedupe.js';
 import { actionSummary } from './action-retries.js';
 import { randomUUID } from 'node:crypto';
 import { readFile, realpath } from 'node:fs/promises';
 import { Router } from 'express';
 import { resolveProvider } from '../llm.js';
+import { agentNameFromTask, writeAgentName } from './agent-names.js';
 import { OWNER_KEY } from '../motivation/risk.js';
 import { streamName } from './board.js';
 import { createTaskDispositions, makeDisposition, DISPOSITIONS, PROVIDER_LIMIT } from './task-dispositions.js';
@@ -49,6 +53,9 @@ function settledReply(t, since, runId = null) {
   return last;
 }
 
+// A reply as a person reads it: the report block is for the engine. A block cut off by a length limit goes too.
+export function withoutReport(reply) { return String(reply ?? '').replace(/```oca\b[\s\S]*?(?:```|$)/g, '').trim(); }
+
 // The last ```oca block in a reply, validated. Null when the agent did not report.
 export function parseReport(reply) {
   const blocks = [...String(reply || '').matchAll(/```oca\s*\n([\s\S]*?)```/g)];
@@ -59,6 +66,9 @@ export function parseReport(reply) {
   if (r.status === 'needs_person') out.question = text(r.question, 800) || text(r.summary, 800);
   if (DISPOSITIONS.includes(r.disposition?.status)) out.disposition = { status: r.disposition.status };
   if (typeof r.nextStep === 'string') out.nextStep = text(r.nextStep, 600);
+  // The readable write-up the person gets as a deliverable (reasoning/deliverables.js): markdown keeps its lines.
+  if (typeof r.title === 'string') out.title = text(r.title, 90);
+  if (typeof r.brief === 'string') out.brief = r.brief.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim().slice(0, 20000);
   // When the next step belongs to a future moment (a launch date, the end of a month), the agent says when.
   if (typeof r.resumeAt === 'string' && Number.isFinite(Date.parse(r.resumeAt))) out.resumeAt = new Date(Date.parse(r.resumeAt)).toISOString();
   if (Array.isArray(r.remaining)) out.remaining = r.remaining.slice(0, 5).map(x => text(x, 300)).filter(Boolean);
@@ -69,22 +79,38 @@ export function parseReport(reply) {
   if (typeof r.branch === 'string') out.branch = text(r.branch, 120);
   // What the agent set up that lasts — a live listing, a post, a changed setting, a finished asset — for the board.
   if (Array.isArray(r.made)) out.made = r.made.slice(0, 8).filter(m => m && typeof m === 'object').map(m => ({ what: text(m.what, 200), where: text(m.where, 400) })).filter(m => m.what.length >= 4);
+  // A deliverable the person can act on (reasoning/deliverables.js). One that can't make a card stays a brief.
+  if (r.deliverable && typeof r.deliverable === 'object') { const card = normalizeCard(r.deliverable); if (card) out.deliverable = card; }
+  // The agent's word that the finish line is met. Only the person's confirmation finishes a pursuit.
+  if (r.finishLineMet === true) { out.finishLineMet = true; if (typeof r.finishEvidence === 'string') out.finishEvidence = text(r.finishEvidence, 400); }
   return out;
 }
 
 const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 {"status":"working","summary":"what you did and what is next"}  — you made progress and want to keep going (the thinker sends you on)
 {"status":"needs_person","question":"the one thing only the person can answer or do","summary":"why"}  — ask in plain words above the block too
-{"status":"done","summary":"…","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00","made":[{"what":"what you set up that lasts","where":"its URL or file path"}]}
+{"status":"done","title":"a few words naming what you found","summary":"…","brief":"the write-up Quinn reads, in markdown (see below)","evidence":[{"source":"https://… or /absolute/path","quote":"exact text you saw there (≥ 24 chars)","observation":"what it shows"}],"nextStep":"…","remaining":["open question"],"resumeAt":"2026-10-01T09:00:00-04:00","made":[{"what":"what you set up that lasts","where":"its URL or file path"}]}
 {"status":"failed","summary":"why"}
+A done block may also carry "deliverable" when what you made is something Quinn should act on, not only read:
+"deliverable":{"kind":"mail_draft","to":"name@example.com","subject":"…","body":"the email, ready to send"}
+"deliverable":{"kind":"calendar_block","title":"…","start":"2026-11-12T15:00:00-05:00","durationMinutes":45,"notes":"…","calendar":"Personal"}
+He sees it as a card he can edit, then opens it as a draft in Gmail or adds it to Calendar with one press. You never send mail or add events yourself for these. A reply to a mail you read can also carry "threadId" and "account". Leave deliverable out for a plain write-up.
+A done block may also carry "finishLineMet":true and "finishEvidence":"what you observed that shows it" when, and only when, you saw the finish line met. Quinn is asked to confirm; only he can call it done.
 If this task scope is exhausted, superseded by the owner, or blocked on missing evidence, include "disposition":{"status":"exhausted|superseded|evidence-blocked"} in your done/failed block. Name the objective, period and blocker in the summary; do not report ordinary progress as retirement.
 Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
+brief is what Quinn gets to read and judge: a markdown write-up of what you found, written for him, not for the engine. Lead with the answer; when you compared options, give a table (name, price, what reviewers say, link); cite each source inline as a link; say plainly what you could not confirm. Skip process notes and tool names. A short brief that answers the task beats a long one.
 made lists only what exists now because of you and will last: a live listing, a published post, a changed account setting, a finished asset or file others will use. Leave it out when you only read or researched.
-If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches their phone.
+If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches Quinn (a text, and the pursuit's conversation in Oneiro).
 If the next step cannot happen before a certain time (a planned launch date, results that only exist after a period ends), set resumeAt to that time and nextStep to exactly what to do then: the engine sends no one until then, and at that time deploys an agent to do nextStep. Do not research what cannot exist yet.`;
 
+/** The model name Codex takes: without a provider prefix, or null to use Codex's own default. */
+export function agentModel(model) {
+  const m = typeof model === 'string' ? model.trim().replace(/^(openai|codex)\//i, '') : '';
+  return m || null;
+}
+
 // The first message of a deployment: the pursuit, the task, what is known and missing, the rules.
-export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [], missing = [], remaining = [], cwd = null, engine = 'http://localhost:3333' }) {
+export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [], missing = [], remaining = [], cwd = null, engine = 'http://localhost:3333', accounts = '' }) {
   const ev = evidence.slice(-8).map(e => `- ${text(e.observation, 240)} (${text(e.source, 80)})`).join('\n');
   const head = `${THINKER} You are deployed by the Oneiro engine on pursuit #${chainId}: ${text(want, 600)}\n`
     + (doneWhen ? `Done when: ${text(doneWhen, 400)}\n` : '')
@@ -93,6 +119,8 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
         executor: 'Act in the world to get done what the task is for, and no further; report what you did and what you observed happen, never what you intended.',
         talker: `You are the voice of the engine for this pursuit — you talk, you do not do the pursuit's work (research agents do that; you can see them and their results in the live state: curl -s ${engine}/ponder/${chainId} and curl -s ${engine}/oca/agents?chainId=${chainId}). When the person asks what is happening, answer from that state in two or three lines. What they state is fact for the engine; when they change direction, say back what changed. Do not open the browser, do not research. Until the person speaks, reply with one short line saying you are here for this pursuit.` })[kind]}\n`
     + (task ? `\nTask now: ${text(task, 3000)}\n` : '')
+    // Which signed-in accounts this agent may use (reasoning/integrations.js), so it picks the right Gmail and workspace.
+    + (accounts && kind !== 'talker' ? `\n${text(accounts, 1200)}\n` : '')
     + (missing.length ? `\nStill missing (from the last review):\n${missing.slice(0, 6).map(m => `- ${text(m, 300)}`).join('\n')}\n` : '')
     + (remaining.length ? `\nOpen questions from the last agent:\n${remaining.slice(0, 4).map(m => `- ${text(m, 200)}`).join('\n')}\n` : '')
     + (ev ? `\nWhat is already known (verified):\n${ev}\n` : '')
@@ -101,16 +129,20 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
   return head;
 }
 
-export function createAgents({ pool, gateway, queue, risk = null, asks = null, aside = null, llm = null, controls = null, clock = Date.now, log = console,
+export function createAgents({ pool, host, queue, risk = null, asks = null, aside = null, llm = null, nameLlm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
   roots = [], engine = 'http://localhost:3333', continuityIntervalMs = 20 * 60_000, ensureSelf = false, selfGapMs = 15 * 60_000,
-  staleTurnMs = 90 * 60_000 } = {}) {
+  staleTurnMs = 90 * 60_000, conversations = true, accounts = null, deliver = null } = {}) {
 
   const dispositions = createTaskDispositions({ pool, llm, log });
+  // Codex names its models bare ("gpt-5.6-sol"). A provider prefix ("openai/gpt-5.6-sol", as the LaunchAgent sets it)
+  // makes every turn fail with "model is not supported", so no agent on any pursuit could run.
+  model = agentModel(model);
 
   async function init() {
     await pool.query(await readFile(new URL('../migrations/062_agent_deployments.sql', import.meta.url), 'utf8'));
     await pool.query(await readFile(new URL('../migrations/064_pursuit_board.sql', import.meta.url), 'utf8'));
+    await pool.query(await readFile(new URL('../migrations/072_agent_names.sql', import.meta.url), 'utf8'));
     if (ensureSelf) await selfPursuit().catch(e => log.warn?.('[agents] self pursuit:', e.message));
   }
   // The engine's one standing pursuit about itself. Quinn asked for it: the only time it sits is when it is
@@ -143,7 +175,34 @@ Questions sent to Quinn (72 h) and his answers:\n${asks.map(a => `- ${a.q} → $
 Self-build events (24 h): ${builds.map(b => `${b.kind} ${b.n}`).join(', ') || 'none'}
 To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is /Users/quinnodonnell/oneiro/oca-cognitive (read it; do not edit it directly).`;
   }
-  const rowOf = r => r && ({ id: r.id, chainId: r.chain_id, kind: r.kind, task: r.task, sessionKey: r.session_key, agentId: r.agent_id, displayName: r.display_name,
+  // An agent's short name: what the model wrote, else a clean shortening of its task, with the writing queued so an old
+  // row gets its name the first time anyone reads it. Reading never waits on the model.
+  const naming = new Set();
+  const nameQueue = [];
+  let namingNow = false;
+  async function nextName() {
+    if (namingNow) return;
+    namingNow = true;
+    try {
+      for (let job = nameQueue.shift(); job; job = nameQueue.shift()) {
+        const name = await writeAgentName({ llm: nameLlm, task: job.task, want: job.want });
+        if (name) await pool.query(`UPDATE agent_deployments SET name = $2 WHERE id = $1 AND name IS NULL`, [job.id, name]).catch(() => {});
+      }
+    } finally { namingNow = false; }
+  }
+  function queueName(id, task, want = '') {
+    if (!nameLlm || !task || naming.has(id)) return;
+    naming.add(id);   // once per process: a model that can't name it now leaves the clean shortening standing
+    nameQueue.push({ id, task, want });
+    nextName().catch(e => log.warn?.('[agents] naming:', e.message));
+  }
+  const nameOf = r => {
+    if (r.kind === 'talker') return 'Conversation';
+    if (r.name) return r.name;
+    queueName(r.id, r.task);
+    return agentNameFromTask(r.task, { kind: r.kind });
+  };
+  const rowOf = r => r && ({ id: r.id, chainId: r.chain_id, kind: r.kind, name: nameOf(r), task: r.task, sessionKey: r.session_key, agentId: r.agent_id, displayName: r.display_name,
     status: r.status, turns: r.turns, question: r.question, askId: r.ask_id, report: r.report, error: r.error, firedBy: r.fired_by, cwd: r.cwd, stream: r.stream || null,
     createdAt: r.created_at, updatedAt: r.updated_at, endedAt: r.ended_at });
   const chain = async chainId => (await pool.query('SELECT id, seed, status, ponder_state AS state FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL', [chainId])).rows[0] || null;
@@ -159,9 +218,11 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (!AGENT_KINDS.includes(kind)) throw new Error(`an agent is one of ${AGENT_KINDS.join(', ')}`);
     if (!['engine', 'person'].includes(firedBy)) throw new Error('an agent is fired by a person or the engine');
     const row = await chain(Number(chainId)); if (!row) throw new Error('Pursuit not found');
-    if (['cancelled', 'resolved'].includes(row.status) || row.state.want?.status !== 'active') throw new Error('This pursuit is closed');
+    if (['cancelled', 'resolved'].includes(row.status) || row.state.want?.status !== 'active' || row.state.deleted) throw new Error('This pursuit is closed');
+    // A paused pursuit (reasoning/pursuit-life.js) gets no new work from the engine; the person can still send one.
+    if (row.state.paused && firedBy !== 'person' && kind !== 'talker') throw new Error('This pursuit is paused');
     // A cached "down" is re-checked before it stops a deployment: the planner may have spent minutes thinking since.
-    if (!(await gateway.available()) && !(await gateway.available({ force: true }))) throw new Error('The gateway is not reachable; no agent can be deployed');
+    if (!(await host.available()) && !(await host.available({ force: true }))) throw new Error('Codex is not reachable (codex app-server); no agent can be deployed');
     if (firedBy === 'engine' && clock() < providerBackoffUntil) throw new Error(`the model provider is limiting agents; deployments resume at ${new Date(providerBackoffUntil).toISOString()}`);
     // A builder is the engine repairing itself (self-build runs one at a time); it never waits behind pursuit work.
     if (!standing && kind !== 'builder' && (await liveCount()) >= (await slots())) throw new Error(`all ${await slots()} agent slots are busy; raise agentSlots or wait`);
@@ -181,8 +242,9 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     }
     const id = randomUUID();
     const s = row.state, want = s.want?.description || row.seed;
+    const accountsLine = briefOverride || !accounts ? '' : await Promise.resolve().then(accounts).catch(e => { log.warn?.('[agents] accounts:', e.message); return ''; });
     const brief = briefOverride || composeBrief({ kind, chainId: row.id, want, doneWhen: s.want?.doneWhen || s.doneWhen, task,
-      evidence: s.evidence || [], missing: s.result?.missingEvidence || [], remaining: s.continuity?.remaining || [], cwd, engine });
+      evidence: s.evidence || [], missing: s.result?.missingEvidence || [], remaining: s.continuity?.remaining || [], cwd, engine, accounts: accountsLine });
     // Appraised like any other action. Research, talking and building in a worktree touch nothing of the
     // person's; an executor acts in the world and needs the master switch like everything else that does.
     const decision = risk ? await risk.decide({ id: `agent:${id}`, chainId: row.id, kind: 'deploy_agent', firedBy,
@@ -195,24 +257,25 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     // The label is what the app shows in its list: the want, the role, and enough of the task to tell agents apart.
     const displayName = `#${row.id} ${kind} · ${text(task || want, 56)}${task ? '' : ''}`.replace(/\s+·\s*$/, '');
     const key = `agent:${agentId}:want-${row.id}-${kind}-${id.slice(0, 8)}`;
-    await gateway.createSession({ agentId, key, label: `${displayName} (${id.slice(0, 6)})`, displayName, model, thinkingLevel });
+    await host.createSession({ agentId, key, kind, label: `${displayName} (${id.slice(0, 6)})`, displayName, model, thinkingLevel, ...(cwd ? { cwd } : {}) });
     await pool.query(`INSERT INTO agent_deployments (id, chain_id, kind, task, brief, session_key, agent_id, display_name, status, fired_by, cwd, stream)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [id, row.id, kind, text(task, 3000), brief, key, agentId, displayName, standing ? 'standing' : 'queued', firedBy, cwd, streamName(stream)]);
     log.log?.(`[agents] deployed ${kind} ${id.slice(0, 8)} for want #${row.id} (${firedBy}) → ${key}`);
+    if (kind !== 'talker') queueName(id, text(task || want, 3000), want);
     if (!standing) await startTurn(id, brief).catch(e => log.warn?.('[agents] first turn:', e.message));
-    else await gateway.turn({ sessionKey: key, message: brief, idempotencyKey: `${id}:0` }).catch(e => log.warn?.('[agents] talker brief:', e.message));
+    else await host.turn({ sessionKey: key, message: brief, idempotencyKey: `${id}:0` }).catch(e => log.warn?.('[agents] talker brief:', e.message));
     if (standing) await pool.query(`UPDATE agent_deployments SET seen_at_ms = $2 WHERE id = $1`, [id, clock()]);
     return { ...rowOf((await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]), decision: 'proceed' };
   }
 
-  // The row is claimed before the gateway is called, so a poll tick in between cannot send the same turn twice;
+  // The row is claimed before the host is called, so a poll tick in between cannot send the same turn twice;
   // a call that fails hands the row back to the queue.
   async function startTurn(id, message) {
     // seen_at_ms is the turn's start; recovery also checks liveness and available turn identity.
     const { rows: [d] } = await pool.query(`UPDATE agent_deployments SET status = 'running', run_id = $2 || ':' || (turns + 1), turns = turns + 1, seen_at_ms = $3, updated_at = now()
       WHERE id = $1 AND status IN ('queued', 'running', 'waiting_person', 'standing') RETURNING *`, [id, id, clock() - 1]); if (!d) return;
     try {
-      await gateway.turn({ sessionKey: d.session_key, message, idempotencyKey: d.run_id });
+      await host.turn({ sessionKey: d.session_key, message, idempotencyKey: d.run_id });
     } catch (e) {
       await pool.query(`UPDATE agent_deployments SET status = 'queued', turns = turns - 1, run_id = NULL WHERE id = $1`, [id]);
       throw e;
@@ -261,7 +324,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (schedule) log.log?.(`[agents] #${chainId} scheduled ${new Date(at).toISOString()}: ${text(nextStep, 120)}; next due ${next.at}`);
     if (!found) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity,dry}', to_jsonb(COALESCE((ponder_state #>> '{continuity,dry}')::int, 0) + 1)) WHERE id = $1`, [chainId]).catch(() => {});
   }
-  const observe = (d, result, observation) => risk ? risk.observe(`agent:${d.id}`, { result, evidence: [{ id: `agent-${d.id.slice(0, 8)}-${result}`, source: 'agent runtime: gateway session and verification', observation }] }).catch(e => log.warn?.('[agents] outcome not journaled:', e.message)) : Promise.resolve();
+  const observe = (d, result, observation) => risk ? risk.observe(`agent:${d.id}`, { result, evidence: [{ id: `agent-${d.id.slice(0, 8)}-${result}`, source: 'agent runtime: Codex thread and verification', observation }] }).catch(e => log.warn?.('[agents] outcome not journaled:', e.message)) : Promise.resolve();
 
   async function finish(d, report, messages) {
     const { verified, unverified } = await verifyEvidence(report.evidence || [], d.id);
@@ -275,7 +338,17 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     }
     const taskDisposition = makeDisposition(d, report, (await chain(d.chain_id))?.state);
     const final = { ...report, verified, unverified, stated: stated.length, evidenceApplied: applied, applyError, ...(taskDisposition ? { taskDisposition } : {}) };
+    if (d.kind !== 'talker') tellConversation(d.chain_id, `Agent "${d.display_name}" finished: ${text(report.summary, 600)}${verified.length ? ` (${verified.length} source${verified.length === 1 ? '' : 's'} verified)` : ''}`, `done:${d.id}`);
     await pool.query(`UPDATE agent_deployments SET status = 'done', report = $2::jsonb, ended_at = now(), updated_at = now(), question = NULL WHERE id = $1`, [d.id, JSON.stringify(final)]);
+    // Every finished run on a person's pursuit leaves a brief they can read and rate (reasoning/deliverables.js).
+    if (deliver && ['research', 'executor'].includes(d.kind)) {
+      const row = await chain(d.chain_id);
+      if (row && row.state?.standing !== 'self' && row.state?.origin?.kind !== 'self') {
+        await deliver({ chainId: d.chain_id, agentId: d.id, kind: d.kind, task: d.task, report, verified,
+          want: row.state?.want?.description || row.seed, doneWhen: row.state?.want?.doneWhen || row.state?.doneWhen || '' })
+          .catch(e => log.warn?.(`[agents] brief for ${d.id.slice(0, 8)} not saved:`, text(e.message, 200)));
+      }
+    }
     await noteContinuity(d.chain_id, { found: !taskDisposition && (applied || report.status === 'done'), remaining: report.remaining || [], nextStep: report.nextStep || null, resumeAt: report.resumeAt || null, stream: d.stream || null });
     await observe(d, applied ? 'success' : 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) finished after ${d.turns} turns: ${verified.length} verified sources of ${(report.evidence || []).length} claimed, ${stated.length} statements by the person; evidence applied: ${applied}${applyError ? '; ' + applyError : ''}.`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} done: ${verified.length} verified, ${stated.length} stated, applied=${applied}`);
@@ -301,6 +374,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       [d.id, text(why, 500), JSON.stringify({ ...report, ...(provider ? { failureClass: 'provider' } : {}), ...(taskDisposition ? { taskDisposition } : {}) })]);
     if (provider) { await providerTrouble(d, why); await observe(d, 'not_attempted', `Agent ${d.id.slice(0, 8)} (${d.kind}) could not run: ${text(why, 200)}`); return; }
     await noteContinuity(d.chain_id, { found: false, error: text(why, 200) });
+    if (d.kind !== 'talker') tellConversation(d.chain_id, `Agent "${d.display_name}" stopped: ${text(why, 400)}`, `failed:${d.id}`);
     await observe(d, 'failure', `Agent ${d.id.slice(0, 8)} (${d.kind}) failed: ${text(why, 300)}`);
     log.warn?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} failed: ${text(why, 200)}`);
   }
@@ -319,11 +393,12 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (asks && askId === null) {
       try {
         const a = await asks.ask({ chainId: d.chain_id, kind: 'question', detail: report.question, want: row?.state?.want?.description || row?.seed || '', stakes: row?.state?.want?.stakes || [],
-          sessionKey: d.session_key, agent: d.display_name });
+          sessionKey: d.session_key, agent: nameOf(d) });
         askId = a.id ?? null;
       } catch (e) { log.warn?.('[agents] ask:', e.message); }
     }
     await pool.query(`UPDATE agent_deployments SET status = 'waiting_person', question = $2, ask_id = $3, seen_at_ms = $4, updated_at = now() WHERE id = $1`, [d.id, report.question, askId, clock()]);
+    if (d.kind !== 'talker') tellConversation(d.chain_id, `Agent "${d.display_name}" needs you: ${text(report.question, 800)} — answer here and the engine passes it on.`, `ask:${d.id}:${d.turns}`);
     log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)} for #${d.chain_id} needs the person: ${text(report.question, 160)}`);
   }
   async function applyReply(d, replyText, messages) {
@@ -348,7 +423,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       if (!(r.verified || []).length && !r.stated) { await pool.query(`UPDATE agent_deployments SET report = report || '{"applyError": null}'::jsonb WHERE id = $1`, [d.id]); continue; }
       const row = await chain(d.chain_id); if (!row || row.status === 'running' || row.status === 'pondering') continue;
       try {
-        const messages = await gateway.history(d.session_key).catch(() => []);
+        const messages = await host.history(d.session_key).catch(() => []);
         const all = [...(await personStatements(d, messages, 0)), ...(r.verified || [])];
         if (all.length) await queue.addEvidence(d.chain_id, all);
         await pool.query(`UPDATE agent_deployments SET report = report || '{"evidenceApplied": true, "applyError": null}'::jsonb WHERE id = $1`, [d.id]);
@@ -361,17 +436,17 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   async function poll() {
     if (polling) return; polling = true;
     try {
-      if (!(await gateway.available())) return;
+      if (!(await host.available())) return;
       await reapply().catch(e => log.warn?.('[agents] reapply:', e.message));
       const { rows } = await pool.query(`SELECT * FROM agent_deployments WHERE status IN ('queued','running','waiting_person','standing') ORDER BY updated_at ASC LIMIT 40`);
-      // Sessions parked on the person (or standing) are read only when the gateway says they changed: one
-      // sessions.list instead of a transcript per session per tick.
+      // Sessions parked on the person (or standing) are read only when their thread changed: one listing of the
+      // threads instead of a transcript per session per tick.
       let changed = null;
-      if (rows.some(d => d.status === 'waiting_person' || d.status === 'standing') && gateway.sessions) {
+      if (rows.some(d => d.status === 'waiting_person' || d.status === 'standing') && host.sessions) {
         try {
-          const list = await gateway.sessions({ agentId, limit: 300 });
+          const list = await host.sessions({ agentId, limit: 300 });
           changed = new Map(list.map(s => [s.key, Number(s.updatedAt) || 0]));
-        } catch (e) { log.warn?.('[agents] sessions.list:', text(e.message, 160)); }
+        } catch (e) { log.warn?.('[agents] thread list:', text(e.message, 160)); }
       }
       for (const d of rows) {
         if ((d.status === 'waiting_person' || d.status === 'standing') && changed) {
@@ -382,35 +457,45 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           if (d.status === 'queued') { await startTurn(d.id, d.brief); continue; }
           if (d.status === 'running') {
             if (!d.run_id) { await startTurn(d.id, d.brief); continue; }
-            // A wait the gateway does not answer is the same as a run still pending: it falls through to the
+            // A wait the host does not answer is the same as a run still pending: it falls through to the
             // transcript, which is where a lost run is recovered from (or found never to have run).
-            const w = await gateway.wait(d.run_id, { timeoutMs: 1000 }).catch(e => { log.warn?.(`[agents] wait ${d.id.slice(0, 8)}:`, text(e.message, 120)); return null; });
+            const w = await host.wait(d.run_id, { timeoutMs: 1000 }).catch(e => { log.warn?.(`[agents] wait ${d.id.slice(0, 8)}:`, text(e.message, 120)); return null; });
+            // The app-server (or the engine) restarted mid-turn: the turn is gone, the thread is not. The agent is
+            // told so and carries on in the same thread, costing one turn of its budget.
+            // An interrupted turn on an agent nobody cancelled is the same: the app-server went away under it (an engine
+            // or app restart). It carries on rather than failing the run.
+            if (w?.status === 'error' && (w.stopReason === 'lost' || (w.stopReason === 'interrupted' && d.status !== 'cancelled'))) {
+              if (d.turns >= maxTurns) { await fail(d, `turn budget of ${maxTurns} spent; the last turn was lost to a restart`); continue; }
+              log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)}: turn lost to a restart; continuing in the same thread`);
+              await startTurn(d.id, `${THINKER} The engine restarted while you were working, so your last turn was cut off. Carry on from where you were; your thread still has everything you did.`);
+              continue;
+            }
             if (!w || w.status === 'pending' || w.status === 'timeout') {
-              // A gateway restart re-runs a turn under a new run id, so the old one never resolves. The transcript
-              // still shows the reply: after a grace period, a settled session whose last words are the agent's,
-              // newer than the turn's start, is that turn's reply.
+              // A run that never resolves still shows its reply in the transcript: after a grace period, a settled
+              // thread whose last words are the agent's, newer than the turn's start, is that turn's reply.
               const since = Number(d.seen_at_ms) || 0;
               if (clock() - since < 90_000) continue;
-              const t = await gateway.transcript(d.session_key).catch(() => null);
+              const t = await host.transcript(d.session_key).catch(() => null);
               const last = settledReply(t, since, d.run_id);
               if (!last) {
                 // A turn that has shown nothing for longer than any turn runs — no reply, nothing pending, nothing
-                // active — was lost by the gateway. It fails, with the reason, so its slot and its pursuit are free
-                // again; waiting on it would hold both forever.
-                if (clock() - since > staleTurnMs && t && !t.pending && !t.active) await fail(d, `the gateway never answered this run (${d.run_id}) and its session shows no reply after ${Math.round((clock() - since) / 60_000)} minutes`);
+                // active — was lost. It fails, with the reason, so its slot and its pursuit are free again; waiting
+                // on it would hold both forever.
+                if (clock() - since > staleTurnMs && t && !t.pending && !t.active) await fail(d, `this run (${d.run_id}) never finished and its thread shows no reply after ${Math.round((clock() - since) / 60_000)} minutes`);
                 continue;
               }
               log.log?.(`[agents] ${d.kind} ${d.id.slice(0, 8)}: run ${d.run_id} did not resolve; taking the reply from the transcript`);
               await applyReply(d, last.text, t.messages);
               continue;
             }
-            const messages = await gateway.history(d.session_key).catch(() => []);
-            if (w.status === 'error') { if (w.stopReason === 'superseded') continue; await fail(d, w.error?.message || w.error || 'the run ended in error'); continue; }
+            const messages = await host.history(d.session_key).catch(() => []);
+            if (w.status === 'error') { if (w.stopReason === 'interrupted' && d.status === 'cancelled') continue; await fail(d, w.error?.message || w.error || 'the run ended in error'); continue; }
             await applyReply(d, w.terminalReply?.text || '', messages);
             continue;
           }
-          // waiting on the person, or a standing talker: the person may have spoken in the session; the app ran the turn.
-          const t = await gateway.transcript(d.session_key).catch(() => null);
+          // waiting on the person, or a standing talker: the person may have spoken in the thread (in T3 Code or
+          // Codex), and that app ran the turn.
+          const t = await host.transcript(d.session_key).catch(() => null);
           if (!t) continue;
           const { messages } = t;
           const since = Number(d.seen_at_ms) || 0;
@@ -421,11 +506,15 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           if (!last) continue;   // no settled reply yet, including when the app is running the turn
           const latest = Math.max(since, ...messages.map(m => m.at || 0));
           if (d.status === 'standing') {
-            // Whatever the person states to the talker is theirs to state; it goes on the want as evidence.
+            // Whatever the person states to the talker is theirs to state; it goes on the want as evidence. An agent
+            // on this pursuit waiting for the person gets his words as its answer (he answered in the conversation).
             if (personSaid.length && last.role === 'assistant') {
               const stated = await personStatements(d, messages, since);
               if (stated.length) { try { await queue.addEvidence(d.chain_id, stated); log.log?.(`[agents] talker for #${d.chain_id}: ${stated.length} statement(s) by the person recorded`); } catch (e) { log.warn?.('[agents] talker evidence:', e.message); } }
               await pool.query('UPDATE agent_deployments SET seen_at_ms = $2, updated_at = now() WHERE id = $1', [d.id, latest]);
+              const words = text(String(personSaid.at(-1).text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 4000);
+              const { rows: waiting } = await pool.query(`SELECT id FROM agent_deployments WHERE chain_id = $1 AND status = 'waiting_person'`, [d.chain_id]);
+              for (const w of waiting) await relay(w.id, words, { via: 'the pursuit conversation', note: false }).catch(e => log.warn?.('[agents] relay from conversation:', e.message));
             }
             continue;
           }
@@ -458,11 +547,12 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     try { return await planOnce(opts); } finally { planning = false; }
   }
   async function planOnce({ perTick = 2 } = {}) {
-    if ((!(await gateway.available()) && !(await gateway.available({ force: true }))) || clock() < providerBackoffUntil) return { started: [] };
+    if ((!(await host.available()) && !(await host.available({ force: true }))) || clock() < providerBackoffUntil) return { started: [] };
     const paused = await controls?.get?.().then(c => c.queuePaused === true).catch(() => false); if (paused) return { started: [] };
     const free = () => slots().then(async s => s - (await liveCount()));
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true AND ponder_state #>> '{want,status}' = 'active'
+        AND ponder_state -> 'paused' IS NULL
         AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input', 'ready')
         AND NOT EXISTS (SELECT 1 FROM agent_deployments a WHERE a.chain_id = thought_chains.id AND a.status IN ('queued', 'running'))
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
@@ -471,7 +561,22 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     // The only time the engine sits is when it thinks over itself: when no other pursuit is due and a slot is
     // free, the standing self pursuit is due (at most every selfGapMs), whatever its own cadence says.
     const isSelf = r => r.state?.standing === 'self';
-    const due = rows.filter(r => !isSelf(r) && dueIn(r.state, now) <= 0);
+    // A deliverable waiting on the person's verdict, or a finish line on their yes, is their move: another agent would only
+    // redo the work. A dated step still fires, an open question the last agent named still gets worked, and they can
+    // always send one by hand. The pursuit says so, worked out when it's read (board.js), not left silent.
+    const holds = new Map(), due = [];
+    for (const r of rows.filter(r => !isSelf(r) && dueIn(r.state, now) <= 0)) {
+      const c = r.state.continuity || {};
+      const dated = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
+      const hold = dated ? null : await holdContext(pool, r).then(ctx => deliveryHold(r.state, ctx)).catch(e => { log.warn?.(`[agents] hold #${r.id}:`, text(e.message, 160)); return null; });
+      if (hold) {
+        const sent = Array.isArray(c.heldThreads) ? c.heldThreads : [];
+        const open = [...new Set((c.remaining || []).map(x => text(x, 300)).filter(Boolean))].filter(t => !sent.some(x => sameThing(x, t)) && !sameThing(t, hold.title));
+        if (!open.length) continue;
+        holds.set(r.id, { ...hold, threads: open });
+      }
+      due.push(r);
+    }
     if (!due.length && (await free()) > 0) {
       const self = rows.find(r => isSelf(r) && now - Math.max(Number(r.state.continuity?.lastSliceStartedAt) || 0, Number(r.state.continuity?.lastSliceEndedAt) || 0) >= selfGapMs);
       if (self) due.push(self);
@@ -482,7 +587,11 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       const threads = [...new Set([...missing, ...remaining].map(x => text(x, 300)).filter(Boolean))];
       const c = row.state.continuity || {};
       const resuming = c.resumeAt && Date.parse(c.resumeAt) <= now && Number(c.lastSliceStartedAt || 0) < Date.parse(c.resumeAt);
+      const held = holds.get(row.id);
       let tasks = [{ task: `Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.` }];
+      // The first step Quinn confirmed when he made the pursuit is the first run's task, before any strategist plans.
+      const firstStep = !Number(c.runs) && !c.lastSliceStartedAt ? text(row.state.finishLine?.firstStep, 600) : '';
+      if (firstStep) tasks = [{ task: `Start with the first step Quinn confirmed when he made this pursuit: ${firstStep}` }];
       if (resuming && c.resumeTask) {
         const step = (Array.isArray(c.schedule) ? c.schedule : []).find(x => x.at === c.resumeAt && x.task === c.resumeTask);
         tasks = [{ task: `It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`, stream: step?.stream || null }];
@@ -490,7 +599,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
         await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
           [row.id, JSON.stringify({ schedule: rest, resumeAt: rest[0]?.at || null, resumeTask: rest[0]?.task || null, firedStep: { at: c.resumeAt, task: c.resumeTask, firedAt: new Date(now).toISOString() } })]).catch(() => {});
       }
-      else if (llm) {
+      else if (held) tasks = held.threads.slice(0, Math.max(1, await free())).map(t => ({ task: `Something is already waiting on Quinn's answer on this pursuit, so do not redo or restate it: ${held.title}. Work only this open question it left: ${t}` }));
+      else if (llm && !firstStep) {
         const s = await strategize(row, Math.max(1, Math.min(3, await free())), now).catch(e => { log.warn?.('[agents] strategist:', text(e.message, 200)); return null; });
         if (s) {
           await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
@@ -516,7 +626,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       }
       // The cadence advances on a deployment; a failed attempt is retried on the next tick.
       if (deployed) await pool.query(`UPDATE thought_chains SET ponder_state = jsonb_set(ponder_state, '{continuity}', (COALESCE(ponder_state -> 'continuity', '{}'::jsonb) || $2::jsonb)) WHERE id = $1`,
-        [row.id, JSON.stringify({ lastSliceStartedAt: now, runs: Number(row.state.continuity?.runs || 0) + deployed })]).catch(() => {});
+        [row.id, JSON.stringify({ lastSliceStartedAt: now, runs: Number(row.state.continuity?.runs || 0) + deployed, ...(held ? { heldThreads: [...(row.state.continuity?.heldThreads || []), ...held.threads].slice(-20) } : {}) })]).catch(() => {});
       // What was refused goes to the strategist next cycle, so it proposes different work instead of variants of
       // the same. A cycle whose every move was refused still counts as a slice: thinking again a minute later would
       // spend a model call per retired task only to be refused again.
@@ -572,28 +682,104 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     if (rows[0]) return rowOf(rows[0]);
     return deploy(Number(chainId), { kind: 'talker', firedBy: 'person', standing: true });
   }
-  // A reply that came another way (Messages, the Judge form) is relayed into the agent's session as the person's.
+  // A reply that came another way (Messages, the Judge form, the pursuit conversation, an MCP client relaying his
+  // words) is relayed into the agent's thread as the person's.
   async function relay(id, reply, { via = 'Messages' } = {}) {
     const { rows: [d] } = await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id]); if (!d) throw new Error('agent not found');
     if (!['waiting_person', 'standing', 'done', 'running'].includes(d.status)) throw new Error(`agent is ${d.status}`);
+    if (!text(reply)) throw new Error('nothing to relay');
     if (d.ask_id && asks) await asks.answer(d.ask_id, text(reply, 500)).catch(() => {});
-    if (d.status === 'standing' || d.status === 'done') { await gateway.turn({ sessionKey: d.session_key, message: `[Quinn, via ${via}] ${text(reply, 4000)}` }); }
-    else await startTurn(d.id, `[Quinn, via ${via}] ${text(reply, 4000)}`);
+    // His words keep their lines (a list, a pasted snippet, a file path per line); only the length is bounded.
+    const words = String(reply).replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').trim().slice(0, 4000);
+    if (d.status === 'standing' || d.status === 'done') { await host.turn({ sessionKey: d.session_key, message: `[Quinn, via ${via}] ${words}`, idempotencyKey: `${d.id}:relay:${randomUUID()}` }); }
+    else await startTurn(d.id, `[Quinn, via ${via}] ${words}`);
     return rowOf((await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]);
+  }
+  // The pursuit's conversation hears what its agents need and what they found. It is a standing talker; in T3 Code
+  // when T3 Code is running. One line per event; the talker answers in one line.
+  async function tellConversation(chainId, line, eventKey) {
+    if (!conversations) return;
+    try {
+      const row = await chain(chainId);
+      if (!row || row.state?.standing === 'self') return;
+      const t = await talker(chainId);
+      if (!t?.sessionKey) return;
+      await host.turn({ sessionKey: t.sessionKey, message: `${THINKER} ${text(line, 3000)}`, idempotencyKey: `${t.id}:note:${eventKey}` });
+    } catch (e) { log.warn?.(`[agents] conversation for #${chainId}:`, text(e.message, 160)); }
   }
   async function cancel(id) {
     const { rows: [d] } = await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id]); if (!d) throw new Error('agent not found');
     if (!LIVE.includes(d.status) && d.status !== 'standing') return rowOf(d);
     await pool.query(`UPDATE agent_deployments SET status = 'cancelled', ended_at = now(), updated_at = now() WHERE id = $1`, [id]);
-    await gateway.call('chat.abort', { sessionKey: d.session_key }).catch(() => {});
+    await host.abort(d.session_key).catch(() => {});
     await observe(d, 'not_attempted', `Agent ${d.id.slice(0, 8)} cancelled by a person.`);
     return rowOf((await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id])).rows[0]);
   }
+  // Where Quinn can open an agent's thread, and what was said in it.
+  async function link(id) { const d = await get(id); return { id: d.id, ...(await host.link?.(d.sessionKey).catch(() => null) || {}) }; }
+  async function messages(id, { steps = false } = {}) { const d = await get(id); const t = await host.transcript(d.sessionKey, { steps }); return { id: d.id, kind: d.kind, name: d.name, displayName: d.displayName, status: d.status, messages: (t.messages || []).map(m => (m.role === 'assistant' && typeof m.text === 'string' ? { ...m, text: withoutReport(m.text) } : m)).filter(m => m.role !== 'assistant' || typeof m.text !== 'string' || m.text), active: t.active }; }
   async function list({ chainId = null, live = false, limit = 50 } = {}) {
     const { rows } = await pool.query(`SELECT * FROM agent_deployments WHERE ($1::int IS NULL OR chain_id = $1) ${live ? `AND status = ANY($3)` : ''} ORDER BY created_at DESC LIMIT $2`, live ? [chainId, limit, [...LIVE, 'standing']] : [chainId, limit]);
     return rows.map(rowOf);
   }
   async function get(id) { const { rows: [d] } = await pool.query('SELECT * FROM agent_deployments WHERE id = $1', [id]); if (!d) throw new Error('agent not found'); return rowOf(d); }
+
+  // ── the pursuit chat (the Mac app) ─────────────────────────────────────────────────────────────────────
+  // A thread's last line and whether a reply is being written, read from its transcript. Read-only, bounded: a thread
+  // whose rollout can't be read in time comes back without a line rather than holding up the list.
+  async function lastLine(d) {
+    const words = m => (m.role === 'assistant' ? withoutReport(m.text) : String(m.text || '').trim());
+    // The engine's own notes into a thread aren't anything anyone said, so a list never shows them as its last line.
+    const said = m => (m.role === 'user' || m.role === 'assistant') && words(m) && !String(m.text || '').startsWith(THINKER);
+    try {
+      const t = await Promise.race([host.transcript(d.sessionKey), new Promise((_, no) => setTimeout(() => no(new Error('transcript timed out')), 6000).unref?.())]);
+      const lines = (t?.messages || []).filter(said);
+      const last = lines.at(-1), reply = lines.findLast(m => m.role === 'assistant');
+      return { active: Boolean(t?.active), messageCount: lines.length, lastReplyAt: reply?.at || null,
+        last: last ? { role: last.role, text: text(words(last).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 280), at: last.at || null } : null };
+    } catch (e) { return { active: false, messageCount: 0, lastReplyAt: null, last: null, unreadable: text(e.message, 160) }; }
+  }
+  async function eachLimited(items, n, f) {
+    const out = new Array(items.length); let next = 0;
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await f(items[i]); } }));
+    return out;
+  }
+  // One pursuit's threads: its standing conversation first (never created here), then its agents, newest first.
+  async function threads(chainId) {
+    const { rows: [row] } = await pool.query('SELECT id, seed, status, ponder_state AS state FROM thought_chains WHERE id = $1', [Number(chainId)]);
+    if (!row) throw new Error('Pursuit not found');
+    const all = await list({ chainId: row.id, limit: 60 });
+    const talkerRow = all.find(d => d.kind === 'talker' && d.status === 'standing') || null;
+    const agentRows = all.filter(d => d.kind !== 'talker');
+    const rows = [talkerRow, ...agentRows].filter(Boolean);
+    const lines = await eachLimited(rows, 4, lastLine);
+    const out = rows.map((d, i) => ({ ...d, ...lines[i] }));
+    return { chainId: row.id, headline: row.state?.continuity?.board?.headline || null, title: text(row.state?.want?.description || row.seed, 400), seed: row.seed, status: row.status,
+      wantStatus: row.state?.want?.status || null, standing: row.state?.standing || null,
+      talker: talkerRow ? out[0] : null, agents: talkerRow ? out.slice(1) : out };
+  }
+  // Every pursuit's conversation for the app's Chats list: its last line, when it last replied, and what its agents are doing.
+  async function chats({ limit = 40 } = {}) {
+    const { rows } = await pool.query(`SELECT c.id, c.seed, c.status, c.updated_at, c.ponder_state->'want'->>'description' AS description,
+        c.ponder_state->'want'->>'status' AS want_status, c.ponder_state->>'standing' AS standing,
+        c.ponder_state #>> '{continuity,board,headline}' AS headline, c.ponder_state #>> '{origin,kind}' AS origin,
+        (SELECT row_to_json(t) FROM (SELECT * FROM agent_deployments a WHERE a.chain_id = c.id AND a.kind = 'talker' AND a.status = 'standing' ORDER BY a.created_at DESC LIMIT 1) t) AS talker,
+        (SELECT count(*)::int FROM agent_deployments a WHERE a.chain_id = c.id AND a.kind <> 'talker' AND a.status IN ('queued', 'running')) AS working,
+        (SELECT count(*)::int FROM agent_deployments a WHERE a.chain_id = c.id AND a.kind <> 'talker' AND a.status = 'waiting_person') AS waiting,
+        (SELECT count(*)::int FROM agent_deployments a WHERE a.chain_id = c.id AND a.kind <> 'talker') AS agents
+      FROM thought_chains c WHERE c.ponder_state ? 'want' AND c.status <> 'cancelled' AND c.ponder_state -> 'deleted' IS NULL
+      ORDER BY (c.status = 'resolved'), c.updated_at DESC, c.id DESC LIMIT $1`, [Math.max(1, Math.min(100, Number(limit) || 40))]);
+    const talkers = rows.map(r => (r.talker ? rowOf(r.talker) : null));
+    const lines = await eachLimited(talkers, 4, d => d ? lastLine(d) : null);
+    const items = rows.map((r, i) => ({ chainId: r.id, headline: r.headline || null, origin: r.origin || null, title: text(r.description || r.seed, 400), seed: r.seed, status: r.status, wantStatus: r.want_status || null,
+      standing: r.standing || null, updatedAt: r.updated_at, working: r.working, waiting: r.waiting, agents: r.agents,
+      talker: talkers[i] ? { ...talkers[i], ...lines[i] } : null }));
+    // Like a messages list: conversations by their last line, newest first; pursuits not yet talked about after them.
+    const said = x => Number(x.talker?.last?.at || 0);
+    items.sort((a, b) => (a.status === 'resolved') - (b.status === 'resolved') || (said(b) > 0) - (said(a) > 0) || said(b) - said(a)
+      || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return { items };
+  }
   // Wait for one deployment to reach a terminal status (used by self-build for its builder).
   async function waitFor(id, { timeoutMs = 20 * 60_000, signal = null } = {}) {
     const until = clock() + timeoutMs;
@@ -617,9 +803,20 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   router.get('/oca/agents/:id', route(req => get(req.params.id)));
   router.post('/oca/agents/:id/cancel', route(req => cancel(req.params.id)));
   router.post('/oca/agents/:id/say', route(req => relay(req.params.id, req.body?.text ?? req.body?.reply ?? '', { via: req.body?.via || 'Messages' })));
+  router.get('/oca/agents/:id/messages', route(req => messages(req.params.id, { steps: req.query.steps === '1' })));
+  router.get('/oca/agents/:id/link', route(req => link(req.params.id)));
+  // Where a session's thread can be opened (the Mac app's "Answer" and "Talk to it"): a T3 Code link or a Codex command.
+  router.get('/oca/agent-link', route(async req => {
+    const key = String(req.query.sessionKey || '');
+    if (!/^agent:[A-Za-z0-9_-]+:want-\d+-(research|talker|builder|executor)-[A-Za-z0-9]+$/.test(key)) throw new Error('name an agent session');
+    return (await host.link?.(key)) || {};
+  }));
+  router.get('/oca/agent-host', route(async () => ({ ...(host.status?.() || {}), available: await host.available().catch(() => false) })));
   router.post('/oca/inbox/want/:id/deploy', route(req => deploy(Number(req.params.id), { kind: req.body?.kind || 'research', task: req.body?.task || '', firedBy: 'person' })));
   router.get('/oca/inbox/want/:id/talker', route(req => talker(Number(req.params.id))));
   router.post('/oca/inbox/want/:id/talker', route(req => talker(Number(req.params.id))));
+  router.get('/oca/inbox/want/:id/threads', route(req => threads(Number(req.params.id))));
+  router.get('/oca/chats', route(req => chats({ limit: req.query.limit })));
 
-  return { init, deploy, poll, plan, talker, relay, cancel, list, get, waitFor, liveCount, slots, pausedUntil: () => (providerBackoffUntil > clock() ? providerBackoffUntil : null), available: () => gateway.available(), start, stop, router, composeBrief, parseReport };
+  return { init, deploy, nameOf, poll, plan, talker, relay, cancel, list, get, link, messages, threads, chats, waitFor, liveCount, slots, pausedUntil: () => (providerBackoffUntil > clock() ? providerBackoffUntil : null), available: () => host.available(), start, stop, router, composeBrief, parseReport };
 }

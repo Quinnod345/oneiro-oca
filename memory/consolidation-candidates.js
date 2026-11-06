@@ -68,7 +68,7 @@ export function createEvidenceConsolidator({ pool, generate }) {
       locked = lock.acquired;
       if (!locked) return { ...emptyCounts(), busy: true, note: 'Another consolidation review is in progress.' };
       const { rows: episodes } = await client.query(`SELECT id, timestamp, event_type, content, active_app, user_presence, user_activity, participants,
-        emotional_valence, surprise_magnitude FROM episodic_memory WHERE consolidation_status='raw'
+        emotional_valence, surprise_magnitude FROM episodic_memory WHERE consolidation_status='raw' AND forgotten_at IS NULL
         ORDER BY importance_score DESC, id ASC LIMIT 20`);
       if (!episodes.length) return { ...emptyCounts(), note: 'No raw episodes to review.' };
       const evidence = episodes.map(e => ({ id: e.id, timestamp: e.timestamp, eventType: e.event_type,
@@ -83,7 +83,7 @@ export function createEvidenceConsolidator({ pool, generate }) {
       // Atomic candidate receipt + review cursor, including concurrent archival or edits.
       const { rows: current } = await client.query(`SELECT id, timestamp, event_type, content, active_app, user_presence, user_activity, participants,
         emotional_valence, surprise_magnitude FROM episodic_memory
-        WHERE id=ANY($1::int[]) AND consolidation_status='raw' ORDER BY id FOR UPDATE`, [episodes.map(e => e.id)]);
+        WHERE id=ANY($1::int[]) AND consolidation_status='raw' AND forgotten_at IS NULL ORDER BY id FOR UPDATE`, [episodes.map(e => e.id)]);
       const order = rows => [...rows].sort((a,b) => a.id-b.id);
       if (fingerprint(order(current)) !== fingerprint(order(episodes))) throw new Error('Episode evidence changed during review; no review committed');
       const { rows: [review] } = await client.query(`INSERT INTO consolidation_reviews

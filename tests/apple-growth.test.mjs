@@ -59,7 +59,7 @@ test('every move goes to the broker; dry-run answers are kept, unchanged moves a
     ['ads_keyword', '5', { name: 'journal', adGroupId: 9, matchType: 'EXACT' }, { taps: 30, tapInstalls: 10, localSpend: 20, currency: 'USD' }],
   ]) await pool.query(`INSERT INTO apple_metrics (source, day, key, dims, metrics) VALUES ($1, $2, $3, $4, $5)`, [source, day, key, JSON.stringify(dims), JSON.stringify(metrics)]);
   let mode = 'dry-run';
-  const calls = [], asked = [];
+  const calls = [], asked = [], closed = [];
   const apple = {
     status: async () => ({ ok: true, mode }),
     call: async r => {
@@ -75,7 +75,7 @@ test('every move goes to the broker; dry-run answers are kept, unchanged moves a
     },
   };
   const llm = { messages: { create: async () => 'Sorry about the lost entries, and thank you for telling us. Please write to us from Settings → Help so we can look at your sync.' } };
-  const g = createAppleGrowth({ pool, apple, llm, asks: { ask: async a => { asked.push(a); return { id: 1 }; } }, clock: () => now, log: quiet, settingsPath });
+  const g = createAppleGrowth({ pool, apple, llm, asks: { ask: async a => { asked.push(a); return { id: 1 }; }, closeSubject: async s => { closed.push(s); return []; } }, clock: () => now, log: quiet, settingsPath });
   await g.init();
   const first = await g.run();
   const kinds = first.moves.map(m => `${m.kind}:${m.status}`).sort();
@@ -93,7 +93,133 @@ test('every move goes to the broker; dry-run answers are kept, unchanged moves a
   const reply = (await g.recent()).find(p => p.kind === 'review_reply');
   assert.equal(reply.status, 'needs_approval'); assert.equal(reply.approval_id, 'a1b2c3d4');
   assert.match(asked[0].detail, /In Terminal on your Mac, run: sudo -u _oneiroapple … approve a1b2c3d4/);
+  assert.equal(asked[0].kind, 'apple_approval'); assert.equal(asked[0].subject, 'apple:review_reply:rv1');
+  assert.equal(asked[0].apple.command, 'sudo -u _oneiroapple … approve a1b2c3d4');
+  assert.match(asked[0].apple.change, /Posts this public reply to a 2-star App Store review: “Sorry about the lost entries/);
   await g.run();
   assert.equal((await g.recent()).find(p => p.kind === 'review_reply').status, 'sent');
+  assert.ok(closed.includes('apple:review_reply:rv1'), 'once it is sent, its card closes on its own');
   assert.equal(calls.filter(c => c.path === '/v1/customerReviewResponses' && c.approval === 'a1b2c3d4').length, 1);
+}));
+
+test('a review keeps its one drafted reply, and a new code replaces the last ask instead of piling up beside it', async () => database(async pool => {
+  const { createAsks } = await import('../reasoning/asks.js');
+  await pool.query(await readFile(new URL('../migrations/066_apple_proposals.sql', import.meta.url), 'utf8'));
+  let now = Date.parse('2026-10-05T15:00:00Z');
+  const dir = await mkdtemp(join(tmpdir(), 'apple-growth-'));
+  const settingsPath = join(dir, 'settings.json');
+  await writeFile(settingsPath, JSON.stringify({ app: { appId: '1' } }));
+  const sent = [];
+  const asks = createAsks({ pool, clock: () => now, log: quiet, deliverers: { imessage: async m => { sent.push(m); } } });
+  await asks.init();
+  let code = 0, drafted = 0;
+  const review = id => ({ id, attributes: { rating: 5, body: 'Love it', createdDate: '2024-10-05T10:00:00Z' }, relationships: { response: { data: null } } });
+  const apple = {
+    status: async () => ({ ok: true, mode: 'live' }),
+    call: async r => {
+      if (r.method === 'GET') return { ok: true, decision: 'read', body: { data: [review('rv1'), review('rv2')] } };
+      // Each code runs out before he answers, which is what the broker reports when its window closes.
+      if (r.approval) return { ok: false, decision: 'failed', error: `approval ${r.approval} expired` };
+      code += 1;
+      return { ok: true, decision: 'needs_approval', approvalId: `c0de${String(code).padStart(4, '0')}`, approve: `sudo -u _oneiroapple approve c0de${String(code).padStart(4, '0')}` };
+    },
+  };
+  const llm = { messages: { create: async () => { drafted += 1; return `Thank you, draft number ${drafted}.`; } } };
+  const g = createAppleGrowth({ pool, apple, llm, asks, clock: () => now, log: quiet, settingsPath });
+  await g.init();
+  const open = async () => (await asks.open()).filter(a => a.kind === 'apple_approval');
+
+  await g.run();
+  assert.equal(drafted, 2, 'one reply drafted per review');
+  assert.equal((await open()).length, 2, 'one ask per review');
+  const words = new Set((await open()).map(a => a.apple.change));
+  // Day after day: never more than one open ask per review, whatever happens to the codes, and it isn't redrafted.
+  for (let day = 0; day < 6; day++) {
+    now += 86_400_000;
+    await g.run();
+    const asksNow = await open();
+    assert.ok(asksNow.length <= 2, `day ${day}: ${asksNow.length} open asks for two reviews`);
+    for (const a of asksNow) assert.ok(words.has(a.apple.change), 'each review keeps the words it was first drafted with');
+  }
+  assert.equal(drafted, 2, 'a drafted reply is never written again');
+  const [one] = await open();
+  assert.match(one.apple.change, /Posts this public reply to a 5-star App Store review: “Thank you, draft number/);
+  assert.match(one.apple.command, /^sudo -u _oneiroapple approve c0de\d{4}$/);
+  assert.match(one.message, /approve c0de\d{4}/);
+  assert.doesNotMatch(sent.join('\n'), /T3 Code/);
+}));
+
+test('asks: the dedupe keys on the subject, not the text holding the code; a stale code can never sit open beside a newer one', async () => database(async pool => {
+  const { createAsks } = await import('../reasoning/asks.js');
+  let now = Date.parse('2026-10-05T15:00:00Z');
+  const asks = createAsks({ pool, clock: () => now, log: quiet, notify: false });
+  await asks.init();
+  const say = (code, subject = 'apple:review_reply:rv1') => asks.ask({ chainId: null, kind: 'apple_approval', subject, detail: `Approve an Apple change: a reply. In Terminal on your Mac, run: sudo approve ${code}` });
+  const a = await say('aaaa1111');
+  const again = await say('aaaa1111');
+  assert.equal(again.asked, false); assert.equal(again.id, a.id, 'the same code is the same ask');
+  now += 1000;
+  const b = await say('bbbb2222');
+  assert.notEqual(b.id, a.id);
+  const open = await asks.open();
+  assert.deepEqual(open.map(x => x.id), [b.id], 'the older code closed when the newer one was asked');
+  const { rows: [closed] } = await pool.query(`SELECT replied_at, metadata FROM notifications WHERE id = $1`, [a.id]);
+  assert.ok(closed.replied_at); assert.equal(closed.metadata.closed.why, 'superseded');
+  // A different subject is a different ask, and a question without a pursuit is deduped too (it used to compare null to null).
+  const c = await say('cccc3333', 'apple:review_reply:rv2');
+  assert.equal((await asks.open()).length, 2); assert.notEqual(c.id, b.id);
+  const q1 = await asks.ask({ chainId: null, kind: 'question', detail: 'Which store region should this use?' });
+  const q2 = await asks.ask({ chainId: null, kind: 'question', detail: 'Which store region should this use?' });
+  assert.equal(q2.id, q1.id);
+  // A payment is only ever decided, so a subject can't close it.
+  await pool.query(`UPDATE notifications SET metadata = metadata || '{"payment":true,"subject":"pay"}'::jsonb WHERE id = $1`, [q1.id]);
+  assert.deepEqual(await asks.closeSubject('pay'), []);
+}));
+
+test('an ask written before the Apple record existed still reads as an Apple change, in its old words and with the current proposal\'s description', async () => database(async pool => {
+  const { createAsks } = await import('../reasoning/asks.js');
+  const { parseAppleAsk, appleChangeWords } = await import('../apple/change-words.js');
+  await pool.query(await readFile(new URL('../migrations/066_apple_proposals.sql', import.meta.url), 'utf8'));
+  const old = 'Oneiro\'s agent on #null asks: Approve an Apple change: a 5-star review from 2024-10-05 has no reply. In Terminal on your Mac, run: sudo -u _oneiroapple /opt/oneiro/apple/run approve 404916dc — open Oneiro and answer it in the chat, or reply here.';
+  const parsed = parseAppleAsk(old);
+  assert.deepEqual(parsed, { why: 'a 5-star review from 2024-10-05 has no reply', command: 'sudo -u _oneiroapple /opt/oneiro/apple/run approve 404916dc', approval: '404916dc' });
+  assert.equal(parseAppleAsk('Which store region?'), null);
+  assert.equal(parseAppleAsk(old.replace(/ — open Oneiro.*$/, ' — reply here, or answer in the pursuit\'s conversation in T3 Code.')).command, parsed.command);
+  const asks = createAsks({ pool, log: quiet, notify: false }); await asks.init();
+  await pool.query(`INSERT INTO notifications (message, category, metadata) VALUES ($1, 'ask', $2::jsonb)`, [old, JSON.stringify({ chainId: null, kind: 'question', detail: old.slice(0, 300) })]);
+  await pool.query(`INSERT INTO apple_proposals (kind, subject, evidence, request, why, status, approval_id) VALUES ('review_reply', 'rv1', '{"rating":5}', $1, 'a 5-star review', 'needs_approval', '404916dc')`,
+    [JSON.stringify({ body: { data: { attributes: { responseBody: 'Thank you.' } } } })]);
+  const [a] = await asks.open();
+  assert.equal(a.apple.command, parsed.command);
+  assert.equal(a.apple.change, 'Posts this public reply to a 5-star App Store review: “Thank you.”');
+  assert.equal(appleChangeWords({ kind: 'negative_keyword', request: { body: { items: [{ data: { text: 'free diary' } }] } } }), 'Stops Apple Ads from showing for “free diary”.');
+}));
+
+test('close-duplicate-asks prints by default, closes only with --apply, keeps the newest per subject, and is idempotent', async () => database(async pool => {
+  const { createAsks } = await import('../reasoning/asks.js');
+  const { closeDuplicates } = await import('../scripts/close-duplicate-asks.mjs');
+  await pool.query(await readFile(new URL('../migrations/066_apple_proposals.sql', import.meta.url), 'utf8'));
+  const asks = createAsks({ pool, log: quiet, notify: false }); await asks.init();
+  const insert = async (date, code, at) => (await pool.query(`INSERT INTO notifications (message, category, created_at, metadata) VALUES ($1, 'ask', $2, $3::jsonb) RETURNING id`,
+    [`Oneiro's agent on #null asks: Approve an Apple change: a 5-star review from ${date} has no reply. In Terminal on your Mac, run: sudo approve ${code} — open Oneiro and answer it in the chat, or reply here.`, at, JSON.stringify({ chainId: null, kind: 'question' })])).rows[0].id;
+  const old1 = await insert('2024-10-05', 'aaaaaaaa', '2026-10-05T00:00:00Z');
+  const old2 = await insert('2024-10-05', 'bbbbbbbb', '2026-10-06T00:00:00Z');
+  const newest = await insert('2024-10-05', 'cccccccc', '2026-11-05T00:00:00Z');
+  const other = await insert('2025-09-05', 'dddddddd', '2026-10-05T00:00:00Z');
+  // Same words as another subject, but its code is still the one a proposal holds, so it stays.
+  const sameDay = await insert('2024-10-05', 'eeeeeeee', '2026-10-01T00:00:00Z');
+  await pool.query(`INSERT INTO apple_proposals (kind, subject, why, status, approval_id) VALUES ('review_reply', 'rvE', 'x', 'needs_approval', 'eeeeeeee')`);
+  const question = (await pool.query(`INSERT INTO notifications (message, category, metadata) VALUES ('Which region?', 'ask', '{"kind":"question","chainId":null}') RETURNING id`)).rows[0].id;
+  const pay = (await pool.query(`INSERT INTO notifications (message, category, metadata) VALUES ('Pay', 'ask', '{"kind":"question","payment":true,"subject":"apple:x"}') RETURNING id`)).rows[0].id;
+  const lines = [];
+  const dry = await closeDuplicates(pool, { log: l => lines.push(l) });
+  assert.deepEqual(dry.closed, []); assert.deepEqual(dry.wouldClose.sort((a, b) => a - b), [old1, old2].sort((a, b) => a - b));
+  assert.match(lines.join('\n'), /would close #\d+ \(code aaaaaaaa\)/); assert.match(lines.at(-1), /--apply/);
+  const open = async () => (await pool.query(`SELECT id FROM notifications WHERE category = 'ask' AND replied_at IS NULL ORDER BY id`)).rows.map(r => r.id);
+  assert.equal((await open()).length, 7, 'a dry run changes nothing');
+  const done = await closeDuplicates(pool, { apply: true, log: () => {} });
+  assert.deepEqual(done.closed.sort((a, b) => a - b), [old1, old2].sort((a, b) => a - b));
+  assert.deepEqual(await open(), [newest, other, sameDay, question, pay].sort((a, b) => a - b));
+  const again = await closeDuplicates(pool, { apply: true, log: () => {} });
+  assert.deepEqual(again.closed, [], 'running it twice finds nothing');
 }));

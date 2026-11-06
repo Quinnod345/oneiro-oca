@@ -1,33 +1,44 @@
-// Payments ask on Quinn's iPhone, with Approve and Deny. For each payment ask the engine opens a gateway approval;
-// OpenClaw pushes it to his iPhone as a notification he can pull down or press and hold, then tap Approve (after the
-// phone unlocks) or Deny. His tap resolves it on the gateway, and the engine reads the decision back.
+// Every payment waits for Quinn's yes, and only Quinn can give it. Each payment ask carries a one-time code bound to that
+// one request; he approves by texting "APPROVE <code>" (or "DENY <code>") from his own phone, in the Oneiro conversation
+// in Messages. The engine reads that reply from the work Mac's Messages database, where a message counts as his only if
+// Messages received it from his handle — nothing running on this Mac, where agents run, can produce one. So an agent
+// can never approve its own payment, even though it can read the engine's tables: the code alone approves nothing.
 //
-// A decision counts only when the gateway recorded it as made on one of his approving devices: the paired phone the
-// engine pushes to, plus any listed in OCA_PAYMENT_APPROVER_DEVICES. The gateway takes that identity from the
-// device's signed connection, not from anything the client says. A client on this Mac, where agents run, resolves as
-// another device and is ignored, so an agent can't approve its own payment, and Quinn hears about the attempt.
-// The decision answers the ask and wakes every agent waiting on it, like a reply in its session would.
+// The code is stored only as a hash. The first answer wins. An approval stays open ten minutes; after that, or once he
+// has answered the ask another way, it is settled and the code is dead. A decision for another request, a reused code,
+// or a late one is refused, and he is told when it comes from a text he sent. When a window closes while the want is
+// still active, the engine asks once more with a new code (asks.js reissueExpired), in the morning if it closed overnight.
+// A new code only reopens the question: nothing here ever approves on its own.
 //
-// The first answer wins. The gateway keeps an approval open for ten minutes at most; after that, or once he has
-// answered in Messages or the app, the phone's prompt is gone and the ask is settled the way he answered it.
-//
-// The engine reads a decision from the gateway's history of closed approvals, never from approval.get. An open
-// approval is visible only to the devices it was sent to, so approval.get answers the engine "approval not found"
-// from the moment it exists. Reading that as "gone" settled every approval as expired seconds after it was sent, and
-// a tap on the phone was never seen (2026-09-29 to 2026-10-01). The history carries each decision with the device
-// that made it.
+// This replaced the OpenClaw gateway's plugin approvals and iPhone push (2026-11): the phone app is retired, and
+// Messages on his phone is now the one place a payment is decided.
+import { createHash, randomInt } from 'node:crypto';
+
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 export const APPROVAL_WINDOW_MS = 600_000;
-// An approval missing from the history this long after its window has left no trace; it can no longer be decided.
-export const LOST_AFTER_MS = 600_000;
 export const APPROVE = 'allow-once';
 export const DENY = 'deny';
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I: a code read off a lock screen is typed right
+export const hashCode = code => createHash('sha256').update(`oca-payment:${String(code).toUpperCase()}`).digest('hex');
+export function newCode() { let c = ''; for (let i = 0; i < 6; i++) c += ALPHABET[randomInt(ALPHABET.length)]; return c; }
+// "approve K7Q2MX", "Approve k7q2mx.", "DENY K7Q2MX" — the verb and the code, nothing else decides.
+export function parseDecision(message) {
+  const m = String(message || '').trim().match(/^(approve|deny)\s+([A-Za-z0-9]{6})\b[.!]?$/i);
+  return m ? { approved: m[1].toLowerCase() === 'approve', code: m[2].toUpperCase() } : null;
+}
+// How often he can ask for a new code from the app, so a stuck button can't flood his phone.
+export const RESEND_MAX = 5;
+export const RESEND_GAP_MS = 30_000;
+// When an expired approval may ask again: now in the day, 8 am after a window that closed overnight (10 pm to 8 am).
+export function reissueAt(now = Date.now()) {
+  const d = new Date(now), h = d.getHours();
+  if (h >= 8 && h < 22) return now;
+  const morning = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (h >= 22 ? 1 : 0), 8, 0, 0, 0);
+  return morning.getTime();
+}
+export function approvalLine(code) { return `Reply APPROVE ${code} to pay, or DENY ${code}. (Expires in 10 minutes.)`; }
 
-// The gateway answers either with the value itself or wrapped; read the id or approval from any of those shapes.
-const unwrap = r => (r && typeof r === 'object' ? (r.result ?? r.payload ?? r) : r);
-
-export function createPaymentApprovals({ pool, gateway, deciders = [], clock = Date.now, log = console, onDecision = null, onUntrusted = null, tickMs = 10_000 } = {}) {
-  const trusted = new Set(deciders.filter(Boolean).map(String));
+export function createPaymentApprovals({ pool, clock = Date.now, log = console, onDecision = null, onRefused = null, onExpired = null, tickMs = 30_000, windowMs = APPROVAL_WINDOW_MS } = {}) {
   let timer = null, ticking = false;
 
   async function settle(askId, fields) {
@@ -35,75 +46,56 @@ export function createPaymentApprovals({ pool, gateway, deciders = [], clock = D
       [askId, JSON.stringify(fields)]);
   }
 
-  // Opens the approval for one payment ask and returns what the ask records ({ id, requestedAt, expiresAt }), or null
-  // when the gateway couldn't take it or had no way to reach the phone (the ask then goes out as a plain push, and
-  // stands in the app and in Messages).
-  async function request({ title, description, detail = null }) {
-    if (!trusted.size) { log.warn?.('[payments] no approving device is configured; the ask goes out as a plain push'); return null; }
-    let r;
-    try {
-      r = unwrap(await gateway.call('plugin.approval.request', {
-        pluginId: 'oneiro.payments', title: text(title, 80), description: text(description, 512), ...(detail ? { detail: text(detail, 4000) } : {}),
-        severity: 'warning', allowedDecisions: [APPROVE, DENY], timeoutMs: APPROVAL_WINDOW_MS, twoPhase: true,
-      }, { timeout: 30_000 }));
-    } catch (e) { log.warn?.('[payments] approval request failed:', text(e.message, 200)); return null; }
-    if (r?.status !== 'accepted' || !r.id) {
-      log.warn?.(`[payments] the gateway could not deliver the approval (${text(JSON.stringify(r), 200)}); the ask goes out as a plain push`);
-      return null;
-    }
-    const at = clock();
-    return { id: r.id, requestedAt: at, expiresAt: Number(r.expiresAtMs) || at + APPROVAL_WINDOW_MS, route: r.deliveryRoute || null };
+  // A new approval for one payment ask: the record the ask stores (no code in it) and the code for the text to him.
+  async function request({ title, description }) {
+    const code = newCode(), at = clock();
+    const record = { id: `pay:${hashCode(code).slice(0, 16)}`, codeHash: hashCode(code), requestedAt: at, expiresAt: at + windowMs, route: 'imessage',
+      title: text(title, 120), description: text(description, 500) };
+    return { ...record, code };
   }
 
-  // The plugin approvals the gateway has closed (allowed, denied or expired), by id, each with who decided it.
-  async function closedApprovals() {
-    const r = unwrap(await gateway.call('approval.history', { kind: 'plugin', limit: 50 }, { timeout: 20_000 }));
-    const items = Array.isArray(r?.items) ? r.items : [];
-    return new Map(items.filter(i => i?.id).map(i => [String(i.id), i]));
+  // A decision Quinn texted. `from` is what the Messages reader verified: his handle, received on the work Mac.
+  async function decide({ approved, code, from, via = 'Messages', at = clock() }) {
+    const h = hashCode(code);
+    const { rows } = await pool.query(`SELECT id, replied_at, metadata FROM notifications WHERE category = 'ask' AND metadata->'approval'->>'codeHash' = $1 LIMIT 1`, [h]);
+    const a = rows[0];
+    const refuse = async why => { log.warn?.(`[payments] ${approved ? 'APPROVE' : 'DENY'} ${String(code).slice(0, 2)}…: ${why}`); try { await onRefused?.({ askId: a?.id ?? null, why }); } catch {} return { ok: false, why }; };
+    if (!a) return refuse('no payment is waiting on that code');
+    const ap = a.metadata.approval;
+    if (ap.settled) return refuse(`that payment was already ${ap.settled === APPROVE ? 'approved' : ap.settled === DENY ? 'denied' : ap.settled}`);
+    if (a.replied_at) { await settle(a.id, { settled: 'answered-elsewhere' }); return refuse('that payment was already answered another way'); }
+    if (at > Number(ap.expiresAt || 0)) { await settle(a.id, { settled: 'expired' }); return refuse('that code has expired; the payment was not made'); }
+    const decision = approved ? APPROVE : DENY;
+    await settle(a.id, { settled: decision, resolver: { kind: 'imessage', id: text(from, 80), via }, decidedAt: at });
+    log.log?.(`[payments] ask #${a.id}: ${approved ? 'approved' : 'denied'} by Quinn in ${via}`);
+    try { await onDecision?.({ askId: a.id, approved }); }
+    catch (e) { log.warn?.(`[payments] ask #${a.id}: the decision couldn't reach its agent:`, text(e.message, 200)); }
+    return { ok: true, askId: a.id, approved };
   }
 
-  // Reads back every open approval. A decision from his phone answers the ask; one from anywhere else is ignored and
-  // reported. An ask he already answered another way keeps that answer, and its prompt is taken off the phone.
+  // Open approvals past their window, or answered some other way, are settled so their codes are dead.
   async function tick() {
     if (ticking) return; ticking = true;
     try {
       const { rows } = await pool.query(`SELECT id, replied_at, metadata FROM notifications WHERE category = 'ask'
-        AND metadata->'approval'->>'id' IS NOT NULL AND metadata->'approval'->>'settled' IS NULL ORDER BY id LIMIT 20`);
-      let closed = null;
+        AND metadata->'approval'->>'codeHash' IS NOT NULL AND metadata->'approval'->>'settled' IS NULL ORDER BY id LIMIT 50`);
       for (const a of rows) {
-        const ap = a.metadata.approval;
-        if (a.replied_at) {
-          await settle(a.id, { settled: 'answered-elsewhere' });
-          await gateway.call('approval.resolve', { id: ap.id, kind: 'plugin', decision: DENY }, { timeout: 20_000 }).catch(() => {});
-          continue;
+        if (a.replied_at) await settle(a.id, { settled: 'answered-elsewhere' });
+        else if (clock() > Number(a.metadata.approval.expiresAt || 0)) {
+          await settle(a.id, { settled: 'expired' });
+          await onExpired?.({ askId: a.id }).catch?.(e => log.warn?.(`[payments] ask #${a.id}: couldn't ask again:`, text(e.message, 200)));
         }
-        if (closed === null) {
-          try { closed = await closedApprovals(); }
-          catch (e) { log.warn?.('[payments] approval history unavailable; will read again next pass:', text(e.message, 160)); return; }
-        }
-        const snap = closed.get(String(ap.id));
-        if (!snap) {   // still open on the phone; only long past its window, with no record at all, is it lost
-          if (clock() > Number(ap.expiresAt || 0) + LOST_AFTER_MS) await settle(a.id, { settled: 'expired', status: 'missing' });
-          continue;
-        }
-        const decision = snap.decision, resolver = snap.resolver || null;
-        if (decision !== APPROVE && decision !== DENY) { await settle(a.id, { settled: 'expired', status: snap.status ?? null }); continue; }
-        if (resolver?.kind !== 'device' || !trusted.has(String(resolver.id))) {
-          const who = resolver ? `${resolver.kind} ${text(resolver.id, 12)}` : 'an unknown client';
-          log.warn?.(`[payments] ask #${a.id}: ${decision} came from ${who}, not Quinn's phone; ignored`);
-          await settle(a.id, { settled: 'untrusted', decision, resolver });
-          try { await onUntrusted?.({ askId: a.id, decision, resolver }); } catch (e) { log.warn?.('[payments] untrusted notice:', text(e.message, 160)); }
-          continue;
-        }
-        await settle(a.id, { settled: decision, resolver, decidedAt: snap.resolvedAtMs ?? clock() });
-        log.log?.(`[payments] ask #${a.id}: ${decision === APPROVE ? 'approved' : 'denied'} on Quinn's iPhone`);
-        try { await onDecision?.({ askId: a.id, approved: decision === APPROVE }); }
-        catch (e) { log.warn?.(`[payments] ask #${a.id}: the decision couldn't reach its agent:`, text(e.message, 200)); }
+      }
+      // A re-ask held for the morning.
+      if (onExpired) {
+        const { rows: held } = await pool.query(`SELECT id FROM notifications WHERE category = 'ask' AND replied_at IS NULL
+          AND metadata->'approval'->>'settled' = 'expired' AND (metadata->'approval'->>'reissueAt')::float8 <= $1 ORDER BY id LIMIT 20`, [clock()]);
+        for (const a of held) await onExpired({ askId: a.id }).catch(e => log.warn?.(`[payments] ask #${a.id}: couldn't ask again:`, text(e.message, 200)));
       }
     } finally { ticking = false; }
   }
 
   function start() { if (!timer) { timer = setInterval(() => { tick().catch(e => log.warn?.('[payments] tick:', e.message)); }, tickMs); timer.unref?.(); } }
   function stop() { if (timer) clearInterval(timer); timer = null; }
-  return { request, tick, start, stop, deciders: () => [...trusted] };
+  return { request, decide, tick, start, stop };
 }

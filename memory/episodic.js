@@ -81,7 +81,8 @@ export async function store({
 export async function recall(query, { limit = 5, minImportance = 0, eventType = null, since = null } = {}) {
   const embedding = await getEmbedding(query);
   
-  let whereClause = 'WHERE importance_score >= $2';
+  // Forgotten memories (forgotten_at set from the Memory page) never come back through recall.
+  let whereClause = 'WHERE importance_score >= $2 AND forgotten_at IS NULL';
   const params = [JSON.stringify(embedding), minImportance];
   let paramIdx = 3;
   
@@ -122,7 +123,7 @@ export async function recall(query, { limit = 5, minImportance = 0, eventType = 
 
 // Get recent memories chronologically
 export async function recent(limit = 20, eventType = null) {
-  const where = eventType ? 'WHERE event_type = $2' : '';
+  const where = eventType ? 'WHERE event_type = $2 AND forgotten_at IS NULL' : 'WHERE forgotten_at IS NULL';
   const params = eventType ? [limit, eventType] : [limit];
   const { rows } = await pool.query(
     `SELECT id, timestamp, event_type, content, emotional_valence, emotional_arousal,

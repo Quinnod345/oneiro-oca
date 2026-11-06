@@ -80,7 +80,15 @@ test('the inbox lists what a person owes the engine, and each answer teaches it:
     assert.ok(r.want.want.receipts.some(x => x.receiptId === 'rated-artifact-strategy-1-build-target-checklist.md' && x.usefulness === 0));
     box = await inbox.list();
     assert.equal(box.toRate.filter(i => i.kind === 'artifact').length, 0, 'rated once');
-    await assert.rejects(inbox.rate({ kind: 'artifact', id: art.id, usefulness: 'great' }), /already names a different outcome/);
+    // a misclick can be corrected: the new verdict replaces the old receipt and undoes its strategy rotation
+    const changed = await inbox.rate({ kind: 'artifact', id: art.id, usefulness: 'great' });
+    assert.equal(changed.want.want.strategy, before.want.strategy, 'the useless verdict\'s rotation is undone');
+    assert.equal(changed.want.want.progress, 0.25, 'a Great counts as progress');
+    assert.ok(changed.want.want.receipts.find(x => x.receiptId === 'rated-artifact-strategy-1-build-target-checklist.md').supersededBy, 'the old verdict stays on record, replaced');
+    assert.equal(changed.effect.progressAfter, 0.25); assert.equal(changed.effect.rotated, false); assert.equal(changed.effect.unrotated, true);
+    assert.equal((await inbox.deliverables(chain.chain_id)).find(d => d.name === 'strategy-1-build-target-checklist.md').verdict, 'great');
+    // and changed back, so the rest of this story reads as before
+    await inbox.rate({ kind: 'artifact', id: art.id, usefulness: 'useless' });
     // a second, useful artifact: progress
     const path2 = join(dir, 'strategy-2-config-diff.md');
     await writeFile(path2, `# Config diff\n\n_For:_ Getting the build green\n\n_Judge by:_ Is the difference real?\n\nTarget B pins an older toolchain.\n`);

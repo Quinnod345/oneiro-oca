@@ -106,7 +106,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
   async function runNext(id = null) {
     // SQL selects only pending work or expired claims. CAS below resolves racing workers.
     const { rows } = await pool.query(
-      `SELECT * FROM thought_chains WHERE ponder_state IS NOT NULL AND NOT COALESCE((ponder_state->>'researchActive')::boolean,false) AND
+      `SELECT * FROM thought_chains WHERE ponder_state IS NOT NULL AND NOT COALESCE((ponder_state->>'researchActive')::boolean,false) AND ponder_state -> 'paused' IS NULL AND
        (status = 'pondering' OR (status = 'running' AND (ponder_state->>'leaseUntil')::float8 < $1)
         OR (status = 'budget' AND ponder_state #>> '{result,stopReason}' = 'deadline'
           AND (ponder_state->>'attempts')::int < 3

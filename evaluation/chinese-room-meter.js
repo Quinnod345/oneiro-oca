@@ -114,7 +114,7 @@ export async function compute({ db = pool } = {}) {
   await measure('creativity', async () => {
     const { rows } = await db.query(`SELECT ponder_state -> 'want' -> 'receipts' AS receipts, ponder_state -> 'commitments' AS commitments FROM thought_chains WHERE ponder_state IS NOT NULL`);
     const delivered = rows.reduce((n, r) => n + (r.commitments || []).filter(c => c.kind === 'artifact').length, 0);
-    const rated = rows.flatMap(r => (r.receipts || []).filter(x => Number.isFinite(x.usefulness) && (x.evidence || []).some(e => /artifact/i.test(e.id) || /artifact/i.test(e.observation || ''))));
+    const rated = rows.flatMap(r => (r.receipts || []).filter(x => Number.isFinite(x.usefulness) && !x.supersededBy && (x.evidence || []).some(e => /artifact/i.test(e.id) || /artifact/i.test(e.observation || ''))));
     if (rated.length < MIN_N.creativity) return insufficient(`Needs ${MIN_N.creativity} artifacts rated by a person; have ${rated.length} (delivered: ${delivered}).`, { delivered, rated: rated.length });
     return { score: rated.reduce((n, x) => n + x.usefulness, 0) / rated.length, status: 'measured', n: rated.length,
       detail: 'Mean usefulness a person assigned to delivered artifacts. Delivery alone is nothing.', diagnostics: { delivered, rated: rated.length } };

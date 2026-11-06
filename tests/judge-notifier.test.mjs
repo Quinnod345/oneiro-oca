@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createJudgeNotifier, judgeMessage, JUDGE_TITLE } from '../reasoning/judge-notifier.js';
+import { createJudgeNotifier, judgeMessage, judgeText, JUDGE_TITLE } from '../reasoning/judge-notifier.js';
 
 const silent = { log() {}, warn() {} };
 
@@ -47,4 +47,8 @@ test('a push when something new lands in Judge: never the backlog, never twice, 
 test('the push body names one item, or counts several', () => {
   assert.equal(judgeMessage([{ kind: 'note', id: 'x.md', title: '' }]), 'A note is waiting: x.md');
   assert.match(judgeMessage([{ kind: 'artifact', title: 'A' }, { kind: 'note', title: 'B' }, { kind: 'note', title: 'C' }]), /^3 new things to judge, starting with A$/);
+});
+
+test('the text to his phone ends at the Oneiro app, with no plumbing in it', () => {
+  assert.equal(judgeText('A deliverable is waiting: Three piano teachers compared'), 'Oneiro: A deliverable is waiting: Three piano teachers compared — rate it in the Oneiro app.');
 });

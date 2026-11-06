@@ -54,7 +54,7 @@ function extractEntitiesHeuristic(query) {
 
   // Known patterns
   const patterns = [
-    /\b(?:Quinn|Oneiro|OCA|OpenClaw|EOSAI|InnerEcho)\b/gi,
+    /\b(?:Quinn|Oneiro|OCA|EOSAI|InnerEcho)\b/gi,
     /\b(?:Cursor|Terminal|Xcode|Telegram|Discord|Arc|Dia)\b/gi,
     /\b(?:MacBook|Apple|Swift|Node\.js|PostgreSQL|Claude)\b/gi,
   ];

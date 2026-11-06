@@ -11,6 +11,9 @@ const CRM_COMPONENTS = [
   'creativity', 'metacognition', 'emotion', 'counterfactual', 'causal'
 ];
 
+// An unavailable score is not zero, and PostgreSQL accepts non-finite floats.
+const validScore = score => Number.isFinite(score) && score >= 0 && score <= 1;
+
 const HORIZONS = {
   short:  { label: 'short',  opHoursWindow: 24 },
   medium: { label: 'medium', opHoursWindow: 24 * 7 },
@@ -51,7 +54,7 @@ export async function computeTrend(horizon = 'medium') {
        WHERE evaluation_version = $1 ORDER BY created_at DESC LIMIT 1`,
       [EVALUATION_VERSION]
     );
-    if (rows[0] && rows[0].composite != null) {
+    if (rows[0] && validScore(rows[0].composite)) {
       currentSnapshot = rows[0];
     }
   } catch {}
@@ -82,8 +85,8 @@ export async function computeTrend(horizon = 'medium') {
 
   // Wall-clock history cannot stand in for an operating-time baseline.
 
-  const currentComposite = currentSnapshot.composite;
-  const baselineComposite = baselineSnapshot?.composite;
+  const currentComposite = validScore(currentSnapshot.composite) ? currentSnapshot.composite : null;
+  const baselineComposite = validScore(baselineSnapshot?.composite) ? baselineSnapshot.composite : null;
   const currentComponents = typeof currentSnapshot.components === 'string'
     ? JSON.parse(currentSnapshot.components) : currentSnapshot.components;
   const baselineComponents = baselineSnapshot
@@ -99,8 +102,8 @@ export async function computeTrend(horizon = 'medium') {
   // Per-component decomposition (§18.4.3)
   const componentDeltas = {};
   for (const comp of CRM_COMPONENTS) {
-    const cur = currentComponents?.[comp]?.score ?? null;
-    const base = baselineComponents?.[comp]?.score ?? null;
+    const cur = validScore(currentComponents?.[comp]?.score) ? currentComponents[comp].score : null;
+    const base = validScore(baselineComponents?.[comp]?.score) ? baselineComponents[comp].score : null;
     componentDeltas[comp] = {
       current: cur,
       baseline: base,
@@ -116,7 +119,8 @@ export async function computeTrend(horizon = 'medium') {
     crm_baseline: baselineComposite,
     crm_delta: crmDelta,
     component_deltas: componentDeltas,
-    has_baseline: baselineSnapshot != null,
+    has_baseline: baselineComposite != null,
+    status: currentComposite == null ? 'insufficient_evidence' : 'measured',
     window_hours: cfg.opHoursWindow
   };
 }
@@ -269,9 +273,14 @@ export async function runAntiDecayEvaluation() {
   const { failures, remediations } = await checkFailureConditions(trends);
   const opTime = await getTotalOperatingTimeMs();
 
-  // Persist each horizon's trend
+  // Keep incomplete evaluations visible without inventing a score or violating
+  // the history table's required current-score constraint.
+  const persistence = {};
   for (const [horizon, data] of Object.entries(trends)) {
-    if (data.error) continue;
+    if (data.error || !validScore(data.crm_current)) {
+      persistence[horizon] = { stored: false, reason: data.error ? 'computation_failed' : 'insufficient_evidence' };
+      continue;
+    }
     try {
       await pool.query(
         `INSERT INTO anti_decay_trends
@@ -285,7 +294,10 @@ export async function runAntiDecayEvaluation() {
           JSON.stringify(remediations)
         ]
       );
-    } catch {}
+      persistence[horizon] = { stored: true };
+    } catch (e) {
+      persistence[horizon] = { stored: false, reason: 'write_failed', error: e.message };
+    }
   }
 
   // Log maintenance audit
@@ -294,11 +306,11 @@ export async function runAntiDecayEvaluation() {
       `INSERT INTO maintenance_audit (layer, last_maintained_at, maintenance_type, details)
        VALUES ('anti_decay', NOW(), 'evaluation', $1)
        ON CONFLICT (layer, maintenance_type) DO UPDATE SET last_maintained_at = NOW(), details = $1`,
-      [JSON.stringify({ failures: failures.length, remediations: remediations.length })]
+      [JSON.stringify({ failures: failures.length, remediations: remediations.length, persistence })]
     );
   } catch {}
 
-  return { trends, failures, remediations, operating_time_ms: opTime };
+  return { trends, failures, remediations, persistence, operating_time_ms: opTime };
 }
 
 // ═══════════════════════════════════════════════════

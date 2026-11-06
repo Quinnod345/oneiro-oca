@@ -206,10 +206,10 @@ async function getApiClient() {
   try {
     const { TwitterApi } = await import('twitter-api-v2');
     apiClient = new TwitterApi({
-      appKey: '***REMOVED***',
-      appSecret: '***REMOVED***',
-      accessToken: '***REMOVED***',
-      accessSecret: '***REMOVED***',
+      appKey: process.env.X_APP_KEY,
+      appSecret: process.env.X_APP_SECRET,
+      accessToken: process.env.X_ACCESS_TOKEN,
+      accessSecret: process.env.X_ACCESS_SECRET,
     });
     await apiClient.v2.me();
     console.log('[x-poster] API auth verified');

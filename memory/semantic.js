@@ -69,7 +69,7 @@ export async function learn(concept, {
   const { rows: existing } = await pool.query(
     `SELECT id, concept, evidence_count, contradiction_count, confidence, source_episodes
      FROM semantic_memory 
-     WHERE embedding <=> $1::vector < 0.12
+     WHERE forgotten_at IS NULL AND embedding <=> $1::vector < 0.12
      ORDER BY embedding <=> $1::vector 
      LIMIT 1`,
     [JSON.stringify(embedding)]
@@ -243,7 +243,8 @@ export async function query(searchText, {
 } = {}) {
   const embedding = await getEmbedding(searchText);
   
-  let where = 'WHERE confidence >= $2';
+  // Forgotten claims (forgotten_at set from the Memory page) never come back through recall.
+  let where = 'WHERE confidence >= $2 AND forgotten_at IS NULL';
   const params = [JSON.stringify(embedding), minConfidence];
   let idx = 3;
   
@@ -305,7 +306,7 @@ export async function abstractFromEpisodes(episodeIds, concept, category = null)
 export async function getCategory(category, limit = 50) {
   const { rows } = await pool.query(
     `SELECT id, concept, confidence, evidence_count, contradiction_count
-     FROM semantic_memory WHERE category = $1 ORDER BY confidence DESC LIMIT $2`,
+     FROM semantic_memory WHERE category = $1 AND forgotten_at IS NULL ORDER BY confidence DESC LIMIT $2`,
     [category, limit]
   );
   return rows;

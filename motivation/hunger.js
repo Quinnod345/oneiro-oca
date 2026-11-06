@@ -63,7 +63,17 @@ export function recordAttempt(want, { result, now = Date.now() }) {
     failedAttempts: want.failedAttempts + (stalled ? 1 : 0),
     strategy: want.strategy + (stalled && result !== 'interrupted' ? 1 : 0), lastAttemptAt: now };
 }
-export function recordOutcome(want, { receiptId, progress, evidence, criterionMet = false, usefulness = null, now = Date.now() }) {
+// A verdict of Useful or better (inbox RATINGS.useful) is progress on the want, even when the number cannot move:
+// rated progress stops short of done, so a want near its cap would otherwise count a Great as a failed attempt.
+export const USEFUL_AT = 0.67;
+const isUseful = u => Number.isFinite(u) && u >= USEFUL_AT;
+// What a receipt did to the want when it landed, for receipts saved before that was recorded.
+const effectOf = r => r.effect || { progressBefore: r.progress, rotated: !isUseful(r.usefulness) };
+// `supersedes` names an earlier receipt this one replaces (a person changing their verdict): the earlier one stays on
+// record, marked replaced, and its effect on the strategy is undone before this one is applied.
+// `reopened` takes a verdict back with nothing in its place: the want returns to where it stood before that verdict, and
+// the item goes back to Judge. A verdict on a want already finished is on record and leaves it finished.
+export function recordOutcome(want, { receiptId, progress, evidence, criterionMet = false, usefulness = null, supersedes = null, reopened = false, now = Date.now() }) {
   if (want.status === 'cancelled') throw new Error('cancelled wants do not accept outcomes');
   const observations = normalizeEvidence(evidence);
   if (typeof receiptId !== 'string' || !receiptId.trim() || receiptId.length > 200 || !observations.length) throw new Error('outcome requires a receipt ID and observed evidence');
@@ -72,17 +82,39 @@ export function recordOutcome(want, { receiptId, progress, evidence, criterionMe
   if (usefulness !== null && (!Number.isFinite(usefulness) || usefulness < 0 || usefulness > 1)) throw new Error('observed usefulness must be in [0, 1]');
   const receipt = { receiptId, progress, evidence: observations, criterionMet };
   if (usefulness !== null) receipt.usefulness = usefulness;
+  if (supersedes !== null) receipt.supersedes = supersedes;
+  if (reopened) receipt.reopened = true;
   const existing = want.receipts.find(r => r.receiptId === receiptId);
   if (existing) {
-    const { at, ...old } = existing;
+    const { at, effect, supersededBy, ...old } = existing;
     if (!isDeepStrictEqual(old, receipt)) throw new Error('receipt ID already names a different outcome');
     return want;
   }
   if (want.receipts.length >= 100) throw new Error('want receipt budget exhausted');
-  const improved = progress > want.progress;
-  return { ...want, progress, status: criterionMet ? 'sated' : 'active',
-    failedAttempts: improved ? 0 : want.failedAttempts + 1,
-    strategy: improved ? want.strategy : want.strategy + 1,
-    lastProgressAt: improved ? now : want.lastProgressAt,
-    receipts: [...want.receipts, { ...receipt, at: now }] };
+  let base = want, receipts = want.receipts, progressBefore = want.progress;
+  if (supersedes !== null) {
+    const prior = want.receipts.find(r => r.receiptId === supersedes);
+    if (!prior) throw new Error('the verdict being replaced is not on this want');
+    if (prior.supersededBy) throw new Error('that verdict was already replaced');
+    const e = effectOf(prior);
+    // Undo what the replaced verdict did to the strategy; its progress is replaced by this receipt's own.
+    base = { ...want, strategy: e.rotated ? Math.max(0, want.strategy - 1) : want.strategy,
+      failedAttempts: e.rotated ? Math.max(0, want.failedAttempts - 1) : want.failedAttempts };
+    progressBefore = e.progressBefore;
+    receipts = want.receipts.map(r => (r === prior ? { ...r, supersededBy: receiptId } : r));
+  }
+  // A correction (no usefulness, a lower reading of the world) still reopens a finished want. A verdict, or a verdict
+  // taken back, doesn't: the finish line was the person's own call, and they can correct that separately.
+  if (want.status === 'sated' && !criterionMet && (usefulness !== null || reopened)) {
+    return { ...want, receipts: [...receipts, { ...receipt, progress: want.progress, at: now, effect: { progressBefore: want.progress, rotated: false } }] };
+  }
+  if (reopened) {
+    return { ...base, progress, status: 'active', receipts: [...receipts, { ...receipt, at: now, effect: { progressBefore, rotated: false } }] };
+  }
+  const improved = progress > progressBefore || isUseful(usefulness);
+  return { ...base, progress, status: criterionMet ? 'sated' : 'active',
+    failedAttempts: improved ? 0 : base.failedAttempts + 1,
+    strategy: improved ? base.strategy : base.strategy + 1,
+    lastProgressAt: improved ? now : base.lastProgressAt,
+    receipts: [...receipts, { ...receipt, at: now, effect: { progressBefore, rotated: !improved } }] };
 }

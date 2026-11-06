@@ -187,7 +187,7 @@ export async function verifyWorkSources(candidates, { roots, workRoot, startedAt
       if (typeof item?.path !== 'string' || !isAbsolute(item.path) || typeof item.quote !== 'string' || item.quote.trim().length < 8 || item.quote.length > 4000) throw Error('A source needs an absolute path and an exact quotation.');
       const path = await realpath(item.path);
       if (!roots.some(root => inside(path, root)) || inside(path, workRoot)
-        || /(^|\/)(\.env(?:\.[^/]*)?|\.ssh|\.codex|\.openclaw|credentials?|secrets?|auth\.json|config\.toml)(\/|$)/i.test(path)) throw Error('Source is outside the readable research scope.');
+        || /(^|\/)(\.env(?:\.[^/]*)?|\.ssh|\.codex|credentials?|secrets?|auth\.json|config\.toml)(\/|$)/i.test(path)) throw Error('Source is outside the readable research scope.');
       const info = await stat(path);
       if (!info.isFile() || info.size > 1024 * 1024 || Math.floor(info.mtimeMs) > startedAt) throw Error('Source must be an existing, unchanged text file (at most 1 MB).');
       const content = await readFile(path, 'utf8');
@@ -480,7 +480,7 @@ export function createPursuitWork({ pool, queue, runner = runCodex,
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true
         AND ponder_state #>> '{want,status}' = 'active' AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed')
-        AND NOT COALESCE((ponder_state ->> 'researchActive')::boolean, false)
+        AND NOT COALESCE((ponder_state ->> 'researchActive')::boolean, false) AND ponder_state -> 'paused' IS NULL
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
       ORDER BY updated_at ASC`);
     const now = clock(), started = [];

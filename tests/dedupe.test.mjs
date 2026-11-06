@@ -41,7 +41,7 @@ function fakeGateway() {
     async wait() { return { status: 'pending' }; },
     async history() { return []; },
     async transcript() { return { messages: [], pending: 0 }; },
-    async call() { return { ok: true }; },
+    async abort() { return { ok: true }; },
   };
 }
 
@@ -77,7 +77,7 @@ test('never two agents on the same work; different work still runs', async () =>
   const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 5 };
   const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
   const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
-  const agents = createAgents({ pool, gateway: fakeGateway(), queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: silent });
+  const agents = createAgents({ pool, host: fakeGateway(), conversations: false, queue, risk, controls: { get: async () => controlsState }, clock: () => now, log: silent });
   await agents.init();
   const chain = await queue.enqueue({ seed: 'Get InnerEcho more paying subscribers', doneWhen: 'a net positive month', stakes: [{ entityKey: 'person:quinn', share: 1 }] }, { origin: { kind: 'explicit', by: 'quinn' } });
   const first = await agents.deploy(chain.chain_id, { kind: 'research', task: 'Improve the App Store promotional text for the October launch', firedBy: 'engine' });

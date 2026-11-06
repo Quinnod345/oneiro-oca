@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { createBoard, parseBoard, streamName } from '../reasoning/board.js';
+import { createBoard, parseBoard, streamName, agentsHealth } from '../reasoning/board.js';
 
 async function database(run) {
   const dsn = process.env.OCA_TEST_DATABASE_URL || 'postgres://localhost/oneiro';
@@ -107,10 +107,11 @@ test('the map: the orchestrator and every pursuit with its streams, live agents 
   await pool.query(`INSERT INTO self_build_events (kind, chain_id, payload, created_at) VALUES ('merged', $1, '{"branch":"self/34-fix","sha":"4d650f8f3886"}', $2)`, [self1, new Date(now - 100000)]);
   const asks = { open: async () => [{ id: 9, chainId: id, kind: 'question', detail: 'Which OpenAI org?', sessionKey: 'k' }] };
   const agents = { slots: async () => 4, pausedUntil: () => null };
-  const board = createBoard({ pool, llm: null, asks, agents, controls: { get: async () => ({ queuePaused: false }) }, gateway: { available: async () => true }, clock: () => now, log: quiet });
+  const board = createBoard({ pool, llm: null, asks, agents, controls: { get: async () => ({ queuePaused: false }) }, host: { available: async () => true, status: () => ({ codex: { up: true, signedIn: true, why: null } }) }, clock: () => now, log: quiet });
   const map = await board.overview();
+  assert.deepEqual(map.orchestrator.agents, { state: 'up', why: null, fix: null, command: null }, 'the map says why agents can or can\'t run, not only whether');
   assert.equal(map.orchestrator.slots, 4); assert.equal(map.orchestrator.working, 1); assert.equal(map.orchestrator.waiting, 1); assert.equal(map.orchestrator.selfChainId, selfId);
-  assert.equal(map.orchestrator.today.merged, 1); assert.equal(map.orchestrator.lastMerge.branch, 'self/34-fix'); assert.equal(map.orchestrator.gatewayUp, true);
+  assert.equal(map.orchestrator.today.merged, 1); assert.equal(map.orchestrator.lastMerge.branch, 'self/34-fix'); assert.equal(map.orchestrator.agentsUp, true);
   const p = map.pursuits.find(x => x.chainId === id);
   assert.equal(p.headline, 'InnerEcho profit'); assert.equal(p.lastThought, 'Video and free distribution are the moves now.');
   assert.deepEqual(p.next, { at: '2026-10-01T13:00:00.000Z', task: 'Publish the Day 1 posts' }, 'the next step is the earliest future one');
@@ -134,4 +135,66 @@ test('the map: the orchestrator and every pursuit with its streams, live agents 
   assert.equal((await board.detail(self1)).made[0].what, 'Merged self/34-fix', 'a merged fix is something the engine set up for itself');
   assert.ok((await board.detail(selfId)).made.some(m => m.what === 'Merged self/34-fix'), 'the pursuit about itself owns the merges of the fixes it filed');
   await assert.rejects(board.detail(9999), /not found/);
+}));
+
+test('agents down is two different problems: Codex signed out (fix: codex login) or Codex not answering (fix: restart), and the map says which', () => {
+  assert.equal(agentsHealth(null), null, 'no host, nothing to say');
+  assert.equal(agentsHealth(true, { codex: { up: true, signedIn: true } }).state, 'up');
+  const out = agentsHealth(false, { codex: { up: true, signedIn: false, why: 'Codex is not signed in to ChatGPT' } });
+  assert.equal(out.state, 'signed_out'); assert.equal(out.command, 'codex login'); assert.match(out.fix, /codex login/);
+  assert.equal(agentsHealth(false, { up: true, signedIn: false, why: null }).state, 'signed_out', 'a bare host status reads the same');
+  const missing = agentsHealth(false, { codex: { up: false, why: 'spawn /opt/homebrew/bin/codex ENOENT' } });
+  assert.equal(missing.state, 'missing'); assert.match(missing.fix, /Install Codex/);
+  const down = agentsHealth(false, { codex: { up: false, signedIn: false, why: 'app-server exited (code 1)' } });
+  assert.equal(down.state, 'down'); assert.match(down.why, /app-server exited/); assert.match(down.fix, /Restart the engine/);
+  assert.equal(agentsHealth(false, null).state, 'down', 'no status at all is down, not signed out');
+});
+
+test('a pursuit keeps the name it was first given through every later review, unless that name is in the old words', async () => database(async pool => {
+  let now = Date.parse('2026-11-06T00:00:00Z'), headline = 'Make InnerEcho Profitable';
+  const keeper = { messages: { create: async () => JSON.stringify({ headline, progress: 'Going.', streams: [{ name: 'Pricing', aim: 'x', state: 'active', standing: 'y' }], labels: {}, made: [], milestones: [] }) } };
+  const board = createBoard({ pool, llm: keeper, clock: () => now, log: quiet });
+  const nameOf = async id => (await board.detail(id)).headline;
+  const id = await pursuit(pool, { description: 'InnerEcho makes a profit' });
+  await run(pool, id, { task: 'Read the numbers', at: now - 1000 });
+
+  // written at the first review, then never again, whatever the model says later
+  await board.review(id);
+  assert.equal(await nameOf(id), 'Make InnerEcho Profitable');
+  for (const later of ['InnerEcho Profitable Growth', 'InnerEcho Subscriber Profitability']) {
+    now += 3600_000; headline = later;
+    const { board: written } = await board.review(id);
+    assert.equal(written.progress, 'Going.', 'the rest of the board is rewritten');
+    assert.equal(await nameOf(id), 'Make InnerEcho Profitable', `not renamed to ${later}`);
+  }
+
+  // a name in the old words is replaced once, only by a clean one, and then it holds too
+  const old = await pursuit(pool, { description: 'Fix the settlement bug', continuity: { board: { headline: 'OCA settlement', updatedAt: new Date(now).toISOString(), streams: [], made: [], milestones: [] } } });
+  await run(pool, old, { task: 'Fix it', at: now });
+  headline = 'The thinker settlement';
+  await board.review(old);
+  assert.equal(await nameOf(old), 'OCA settlement', 'not swapped for another name in the old words');
+  headline = 'Settle runs reliably';
+  await board.review(old);
+  assert.equal(await nameOf(old), 'Settle runs reliably');
+  headline = 'Run settlement';
+  await board.review(old);
+  assert.equal(await nameOf(old), 'Settle runs reliably');
+}));
+
+test('a resting pursuit with no runs gets a name, and no invented workstreams', async () => database(async pool => {
+  const now = Date.parse('2026-11-06T00:00:00Z'), asked = [];
+  // A keeper that answers more than it was asked still can't add workstreams to a pursuit that has done nothing.
+  const keeper = { messages: { create: async ({ system }) => { asked.push(system); return JSON.stringify({ headline: 'Learn the piano', progress: 'Well along.', streams: [{ name: 'Practice', aim: 'x', state: 'active', standing: 'y' }], milestones: [{ label: 'Invented step', state: 'next' }] }); } } };
+  const board = createBoard({ pool, llm: keeper, clock: () => now, log: quiet });
+  const id = await pursuit(pool, { description: 'Develop the missing intrinsic motivation to practice piano every day' });
+
+  // the map's read starts it, so nobody has to visit the pursuit
+  await board.overview();
+  let d = null;
+  for (let i = 0; i < 100 && !d?.headline; i++) { await new Promise(r => setTimeout(r, 10)); d = await board.detail(id); }
+  assert.equal(d.headline, 'Learn the piano');
+  assert.equal(asked.length, 1); assert.match(asked[0], /You name one pursuit/, 'it asks only for a name');
+  assert.deepEqual([d.streams, d.milestoneList, d.progress], [[], [], null], 'and adds nothing it did not do');
+  assert.equal(await board.stale((await pool.query(`SELECT id, ponder_state AS state FROM thought_chains WHERE id = $1`, [id])).rows[0]), false, 'and once named it is left alone');
 }));

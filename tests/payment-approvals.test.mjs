@@ -6,7 +6,11 @@ import { randomBytes } from 'node:crypto';
 import { createActuator } from '../reasoning/actuator.js';
 import { createAsks } from '../reasoning/asks.js';
 import { createInbox } from '../reasoning/inbox.js';
-import { createPaymentApprovals, APPROVE, DENY, APPROVAL_WINDOW_MS, LOST_AFTER_MS } from '../reasoning/payment-approvals.js';
+import { createPaymentApprovals, APPROVE, DENY, APPROVAL_WINDOW_MS, parseDecision, hashCode, newCode } from '../reasoning/payment-approvals.js';
+import { createImessageInbox, pickAsk } from '../reasoning/imessage-inbox.js';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createPonderQueue } from '../reasoning/ponder-queue.js';
 import { createWorthLedger } from '../motivation/worth-ledger.js';
 import { createRiskJournal } from '../motivation/risk-journal.js';
@@ -30,190 +34,158 @@ async function database(run) {
   } finally { if (pool) await pool.end(); await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); await admin.end(); }
 }
 
-// A gateway that records every call and behaves like the real one: an open approval is invisible to the engine
-// (approval.get answers "approval not found", because only the phone it was sent to may read it), and a closed one
-// shows up in approval.history with who decided it, the way Quinn's tap would leave it.
-function fakeGateway() {
-  const calls = [], snapshots = new Map();
-  let n = 0, deliver = true;
-  return {
-    calls, snapshots,
-    noRoute() { deliver = false; },
-    decide(id, decision, resolver) { snapshots.set(id, { id, status: decision === DENY ? 'denied' : 'allowed', decision, resolvedAtMs: 1, resolver }); },
-    expire(id) { snapshots.set(id, { id, status: 'expired', resolvedAtMs: 1, resolver: { kind: 'system' } }); },
-    async call(method, params) {
-      calls.push({ method, params });
-      if (method === 'plugin.approval.request') {
-        const id = `plugin:${++n}`;
-        if (!deliver) return { id, decision: null, createdAtMs: 0, expiresAtMs: 0 };   // expired at once: no route to a phone
-        snapshots.set(id, { id, status: 'pending' });
-        return { status: 'accepted', id, deliveryRoute: 'forwarder', createdAtMs: 0, expiresAtMs: 0 };
-      }
-      if (method === 'approval.get') throw new Error('gateway approval.get: approval not found');
-      if (method === 'approval.history') return { items: [...snapshots.values()].filter(s => s.status !== 'pending').reverse() };
-      if (method === 'approval.resolve') { snapshots.set(params.id, { id: params.id, status: 'denied', decision: DENY, resolver: { kind: 'device', id: 'this-mac' } }); return { ok: true }; }
-      throw new Error(`unexpected ${method}`);
-    },
-  };
-}
 
-test('every payment asks on the phone with Approve and Deny; only a tap on Quinn\'s phone decides it, and the first answer wins', async () => database(async pool => {
-  let now = Date.parse('2026-09-29T12:00:00');
-  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+async function world(pool, { perDay = 3 } = {}) {
+  const w = { now: Date.parse('2026-09-29T12:00:00') };
+  const worth = createWorthLedger({ pool, clock: () => w.now }); await worth.seed();
   const charter = normalizeCharter({ ramp: 0, spend: { granted: true, monthlyCap: 500 }, publish: { granted: true } });
   const controls = { get: async () => ({ askOwner: true, autonomousActions: false, charter }) };
-  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controls.get() });
-  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
-  const pushed = [], texted = [];
-  const asks = createAsks({ pool, risk, clock: () => now, perDay: 3, log: silent,
-    deliverers: { push: async m => { pushed.push(m); }, imessage: async m => { texted.push(m); } } }); await asks.init();
-  const gateway = fakeGateway(), decided = [], untrusted = [];
-  const approvals = createPaymentApprovals({ pool, gateway, deciders: ['phone-1', 'phone-2'], clock: () => now, log: silent,
-    onDecision: async d => { decided.push(d); await asks.answer(d.askId, d.approved ? `Approved on iPhone (ask #${d.askId}).` : `Denied on iPhone (ask #${d.askId}). Don't make this payment.`); },
-    onUntrusted: async d => { untrusted.push(d); } });
-  asks.useApprovals(approvals);
-  const act = createActuator({ pool, risk, asks, controls, queue, clock: () => now, log: silent }); await act.init();
-  const id = (await queue.enqueue({ seed: 'Grow InnerEcho', doneWhen: 'a profitable month', stakes: [{ entityKey: 'person:quinn', share: 1 }] }, { origin: { kind: 'explicit', by: 'quinn' } })).chain_id;
-  const approvalOf = async askId => (await pool.query('SELECT metadata FROM notifications WHERE id = $1', [askId])).rows[0].metadata.approval;
-  const requests = () => gateway.calls.filter(c => c.method === 'plugin.approval.request');
+  const risk = createRiskJournal({ pool, worth, clock: () => w.now, controls: () => controls.get() });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => w.now, worth, risk });
+  w.texted = []; w.decided = []; w.refused = [];
+  w.asks = createAsks({ pool, risk, clock: () => w.now, perDay, log: silent, deliverers: { imessage: async m => { w.texted.push(m); } } }); await w.asks.init();
+  w.approvals = createPaymentApprovals({ pool, clock: () => w.now, log: silent,
+    onDecision: async d => { w.decided.push(d); await w.asks.answer(d.askId, d.approved ? `Approved in Messages with its code (ask #${d.askId}).` : `Denied in Messages (ask #${d.askId}). Don't make this payment.`); },
+    onRefused: async d => { w.refused.push(d); } });
+  w.asks.useApprovals(w.approvals);
+  w.act = createActuator({ pool, risk, asks: w.asks, controls, queue, clock: () => w.now, log: silent }); await w.act.init();
+  w.id = (await queue.enqueue({ seed: 'Grow InnerEcho', doneWhen: 'a profitable month', stakes: [{ entityKey: 'person:quinn', share: 1 }] }, { origin: { kind: 'explicit', by: 'quinn' } })).chain_id;
+  w.approvalOf = async askId => (await pool.query('SELECT message, metadata FROM notifications WHERE id = $1', [askId])).rows[0];
+  w.code = () => (w.texted.at(-1).match(/APPROVE ([A-Z0-9]{6})/) || [])[1];
+  return w;
+}
 
-  // 1. a payment opens an approval: the price leads the title, "Are you sure" survives the phone's cut, and the push is
-  //    the approval itself (Messages still gets the question)
-  const pay = { chainId: id, class: 'spend', host: 'www.namecheap.com', description: 'buy the domain innerecho.app for a year', cost: 12.98 };
-  const a = await act.authorize(pay);
+test('every payment asks with a one-time code; only that code, texted back by Quinn, decides it, and the first answer wins', async () => database(async pool => {
+  const w = await world(pool);
+  const pay = { chainId: w.id, class: 'spend', host: 'www.namecheap.com', description: 'buy the domain innerecho.app for a year', cost: 12.98 };
+  // 1. the ask: the question and its code go out as a text; the record keeps the price and a hash, never the code
+  const a = await w.act.authorize(pay);
   assert.equal(a.decision, 'ask');
-  const [req] = requests();
-  assert.equal(req.params.pluginId, 'oneiro.payments'); assert.equal(req.params.twoPhase, true); assert.deepEqual(req.params.allowedDecisions, [APPROVE, DENY]);
-  assert.equal(req.params.timeoutMs, APPROVAL_WINDOW_MS);
-  assert.equal(req.params.title, 'Approve $12.98 on www.namecheap.com?');
-  assert.match(req.params.description, /^Oneiro wants to buy the domain innerecho\.app for a year on www\.namecheap\.com \(cost \$12\.98\)\. Are you sure you want to go through with this\?$/);
-  assert.match(req.params.detail, /every payment waits for Quinn's yes/);
-  assert.equal(pushed.length, 0, 'no second, plain push'); assert.equal(texted.length, 1);
-  assert.equal((await approvalOf(a.askId)).id, 'plugin:1');
-  // a long description gives way; the cost and the question don't
-  const long = await act.authorize({ ...pay, description: `renew ${'the premium hosting plan with every add-on '.repeat(12)}`, cost: 240 });
-  const longReq = requests().at(-1).params;
-  assert.ok(longReq.description.length <= 256, `${longReq.description.length} characters`);
-  assert.match(longReq.description, /…\s\(cost \$240\.00\)\. Are you sure you want to go through with this\?$/);
-  // a daily budget says so in the title
-  const budget = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the promoted-post daily budget', dailyBudget: 20, previousDailyBudget: 10 });
-  assert.equal(requests().at(-1).params.title, 'Approve a possible payment on ads.x.com?'.replace('a possible payment', 'a $20.00/day budget'));
-  // a step with no price that only reads like spending says so, and names the word that made it ask
-  await act.authorize({ chainId: id, class: 'spend', host: 'www.instagram.com', description: 'publish the Day 1 carousel with no crop, filter, music or boost', flagged: 'boost' });
-  assert.equal(requests().at(-1).params.title, 'Approve a possible payment on www.instagram.com?');
-  assert.match(requests().at(-1).params.description, /\(no price was given; it asks because the task says "boost"\)\. Are you sure you want to go through with this\?$/);
+  assert.match(w.texted[0], /buy the domain innerecho\.app for a year on www\.namecheap\.com \(cost \$12\.98\)\. Are you sure you want to go through with this\?/);
+  const code = w.code();
+  assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/, 'no 0/O or 1/I');
+  assert.match(w.texted[0], new RegExp(`Reply APPROVE ${code} to pay, or DENY ${code}\\. \\(Expires in 10 minutes\\.\\)$`));
+  const row = await w.approvalOf(a.askId);
+  assert.ok(!row.message.includes(code), 'the stored ask has no code'); assert.ok(!JSON.stringify(row.metadata).includes(code), 'nor its record');
+  assert.equal(row.metadata.approval.codeHash, hashCode(code)); assert.equal(row.metadata.approval.title, 'Approve $12.98 on www.namecheap.com?');
+  assert.equal(row.metadata.approval.expiresAt - row.metadata.approval.requestedAt, APPROVAL_WINDOW_MS);
 
-  // 2. waiting: nothing is decided, and the held step stays held. The gateway hides an open approval from the
-  //    engine; that is "still open", never "gone" (it used to settle every approval as expired within seconds).
-  await approvals.tick(); await approvals.tick();
-  assert.equal(decided.length, 0); assert.equal((await approvalOf(a.askId)).settled, undefined);
-  assert.equal((await act.authorize({ ...pay, approval: a.askId })).decision, 'ask');
-  assert.ok(!gateway.calls.some(c => c.method === 'approval.get'), 'decisions are read from the history');
+  // 2. waiting: nothing is decided, and the held step stays held
+  await w.approvals.tick();
+  assert.equal((await w.act.authorize({ ...pay, approval: a.askId })).decision, 'ask');
 
-  // 3. a decision from anywhere but his phone is ignored and reported: here, a client on this Mac approving
-  gateway.decide('plugin:1', APPROVE, { kind: 'device', id: 'mac-cli' });
-  await approvals.tick();
-  assert.equal(decided.length, 0); assert.equal(untrusted.length, 1); assert.equal(untrusted[0].askId, a.askId);
-  assert.equal((await approvalOf(a.askId)).settled, 'untrusted');
-  assert.equal((await act.authorize({ ...pay, approval: a.askId })).decision, 'ask', 'still waiting for Quinn');
-  // …and so is one with no device identity at all
-  gateway.decide('plugin:2', APPROVE, { kind: 'runtime', id: 'phone-1' });
-  await approvals.tick();
-  assert.equal(decided.length, 0); assert.equal((await approvalOf(long.askId)).settled, 'untrusted');
+  // 3. a second payment's code cannot decide the first, and a wrong code decides nothing
+  const b = await w.act.authorize({ ...pay, description: 'buy innerecho.dev too', cost: 9.5 });
+  const codeB = w.code(); assert.notEqual(codeB, code);
+  assert.deepEqual(await w.approvals.decide({ approved: true, code: 'ZZZZZZ', from: 'quinn' }), { ok: false, why: 'no payment is waiting on that code' });
+  assert.equal((await w.act.authorize({ ...pay, approval: a.askId })).decision, 'ask', 'still waiting for its own code');
 
-  // 4. Approve on his phone: the ask is answered yes, and that one payment proceeds
-  gateway.decide('plugin:3', APPROVE, { kind: 'device', id: 'phone-2' });
-  await approvals.tick();
-  assert.deepEqual(decided, [{ askId: budget.askId, approved: true }]);
-  assert.equal((await approvalOf(budget.askId)).settled, APPROVE);
-  const go = await act.authorize({ chainId: id, class: 'spend', host: 'ads.x.com', description: 'raise the promoted-post daily budget', dailyBudget: 20, previousDailyBudget: 10, approval: budget.askId });
-  assert.equal(go.decision, 'proceed'); assert.equal(go.approvedBy, budget.askId);
-  await approvals.tick(); assert.equal(decided.length, 1, 'a settled approval is read once');
+  // 4. his APPROVE with the code: that one payment proceeds, once
+  assert.deepEqual(await w.approvals.decide({ approved: true, code, from: 'quinn@icloud.com' }), { ok: true, askId: a.askId, approved: true });
+  assert.equal((await w.approvalOf(a.askId)).metadata.approval.settled, APPROVE);
+  assert.deepEqual((await w.approvalOf(a.askId)).metadata.approval.resolver, { kind: 'imessage', id: 'quinn@icloud.com', via: 'Messages' });
+  const go = await w.act.authorize({ ...pay, approval: a.askId });
+  assert.equal(go.decision, 'proceed'); assert.equal(go.approvedBy, a.askId);
+  await w.act.observe({ actionId: go.actionId, result: 'success', observation: 'domain bought' });
+  assert.equal((await w.approvals.decide({ approved: false, code, from: 'quinn' })).ok, false, 'the first answer wins');
+  assert.equal(w.decided.length, 1);
 
-  // 5. Deny on his phone: the payment is refused
-  const b = await act.authorize({ chainId: id, class: 'spend', host: 'www.canva.com', description: 'subscribe to Canva Pro for the carousel', cost: 15 });
-  gateway.decide((await approvalOf(b.askId)).id, DENY, { kind: 'device', id: 'phone-1' });
-  await approvals.tick();
-  assert.deepEqual(decided.at(-1), { askId: b.askId, approved: false });
-  const no = await act.authorize({ chainId: id, class: 'spend', host: 'www.canva.com', description: 'subscribe to Canva Pro for the carousel', cost: 15, approval: b.askId });
-  assert.equal(no.decision, 'refuse'); assert.match(no.why, /Quinn declined/);
-
-  // 6. answered in Messages first: that answer stands, a later tap changes nothing, and the phone's prompt is cleared
-  const c = await act.authorize({ chainId: id, class: 'spend', host: 'www.fiverr.com', description: 'order the app-preview video edit', cost: 60 });
-  const cApproval = (await approvalOf(c.askId)).id;
-  await asks.answer(c.askId, 'yes');
-  await approvals.tick();
-  assert.equal((await approvalOf(c.askId)).settled, 'answered-elsewhere');
-  assert.ok(gateway.calls.some(x => x.method === 'approval.resolve' && x.params.id === cApproval && x.params.decision === DENY && x.params.kind === 'plugin'));
-  assert.equal(decided.length, 2, 'no decision relayed for it');
-  assert.equal((await act.authorize({ chainId: id, class: 'spend', host: 'www.fiverr.com', description: 'order the app-preview video edit', cost: 60, approval: c.askId })).decision, 'proceed');
-
-  // 7. no route to a phone: the ask goes out as a plain push instead, with no approval to wait on
-  gateway.noRoute();
-  const d = await act.authorize({ chainId: id, class: 'spend', host: 'www.etsy.com', description: 'purchase the journal mockup template', cost: 9 });
-  assert.equal(pushed.length, 1); assert.equal(await approvalOf(d.askId), undefined);
-
-  // 8. an approval nobody answered lapses when the gateway closes it; the ask stays open for Messages and the app
-  const e = await (async () => { const g2 = fakeGateway(); const ap2 = createPaymentApprovals({ pool, gateway: g2, deciders: ['phone-1'], clock: () => now, log: silent });
-    asks.useApprovals(ap2); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'purchase the icon pack for the site', cost: 19 });
-    now += APPROVAL_WINDOW_MS + 1000; g2.expire((await approvalOf(r.askId)).id); await ap2.tick(); return r; })();
-  assert.equal((await approvalOf(e.askId)).settled, 'expired');
-  // and one that left no record at all is still waited on through its window, then given up well after it
-  const f = await (async () => { const g3 = fakeGateway(); const ap3 = createPaymentApprovals({ pool, gateway: g3, deciders: ['phone-1'], clock: () => now, log: silent });
-    asks.useApprovals(ap3); const r = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'buy the font license for the site', cost: 29 });
-    g3.snapshots.clear(); await ap3.tick();
-    assert.equal((await approvalOf(r.askId)).settled, undefined, 'not given up while it could still be answered');
-    now += APPROVAL_WINDOW_MS + LOST_AFTER_MS + 1000; await ap3.tick(); return r; })();
-  assert.equal((await approvalOf(f.askId)).settled, 'expired');
-  assert.ok((await asks.open()).some(o => o.id === e.askId), 'still open');
-
-  // 9. a payment is never held back by the daily cap (3 here, long since passed); an ordinary ask is
-  assert.equal((await asks.ask({ chainId: id, kind: 'question', detail: 'Which caption reads better?' })).asked, false);
-  const late = await act.authorize({ chainId: id, class: 'spend', host: 'www.gumroad.com', description: 'purchase the second icon pack', cost: 19 });
-  assert.equal(late.decision, 'ask');
-  assert.ok((await approvalOf(late.askId))?.id, 'the approval still went out');
+  // 5. DENY refuses
+  assert.equal((await w.approvals.decide({ approved: false, code: codeB, from: 'quinn' })).ok, true);
+  const no = await w.act.authorize({ ...pay, description: 'buy innerecho.dev too', cost: 9.5, approval: b.askId });
+  assert.equal(no.decision, 'refuse'); assert.match(no.why, /declined/);
 }));
 
-test('no approving device configured: payments still ask, as a plain push', async () => {
-  const warned = [];
-  const approvals = createPaymentApprovals({ pool: null, gateway: { call: async () => { throw new Error('not called'); } }, deciders: [], log: { warn: m => warned.push(m) } });
-  assert.equal(await approvals.request({ title: 'Approve $5.00?', description: 'x' }), null);
-  assert.match(warned[0], /no approving device/);
-});
+test('a "yes" that is not the code, from anywhere, pays nothing; a code past its window or after another answer is dead', async () => database(async pool => {
+  const w = await world(pool);
+  const pay = { chainId: w.id, class: 'spend', host: 'ads.x.com', description: 'boost the post for a day', cost: 20 };
+  // posted to the engine (what any process on this Mac could do): closes the ask, pays nothing
+  const a = await w.act.authorize(pay); const codeA = w.code();
+  await w.asks.answer(a.askId, 'yes');
+  const r = await w.act.authorize({ ...pay, approval: a.askId });
+  assert.equal(r.decision, 'refuse'); assert.match(r.why, /without Quinn's approval code/);
+  await w.approvals.tick();
+  assert.equal((await w.approvalOf(a.askId)).metadata.approval.settled, 'answered-elsewhere');
+  assert.match((await w.approvals.decide({ approved: true, code: codeA, from: 'quinn' })).why, /already/, 'and its code is dead');
+  // past the window
+  const b = await w.act.authorize({ ...pay, description: 'boost the other post', cost: 15 }); const codeB = w.code();
+  w.now += APPROVAL_WINDOW_MS + 1;
+  assert.match((await w.approvals.decide({ approved: true, code: codeB, from: 'quinn' })).why, /expired/);
+  assert.equal((await w.act.authorize({ ...pay, description: 'boost the other post', cost: 15, approval: b.askId })).decision, 'refuse');
+  assert.equal(w.refused.length, 2, 'every refusal is reported');
+  // payments are never held back by the daily cap
+  const many = [];
+  for (let i = 0; i < 5; i++) many.push(await w.act.authorize({ ...pay, description: `boost post ${i}`, cost: 1 + i }));
+  assert.ok(many.every(m => m.decision === 'ask'));
+  assert.equal(w.texted.filter(t => /APPROVE [A-Z0-9]{6}/.test(t)).length, 7, 'each one texted with its code');
+}));
 
-test('an answer reaches every agent waiting on the ask, even one that joined an ask the engine raised with no session', async () => {
-  const relayed = [], answered = [];
-  const pool = { query: async (sql, params) => (/FROM agent_deployments WHERE ask_id/.test(sql) && params[0] === 41 ? { rows: [{ id: 'dep-a' }, { id: 'dep-b' }] } : { rows: [] }) };
-  const asks = { answer: async (id, reply) => { answered.push([id, reply]); return { id, metadata: { chainId: 27 } }; } };
-  const agents = { relay: async (id, reply, { via }) => { relayed.push([id, reply, via]); } };
-  const inbox = createInbox({ pool, queue: {}, worth: {}, workRoot: '/tmp', asks, agents, log: silent });
-  await inbox.answerAsk({ id: 41, reply: 'Approved on iPhone (ask #41).', via: 'iPhone' });
-  assert.deepEqual(answered, [[41, 'Approved on iPhone (ask #41).']]);
-  assert.deepEqual(relayed, [['dep-a', 'Approved on iPhone (ask #41).', 'iPhone'], ['dep-b', 'Approved on iPhone (ask #41).', 'iPhone']]);
-});
+test('nothing in Judge can approve a payment: its answer box, an agent\'s thread, the code typed into the app, and dismiss all leave it unpaid', async () => database(async pool => {
+  const w = await world(pool);
+  const inbox = createInbox({ pool, queue: null, worth: null, workRoot: tmpdir(), asks: w.asks, clock: () => w.now, log: silent });
+  const pay = { chainId: w.id, class: 'spend', host: 'www.sweetwater.com', description: 'buy the piano book', cost: 24.99 };
+  // the answer box (POST /oca/inbox/asks/:id/answer): a typed yes closes the ask and pays nothing
+  const a = await w.act.authorize(pay);
+  await inbox.answerAsk({ id: a.askId, reply: 'yes, approve it', via: 'Oneiro' });
+  assert.equal((await w.act.authorize({ ...pay, approval: a.askId })).decision, 'refuse');
+  // the agent's thread (POST /oca/agents/:id/say relays through the same answer): even the real code, typed into the app
+  const b = await w.act.authorize({ ...pay, description: 'buy the second book', cost: 19.99 });
+  await w.asks.answer(b.askId, `APPROVE ${w.code()}`);
+  assert.equal((await w.act.authorize({ ...pay, description: 'buy the second book', cost: 19.99, approval: b.askId })).decision, 'refuse');
+  await w.approvals.tick();
+  assert.notEqual((await w.approvalOf(b.askId)).metadata.approval.settled, APPROVE, 'never settled as approved');
+  // dismiss: refused outright for a payment, so it stays open for the phone or Deny
+  const c = await w.act.authorize({ ...pay, description: 'buy the third book', cost: 14.99 });
+  await assert.rejects(inbox.dismissAsk({ id: c.askId }), /can’t be dismissed/);
+  assert.equal((await w.act.authorize({ ...pay, description: 'buy the third book', cost: 14.99, approval: c.askId })).decision, 'ask', 'still waiting on the phone');
+  // and Judge's Deny is a real no
+  await inbox.answerAsk({ id: c.askId, reply: 'no', via: 'the app' });
+  assert.equal((await w.act.authorize({ ...pay, description: 'buy the third book', cost: 14.99, approval: c.askId })).decision, 'refuse');
+}));
 
-test('a yes to a payment whose agent is gone sends a fresh executor to do exactly that action, citing the approval', async () => {
-  const deployed = [];
-  let deployFails = null;
-  const pool = { query: async (sql, params) => {
-    if (/FROM agent_deployments WHERE ask_id/.test(sql)) return { rows: [] };
-    if (/FROM agent_actions WHERE ask_id/.test(sql)) return { rows: params[0] === 37 ? [{ class: 'spend', host: 'www.instagram.com', description: 'Publish the Day 1 carousel with no crop, filter, music or boost', cost: 0 }] : [] };
-    return { rows: [] };
-  } };
-  const asks = { answer: async (id, reply) => ({ id, reply, metadata: { chainId: 27, payment: id !== 50 } }) };
-  const agents = { relay: async () => {}, deploy: async (chainId, opts) => { if (deployFails) throw new Error(deployFails); deployed.push([chainId, opts]); return { id: 'dep-new' }; } };
-  const inbox = createInbox({ pool, queue: {}, worth: {}, workRoot: '/tmp', asks, agents, log: silent });
+test('reading his replies: APPROVE/DENY codes, answers to asks, "status" — and a plain yes to a payment only gets the instructions', async () => database(async pool => {
+  const w = await world(pool);
+  const dir = await mkdtemp(join(tmpdir(), 'imsg-inbox-'));
+  const inbox = createInbox({ pool, queue: { get: async () => null }, worth: null, workRoot: dir, asks: w.asks, agents: null });
+  const incoming = [], replies = [];
+  const line = { since: async after => incoming.filter(m => m.id > after), latestId: async () => 100, send: async m => { replies.push(m); } };
+  const reader = createImessageInbox({ imessage: line, asks: w.asks, inbox, payments: w.approvals, statePath: join(dir, 'state.json'), log: silent,
+    wants: async () => [{ id: w.id, description: 'Grow InnerEcho' }] });
+  const say = async text => { incoming.push({ id: 100 + incoming.length + 1, text, sender: 'quinn@icloud.com', at: w.now }); await reader.tick(); return replies.at(-1); };
 
-  const yes = await inbox.answerAsk({ id: 37, reply: 'yes' });
-  assert.deepEqual(yes.followUp, { started: true, agent: 'dep-new' });
-  assert.equal(deployed.length, 1); const [chainId, opts] = deployed[0];
-  assert.equal(chainId, 27); assert.equal(opts.kind, 'executor'); assert.equal(opts.firedBy, 'person');
-  assert.match(opts.task, /approval=37/); assert.match(opts.task, /Day 1 carousel/); assert.match(opts.task, /once/);
+  // nothing open: a status line
+  assert.match(await say('status'), /^Working on: #\d+ Grow InnerEcho\./);
+  // a question: his reply answers it
+  const q = await w.asks.ask({ chainId: w.id, kind: 'question', detail: 'Which caption reads better?' });
+  assert.match(await say('the second one'), new RegExp(`passed to #${w.id} \\(ask #${q.id}\\)`));
+  assert.equal((await pool.query('SELECT reply FROM notifications WHERE id = $1', [q.id])).rows[0].reply, 'the second one');
+  // a payment: "yes" gets the instructions, never an approval; the code decides it
+  const pay = await w.act.authorize({ chainId: w.id, class: 'spend', host: 'www.namecheap.com', description: 'buy innerecho.app', cost: 12 });
+  const code = w.code();
+  assert.match(await say('yes'), /reply with the APPROVE or DENY code/);
+  assert.equal((await w.approvalOf(pay.askId)).metadata.approval.settled, undefined);
+  assert.match(await say(`approve ${code.toLowerCase()}`), /^Approved\./);
+  assert.equal((await w.act.authorize({ chainId: w.id, class: 'spend', host: 'www.namecheap.com', description: 'buy innerecho.app', cost: 12, approval: pay.askId })).decision, 'proceed');
+  assert.match(await say(`DENY ${code}`), /^Not done: that payment was already approved/);
+  // a reader that starts fresh skips what was sent before it
+  const fresh = createImessageInbox({ imessage: { ...line, latestId: async () => 10_000 }, asks: w.asks, inbox, payments: w.approvals, statePath: join(dir, 'fresh.json'), log: silent });
+  const before = replies.length; await fresh.tick(); assert.equal(replies.length, before);
+}));
 
-  assert.equal((await inbox.answerAsk({ id: 37, reply: 'no' })).followUp, undefined, 'a no starts nothing');
-  assert.equal((await inbox.answerAsk({ id: 50, reply: 'yes' })).followUp, undefined, 'only a payment is carried out this way');
-  assert.equal(deployed.length, 1);
-  assert.deepEqual((await inbox.answerAsk({ id: 38, reply: 'yes' })).followUp, { started: false, why: 'the held action is not on record, so there is nothing to carry out' });
-  deployFails = 'all 6 agent slots are busy; raise agentSlots or wait';
-  assert.deepEqual((await inbox.answerAsk({ id: 37, reply: 'Approved on iPhone (ask #37).' })).followUp, { started: false, why: deployFails }, 'why it could not start is said, not swallowed');
+test('which ask a reply answers: "#n" names it, otherwise the newest one he was texted', () => {
+  const open = [
+    { id: 5, chainId: 27, kind: 'question', at: '2026-11-05T10:00:00Z', delivered: ['imessage'] },
+    { id: 6, chainId: 31, kind: 'question', at: '2026-11-05T11:00:00Z', delivered: ['notification'] },
+    { id: 7, chainId: 27, kind: 'notice', at: '2026-11-05T12:00:00Z', delivered: ['imessage'] },
+  ];
+  assert.equal(pickAsk(open, 'done').id, 5, 'the newest texted ask, never a notice');
+  assert.equal(pickAsk(open, '#6 yes').id, 6);
+  assert.equal(pickAsk(open, 'for #31: done').id, 6, 'a pursuit number works too');
+  assert.equal(pickAsk(open, '#99 ok'), null);
+  assert.equal(pickAsk([], 'hi'), null);
+  assert.deepEqual(parseDecision('Approve k7q2mx.'), { approved: true, code: 'K7Q2MX' });
+  assert.deepEqual(parseDecision('DENY K7Q2MX'), { approved: false, code: 'K7Q2MX' });
+  assert.equal(parseDecision('yes approve it'), null);
+  assert.equal(parseDecision('approve K7Q2MX and also the other one'), null, 'the verb and the code, nothing else');
+  assert.match(newCode(), /^[A-HJ-NP-Z2-9]{6}$/);
 });

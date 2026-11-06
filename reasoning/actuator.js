@@ -87,10 +87,19 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     const lead = `Oneiro wants to ${text(description, 400)}${on}`, room = Math.max(60, 250 - tail.length);
     return { title: text(title, 80), description: (lead.length > room ? `${lead.slice(0, room - 1).trimEnd()}…` : lead) + tail };
   }
-  // The person's answer to an approval ask, read from the ask itself.
+  // The person's answer to an approval ask, read from the ask itself. A payment is decided only by its approval code,
+  // texted back from Quinn's own phone (payment-approvals.js): a "yes" typed anywhere else, or posted to the engine by
+  // anything on this Mac, approves nothing.
   async function approvalOf(askId) {
     const { rows: [a] } = await pool.query(`SELECT id, reply, replied_at, metadata FROM notifications WHERE id = $1 AND category = 'ask'`, [askId]);
     if (!a) return { state: 'unknown' };
+    if (a.metadata?.payment === true) {
+      const settled = a.metadata?.approval?.settled;
+      if (settled === 'allow-once') return { state: 'yes', ask: a };
+      if (settled === 'deny' || (a.replied_at && NO.test(a.reply || ''))) return { state: 'no', ask: a };
+      if (settled || a.replied_at) return { state: 'expired', ask: a };   // closed, or answered without the code
+      return { state: 'pending', ask: a };
+    }
     if (!a.replied_at) return { state: 'pending', ask: a };
     if (YES.test(a.reply || '')) return { state: 'yes', ask: a };
     if (NO.test(a.reply || '')) return { state: 'no', ask: a };
@@ -143,7 +152,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
       log.log?.(`[actuator] ${cls} on ${host || '—'} for #${chainId}: ${decision}${extra.askId ? ` (ask #${extra.askId})` : ''} — ${text(why, 140)}`);
       return { decision, actionId: id, why, ...extra };
     };
-    if (!want || want.want?.status !== 'active') return record('refuse', 'no active pursuit is named; an action serves a pursuit');
+    if (!want || want.want?.status !== 'active' || want.deleted) return record('refuse', 'no active pursuit is named; an action serves a pursuit');
     if (cls !== 'sign_in' && isCoursework(host)) return record('refuse', `${host} is a course or assessment site: graded work is submitted by Quinn himself, never by the engine`);
     retry = await retries.check(pool, candidate, retryEvidence, { deadline: retryDeadline, signal });
     ensureLive(signal);
@@ -156,6 +165,7 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
       if (a.state === 'yes' && Number(a.ask?.metadata?.chainId) === Number(chainId)) approvedBy = a.ask.id;
       else if (a.state === 'no') return record('refuse', `Quinn declined (ask #${a.ask.id}: "${text(a.ask.reply, 80)}")`);
       else if (a.state === 'pending') return record('ask', `waiting for Quinn's answer to ask #${approval}`, { askId: Number(approval), question: a.ask?.metadata?.detail || '' });
+      else if (a.state === 'expired') return record('refuse', `ask #${a.ask.id} closed without Quinn's approval code from his phone, so the payment was not made; it needs a new ask`);
     }
     // Does this action need the person's yes?
     let needs = null;
@@ -182,11 +192,11 @@ export function createActuator({ pool, risk = null, asks = null, controls, queue
     }
     if (needs) {
       const question = cls === 'spend'
-        ? `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''} (${costWords}). Are you sure you want to go through with this? Reply yes or no.`
+        ? `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''} (${costWords}). Are you sure you want to go through with this?`
         : `Oneiro wants to ${text(description, 280)}${host ? ` on ${host}` : ''}. OK? Reply yes or no.`;
       let askId = null;
       if (asks) {
-        // A payment asks on the phone with Approve and Deny; everything else asks as before.
+        // A payment asks with a one-time approval code Quinn texts back from his phone; everything else asks as before.
         const payment = cls === 'spend' ? { ...paymentPrompt({ description, host, spendCost, dailyBudget: commitment ? dailyBudget : null, costWords }),
           detail: `${question}\nWhy it asks: ${needs}` } : null;
         const r = await asks.ask({ chainId: Number(chainId), kind: 'question', detail: question, want: want.want?.description || '', stakes: want.want?.stakes || [], sessionKey, agent, payment }).catch(e => ({ error: e.message }));

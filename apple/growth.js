@@ -13,6 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { Router } from 'express';
 import { SETTINGS_PATH } from './metrics.js';
+import { appleChangeWords } from './change-words.js';
 
 const DAY = 86_400_000;
 const text = (v, max = 400) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -113,6 +114,10 @@ export function createAppleGrowth({ pool, apple, llm = null, asks = null, clock 
     for (const review of r.body?.data || []) {
       if (review.relationships?.response?.data) continue;
       const a = review.attributes || {};
+      // A reply already drafted stays as drafted. Writing it afresh every run changed the request, which voided any approval
+      // Quinn gave and raised a new ask with a new code, so the same review piled up in Judge day after day.
+      const { rows: [kept] } = await pool.query(`SELECT request, evidence, why FROM apple_proposals WHERE kind = 'review_reply' AND subject = $1`, [text(review.id, 300)]);
+      if (kept?.request) { out.push({ kind: 'review_reply', subject: review.id, evidence: kept.evidence, why: kept.why, request: kept.request }); continue; }
       const reply = text(await llm.messages.create({ provider: 'codex', max_tokens: 400, temperature: 0.3,
         system: 'You draft a developer reply to an App Store review of InnerEcho, a journaling app, for its maker Quinn to approve. Plain, warm, specific, under 400 characters. Thank them for something they actually said; answer their point honestly; never promise features, dates or refunds; never be defensive. Reply with the text only.',
         messages: [{ role: 'user', content: `Rating: ${a.rating}/5\nTitle: ${a.title || ''}\nReview: ${a.body || ''}` }] }).then(x => (typeof x === 'string' ? x : x?.content?.[0]?.text ?? '')).catch(() => ''), 1000);
@@ -139,9 +144,14 @@ export function createAppleGrowth({ pool, apple, llm = null, asks = null, clock 
       if (r.approvalId) approvalId = r.approvalId;
       // An approval that was used or ran out can't be spent again: the next run asks afresh.
       if (/is used|expired|different request/.test(r.error || '')) approvalId = null;
+      // The ask is about this (kind, subject), not about the text holding the code: a fresh one replaces the last.
+      const subject = `apple:${p.kind}:${p.subject}`;
       if (r.decision === 'needs_approval' && asks && !(same && prior.status === 'needs_approval')) {
-        await asks.ask({ chainId: pursuit, kind: 'question', detail: `Approve an Apple change: ${text(p.why, 200)}. In Terminal on your Mac, run: ${r.approve}` }).catch(() => {});
+        await asks.ask({ chainId: pursuit, kind: 'apple_approval', subject, detail: `Approve an Apple change: ${text(p.why, 200)}. In Terminal on your Mac, run: ${r.approve}`,
+          apple: { why: text(p.why, 300), change: appleChangeWords(p), command: text(r.approve, 400), approval: approvalId } }).catch(e => log.warn?.('[apple] ask:', e.message));
       }
+      // Once it has gone out, or the broker refused it, nothing is left to approve, so the card shouldn't stay.
+      if (['sent', 'denied'].includes(status)) await asks?.closeSubject?.(subject, { why: `it was ${status}` }).catch(e => log.warn?.('[apple] close ask:', e.message));
     } else if (same) status = prior.status;
     await pool.query(`INSERT INTO apple_proposals (kind, subject, evidence, request, why, status, decision, approval_id, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, to_timestamp($9 / 1000.0))

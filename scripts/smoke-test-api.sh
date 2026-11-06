@@ -57,7 +57,7 @@ code=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" -X OPTIONS "$BASE/pulse" ||
 line "OPTIONS /pulse (CORS preflight)" "$code"
 get "GET /web/index.html (static)" "/web/index.html"
 
-echo "--- Core psyche / OpenClaw API ---"
+echo "--- Core psyche API ---"
 get "GET /pulse" "/pulse"
 post_json "POST /recall" "/recall" '{"query":"health","limit":2}'
 post_json "POST /feel" "/feel" '{"content":"api smoke","feeling":"neutral","intensity":0.2}'

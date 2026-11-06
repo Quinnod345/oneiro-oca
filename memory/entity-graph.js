@@ -464,7 +464,7 @@ export async function rankPassagesByPPR(nodeScores, { limit = 10 } = {}) {
   const { rows: episodes } = await pool.query(
     `SELECT id, timestamp, event_type, content, emotional_valence, emotional_arousal,
             surprise_magnitude, importance_score, active_app, participants
-     FROM episodic_memory WHERE id = ANY($1)`,
+     FROM episodic_memory WHERE id = ANY($1) AND forgotten_at IS NULL`,
     [episodeIds]
   );
 

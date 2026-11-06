@@ -60,7 +60,7 @@ const memory = {
 
 test('the draft schema is strict and closed', () => {
   assert.equal(draftSchema.additionalProperties, false);
-  assert.deepEqual(draftSchema.required.sort(), ['description', 'doneWhen', 'duplicateOf', 'evidenceIds', 'priority', 'questions', 'rationale', 'stakes']);
+  assert.deepEqual(draftSchema.required.sort(), ['description', 'doneWhen', 'duplicateOf', 'evidenceIds', 'firstStep', 'priority', 'questions', 'rationale', 'stakes']);
   assert.deepEqual(draftSchema.properties.doneWhen.properties.target.type, ['number', 'null']);
 });
 
@@ -82,7 +82,7 @@ test('gather keeps only what the ledger would accept, labelled by its real sourc
   assert.equal(g.retrieval, 'bge_cosine'); assert.equal(g.similar.length, 1); assert.match(g.similar[0].description, /Call Dan/);
   const noEmbed = createPursuitDrafts({ pool, llm: fakeLlm({ next: goodDraft }), worth, queue, clock: () => now, memory, embed: async () => { throw new Error('ECONNREFUSED'); }, log: { log() {}, warn() {} } });
   const g2 = await noEmbed.gatherContext('call Dan');
-  assert.equal(g2.retrieval, 'word_search'); assert.ok(g2.warnings.some(w => /embedder unreachable/.test(w))); assert.equal(g2.similar.length, 1);
+  assert.equal(g2.retrieval, 'word_search'); assert.ok(g2.warnings.some(w => /by their words instead/.test(w))); assert.equal(g2.similar.length, 1);
 }));
 
 test('a loose request becomes a labelled draft the engine validated; the person confirms it into a want, and only their taps become worth', async () => database(async pool => {
@@ -182,4 +182,36 @@ test('a vague draft needs answers; a model failure leaves what was gathered so t
   assert.deepEqual(await drafts.sweep(), { failed: 1 });
   assert.match((await drafts.get(stale)).error, /restarted/);
   assert.ok((await drafts.list()).some(x => x.draftId === stale));
+}));
+
+test('the finish line keeps its parts: witness, target and first step are drafted, editable on their own, and saved with the pursuit', async () => database(async pool => {
+  let now = 20 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false }) });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  const drafts = createPursuitDrafts({ pool, llm: fakeLlm({ next: { ...goodDraft, firstStep: 'Look through your Messages for the last time you and Dan talked' } }), worth, queue, clock: () => now, memory, embed: async texts => texts.map(() => [1, 0]), log: { log() {}, warn() {} } });
+  const inbox = createInbox({ pool, queue, worth, workRoot: '/tmp/none', clock: () => now, drafts });
+  const id = randomUUID();
+  await drafts.start({ clientRequestId: id, text: 'stay in touch with my brother' });
+  const d = await drafts.get(id, { wait: 5 });
+  assert.equal(d.draft.firstStep.value, 'Look through your Messages for the last time you and Dan talked');
+  assert.deepEqual(d.draft.doneWhen.structured.witness, { kind: 'message', detail: "Quinn's Messages log" }); assert.equal(d.draft.doneWhen.structured.target, 3);
+  // an edit that breaks the structure is refused with the reason, not flattened into a sentence
+  await assert.rejects(inbox.want({ draftId: id, finishLine: { witness: { kind: 'message', detail: '' }, target: 3 } }), /isn't checkable yet: The witness needs a detail/);
+  // the person changes the target and the witness detail, and the first step; the parts are kept on the pursuit
+  const r = await inbox.want({ draftId: id, doneWhen: 'Four months in a row with a call to Dan, in my call log.',
+    finishLine: { witness: { kind: 'message', detail: 'my call log' }, target: 4 }, firstStep: 'Call Dan this Sunday' });
+  const chain = await queue.get(r.chain.chain_id);
+  assert.deepEqual(chain.finishLine.witness, { kind: 'message', detail: 'my call log' });
+  assert.equal(chain.finishLine.target, 4); assert.equal(chain.finishLine.check, 'count'); assert.equal(chain.finishLine.deadlineDays, 90, 'parts the person left alone keep the draft\'s value');
+  assert.equal(chain.finishLine.firstStep, 'Call Dan this Sunday');
+  assert.equal(chain.finishLine.statement, 'Four months in a row with a call to Dan, in my call log.');
+  assert.equal(chain.want.doneWhen, 'Four months in a row with a call to Dan, in my call log.');
+  // clearing the target makes it a yes/no finish line
+  const id2 = randomUUID();
+  await drafts.start({ clientRequestId: id2, text: 'stay in touch with my brother again' });
+  await drafts.get(id2, { wait: 5 });
+  const r2 = await inbox.want({ draftId: id2, finishLine: { witness: { kind: 'person', detail: 'Dan says so' }, target: null } });
+  const c2 = await queue.get(r2.chain.chain_id);
+  assert.equal(c2.finishLine.check, 'binary'); assert.equal(c2.finishLine.target, null);
 }));

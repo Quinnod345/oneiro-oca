@@ -147,7 +147,7 @@ async function _cycleInner() {
 }
 
 // ============================================================
-// API — for integration with cognitive-loop / OpenClaw
+// API — for integration with cognitive-loop, the engine MCP server (mcp/server.js) and the apps
 // ============================================================
 
 // Experience something (creates episodic memory + updates emotion)

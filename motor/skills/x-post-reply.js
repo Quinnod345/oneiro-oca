@@ -181,10 +181,10 @@ async function generateReplyText(params = {}) {
 async function postReplyViaApi(parentId, replyText) {
   const { TwitterApi } = await import('twitter-api-v2');
   const client = new TwitterApi({
-    appKey: '***REMOVED***',
-    appSecret: '***REMOVED***',
-    accessToken: '***REMOVED***',
-    accessSecret: '***REMOVED***',
+    appKey: process.env.X_APP_KEY,
+    appSecret: process.env.X_APP_SECRET,
+    accessToken: process.env.X_ACCESS_TOKEN,
+    accessSecret: process.env.X_ACCESS_SECRET,
   });
   const { data } = await client.readWrite.v2.tweet({
     text: replyText,
