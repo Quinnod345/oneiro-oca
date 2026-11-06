@@ -276,11 +276,13 @@ RULES: description ≤ 40 words, in the person's voice. doneWhen must name a wit
       const last = existing.turns?.[existing.turns.length - 1];
       const sameInput = last && (!t || last.text === t) && JSON.stringify(last.answers || []) === JSON.stringify(cleanAnswers);
       if (existing.status === 'drafting') return { accepted: true, replay: true, ...view(existing) };
-      if (sameInput) return { accepted: false, replay: true, ...view(existing) };
+      // The same words after a failed draft mean try again, not show me that failure again.
+      const retrying = sameInput && existing.status === 'failed';
+      if (sameInput && !retrying) return { accepted: false, replay: true, ...view(existing) };
       if (['confirmed', 'abandoned'].includes(existing.status)) throw Object.assign(new Error(`this draft is ${existing.status}`), { status: 409 });
       if (!cleanAnswers.length && !t) throw new Error('answer a question or say more');
-      if ((existing.turns || []).length >= limits.turns) throw Object.assign(new Error(`a draft takes at most ${limits.turns} turns; start a new one`), { status: 409 });
-      const turns = [...existing.turns, { text: t || existing.turns[0].text, answers: cleanAnswers, at: clock() }];
+      if (!retrying && (existing.turns || []).length >= limits.turns) throw Object.assign(new Error(`a draft takes at most ${limits.turns} turns; start a new one`), { status: 409 });
+      const turns = retrying ? existing.turns : [...existing.turns, { text: t || existing.turns[0].text, answers: cleanAnswers, at: clock() }];
       await set(id, { turns, status: 'drafting', phase: 'gathering', error: null });
     } else {
       if (t.length < 3) throw new Error('say what you want');

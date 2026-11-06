@@ -60,7 +60,7 @@ test('speaking for Quinn is tagged as relayed through MCP; a payment ask can nev
   await call(h, 'oca_answer_ask', { ask: 5, words: 'the second caption' });
   assert.ok(e.calls.some(c => c[1] === '/oca/inbox/asks/5/answer' && /\(MCP\)$/.test(c[2].via)));
   const pay = await call(h, 'oca_answer_ask', { ask: 6, words: 'yes' });
-  assert.equal(pay.result.isError, true); assert.match(pay.result.content[0].text, /code Quinn texts back from his phone/);
+  assert.equal(pay.result.isError, true); assert.match(pay.result.content[0].text, /code Quinn texts back from their phone/);
   assert.ok(!e.calls.some(c => c[1] === '/oca/inbox/asks/6/answer'), 'never sent to the engine');
   const done = await call(createHandlers(fakeEngine({ asks: [{ id: 7, kind: 'finish', payment: false }] })), 'oca_answer_ask', { ask: 7, words: 'yes' });
   assert.equal(done.result.isError, true); assert.match(done.result.content[0].text, /Only Quinn can say so/, 'a finish line is his to confirm');

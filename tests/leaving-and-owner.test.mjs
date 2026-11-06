@@ -6,6 +6,7 @@ import { plainTurnFailure, createAgentHost } from '../agent-host/index.js';
 import { composeDeliverable } from '../reasoning/deliverables.js';
 import { createInbox } from '../reasoning/inbox.js';
 import { waitingOnModel } from '../reasoning/board.js';
+import { providerNotice } from '../reasoning/agents.js';
 
 test('agents hear the configured owner, or "the person" when nobody is configured', async () => {
   process.env.OCA_LOCAL_CONFIG = '/nonexistent/local.json';
@@ -59,7 +60,16 @@ test('a payment can only be denied from the app: a typed yes neither closes it n
 test("a pursuit whose review couldn't reach a model is waiting, not stuck", () => {
   const row = error => ({ status: 'failed', state: { result: { error } } });
   assert.equal(waitingOnModel(row('fetch failed')), true);
+  assert.equal(waitingOnModel(row('artifact unavailable: inference circuit open (fetch failed); retry after 54s')), true);
+  assert.equal(waitingOnModel({ status: 'pondering', state: { result: { error: 'fetch failed' } } }), true);
   assert.equal(waitingOnModel(row('connect ECONNREFUSED 127.0.0.1:11434')), true);
   assert.equal(waitingOnModel(row('the plan contradicts itself')), false);
   assert.equal(waitingOnModel({ status: 'running', state: { result: { error: 'fetch failed' } } }), false);
+});
+
+test("a provider's trouble reads as what happened and what comes next, with nothing to answer", () => {
+  for (const why of ['stream disconnected before completion', 'You exceeded your current quota, please add credits']) {
+    assert.match(providerNotice(why), /agents are paused\. They try again on their own in an hour\.$/);
+    assert.doesNotMatch(providerNotice(why), /Deployments|stream|credits/);
+  }
 });

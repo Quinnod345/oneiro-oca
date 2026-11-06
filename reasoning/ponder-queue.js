@@ -1,5 +1,7 @@
 // Durable wants and scoped inquiries. A lease fences checkpoint writes after a crash.
 // Pondering prepares a reviewable answer; only observed outcomes can satiate the want.
+import { modelDown } from './board.js';
+const MODEL_RETRY_MS = 5 * 60_000;
 import { randomUUID, createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { normalizeEvidence, currentEvidence } from './loop.js';
@@ -116,6 +118,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
           AND jsonb_array_length(COALESCE(ponder_state #> '{checkpoint,passes}', '[]'::jsonb)) < (ponder_state->>'maxPasses')::int
           AND (jsonb_typeof(ponder_state #> '{checkpoint,draft}') = 'object'
             OR jsonb_array_length(COALESCE(ponder_state #> '{checkpoint,passes}', '[]'::jsonb)) > 0)))
+       AND COALESCE((ponder_state->>'modelRetryAt')::float8, 0) <= $1
        AND ($2::int IS NULL OR id = $2)
        ORDER BY (COALESCE(ponder_state #>> '{origin,kind}', 'explicit') = 'interest'), priority DESC, created_at ASC LIMIT 100`, [clock(), id]);
     const priced = await reprice(rows);
@@ -189,6 +192,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
           evidence: selectedEvidence, maxPasses: budget.maxPasses, timeBudgetSeconds: budget.timeBudgetSeconds,
           checkpoint: state.checkpoint,
           onCheckpoint: async checkpoint => { state = { ...state, checkpoint }; await save(row.id, lease, state); } };
+        const wantBefore = state.want, stallBefore = state.stallStreak || 0;
         const result = await strategy.run({ chain: { chain_id: row.id, seed: row.seed }, want: state.want, motivation, state, evidence: current,
           budget, reasonOptions, deps: strategyDeps, clock });
         // Observations a strategy produced join the want's evidence (never rewriting an existing id).
@@ -208,6 +212,9 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         state = { ...state, stallStreak, unfinishedClaims: 0 };
         // A full rotation is one attempt per strategy this want can use; only then does it wait for evidence.
         if (rotating && stallStreak < eligibleStrategies(strategyDeps, state).length) status = 'pondering';
+        // No model to reason with isn't a failed attempt. It waits, then tries again, and agents can still work meanwhile.
+        if (result.status === 'failed' && modelDown(result.error)) { status = 'pondering'; state = { ...state, modelRetryAt: clock() + MODEL_RETRY_MS, want: wantBefore, stallStreak: stallBefore }; }
+        else state = { ...state, modelRetryAt: null };
         await save(row.id, lease, state, status);
         // The reasoner ran and did not get there: an observed failure of the engine's own pondering.
         // Converging is not a success (a plan satiates nothing); a transport failure is not a failure of thought.
@@ -219,6 +226,11 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
         return get(row.id);
       } catch (e) {
         if (e.code === 'LEASE_LOST') return get(row.id);
+        if (modelDown(e.message)) {
+          state = { ...state, unfinishedClaims: 0, result: { status: 'failed', error: e.message }, modelRetryAt: clock() + MODEL_RETRY_MS };
+          await save(row.id, lease, state, 'pondering');
+          return get(row.id);
+        }
         state = { ...state, unfinishedClaims: 0, result: { status: 'failed', error: e.message },
           want: recordAttempt(state.want, { result: 'failed', now: clock() }) };
         await save(row.id, lease, state, 'failed');

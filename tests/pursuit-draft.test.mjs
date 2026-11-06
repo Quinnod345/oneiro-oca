@@ -215,3 +215,25 @@ test('the finish line keeps its parts: witness, target and first step are drafte
   const c2 = await queue.get(r2.chain.chain_id);
   assert.equal(c2.finishLine.check, 'binary'); assert.equal(c2.finishLine.target, null);
 }));
+
+test('the same words after a failed draft try again, and a later good answer clears the failure', async () => database(async pool => {
+  let now = 20 * 86400000;
+  const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+  const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => ({ autonomousActions: false }) });
+  const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+  let calls = 0, down = true;
+  const llm = { messages: { create: async () => { calls++; if (down) throw new Error('fetch failed'); return { content: [{ text: JSON.stringify(goodDraft) }], _via: 'local' }; } } };
+  const drafts = createPursuitDrafts({ pool, llm, worth, queue, clock: () => now, memory, embed: async texts => texts.map(() => [1, 0]), provider: () => ({ provider: 'local', model: 'x' }) });
+  const id = randomUUID(), words = 'help me stay in touch with my brother';
+  await drafts.start({ clientRequestId: id, text: words });
+  let r; for (let i = 0; i < 200 && (r = await drafts.get(id)).status === 'drafting'; i++) await new Promise(ok => setTimeout(ok, 5));
+  assert.equal(r.status, 'failed');
+  const before = calls;
+  down = false;
+  const again = await drafts.start({ clientRequestId: id, text: words });
+  assert.equal(again.accepted, true, 'it really starts again');
+  for (let i = 0; i < 200 && (r = await drafts.get(id)).status === 'drafting'; i++) await new Promise(ok => setTimeout(ok, 5));
+  assert.ok(calls > before, 'the model was asked again');
+  assert.notEqual(r.status, 'failed');
+  assert.equal((r.turns || []).length || 1, 1, 'a retry is not a new turn');
+}));

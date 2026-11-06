@@ -33,6 +33,8 @@ export const LIVE = ['queued', 'running', 'waiting_person'];
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 const THINKER = '[thinker]';
+// A person's words relayed into a thread. The name in it is whoever owns this install (agent-host/index.js), so don't match one.
+const RELAYED = /^\s*\[[^\],]+, via [^\]]+\]\s*/;
 
 // Stream fallback entries are not terminal without an explicit terminal marker, even with stopReason 'stop'.
 // Prefer explicit turn identity when present; timestamps retain legacy restart recovery.
@@ -95,11 +97,11 @@ const CONTRACT = `End every reply with a fenced block tagged oca, JSON, one of:
 A done block may also carry "deliverable" when what you made is something Quinn should act on, not only read:
 "deliverable":{"kind":"mail_draft","to":"name@example.com","subject":"…","body":"the email, ready to send"}
 "deliverable":{"kind":"calendar_block","title":"…","start":"2026-11-12T15:00:00-05:00","durationMinutes":45,"notes":"…","calendar":"Personal"}
-He sees it as a card he can edit, then opens it as a draft in Gmail or adds it to Calendar with one press. You never send mail or add events yourself for these. A reply to a mail you read can also carry "threadId" and "account". Leave deliverable out for a plain write-up.
-A done block may also carry "finishLineMet":true and "finishEvidence":"what you observed that shows it" when, and only when, you saw the finish line met. Quinn is asked to confirm; only he can call it done.
+They see it as a card they can edit, then open it as a draft in Gmail or adds it to Calendar with one press. You never send mail or add events yourself for these. A reply to a mail you read can also carry "threadId" and "account". Leave deliverable out for a plain write-up.
+A done block may also carry "finishLineMet":true and "finishEvidence":"what you observed that shows it" when, and only when, you saw the finish line met. Quinn is asked to confirm; only they can call it done.
 If this task scope is exhausted, superseded by the owner, or blocked on missing evidence, include "disposition":{"status":"exhausted|superseded|evidence-blocked"} in your done/failed block. Name the objective, period and blocker in the summary; do not report ordinary progress as retirement.
 Evidence counts only when the engine can re-read the source and find your quote; say what you saw, never what you assume.
-brief is what Quinn gets to read and judge: a markdown write-up of what you found, written for him, not for the engine. Lead with the answer; when you compared options, give a table (name, price, what reviewers say, link); cite each source inline as a link; say plainly what you could not confirm. Skip process notes and tool names. A short brief that answers the task beats a long one.
+brief is what Quinn gets to read and judge: a markdown write-up of what you found, written for them, not for the engine. Lead with the answer; when you compared options, give a table (name, price, what reviewers say, link); cite each source inline as a link; say plainly what you could not confirm. Skip process notes and tool names. A short brief that answers the task beats a long one.
 made lists only what exists now because of you and will last: a live listing, a published post, a changed account setting, a finished asset or file others will use. Leave it out when you only read or researched.
 If the next step is something only the person can decide or provide, do not report done with it in nextStep — stop and ask it as needs_person, so it reaches Quinn (a text, and the pursuit's conversation in Oneiro).
 If the next step cannot happen before a certain time (a planned launch date, results that only exist after a period ends), set resumeAt to that time and nextStep to exactly what to do then: the engine sends no one until then, and at that time deploys an agent to do nextStep. Do not research what cannot exist yet.`;
@@ -126,9 +128,14 @@ export function composeBrief({ kind, chainId, want, doneWhen, task, evidence = [
     + (remaining.length ? `\nOpen questions from the last agent:\n${remaining.slice(0, 4).map(m => `- ${text(m, 200)}`).join('\n')}\n` : '')
     + (ev ? `\nWhat is already known (verified):\n${ev}\n` : '')
     + `\nMessages that start with ${THINKER} are the engine. Anything else here is the person — Quinn, the owner; they may join at any time.\n`
-    + `You act, not just research: sign in (aside__aside_sign_in), post, submit, upload, change settings, pay for things (every payment waits for Quinn's yes, however small) — click it with aside__aside_click, or hand the whole task to aside__aside_do — always passing pursuit ${chainId} and a one-line purpose. The engine decides each committing step under Quinn's charter: it proceeds, or it is held for his one yes (end your turn with needs_person quoting the question you were given, then retry with approval=<ask id> after he says yes), or it is refused with the reason. Do the work yourself; ask Quinn only for what only he can decide or give. Never ask him to send a code, password, key or token: sign in yourself with aside__aside_sign_in, which uses his saved passwords and fetches the verification code from his Messages or Gmail (Apple sign-ins included). Ask him only if that sign-in comes back BLOCKED, quoting what blocked it. Never write a password, verification code, key or token into any file, note, memory, message or report: logins live in Aside Vault, and Aside fills them. Apple work goes through the Apple API first: App Store Connect, Apple Ads, subscriptions and refunds are apple__apple_call (apple__apple_status shows what's set up), and the Apple broker behind it decides every write. Use Aside for Apple only when the API can't do the step, saying why in whyNotApi. On Apple's and Meta's consoles every committing step waits for his yes. Use judgment like a capable person: a check written into your task (an exact link, label, price or wording to verify first) is there to protect what Quinn wants, not to stop you. When one fails in a way that doesn't change his outcome (a tracking tag differs but the link reaches the right app, a button is renamed, a field moved), carry on and report the difference. Stop only for what could hurt him: money beyond what he approved, the wrong account or audience, something that can't be undone beyond the task, or going against what he said. Graded coursework and CAPTCHAs are never yours to do. If you boot an iOS Simulator, shut it down (xcrun simctl shutdown <udid>) before you report; a booted one slows the whole Mac and every other agent.\n\n${CONTRACT}`;
+    + `You act, not just research: sign in (aside__aside_sign_in), post, submit, upload, change settings, pay for things (every payment waits for Quinn's yes, however small) — click it with aside__aside_click, or hand the whole task to aside__aside_do — always passing pursuit ${chainId} and a one-line purpose. The engine decides each committing step under Quinn's charter: it proceeds, or it is held for their one yes (end your turn with needs_person quoting the question you were given, then retry with approval=<ask id> after they say yes), or it is refused with the reason. Do the work yourself; ask Quinn only for what only they can decide or give. Never ask them to send a code, password, key or token: sign in yourself with aside__aside_sign_in, which uses his saved passwords and fetches the verification code from his Messages or Gmail (Apple sign-ins included). Ask him only if that sign-in comes back BLOCKED, quoting what blocked it. Never write a password, verification code, key or token into any file, note, memory, message or report: logins live in Aside Vault, and Aside fills them. Apple work goes through the Apple API first: App Store Connect, Apple Ads, subscriptions and refunds are apple__apple_call (apple__apple_status shows what's set up), and the Apple broker behind it decides every write. Use Aside for Apple only when the API can't do the step, saying why in whyNotApi. On Apple's and Meta's consoles every committing step waits for his yes. Use judgment like a capable person: a check written into your task (an exact link, label, price or wording to verify first) is there to protect what Quinn wants, not to stop you. When one fails in a way that doesn't change his outcome (a tracking tag differs but the link reaches the right app, a button is renamed, a field moved), carry on and report the difference. Stop only for what could hurt him: money beyond what he approved, the wrong account or audience, something that can't be undone beyond the task, or going against what he said. Graded coursework and CAPTCHAs are never yours to do. If you boot an iOS Simulator, shut it down (xcrun simctl shutdown <udid>) before you report; a booted one slows the whole Mac and every other agent.\n\n${CONTRACT}`;
   return head;
 }
+
+/** What a person reads when the model provider stops the agents. Pure. */
+export const providerNotice = why => (/usage limit|quota|rate.?limit|\b429\b|limit reached|credit/i.test(String(why))
+  ? "Codex hit its usage limit, so agents are paused. They try again on their own in an hour."
+  : "Codex stopped answering, so agents are paused. They try again on their own in an hour.");
 
 export function createAgents({ pool, host, queue, risk = null, asks = null, aside = null, llm = null, nameLlm = null, controls = null, clock = Date.now, log = console,
   agentId = 'main', model = null, thinkingLevel = 'high', pollMs = 15_000, planMs = 60_000, maxTurns = 12, slotsDefault = 4,
@@ -172,7 +179,7 @@ export function createAgents({ pool, host, queue, risk = null, asks = null, asid
 Runs per pursuit (24 h): ${churn.map(r => `${r.want} ${r.runs} (${r.failed} failed)`).join(', ') || 'none'}
 Recent failures:\n${failures.map(f => `- ${f.want}: ${f.why}`).join('\n') || '- none'}
 Actions held, refused or failed:\n${actions.map(a => `- ${actionSummary(a)}`).join('\n') || '- none'}
-Questions sent to Quinn (72 h) and his answers:\n${asks.map(a => `- ${a.q} → ${a.a}`).join('\n') || '- none'}
+Questions sent to Quinn (72 h) and the answers:\n${asks.map(a => `- ${a.q} → ${a.a}`).join('\n') || '- none'}
 Self-build events (24 h): ${builds.map(b => `${b.kind} ${b.n}`).join(', ') || 'none'}
 To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is ${fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')} (read it; do not edit it directly).`;
   }
@@ -304,7 +311,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const seen = new Set();
     const said = messages.filter(m => m.role === 'user' && (m.at || 0) > sinceMs && !String(m.text || '').startsWith(THINKER) && text(m.text, 20).length >= 3)
       .filter(m => { const k = norm(m.text); if (seen.has(k)) return false; seen.add(k); return true; });
-    return said.map(m => ({ id: `person-${d.session_key.slice(-8)}-${m.at || clock()}`, source: `stated by Quinn in the agent session "${d.display_name}"`, observation: text(String(m.text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 1000) }));
+    return said.map(m => ({ id: `person-${d.session_key.slice(-8)}-${m.at || clock()}`, source: `stated by Quinn in the agent session "${d.display_name}"`, observation: text(String(m.text).replace(RELAYED, ''), 1000) }));
   }
   // Dated steps form a schedule: a report adds its step, it never erases another's (a November review must
   // not swallow an October launch). The earliest future step is what the pursuit waits for.
@@ -364,7 +371,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     log.warn?.(`[agents] provider limit: deployments paused until ${new Date(until).toISOString()}: ${text(why, 160)}`);
     if (asks && clock() - providerNoticeAt > 6 * 3600_000) {
       providerNoticeAt = clock();
-      try { await asks.ask({ chainId: d.chain_id, kind: 'notice', detail: `its agents cannot run — the model provider says: "${text(why, 140)}". Deployments are paused for an hour and will retry on their own; switch the agent model or add credits to resume sooner.`, want: '' }); }
+      try { await asks.ask({ chainId: d.chain_id, kind: 'notice', detail: providerNotice(why), want: '' }); }
       catch (e) { log.warn?.('[agents] provider notice:', e.message); }
     }
   }
@@ -502,7 +509,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
           const since = Number(d.seen_at_ms) || 0;
           const fresh = messages.filter(m => (m.at || 0) > since);
           if (!fresh.length) continue;
-          const personSaid = fresh.filter(m => m.role === 'user' && !String(m.text || '').startsWith(THINKER) && !String(m.text || '').startsWith('[Quinn, via'));
+          const personSaid = fresh.filter(m => m.role === 'user' && !String(m.text || '').startsWith(THINKER) && !RELAYED.test(String(m.text || '')));
           const last = settledReply(t, since);
           if (!last) continue;   // no settled reply yet, including when the app is running the turn
           const latest = Math.max(since, ...messages.map(m => m.at || 0));
@@ -513,7 +520,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
               const stated = await personStatements(d, messages, since);
               if (stated.length) { try { await queue.addEvidence(d.chain_id, stated); log.log?.(`[agents] talker for #${d.chain_id}: ${stated.length} statement(s) by the person recorded`); } catch (e) { log.warn?.('[agents] talker evidence:', e.message); } }
               await pool.query('UPDATE agent_deployments SET seen_at_ms = $2, updated_at = now() WHERE id = $1', [d.id, latest]);
-              const words = text(String(personSaid.at(-1).text).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 4000);
+              const words = text(String(personSaid.at(-1).text).replace(RELAYED, ''), 4000);
               const { rows: waiting } = await pool.query(`SELECT id FROM agent_deployments WHERE chain_id = $1 AND status = 'waiting_person'`, [d.chain_id]);
               for (const w of waiting) await relay(w.id, words, { via: 'the pursuit conversation', note: false }).catch(e => log.warn?.('[agents] relay from conversation:', e.message));
             }
@@ -554,7 +561,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const { rows } = await pool.query(`SELECT id, seed, status, ponder_state AS state FROM thought_chains
       WHERE ponder_state IS NOT NULL AND (ponder_state ->> 'continuous')::boolean = true AND ponder_state #>> '{want,status}' = 'active'
         AND ponder_state -> 'paused' IS NULL
-        AND status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input', 'ready')
+        AND (status IN ('awaiting_evidence', 'stalled', 'budget', 'failed', 'needs_input', 'ready') OR (status = 'pondering' AND ponder_state ->> 'modelRetryAt' IS NOT NULL))
         AND NOT EXISTS (SELECT 1 FROM agent_deployments a WHERE a.chain_id = thought_chains.id AND a.status IN ('queued', 'running'))
         AND NOT EXISTS (SELECT 1 FROM pursuit_work w WHERE w.chain_id = thought_chains.id AND w.status IN ('queued', 'running'))
       ORDER BY updated_at ASC`);
@@ -592,7 +599,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       let tasks = [{ task: `Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.` }];
       // The first step Quinn confirmed when he made the pursuit is the first run's task, before any strategist plans.
       const firstStep = !Number(c.runs) && !c.lastSliceStartedAt ? text(row.state.finishLine?.firstStep, 600) : '';
-      if (firstStep) tasks = [{ task: `Start with the first step Quinn confirmed when he made this pursuit: ${firstStep}` }];
+      if (firstStep) tasks = [{ task: `Start with the first step Quinn confirmed when making this pursuit: ${firstStep}` }];
       if (resuming && c.resumeTask) {
         const step = (Array.isArray(c.schedule) ? c.schedule : []).find(x => x.at === c.resumeAt && x.task === c.resumeTask);
         tasks = [{ task: `It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`, stream: step?.stream || null }];
@@ -657,7 +664,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
     const own = s.standing === 'self' ? `\n\nThe engine's own operation (this pursuit is about itself; its moves are reviews that end in concrete self-wants, one defect each, with the evidence):\n${await selfSignals()}` : '';
     const p = resolveProvider('cloud');
     const r = await llm.messages.create({ provider: p.provider, model: p.model, max_tokens: 1400, temperature: 0.4,
-      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under his charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; retired tasks stay retired unless materially new relevant evidence permits reopening, and superseded scopes additionally require new applicable owner authorization; propose distinct useful work instead; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
+      system: `You are the strategist of a cognitive engine that works for Quinn. For one pursuit, decide what its agents should do next. A pursuit like this is never "waiting": there is almost always a useful move — make content, publish, get listed or featured, improve the product or its store page, reach the right communities, fix what is broken, learn what works from what has been tried. Agents can browse and act on Quinn's signed-in accounts (Aside), run and record InnerEcho in the iOS Simulator (never Quinn's own phone), drive Mac apps, write files, and run code; the engine gates committing actions under the person's charter. Rules: moves are concrete and doable now; each produces something or changes something; never repeat a recent task or retry what just failed the same way; never research data that cannot exist yet; respect what Quinn said; retired tasks stay retired unless materially new relevant evidence permits reopening, and superseded scopes additionally require new applicable owner authorization; propose distinct useful work instead; no graded coursework, no CAPTCHAs, nothing in anyone else's name. File every move under a workstream: the categories of work you run for this pursuit (1–3 words, e.g. "Content", "Distribution", "Measurement"); reuse an existing one, name a new one only when none fits. Return JSON only: {"thought":"one sentence — what you think about this pursuit right now","moves":[{"task":"exact instruction for one agent","why":"one line","stream":"Content"}]} with at most N moves; an empty list only if every useful move is genuinely done or in flight.`,
       messages: [{ role: 'user', content: `Now: ${new Date(now).toISOString()}\nN = ${max}\nPursuit #${row.id}: ${text(want.description || row.seed, 600)}\nDone when: ${text(want.doneWhen || s.doneWhen || '', 400)}\nThe engine may act on its own for: ${grants}\n\nWhat Quinn said:\n${said || '- (nothing recorded)'}\n\nWhat is known:\n${known || '- (nothing yet)'}\n\nScheduled:\n${schedule || '- (nothing)'}\n\nDurable task dispositions (not a recent-run window):\n${retirement || '- (none)'}${refusedLast ? `\n\nMoves refused last cycle, before they started (do not propose these or close variants; propose genuinely different work):\n${refusedLast}` : ''}\n\nRecent agent work (newest first):\n${recent.map(x => `- ${x.at} [${x.status}]${x.stream ? ` (${x.stream})` : ''} ${x.task} → ${x.outcome}`).join('\n') || '- (none)'}\n\nRecent actions:\n${acts.map(a => `- ${a.at} ${actionSummary(a)} — ${a.d}`).join('\n') || '- (none)'}\n\nWorkstreams so far: ${[...new Set([...(s.continuity?.board?.streams || []).map(x => x.name), ...recent.map(x => x.stream).filter(Boolean)])].join(', ') || '(none yet — name them)'}\n\nLast thought: ${text(s.continuity?.lastThought || '', 300) || '(none)'}${own}` }] });
     const raw = typeof r === 'string' ? r : r?.content?.[0]?.text ?? r?.text ?? '';
     const j = JSON.parse(String(raw).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1'));
@@ -737,7 +744,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       const lines = (t?.messages || []).filter(said);
       const last = lines.at(-1), reply = lines.findLast(m => m.role === 'assistant');
       return { active: Boolean(t?.active), messageCount: lines.length, lastReplyAt: reply?.at || null,
-        last: last ? { role: last.role, text: text(words(last).replace(/^\[Quinn, via [^\]]+\]\s*/, ''), 280), at: last.at || null } : null };
+        last: last ? { role: last.role, text: text(words(last).replace(RELAYED, ''), 280), at: last.at || null } : null };
     } catch (e) { return { active: false, messageCount: 0, lastReplyAt: null, last: null, unreadable: text(e.message, 160) }; }
   }
   async function eachLimited(items, n, f) {
@@ -806,6 +813,8 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
   router.post('/oca/agents/:id/say', route(req => relay(req.params.id, req.body?.text ?? req.body?.reply ?? '', { via: req.body?.via || 'Messages' })));
   router.get('/oca/agents/:id/messages', route(req => messages(req.params.id, { steps: req.query.steps === '1' })));
   router.get('/oca/agents/:id/link', route(req => link(req.params.id)));
+  // Stops the turn a thread is on and leaves the thread open. A conversation can't be cancelled, but a reply can hang.
+  router.post('/oca/agents/:id/interrupt', route(async req => { const d = await get(req.params.id); return (await host.abort(d.sessionKey)) || { ok: true }; }));
   // Where a session's thread can be opened (the Mac app's "Answer" and "Talk to it"): a T3 Code link or a Codex command.
   router.get('/oca/agent-link', route(async req => {
     const key = String(req.query.sessionKey || '');

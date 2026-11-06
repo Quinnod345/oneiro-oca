@@ -19,6 +19,7 @@
 // GET  /oca/pursuits/:id/deliverables    every deliverable with its current verdict
 // GET  /oca/pursuits/:id/deliverables/:name   one deliverable's words
 // POST /oca/inbox/asks/:id/dismiss       clear a question without answering it
+import { forOwner } from './local-config.js';
 import { Router } from 'express';
 
 const line = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -194,7 +195,7 @@ export function createPursuitLife({ pool, inbox = null, agents = null, pursuitWo
   router.post('/oca/pursuits/:id/undelete', route(req => undelete(req.params.id)));
   router.get('/oca/pursuits/deleted', route(async () => ({ items: await deleted() })));
   router.get('/oca/pursuits/exportable', route(async () => ({ ids: await exportable() })));
-  router.get('/oca/pursuits/:id/export', route(req => exportOne(req.params.id)));
+  router.get('/oca/pursuits/:id/export', route(async req => JSON.parse(forOwner(JSON.stringify(await exportOne(req.params.id))))));
   router.get('/oca/pursuits/:id/deliverables', route(async req => ({ items: inbox ? await inbox.deliverables(req.params.id) : [] })));
   router.get('/oca/pursuits/:id/deliverables/:name', route(req => { if (!inbox) throw new Error('deliverables are not available'); return inbox.deliverable(`${Number(req.params.id)}/${req.params.name}`); }));
   router.post('/oca/inbox/asks/:id/dismiss', route(req => { if (!inbox) throw new Error('asks are not available'); return inbox.dismissAsk({ id: req.params.id, by: req.body?.by || 'quinn' }); }));

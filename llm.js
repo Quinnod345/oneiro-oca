@@ -1,3 +1,4 @@
+import { forOwner, ownerName } from './reasoning/local-config.js';
 import { LocalInferenceQueue } from './local-inference-queue.js';
 // OCA LLM Gateway — unified Claude access with configurable auth mode.
 //
@@ -180,8 +181,16 @@ function getCliModel(apiModel) {
 // ═══════════════════════════════════════════════════
 
 const localInferenceQueue = new LocalInferenceQueue();
+// The prompts were written for one person. Whoever owns this install hears their own name, and only the name changes.
+function ownedParams(params) {
+  if (ownerName() === 'Quinn' || !params) return params;
+  const said = c => (typeof c === 'string' ? forOwner(c) : Array.isArray(c) ? c.map(b => (typeof b?.text === 'string' ? { ...b, text: forOwner(b.text) } : b)) : c);
+  return { ...params, system: said(params.system), messages: Array.isArray(params.messages) ? params.messages.map(m => ({ ...m, content: said(m.content) })) : params.messages };
+}
+
 const messages = {
   async create(params, options = {}) {
+    params = ownedParams(params);
     // Per-call backend override so the thinker can use OpenAI gpt-5.4
     // even when the rest of OCA is on Anthropic/local. Strip the
     // override before forwarding so it never reaches the provider SDK.
@@ -204,7 +213,7 @@ const messages = {
       try { return await local(); }
       catch (e) {
         // Auto: a local backend that is down is not a reason for the engine to stop thinking.
-        if (inferencePolicy.mode === 'auto' && LOCAL_DOWN.test(String(e.message)) && codexAvailable() && Date.now() >= codexDownUntil) {
+        if (options.localOnly !== true && inferencePolicy.mode === 'auto' && LOCAL_DOWN.test(String(e.message)) && codexAvailable() && Date.now() >= codexDownUntil) {
           noteCrossover('local', 'codex', e.message);
           try { return await cloud(); } catch (e2) { const rest = codexRestUntil(e2.message); if (rest) codexDownUntil = rest; throw e; }
         }

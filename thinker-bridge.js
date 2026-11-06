@@ -612,7 +612,7 @@ Respond with valid JSON only. Respect the action policy. If there is no new supp
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 2000,
       temperature: 0.7
-    }, { jsonMode: true, timeoutMs: 90_000 });
+    }, { jsonMode: true, timeoutMs: 90_000, localOnly: true });   // Idle thinking never spends someone's Codex allowance on its own.
 
     const rawText = response.content?.[0]?.text || '';
     const parsed = parseThought(rawText);

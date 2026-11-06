@@ -11,7 +11,7 @@
 // - Hand the engine a new want, send an agent off, talk to an agent, answer an ask, record a verdict or progress —
 //   always as Quinn's own words, relayed. Every such call is tagged as coming through MCP, so it is never mistaken
 //   for something the engine observed itself.
-// - Never decide a payment. A payment is decided only by the one-time code Quinn texts back from his phone; this
+// - Never decide a payment. A payment is decided only by the one-time code Quinn texts back from their phone; this
 //   server refuses to answer a payment ask at all.
 // The engine's own threads never speak for Quinn through it. Its work agents run without this server
 // (agent-host/codex-host.js switches it off), and its conversations run in T3 Code under the engine's workspace.
@@ -49,12 +49,12 @@ export function createEngineClient({ base = ENGINE, fetchImpl = fetch, timeoutMs
 
 const id = { type: 'integer', minimum: 1 };
 const str = (description, extra = {}) => ({ type: 'string', description, ...extra });
-const RELAY = 'Pass only Quinn\'s own words, as he said them; never decide for him.';
+const RELAY = 'Pass only Quinn\'s own words, exactly as said; never decide for them.';
 
 export const TOOLS = [
   { name: 'oca_status', description: 'Is the engine up, are its agents able to run (Codex signed in, T3 Code open), and what is it working on.',
     inputSchema: { type: 'object', properties: {} } },
-  { name: 'oca_inbox', description: 'What the engine has for Quinn: active wants, open asks, deliverables and notes waiting for his verdict (Judge), and what things are worth to it.',
+  { name: 'oca_inbox', description: 'What the engine has for Quinn: active wants, open asks, deliverables and notes waiting for a verdict (Judge), and what things are worth to it.',
     inputSchema: { type: 'object', properties: {} } },
   { name: 'oca_pursuits', description: 'Every pursuit at once: its goal, workstreams, live agents, progress and next step (the orchestrator\'s map).',
     inputSchema: { type: 'object', properties: {} } },
@@ -67,19 +67,19 @@ export const TOOLS = [
   { name: 'oca_conversation', description: 'Open (or find) a pursuit\'s conversation, the engine\'s voice for it, in T3 Code when it is running, and return where to talk.',
     inputSchema: { type: 'object', properties: { pursuit: id }, required: ['pursuit'] } },
   { name: 'oca_draft_want', description: `Hand the engine a loose request ("help me stay in touch with my brother"). It drafts a want (description, done-when, stakes, first evidence) and returns the draft to confirm with oca_confirm_want. ${RELAY}`,
-    inputSchema: { type: 'object', properties: { request: str('What Quinn wants, in his words') }, required: ['request'] } },
+    inputSchema: { type: 'object', properties: { request: str('What Quinn wants, in their own words') }, required: ['request'] } },
   { name: 'oca_confirm_want', description: 'Confirm a draft into a want the engine pursues. Only when Quinn has said yes to the draft.',
     inputSchema: { type: 'object', properties: { draft: str('Draft id from oca_draft_want'), description: str('Edited description, if Quinn changed it'), doneWhen: str('Edited done-when, if Quinn changed it'),
       stakes: { type: 'array', description: 'What it is for, from the draft\'s known entities: [{ entityKey, share }]', items: { type: 'object', properties: { entityKey: { type: 'string' }, share: { type: 'number' } }, required: ['entityKey'] } },
       evidenceIds: { type: 'array', description: 'Evidence ids the draft found that Quinn agrees with', items: { type: 'string' } } }, required: ['draft'] } },
-  { name: 'oca_say', description: `Say something to one of the engine's agents, as Quinn: an answer to its question, a change of direction. It goes into the agent's thread as his. ${RELAY}`,
+  { name: 'oca_say', description: `Say something to one of the engine's agents, as Quinn: an answer to its question, a change of direction. It goes into the agent's thread as theirs. ${RELAY}`,
     inputSchema: { type: 'object', properties: { agent: str('Agent id (uuid)'), words: str('Quinn\'s words') }, required: ['agent', 'words'] } },
-  { name: 'oca_answer_ask', description: `Answer an open ask (a question the engine sent Quinn). It reaches every agent waiting on it. Payments are refused: those are decided only by the code Quinn texts back from his phone. ${RELAY}`,
+  { name: 'oca_answer_ask', description: `Answer an open ask (a question the engine sent Quinn). It reaches every agent waiting on it. Payments are refused: those are decided only by the code Quinn texts back from their phone. ${RELAY}`,
     inputSchema: { type: 'object', properties: { ask: id, words: str('Quinn\'s answer') }, required: ['ask', 'words'] } },
-  { name: 'oca_rate', description: `Record Quinn's verdict on a deliverable or note in Judge: useless, meh, useful or great. A verdict is the engine's only reward, so only ever his. ${RELAY}`,
-    inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['artifact', 'note'] }, item: str('Item id from oca_inbox (an artifact is "<want id>/<file>")'), verdict: { type: 'string', enum: ['useless', 'meh', 'useful', 'great'] }, note: str('Why, in his words') }, required: ['kind', 'item', 'verdict'] } },
+  { name: 'oca_rate', description: `Record Quinn's verdict on a deliverable or note in Judge: useless, meh, useful or great. A verdict is the engine's only reward, so only ever theirs. ${RELAY}`,
+    inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['artifact', 'note'] }, item: str('Item id from oca_inbox (an artifact is "<want id>/<file>")'), verdict: { type: 'string', enum: ['useless', 'meh', 'useful', 'great'] }, note: str('Why, in their own words') }, required: ['kind', 'item', 'verdict'] } },
   { name: 'oca_progress', description: `Record progress Quinn observed on a want: the only thing that satisfies it. ${RELAY}`,
-    inputSchema: { type: 'object', properties: { pursuit: id, progress: { type: 'number', minimum: 0, maximum: 1, description: 'How far along, 0 to 1' }, observation: str('What he saw happen'), criterionMet: { type: 'boolean' } }, required: ['pursuit', 'progress', 'observation'] } },
+    inputSchema: { type: 'object', properties: { pursuit: id, progress: { type: 'number', minimum: 0, maximum: 1, description: 'How far along, 0 to 1' }, observation: str('What they saw happen'), criterionMet: { type: 'boolean' } }, required: ['pursuit', 'progress', 'observation'] } },
   { name: 'oca_send_agent', description: 'Send an agent off on a pursuit, on Quinn\'s say-so: research (find and verify), executor (act in the world, through the risk gate) or talker.',
     inputSchema: { type: 'object', properties: { pursuit: id, kind: { type: 'string', enum: ['research', 'executor', 'talker'] }, task: str('Exactly what the agent should do') }, required: ['pursuit', 'kind', 'task'] } },
   { name: 'oca_stop_agent', description: 'Stop one of the engine\'s agents now.',
@@ -134,7 +134,7 @@ export function createHandlers(engine = createEngineClient()) {
       const inbox = await engine.get('/oca/inbox');
       const a = (inbox?.asks || []).find(x => Number(x.id) === n);
       if (!a) throw new Error(`ask #${n} is not open`);
-      if (a.payment) throw new Error(`ask #${n} is a payment. Payments are decided only by the APPROVE/DENY code Quinn texts back from his phone; nothing here can answer it.`);
+      if (a.payment) throw new Error(`ask #${n} is a payment. Payments are decided only by the APPROVE/DENY code Quinn texts back from their phone; nothing here can answer it.`);
       if (a.kind === 'finish') throw new Error(`ask #${n} asks whether a pursuit is finished. Only Quinn can say so, by replying to its text or in the Oneiro app; nothing here can answer it.`);
       return engine.post(`/oca/inbox/asks/${n}/answer`, { reply: requireText(words, 'words', 500), via: VIA });
     },
@@ -160,7 +160,7 @@ export async function handle(req, handlers = createHandlers(), { engineThread = 
   const fail = (code, message) => ({ jsonrpc: '2.0', id: req.id, error: { code, message } });
   switch (req.method) {
     case 'initialize': return reply({ protocolVersion: req.params?.protocolVersion || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'oca', title: 'Oneiro engine', version: '1.0.0' },
-      instructions: 'The Oneiro engine (OCA): wants, agents, asks and verdicts. Read freely. Anything that speaks for Quinn must carry his own words. Payments are never decided here.' });
+      instructions: forOwner('The Oneiro engine (OCA): wants, agents, asks and verdicts. Read freely. Anything that speaks for Quinn must carry their own words. Payments are never decided here.') });
     case 'ping': return reply({});
     case 'tools/list': return reply({ tools: JSON.parse(forOwner(JSON.stringify(engineThread ? TOOLS.filter(t => READ_TOOLS.has(t.name)) : TOOLS))) });
     case 'tools/call': {

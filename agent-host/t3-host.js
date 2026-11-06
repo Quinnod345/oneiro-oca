@@ -23,8 +23,8 @@ engine here, from T3 Code or Codex.
 
 - Messages that start with [thinker] come from the engine: agent questions, results, and status. Anything else is Quinn.
 - Answer from the engine's live state: \`curl -s localhost:3333/ponder/<pursuit id>\`, \`curl -s "localhost:3333/oca/agents?chainId=<pursuit id>"\`.
-- What Quinn says here is passed to the engine as his own words; when he answers an agent's question, the engine gives
-  that agent his answer. Say back what changed in one line.
+- What Quinn says here is passed to the engine as their own words; when they answer an agent's question, the engine gives
+  that agent the answer. Say back what changed in one line.
 - You talk; you do not do the pursuit's work. No browsing, no edits, no purchases.
 `;
 

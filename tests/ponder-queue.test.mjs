@@ -108,3 +108,40 @@ test('durable queue: concurrent claims, checkpoints, restart, immutable evidence
     await admin.end();
   }
 });
+
+test('no model to reason with is a wait, not a failed attempt: it retries after a while, and works once the model is back', async () => {
+  const dsn = process.env.OCA_TEST_DATABASE_URL || process.env.DATABASE_URL || 'postgres://localhost/oneiro';
+  const schema = `oca_test_${randomBytes(6).toString('hex')}`;
+  const admin = new pg.Pool({ connectionString: dsn });
+  let pool;
+  try {
+    await admin.query(`CREATE SCHEMA ${schema}`);
+    pool = new pg.Pool({ connectionString: dsn, options: `-c search_path=${schema},public` });
+    await pool.query(`CREATE TABLE thought_chains (id SERIAL PRIMARY KEY, seed TEXT NOT NULL, priority FLOAT8 DEFAULT .5, status TEXT DEFAULT 'pondering', depth INT DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(), ponder_state JSONB)`);
+    let now = 1000, down = true, calls = 0;
+    const reason = async () => {
+      calls++;
+      if (down) throw new Error('artifact unavailable: inference circuit open (fetch failed); retry after 54s');
+      return { status: 'needs_evidence', conclusion: 'Look', missingEvidence: ['a receipt'], checkpoint: { version: 1, passes: [{ pass: 1 }] } };
+    };
+    const queue = createPonderQueue({ pool, reason, clock: () => now });
+    const { chain_id: id } = await queue.enqueue({ seed: 'Find a good beginner book', doneWhen: 'I have one', priority: 0.9 });
+    await queue.runNext();
+    let saved = await queue.get(id);
+    assert.equal(calls, 1);
+    assert.equal(saved.status, 'pondering', 'still pending, not failed');
+    assert.equal(await queue.runNext(), null, 'and it does not spin while the model is out');
+    assert.equal(calls, 1);
+    down = false;
+    now += 5 * 60_000 + 1;
+    await queue.runNext();
+    saved = await queue.get(id);
+    assert.equal(calls, 2, 'it tried again on its own');
+    assert.equal(saved.status, 'awaiting_evidence');
+  } finally {
+    if (pool) await pool.end();
+    await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    await admin.end();
+  }
+});

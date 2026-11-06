@@ -35,7 +35,8 @@ const LIVE = ['queued', 'running'];
 // A review that couldn't reach a model didn't fail at anything: nothing has been tried yet, and nothing about the pursuit
 // needs a new approach. Pure.
 const MODEL_DOWN = /fetch failed|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|socket hang up|no model|model[^.]{0,40}(unreachable|unavailable|isn.t (running|answering)|not found)|inference[^.]{0,40}(down|unreachable|unavailable|failed)|circuit/i;
-export const waitingOnModel = row => ['failed', 'stalled'].includes(row?.status) && MODEL_DOWN.test(String(row?.state?.result?.error || ''));
+export const modelDown = why => MODEL_DOWN.test(String(why || ''));
+export const waitingOnModel = row => ['failed', 'stalled', 'pondering'].includes(row?.status) && modelDown(row?.state?.result?.error);
 
 export function agentsHealth(up, status = null) {
   if (up === null || up === undefined) return null;
@@ -300,7 +301,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
     const q = (sql, args = []) => pool.query(sql, args).then(r => r.rows).catch(() => []);
     // "The last day" is the engine's clock, not the database's: one clock for every window the map reports.
     const dayAgo = new Date(clock() - 86400_000);
-    const [today] = await q(`SELECT count(*)::int AS deployed, sum((status = 'done')::int)::int AS done, sum((status = 'failed')::int)::int AS failed FROM agent_deployments WHERE created_at > $1 AND kind <> 'talker'`, [dayAgo]);
+    const [today] = await q(`SELECT count(*)::int AS deployed, sum((status = 'done')::int)::int AS done, sum((status = 'failed')::int)::int AS failed, sum((status = 'cancelled')::int)::int AS stopped FROM agent_deployments WHERE created_at > $1 AND kind <> 'talker'`, [dayAgo]);
     const [merges] = await q(`SELECT count(*)::int AS n FROM self_build_events WHERE kind = 'merged' AND created_at > $1`, [dayAgo]);
     const [lastMerge] = await q(`SELECT chain_id, payload, created_at FROM self_build_events WHERE kind = 'merged' ORDER BY created_at DESC LIMIT 1`);
     const c = await controls?.get?.().catch(() => null);
@@ -312,7 +313,7 @@ ${merges.length ? `\nMerged fixes:\n${merges.map(m => `- ${iso(m.created_at)?.sl
         slots: agents ? await agents.slots().catch(() => null) : null, working: live.length, builders: live.filter(r => r.kind === 'builder').length,
         waiting: runs.filter(r => r.status === 'waiting_person').length, queuePaused: c?.queuePaused === true,
         agentsUp, agents: agentsHealth(agentsUp, host?.status ? (() => { try { return host.status(); } catch { return null; } })() : null), pausedUntil: agents?.pausedUntil?.() ? iso(agents.pausedUntil()) : null,
-        selfChainId: selfId, today: { deployed: today?.deployed || 0, done: today?.done || 0, failed: today?.failed || 0, merged: merges?.n || 0 },
+        selfChainId: selfId, today: { deployed: today?.deployed || 0, done: today?.done || 0, stopped: today?.stopped || 0, failed: today?.failed || 0, merged: merges?.n || 0 },
         lastMerge: lastMerge ? { chainId: lastMerge.chain_id, branch: lastMerge.payload?.branch || null, at: iso(lastMerge.created_at) } : null,
         asks: openAsks.length,
       },

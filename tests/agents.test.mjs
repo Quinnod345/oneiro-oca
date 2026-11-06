@@ -75,7 +75,7 @@ test('a report is the last oca block of a reply, validated; no block is no repor
 
 test('a brief names the pursuit, the role, the task, what is known, and the contract; the engine speaks as [thinker]', () => {
   const b = composeBrief({ kind: 'research', chainId: 27, want: 'InnerEcho profitability', doneWhen: 'net positive month', task: 'Find the price', evidence: [{ source: 'file', observation: 'zero' }], missing: ['pricing'], remaining: ['q'] });
-  for (const s of ['[thinker] You are deployed', 'pursuit #27', 'Done when: net positive month', 'Your role: research', 'aside__aside_snapshot_tab', 'Task now: Find the price', 'Still missing', '- pricing', 'Open questions', 'already known', '"status":"needs_person"', 'hand the whole task to aside__aside_do', 'passing pursuit 27', 'Never ask him to send a code, password, key or token', 'Apple work goes through the Apple API first', 'apple__apple_call', 'Graded coursework and CAPTCHAs are never yours']) assert.ok(b.includes(s), s);
+  for (const s of ['[thinker] You are deployed', 'pursuit #27', 'Done when: net positive month', 'Your role: research', 'aside__aside_snapshot_tab', 'Task now: Find the price', 'Still missing', '- pricing', 'Open questions', 'already known', '"status":"needs_person"', 'hand the whole task to aside__aside_do', 'passing pursuit 27', 'Never ask them to send a code, password, key or token', 'Apple work goes through the Apple API first', 'apple__apple_call', 'Graded coursework and CAPTCHAs are never yours']) assert.ok(b.includes(s), s);
   assert.ok(composeBrief({ kind: 'builder', chainId: 3, want: 'fix', cwd: '/tmp/wt' }).includes('/tmp/wt'));
   assert.ok(composeBrief({ kind: 'talker', chainId: 3, want: 'x', engine: 'http://e' }).includes('curl -s http://e/ponder/3'));
   assert.deepEqual(AGENT_KINDS, ['research', 'talker', 'builder', 'executor']);
@@ -225,7 +225,7 @@ test('a provider limit is not the pursuit\'s failure: deployments pause for an h
   const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'quote', firedBy: 'engine' });
   await agents.poll();
   const a = await agents.get(d.id); assert.equal(a.status, 'failed'); assert.match(a.error, /usage credits/);
-  assert.equal(sent.length, 1); assert.match(sent[0], /^Oneiro: its agents cannot run/);
+  assert.equal(sent.length, 1); assert.match(sent[0], /^Oneiro: Codex hit its usage limit, so agents are paused/);
   const want = await queue.get(chain.chain_id); assert.equal(want.continuity?.dry ?? 0, 0, 'the cadence was not spent on the provider');
   await assert.rejects(agents.deploy(chain.chain_id, { kind: 'research', task: 'again', firedBy: 'engine' }), /provider is limiting/);
   assert.deepEqual((await agents.plan()).started, [], 'paused');
