@@ -213,7 +213,7 @@ test('a pursuit can be paused (its agents stop, their work kept, the engine star
     const planned = await agents.plan();
     assert.equal(planned.started.length, 1);
     const first = await agents.get(planned.started[0]);
-    assert.match(first.task, /^Start with the first step Quinn confirmed when making this pursuit: List the five best-reviewed method books/);
+    assert.match(first.task, /^Start with the first step confirmed when this pursuit was made: List the five best-reviewed method books/);
 
     // pause: the live agent is stopped (kept), the engine deploys nothing, the person still can
     const paused = await life.pause(chain.chain_id);

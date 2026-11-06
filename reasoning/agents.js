@@ -599,7 +599,7 @@ To change the engine's code, an agent files a self-want: curl -s -X POST localho
       let tasks = [{ task: `Keep this pursuit moving; the person wants an agent always working on it. Do the most useful concrete thing you can toward the goal right now — make, publish, list, fix, improve, reach out — rather than waiting on evidence that does not exist yet.` }];
       // The first step Quinn confirmed when he made the pursuit is the first run's task, before any strategist plans.
       const firstStep = !Number(c.runs) && !c.lastSliceStartedAt ? text(row.state.finishLine?.firstStep, 600) : '';
-      if (firstStep) tasks = [{ task: `Start with the first step Quinn confirmed when making this pursuit: ${firstStep}` }];
+      if (firstStep) tasks = [{ task: `Start with the first step confirmed when this pursuit was made: ${firstStep}` }];
       if (resuming && c.resumeTask) {
         const step = (Array.isArray(c.schedule) ? c.schedule : []).find(x => x.at === c.resumeAt && x.task === c.resumeTask);
         tasks = [{ task: `It is now ${new Date(now).toISOString()}, the time the pursuit was parked for. Do the planned step: ${text(c.resumeTask, 1500)}`, stream: step?.stream || null }];
