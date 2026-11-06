@@ -35,7 +35,7 @@ import { createBoard } from './reasoning/board.js';
 import { createOperations } from './evaluation/operations.js';
 import { createAgentHost } from './agent-host/index.js';
 import { createPaymentApprovals } from './reasoning/payment-approvals.js';
-import { asideOpener, createAsideWaker, createIntegrations, defaultRunner } from './reasoning/integrations.js';
+import { asideOpener, asideUrlOpener, createAsideWaker, createIntegrations, defaultRunner } from './reasoning/integrations.js';
 import { createOvernight } from './reasoning/overnight.js';
 import { createImessage } from './channels/imessage.js';
 import { createImessageInbox } from './reasoning/imessage-inbox.js';
@@ -46,6 +46,8 @@ import { mergeTarget } from './reasoning/dedupe.js';
 import { createJudgeNotifier, judgeText } from './reasoning/judge-notifier.js';
 import { createImessageKeeper, imessageHost, portOpen } from './reasoning/imessage-keeper.js';
 import { aside as asideBrowser } from './aside.js';
+import { workspaceDir } from './reasoning/local-config.js';
+import { homedir } from 'node:os';
 
 export const ocaRouter = Router();
 // The Mac app says it posts notifications itself (X-Oneiro-Notifier: app); AppleScript banners then stay quiet.
@@ -89,7 +91,7 @@ const integrations = createIntegrations({ pool, run: asideRun, imessageLine: () 
 integrations.init().then(() => integrations.refresh()).catch(e => console.warn('[integrations] init:', e.message));
 ocaRouter.use(integrations.router);
 // The night: overnight reading filtered on this Mac, notes in ~/Oneiro Knowledge Base, cards for the morning.
-const overnight = createOvernight({ pool, integrations, run: asideRun, aside: asideWaker, notify: macNotify });
+const overnight = createOvernight({ pool, integrations, run: asideRun, openInAside: asideUrlOpener(), aside: asideWaker, notify: macNotify });
 overnight.init().then(() => overnight.startScheduler()).catch(e => console.error('[night] init:', e.message));
 ocaRouter.use(overnight.router);
 for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => overnight.stop());
@@ -97,9 +99,9 @@ const agentHost = createAgentHost({ pool });
 const agents = createAgents({ pool, host: agentHost, queue: ponderQueue, risk: riskJournal, asks, aside: asideBrowser, llm, nameLlm: llm, controls: userControls,
   accounts: () => integrations.briefLine(),
   // Every finished agent run on a person's pursuit leaves a readable brief, attached to the pursuit (reasoning/deliverables.js).
-  deliver: x => saveDeliverable({ pool, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', ...x }),
+  deliver: x => saveDeliverable({ pool, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work'), ...x }),
   model: process.env.OCA_AGENT_MODEL || null, thinkingLevel: process.env.OCA_AGENT_THINKING || 'high', agentId: process.env.OCA_AGENT_ID || 'main',
-  roots: ['/Users/quinnodonnell'], ensureSelf: true });
+  roots: [homedir()], ensureSelf: true });
 const agentsReady = agentHost.init().then(() => agents.init()).then(() => { agents.start(); pursuitWork.useAgents(agents); selfBuild.useAgents(agents); });
 agentsReady.catch(error => console.error('[agents] startup:', error?.stack || error?.message || String(error)));
 ocaRouter.use(agents.router);
@@ -1624,7 +1626,7 @@ const pursuitDrafts = createPursuitDrafts({ pool, llm, worth: oca.worth, queue: 
     visual: (q, n) => visualMemory.searchVisualMemory(q, n),
     entities: q => entityContextForText(q, { limit: 8 }),
   } });
-const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', drafts: pursuitDrafts, asks, agents });
+const inbox = createInbox({ pool, queue: ponderQueue, worth: oca.worth, workRoot: process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work'), drafts: pursuitDrafts, asks, agents });
 // Every payment waits for Quinn's yes, given only from his phone: the payment's text carries a one-time code, and he
 // texts back APPROVE or DENY with it (reasoning/payment-approvals.js). The decision answers the ask and reaches the
 // agent waiting on it.
@@ -1635,7 +1637,7 @@ const paymentApprovals = createPaymentApprovals({ pool,
   onExpired: ({ askId }) => asks.reissueExpired(askId) });
 asks.useApprovals(paymentApprovals);
 paymentApprovals.start();
-const pursuitWorkRoot = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work';
+const pursuitWorkRoot = process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work');
 // The iMessage line to Quinn: he hears once on the Mac when texts pause and when they resume, and what he texts back
 // is read and routed (payments by code, answers to asks, "status").
 if (imessage) {

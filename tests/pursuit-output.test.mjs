@@ -151,6 +151,47 @@ test('every finished agent leaves a brief on its pursuit: it lands in Judge, a G
 
 // ── pause, archive, export ───────────────────────────────────────────────────────────────────────────────────────────
 
+test('a verdict that lands during a pass waits for it, and if the pass runs long it says so in plain words', async () => database(async pool => {
+  // Found on the real Mac: rating a second brief right after the first failed with "ponder chain is running", and the
+  // error took the brief off the screen.
+  const workRoot = await mkdtemp(join(tmpdir(), 'oca-busy-'));
+  try {
+    let now = 30 * 86400000;
+    const worth = createWorthLedger({ pool, clock: () => now }); await worth.seed();
+    const controlsState = { autonomousActions: false, askOwner: true, agentSlots: 4 };
+    const risk = createRiskJournal({ pool, worth, clock: () => now, controls: () => controlsState });
+    const queue = createPonderQueue({ pool, reason: blocked, clock: () => now, worth, risk });
+    const host = fakeHost(() => `Here it is.${block({ status: 'done', title: 'A brief', summary: 'Done.', brief: 'Words.', evidence: [] })}`);
+    const agents = createAgents({ pool, host, queue, risk, conversations: false, controls: { get: async () => controlsState }, clock: () => now, log: silent,
+      deliver: x => saveDeliverable({ pool, workRoot, clock: () => now, ...x }) });
+    await agents.init();
+    const inbox = createInbox({ pool, queue, worth, workRoot, clock: () => now, agents, passWaitMs: 2_000, passPollMs: 20 });
+    const chain = await inbox.want({ description: 'Compare two things for me', doneWhen: 'A comparison of the two things.' });
+    await agents.deploy(chain.chain_id, { kind: 'research', task: 'Compare them', firedBy: 'person' });
+    await agents.poll();
+    const { id } = (await inbox.deliverables(chain.chain_id))[0];
+    const hold = status => pool.query('UPDATE thought_chains SET status = $2 WHERE id = $1', [chain.chain_id, status]);
+    const { rows: [{ status: idle }] } = await pool.query('SELECT status FROM thought_chains WHERE id = $1', [chain.chain_id]);
+
+    await hold('running');
+    setTimeout(() => hold(idle), 120);
+    const rated = await inbox.rate({ kind: 'artifact', id, usefulness: 'useful' });
+    assert.equal(rated.kind, 'artifact', 'the press waited for the pass and landed');
+    assert.equal((await inbox.deliverables(chain.chain_id))[0].verdict, 'useful');
+
+    await hold('running');
+    setTimeout(() => hold(idle), 120);
+    await inbox.progress({ chainId: chain.chain_id, progress: 0.5, observation: 'the finish press waits too' });
+
+    await hold('running');
+    const impatient = createInbox({ pool, queue, worth, workRoot, clock: () => now, agents, passWaitMs: 0, passPollMs: 1 });
+    await assert.rejects(() => impatient.rate({ kind: 'artifact', id, usefulness: 'great' }), e => {
+      assert.match(e.message, /thinking about this pursuit right now/); assert.doesNotMatch(e.message, /ponder|chain/i); return true;
+    });
+    await hold(idle);
+  } finally { await rm(workRoot, { recursive: true, force: true }); }
+}));
+
 test('a pursuit can be paused (its agents stop, their work kept, the engine starts nothing new), resumed, archived out of sight, restored, and exported as markdown', async () => database(async pool => {
   const workRoot = await mkdtemp(join(tmpdir(), 'oca-life-'));
   try {
@@ -219,6 +260,11 @@ test('a pursuit can be paused (its agents stop, their work kept, the engine star
 test('export is pure: a pursuit with nothing yet still exports, and says so', () => {
   const out = exportPursuit({ row: { id: 3, seed: 'Plan a trip', state: { want: { description: 'Plan a trip to Lisbon', doneWhen: 'Flights booked', progress: 0, receipts: [] } } }, now: Date.parse('2026-11-05T00:00:00Z') });
   assert.equal(out.folder, 'pursuit-3-plan-a-trip-to-lisbon');
+  // Found exporting a renamed pursuit on the real Mac: the file kept its first sentence instead of the name in the app.
+  const named = exportPursuit({ row: { id: 3, seed: 'Plan a trip', state: { continuity: { board: { headline: 'Lisbon in May' } }, want: { description: 'Plan a trip to Lisbon', doneWhen: 'Flights booked', progress: 0, receipts: [] } } }, now: 0 });
+  assert.equal(named.folder, 'pursuit-3-lisbon-in-may');
+  const readme = named.files.find(f => f.path === 'README.md').content;
+  assert.match(readme, /^# Lisbon in May/); assert.match(readme, /Asked for: Plan a trip to Lisbon/);
   assert.match(out.files[0].content, /Nothing delivered yet\./); assert.match(out.files[0].content, /No agent has worked on it yet\./);
 });
 

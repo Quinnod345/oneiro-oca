@@ -138,7 +138,8 @@ export function cardActions({ channel }) {
     if (!check.ok) return { ok: false, duplicate: check.duplicate === true, why: `Nothing was done: ${check.why}.` };
     if (card.kind === 'mail_draft') {
       if (card.payload.threadId) {
-        await channel.openReplyDraft({ account: card.payload.account, threadId: card.payload.threadId, body: card.body });
+        const opened = await channel.openReplyDraft({ account: card.payload.account, threadId: card.payload.threadId, body: card.body });
+        if (opened?.existing) return { ok: true, line: 'That thread already had a draft, so it is open in Aside as it was, without the words from this card. Nothing sends until you press Send.' };
         return { ok: true, line: 'The reply is open in Aside as a draft. It sends only when you press Send.' };
       }
       await channel.openNewDraft({ account: card.payload.account, to: card.payload.to, subject: card.payload.subject, body: card.body });

@@ -10,8 +10,9 @@
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { readFile } from 'node:fs/promises';
+import { workspaceDir } from '../reasoning/local-config.js';
 
-export const SETTINGS_PATH = process.env.OCA_APPLE_SETTINGS || '/Users/quinnodonnell/oneiro/runtime/workspace/apple/settings.json';
+export const SETTINGS_PATH = process.env.OCA_APPLE_SETTINGS || workspaceDir('apple', 'settings.json');
 const DAY = 86_400_000;
 const text = (v, max = 400) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 export const isoDay = ms => new Date(ms).toISOString().slice(0, 10);

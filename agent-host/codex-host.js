@@ -19,9 +19,10 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { connectCodex, userText } from './codex-rpc.js';
 import { asideMcpArgs, appleMcpArgs, buildCodexEnvironment, REASONING_EFFORTS, SANDBOX_MODES } from '../codex-cli.js';
+import { workspaceDir } from '../reasoning/local-config.js';
 
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-export const DEFAULT_AGENT_CWD = '/Users/quinnodonnell/oneiro/runtime/workspace';
+export const DEFAULT_AGENT_CWD = workspaceDir();
 export const THREAD_SOURCE = 'oca-engine';
 
 // One step of an agent's work, as the pursuit chat shows it: what kind, a one-line title, a little detail, and

@@ -122,13 +122,34 @@ test('no code path can send mail: the only compose call opens a reply and there 
   const src = await readFile(new URL('../reasoning/overnight-google.js', import.meta.url), 'utf8');
   const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
   assert.doesNotMatch(code, /\[data-tooltip\*?="Send|aria-label="Send|send_message|gmail\.send|\.send\(/i);
-  const seen = [];
-  const channel = createGoogleChannel({ run: async args => { seen.push(args[1]); return { stdout: '{"opened":true}\n' }; } });
-  await channel.openReplyDraft({ account: 'me@x.com', threadId: 'thread-f:1', body: '<script>alert(1)</script>\nSecond line' });
-  assert.match(seen[0], /gmail\.openReplyComposer/);
-  assert.doesNotMatch(seen[0], /<script>/, 'the draft is escaped');
-  assert.match(seen[0], /&lt;script&gt;/);
-  assert.doesNotMatch(seen[0], /click\(/, 'it opens the composer and does nothing else');
+  // Found on the real Mac: a tab `aside repl` opens closes when the run ends, so the card said "open" over nothing.
+  const seen = [], opened = [];
+  const answer = code => /mail:ready/.test(code) ? '{"uid":0,"tabs":["old"]}' : /mail:where/.test(code) ? '{"hex":"1"}' : '{"opened":true,"landed":true}';
+  const channel = createGoogleChannel({ run: async args => { seen.push(args[1]); return { stdout: `${answer(args[1])}\n` }; }, openInAside: async url => { opened.push(url); } });
+  assert.deepEqual(await channel.openReplyDraft({ account: 'me@x.com', threadId: 'thread-f:1', body: 'First line\n\n<b>Third</b> line' }), { opened: true });
+  assert.deepEqual(opened, ['https://mail.google.com/mail/u/0/#inbox/1'], 'the Aside app opens the tab, so it outlives the run');
+  const typed = seen.at(-1);
+  assert.doesNotMatch(typed, /openTab|openReplyComposer/, 'no tab that dies with the run, and no helper that skips the body');
+  assert.match(typed, /attachBrowserTab/);
+  assert.match(typed, /"First line","","<b>Third<\/b> line"/, 'the words go in as text, line by line, so they can never be markup');
+  assert.match(typed, /\["old"\]/, 'it looks for the tab that was not there before');
+  assert.deepEqual(typed.match(/\.click\(\)/g), ['.click()'], 'its one click is Reply');
+  assert.match(typed, /name: 'Reply', exact: true \}\)\.first\(\)\.click\(\)/);
+
+  await channel.openNewDraft({ account: 'me@x.com', to: ['a@x.com'], subject: 'Hi there', body: 'Words' });
+  assert.equal(opened.at(-1), 'https://mail.google.com/mail/u/0/?view=cm&fs=1&to=a%40x.com&su=Hi+there');
+  assert.doesNotMatch(seen.at(-1), /\.click\(\)/, 'a new message has nothing to click');
+});
+
+test('a composer that did not really open is never reported as open', async () => {
+  const say = last => createGoogleChannel({ run: async args => ({ stdout: `${/mail:ready/.test(args[1]) ? '{"uid":0,"tabs":[]}' : /mail:where/.test(args[1]) ? '{"hex":"1"}' : last}\n` }), openInAside: async () => {} });
+  const press = c => c.openReplyDraft({ account: 'me@x.com', threadId: 'thread-f:1', body: 'Words' });
+  await assert.rejects(() => press(say('{"noTab":true}')), /didn't open the draft/);
+  await assert.rejects(() => press(say('{"noBox":true}')), /message box didn't appear/);
+  await assert.rejects(() => press(say('{"opened":true,"landed":false}')), /words didn't go in/);
+  assert.deepEqual(await press(say('{"opened":true,"existing":true}')), { opened: true, existing: true }, "someone's own draft is left as it is");
+  await assert.rejects(() => createGoogleChannel({ run: async () => ({ stdout: '{"uid":0,"tabs":[]}\n' }) }).openNewDraft({ account: 'me@x.com', to: [], subject: 's', body: 'b' }), /no way to open Aside/);
+  await assert.rejects(() => createGoogleChannel({ run: async () => ({ stdout: '{"missing":true}\n' }), openInAside: async () => {} }).openReplyDraft({ account: 'me@x.com', threadId: 'thread-f:1', body: 'b' }), /isn't signed in to Aside/);
 });
 
 test('a calendar block: the slot comes from the calendar, it is added only on the press, and the result is checked', () => database(async (pool, dir) => {

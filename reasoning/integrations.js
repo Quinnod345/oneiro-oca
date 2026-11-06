@@ -111,6 +111,12 @@ export function asideOpener(env = process.env, exec = execFile) {
   return env.OCA_ASIDE_CLI ? null : launch('/usr/bin/open', ['-g', '-a', 'Aside']);
 }
 
+/** How the engine puts a page in front of the person: a tab of Aside's own, which outlives any `aside repl` run. */
+export function asideUrlOpener(env = process.env, exec = execFile) {
+  if (env.OCA_ASIDE_CLI) return null;
+  return url => new Promise((ok, no) => exec('/usr/bin/open', ['-a', 'Aside', url], { timeout: 15_000 }, e => (e ? no(e) : ok())));
+}
+
 export function createAsideWaker({ run, open = null, clock = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)), log = console, waitMs = 60_000, pollMs = 3_000, gapMs = 60_000, checkTimeoutMs = 20_000 } = {}) {
   let inFlight = null, endedAt = -Infinity, last = null;
   const answers = async () => { try { return lastJson((await run(['repl', PROFILE_CHECK], { timeoutMs: checkTimeoutMs })).stdout)?.alive === true; } catch { return false; } };
@@ -387,7 +393,7 @@ export function createIntegrations({ pool, run = defaultRunner(), clock = Date.n
       await pool.query(`UPDATE integrations SET uid = $2, checked_at = $3, check_failed = false, last_connected_at = CASE WHEN status = 'disconnected' THEN last_connected_at ELSE $3 END,
         status = CASE WHEN status = 'disconnected' THEN status ELSE 'connected' END,
         detail = CASE WHEN status = 'disconnected' THEN detail ELSE $4 END WHERE id = $1`,
-        [row.id, j.uid, now, `Inbox read at ${now.toISOString().slice(11, 16)} UTC: ${j.total ?? '?'} conversations.`]);
+        [row.id, j.uid, now, `Inbox read: ${j.total ?? '?'} conversations.`]);
       // The subject goes back to the person who pressed Test; it is not stored.
       return { ok: true, id: row.id, uid: j.uid, total: j.total ?? null, unread: j.unread ?? null, latestSubject: j.latestSubject ? text(j.latestSubject, 200) : null, latestAt: j.latestAt || null };
     }

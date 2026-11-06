@@ -1,4 +1,5 @@
-import { closeSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 
 function isPidAlive(pid) {
   const numeric = Number(pid);
@@ -20,6 +21,8 @@ function readLock(path) {
 }
 
 export function acquireProcessLock(lockPath, metadata = {}) {
+  // A fresh clone has no private/ folder yet, and that's where the lock lives by default.
+  mkdirSync(dirname(lockPath), { recursive: true });
   const payload = {
     pid: process.pid,
     acquiredAt: new Date().toISOString(),

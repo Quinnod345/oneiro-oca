@@ -10,9 +10,10 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { workspaceDir } from '../reasoning/local-config.js';
 
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-export const T3_PROJECT_DIR = process.env.OCA_T3_PROJECT_DIR || '/Users/quinnodonnell/oneiro/runtime/workspace/oneiro-engine';
+export const T3_PROJECT_DIR = process.env.OCA_T3_PROJECT_DIR || workspaceDir('oneiro-engine');
 export const T3_BIN = process.env.OCA_T3_BIN || `${process.env.HOME}/.t3/bin/t3`;
 
 export const PROJECT_AGENTS_MD = `# Oneiro engine — pursuit conversations

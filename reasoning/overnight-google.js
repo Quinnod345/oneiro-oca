@@ -95,12 +95,10 @@ export function findSlot({ minutes = 30, events = [], unreadable = [], now = Dat
   return null;
 }
 const stamp = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-export const escapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const htmlBody = s => escapeHtml(s).split(/\n/).map(l => l || '<br>').map(l => `<div>${l}</div>`).join('');
 const uidLookup = account => `const acc = (await googleAccounts.list()).find(x => String(x.email).toLowerCase() === ${JSON.stringify(account)}); if (!acc) { console.log(JSON.stringify({ missing: true })); return; }`;
 const safely = (tag, body) => `/*${tag}*/ await (async () => { try { ${body} } catch (e) { console.log(JSON.stringify({ error: String((e && e.message) || e).slice(0, 300) })); } })();`;
 
-export function createGoogleChannel({ run, clock = Date.now, replTimeoutMs = 115_000 } = {}) {
+export function createGoogleChannel({ run, openInAside = null, clock = Date.now, replTimeoutMs = 115_000 } = {}) {
   async function repl(code, what) {
     let out;
     try { out = await run(['repl', code], { timeoutMs: replTimeoutMs }); }
@@ -157,25 +155,72 @@ export function createGoogleChannel({ run, clock = Date.now, replTimeoutMs = 115
     return { answered: j.last.from === account.toLowerCase(), lastAt: j.last.at, count: j.count };
   }
 
+  // A tab that `aside repl` opens belongs to that one run and closes when the run ends, so a composer opened that way is
+  // gone before anyone sees it. The person's composer has to be a real tab: the Aside app opens the URL, then a run
+  // attaches to that tab to put the words in. Attaching doesn't take ownership, so the tab outlives the run.
+  async function tabsNow(account, tag) {
+    const j = await repl(safely(tag, `${uidLookup(account)}
+      console.log(JSON.stringify({ uid: acc.accountId, tabs: (await listBrowserTabs()).map(t => t.targetId) }));`), `getting ${account} ready in Aside`);
+    if (j.missing) throw fail(`${account} isn't signed in to Aside, so the draft couldn't be opened. Connect it in Integrations, then press again.`);
+    return j;
+  }
+  const opener = () => {
+    if (!openInAside) throw fail("Oneiro has no way to open Aside from here. Open Aside yourself, then press again.");
+    return openInAside;
+  };
+  // Finds the tab the app just opened, attaches, opens the reply box if asked, and types the words. It stops there.
+  const typeInto = ({ before, reply, body }) => `
+      const before = new Set(${JSON.stringify(before)});
+      let tab = null;
+      for (let i = 0; i < 40 && !tab; i++) {
+        const open = await listBrowserTabs();
+        tab = open.find(t => !before.has(t.targetId) && /mail[.]google[.]com/.test(t.url || '')) || (i > 12 ? open.find(t => t.active && /mail[.]google[.]com/.test(t.url || '')) : null);
+        if (!tab) await sleep(500);
+      }
+      if (!tab) { console.log(JSON.stringify({ noTab: true })); return; }
+      const p = await attachBrowserTab(tab.targetId);
+      await p.waitForSelector('[role="main"]', { timeout: 20000 });
+      const box = '[role=textbox][aria-label]';
+      let ready = await p.waitForSelector(box, { timeout: 3000 }).then(() => true).catch(() => false);
+      ${reply ? `if (!ready) { await p.getByRole('link', { name: 'Reply', exact: true }).first().click(); ready = await p.waitForSelector(box, { timeout: 8000 }).then(() => true).catch(() => false); }` : ''}
+      if (!ready) { console.log(JSON.stringify({ noBox: true })); return; }
+      console.log(JSON.stringify(await p.evaluate(({ box, lines }) => {
+        const b = document.querySelector(box);
+        const had = b.innerText.trim();
+        if (had && !/^Press \\/ for /.test(had)) return { opened: true, existing: true };
+        b.focus();
+        lines.forEach((line, i) => { if (i) document.execCommand('insertLineBreak'); if (line) document.execCommand('insertText', false, line); });
+        return { opened: true, landed: b.innerText.includes(lines.find(Boolean) || '') };
+      }, { box, lines: ${JSON.stringify(String(body).split('\n'))} })));`;
+  const composed = (j, account) => {
+    if (j.noTab) throw fail(`Aside didn't open the draft for ${account}. Open Aside, then press again.`);
+    if (j.noBox) throw fail(`Gmail opened in Aside, but its message box didn't appear, so no words went in. Reply from that tab, or press again.`);
+    if (j.existing) return { opened: true, existing: true };
+    if (!j.landed) throw fail(`Gmail opened in Aside, but the words didn't go into the message. Copy them from the card into that tab.`);
+    return { opened: true };
+  };
+
   // Opens Gmail's reply box with the words in it, then stops. Sending is the person's press in Gmail.
   async function openReplyDraft({ account, threadId, body }) {
-    const code = safely('mail:draft', `${uidLookup(account)}
-      await gmail.openReplyComposer(acc.accountId, { threadId: ${JSON.stringify(threadId)}, mode: 'reply', bodyHtml: ${JSON.stringify(htmlBody(body))} });
-      console.log(JSON.stringify({ opened: true }));`);
-    const j = await repl(code, `opening a reply in ${account}`);
-    if (j.missing) throw fail(`${account} isn't signed in to Aside, so the reply couldn't be opened.`);
-    return { opened: true };
+    const open = opener();
+    const { uid, tabs } = await tabsNow(account, 'mail:ready');
+    const where = await repl(safely('mail:where', `
+      const id = ${JSON.stringify(threadId)};
+      if (id.startsWith('thread-f:')) { console.log(JSON.stringify({ hex: BigInt(id.slice(9)).toString(16) })); return; }
+      const last = (await gmail.getThread(${JSON.stringify(uid)}, id)).messages.filter(m => String(m.messageId).startsWith('msg-f:')).at(-1);
+      console.log(JSON.stringify(last ? { hex: BigInt(last.messageId.slice(6)).toString(16) } : { gone: true }));`), `finding a thread in ${account}`);
+    if (where.gone || !where.hex) throw fail(`That thread isn't in ${account} any more, so there's nothing to reply to.`);
+    await open(`https://mail.google.com/mail/u/${uid}/#inbox/${where.hex}`);
+    return composed(await repl(safely('mail:draft', typeInto({ before: tabs, reply: true, body })), `opening a reply in ${account}`), account);
   }
 
   // Opens a new message in Gmail with the words in it, in its own tab, then stops. Sending is the person's press in Gmail.
   async function openNewDraft({ account, to = [], subject = '', body = '' }) {
-    const params = new URLSearchParams({ view: 'cm', fs: '1', to: [].concat(to).join(','), su: subject, body });
-    const code = safely('mail:new', `${uidLookup(account)}
-      await openTab('https://mail.google.com/mail/u/' + acc.accountId + '/?' + ${JSON.stringify(params.toString())});
-      console.log(JSON.stringify({ opened: true }));`);
-    const j = await repl(code, `opening a draft in ${account}`);
-    if (j.missing) throw fail(`${account} isn't signed in to Aside, so the draft couldn't be opened.`);
-    return { opened: true };
+    const open = opener();
+    const { uid, tabs } = await tabsNow(account, 'mail:ready');
+    const params = new URLSearchParams({ view: 'cm', fs: '1', to: [].concat(to).join(','), su: subject });
+    await open(`https://mail.google.com/mail/u/${uid}/?${params}`);
+    return composed(await repl(safely('mail:new', typeInto({ before: tabs, reply: false, body })), `opening a draft in ${account}`), account);
   }
 
   // Adds one event, after an approve press. Fills Calendar's own form, checks the title landed, presses its Save.

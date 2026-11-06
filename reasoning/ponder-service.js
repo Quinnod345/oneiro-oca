@@ -14,12 +14,13 @@ import { createSelfBuild } from './self-build.js';
 import { runCodex, codexAvailable, selfBuildCodexOptions } from '../codex-cli.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { workspaceDir } from './local-config.js';
 export const userControls = createUserControls(pool);
 // Same journal the orchestrator seeds; wants are priced from it and receipts feed it.
 export const worthLedger = createWorthLedger({ pool, emit });
 // Strategies think locally by default (WORK's Ollama over Tailscale); the pursuit reasoner may use the
 // Codex subscription for hard steps. Artifacts land in the engine's own work directory, never in Quinn's data.
-const WORK_ROOT = process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work';
+const WORK_ROOT = process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work');
 async function writeArtifact(chainId, { title, body, forWhat, judge, attempt }) {
   const dir = join(WORK_ROOT, String(chainId), 'artifacts');
   await mkdir(dir, { recursive: true, mode: 0o700 });

@@ -25,6 +25,7 @@ import { execSync, execFileSync, spawn } from 'child_process';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { workspaceDir } from './reasoning/local-config.js';
 
 const THINKER_LLM_PROVIDER = (() => {
   const value = String(process.env.ONEIRO_THINKER_PROVIDER || 'local').trim().toLowerCase();
@@ -301,7 +302,7 @@ const BLOCKED_ACTION_CLASS = {
 // Writing the thinker meant for Quinn's notes is held at the gate like any other action on his data — but
 // the writing itself is the engine's own and is kept in its own work directory, so a person can read what
 // it actually thought instead of a title. Returns the path, or null when there was nothing to keep.
-const THINKER_WRITING_ROOT = join(process.env.OCA_PURSUIT_WORK_ROOT || '/Users/quinnodonnell/oneiro/runtime/workspace/pursuit-work', 'thinker');
+const THINKER_WRITING_ROOT = join(process.env.OCA_PURSUIT_WORK_ROOT || workspaceDir('pursuit-work'), 'thinker');
 async function keepPrivateWriting({ title, content } = {}) {
   const body = String(content || '').trim();
   if (!body) return null;

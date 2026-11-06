@@ -3,8 +3,8 @@
 // engine is doing and work with it, without coding inside Oneiro. It talks to the running engine over its HTTP API
 // (OCA_ENGINE_URL, default http://localhost:3333) and adds no powers of its own.
 //
-//   codex mcp add oca -- node /Users/quinnodonnell/oneiro/oca-cognitive/mcp/server.js
-//   claude mcp add --scope user oca -- node /Users/quinnodonnell/oneiro/oca-cognitive/mcp/server.js
+//   codex mcp add oca -- node /path/to/oca-cognitive/mcp/server.js
+//   claude mcp add --scope user oca -- node /path/to/oca-cognitive/mcp/server.js
 //
 // What a client may do, and what it may not:
 // - Read everything the engine shows Quinn: pursuits, agents and their threads, asks, Judge, traces, health.
@@ -22,11 +22,12 @@
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { workspaceDir } from '../reasoning/local-config.js';
 
 export const ENGINE = (process.env.OCA_ENGINE_URL || 'http://localhost:3333').replace(/\/$/, '');
 const text = (v, max = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const VIA = `${process.env.OCA_MCP_CLIENT || 'a coding agent'} (MCP)`;
-export const ENGINE_AGENT_DIRS = (process.env.OCA_ENGINE_AGENT_DIRS || '/Users/quinnodonnell/oneiro/runtime/workspace').split(':').filter(Boolean).map(d => d.replace(/\/$/, ''));
+export const ENGINE_AGENT_DIRS = (process.env.OCA_ENGINE_AGENT_DIRS || workspaceDir()).split(':').filter(Boolean).map(d => d.replace(/\/$/, ''));
 export const READ_TOOLS = new Set(['oca_status', 'oca_inbox', 'oca_pursuits', 'oca_pursuit', 'oca_agents', 'oca_agent']);
 // Inside one of the engine's own threads: a folder under the engine's workspace.
 export const insideEngine = (cwd = process.cwd(), dirs = ENGINE_AGENT_DIRS) => dirs.some(d => cwd === d || cwd.startsWith(`${d}/`));

@@ -3,7 +3,7 @@
 # (cd motor/swift && swift build -c release).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ENV_FILE="${ONEIRO_CORE_DIR:-/Users/quinnodonnell/oneiro/runtime/workspace/oneiro-core}/.env"
+ENV_FILE="${ONEIRO_CORE_DIR:-$HOME/oneiro/runtime/workspace/oneiro-core}/.env"
 if [ -f "$ENV_FILE" ]; then
   set -a
   source "$ENV_FILE"

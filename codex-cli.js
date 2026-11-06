@@ -1,11 +1,12 @@
 import { spawn } from 'child_process';
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASIDE_TOOL_NAMES } from './aside-mcp.js';
 import { APPLE_TOOL_NAMES } from './apple-mcp.js';
+import { workspaceDir } from './reasoning/local-config.js';
 
-const DEFAULT_WORKING_DIRECTORY = '/Users/quinnodonnell/oneiro/runtime/workspace';
+const DEFAULT_WORKING_DIRECTORY = workspaceDir();
 const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_DIAGNOSTIC_CHARS = 8_000;
 
@@ -35,7 +36,7 @@ export function buildCodexEnvironment(env = process.env) {
   delete childEnv.ANTHROPIC_API_KEY;
   delete childEnv.OPENAI_BASE_URL;
 
-  childEnv.HOME = env.HOME || env.USERPROFILE || '/Users/quinnodonnell';
+  childEnv.HOME = env.HOME || env.USERPROFILE || homedir();
   childEnv.PATH = [
     `${childEnv.HOME}/.local/bin`,
     '/opt/homebrew/bin',

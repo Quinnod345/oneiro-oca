@@ -31,7 +31,9 @@ const WITNESS_WORDS = { person: 'a person', message: 'a message', test: 'a test'
 /** A pursuit as a folder of markdown files. Pure: the rows in, the files out. */
 export function exportPursuit({ row, runs = [], deliverables = [], now = Date.now() }) {
   const s = row.state || {}, want = s.want || {}, fl = s.finishLine || null;
-  const title = line(want.description || row.seed, 200);
+  // Its name where it has one, the same name the app shows; its first sentence otherwise.
+  const asked = line(want.description || row.seed, 200);
+  const title = line(s.continuity?.board?.headline, 200) || asked;
   const folder = `pursuit-${row.id}-${slug(title)}`;
   const files = [];
   const verdictWord = d => (d.verdict ? d.verdict.charAt(0).toUpperCase() + d.verdict.slice(1) : 'Not rated yet');
@@ -45,7 +47,7 @@ export function exportPursuit({ row, runs = [], deliverables = [], now = Date.no
   files.push({ path: 'README.md', content: `# ${title}
 
 Pursuit #${row.id} · ${status}${s.archived ? ' · archived' : ''} · exported ${new Date(now).toISOString().slice(0, 10)}
-
+${title === asked ? '' : `\nAsked for: ${asked}\n`}
 ## Finish line
 
 ${finish.join('\n\n')}

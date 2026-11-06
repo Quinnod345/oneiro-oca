@@ -25,6 +25,7 @@ import { agentNameFromTask, writeAgentName } from './agent-names.js';
 import { OWNER_KEY } from '../motivation/risk.js';
 import { streamName } from './board.js';
 import { createTaskDispositions, makeDisposition, DISPOSITIONS, PROVIDER_LIMIT } from './task-dispositions.js';
+import { fileURLToPath } from 'node:url';
 
 export const AGENT_KINDS = ['research', 'talker', 'builder', 'executor'];
 export const REPORT_STATUSES = ['working', 'needs_person', 'done', 'failed', 'note'];
@@ -173,7 +174,7 @@ Recent failures:\n${failures.map(f => `- ${f.want}: ${f.why}`).join('\n') || '- 
 Actions held, refused or failed:\n${actions.map(a => `- ${actionSummary(a)}`).join('\n') || '- none'}
 Questions sent to Quinn (72 h) and his answers:\n${asks.map(a => `- ${a.q} → ${a.a}`).join('\n') || '- none'}
 Self-build events (24 h): ${builds.map(b => `${b.kind} ${b.n}`).join(', ') || 'none'}
-To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is /Users/quinnodonnell/oneiro/oca-cognitive (read it; do not edit it directly).`;
+To change the engine's code, an agent files a self-want: curl -s -X POST localhost:3333/oca/self-build/want -H 'content-type: application/json' -d '{"seed":"<the defect and the fix>","doneWhen":"<observable>","evidence":[{"id":"<id>","source":"<where seen>","observation":"<what was seen>"}]}' — the engine builds it on a branch, tests it, and merges it itself. The engine's repository is ${fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')} (read it; do not edit it directly).`;
   }
   // An agent's short name: what the model wrote, else a clean shortening of its task, with the writing queued so an old
   // row gets its name the first time anyone reads it. Reading never waits on the model.

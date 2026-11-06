@@ -194,7 +194,7 @@ test('evidence that meets a want mid-review is applied on a later poll, never dr
   const d = await agents.deploy(chain.chain_id, { kind: 'research', task: 'quote it', firedBy: 'engine' });
   await pool.query(`UPDATE thought_chains SET status = 'running' WHERE id = $1`, [chain.chain_id]);
   await agents.poll();
-  let a = await agents.get(d.id); assert.equal(a.status, 'done'); assert.equal(a.report.evidenceApplied, false); assert.match(a.report.applyError, /running/);
+  let a = await agents.get(d.id); assert.equal(a.status, 'done'); assert.equal(a.report.evidenceApplied, false); assert.match(a.report.applyError, /thinking about this pursuit/);
   await agents.poll(); a = await agents.get(d.id); assert.equal(a.report.evidenceApplied, false, 'still mid-review');
   await pool.query(`UPDATE thought_chains SET status = 'awaiting_evidence' WHERE id = $1`, [chain.chain_id]);
   await agents.poll(); a = await agents.get(d.id); assert.equal(a.report.evidenceApplied, true, 'applied once the review ended');

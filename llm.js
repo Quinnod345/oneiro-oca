@@ -17,6 +17,7 @@ import { existsSync, writeFileSync, unlinkSync } from 'fs';
 import { openai as localOpenAI } from './local-openai-shim.js';
 import { getProviderCredential } from './provider-credentials.js';
 import { codexAvailable, runCodex } from './codex-cli.js';
+import { workspaceDir } from './reasoning/local-config.js';
 
 const BUNDLED_APP = process.env.ONEIRO_BUNDLED_APP === '1' ||
   import.meta.url.includes('.app/Contents/Resources/oca-cognitive');
@@ -327,7 +328,7 @@ async function callCodex(params, options = {}) {
   // A step that names a Codex model gets it; anything else (a local model name, nothing) gets the policy's.
   const model = requestedModel.startsWith('gpt-') ? requestedModel : inferencePolicy.cloudModel;
   const result = await runCodex(prompt, {
-    workingDirectory: process.env.ONEIRO_CODEX_WORKSPACE || '/Users/quinnodonnell/oneiro/runtime/workspace',
+    workingDirectory: process.env.ONEIRO_CODEX_WORKSPACE || workspaceDir(),
     // A step may ask for less effort than the policy's (a yes/no classification needs less than planning), never more.
     model, reasoningEffort: lighterEffort(params?.reasoningEffort, inferencePolicy.cloudEffort),
     sandbox: 'read-only', signal: options.signal, outputSchema: options.responseSchema,

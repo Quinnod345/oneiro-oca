@@ -75,6 +75,8 @@ export function powerGate(power, trigger) {
 
 // ---- the wake helper, as far as an unprivileged engine can tell ----------------------------------------------------
 const installerPath = () => {
+  // The engine's installer keeps a copy of the helper and says where; a checkout beside the app's repository has it too.
+  if (process.env.OCA_WAKE_HELPER_INSTALLER) return process.env.OCA_WAKE_HELPER_INSTALLER;
   const here = fileURLToPath(new URL('../../scripts/overnight/install-overnight-helper.sh', import.meta.url));
   return existsSync(here) ? here : join(homedir(), 'oneiro/scripts/overnight/install-overnight-helper.sh');
 };
@@ -220,7 +222,7 @@ export function plainStoredProblems(problems) {
 const withPlainProblems = report => (report?.problems ? { ...report, problems: plainStoredProblems(report.problems) } : report);
 
 // ---- the engine's night ---------------------------------------------------------------------------------------------
-export function createOvernight({ pool, integrations, model = createNightModel(), run = defaultRunner(), channel = createGoogleChannel({ run }), aside = null, vault = DEFAULT_VAULT, notify = null, clock = Date.now, log = console,
+export function createOvernight({ pool, integrations, model = createNightModel(), run = defaultRunner(), openInAside = null, channel = createGoogleChannel({ run, openInAside }), aside = null, vault = DEFAULT_VAULT, notify = null, clock = Date.now, log = console,
   power = () => readPower(), helper = () => readHelper(), budgets = BUDGETS, tickMs = 60_000, itemTimeoutMs = ITEM_TIMEOUT_MS, writeTimeoutMs = WRITE_TIMEOUT_MS, heartbeatMs = 15_000,
   launchModel = () => startOllama({ exec: (cmd, args) => runCommand(cmd, args, 15_000) }), modelStartWaitMs = 30_000, modelStartPollMs = 1_500, sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   const vaultRoot = () => vault;

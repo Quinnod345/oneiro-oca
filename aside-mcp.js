@@ -16,6 +16,7 @@ import { appendFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { terminalObservation } from './reasoning/action-retries.js';
 import { createAside, validateUrl } from './aside.js';
+import { workspaceDir } from './reasoning/local-config.js';
 
 const aside = createAside();
 const MAX = n => Math.max(200, Math.min(60000, Number(n) || 9000));
@@ -268,7 +269,7 @@ async function committed(id, g, kind, c, actionJs) {
     return { action: { kind, committed: true, actionId: g.actionId, control: c ? `${c.role} "${c.name}"` : undefined }, ...after };
   } catch (e) { await report(g.actionId, 'failure', e.message); throw e; }
 }
-const WORKSPACE = '/Users/quinnodonnell/oneiro/runtime/workspace/';
+const WORKSPACE = `${workspaceDir()}/`;
 // Quinn, 2026-09-30: his agents sign in on their own. They use the saved passwords and fetch every verification code
 // themselves: SMS and iMessage codes through Aside's Messages skill, email codes through Gmail. A code only ever goes
 // into the sign-in or verification step that asked for it, never into a message, post or reply to anyone.

@@ -8,6 +8,9 @@ import { createWant, appetite, recordAttempt, recordOutcome, repriceWant } from 
 import { strategyFor, budgetFor, eligibleStrategies } from './strategies.js';
 import { CAPABILITY_OF } from '../motivation/risk.js';
 
+// A pass holds its chain while it thinks. Anyone pressing something meanwhile sees these words.
+export const CHAIN_BUSY = "Oneiro is thinking about this pursuit right now, so that couldn't land yet. Try again in a minute.";
+
 const slug = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 // `worth` is the ledger (optional). Without it, wants keep their explicit priority as value.
@@ -231,7 +234,7 @@ export function createPonderQueue({ pool, reason, clock = Date.now, worth = null
       const { rows } = await client.query('SELECT * FROM thought_chains WHERE id = $1 AND ponder_state IS NOT NULL FOR UPDATE', [id]);
       const row = rows[0];
       if (!row) throw new Error('ponder chain not found');
-      if (row.status === 'running' && !allowRunning) throw new Error('ponder chain is running; wait for its current pass');
+      if (row.status === 'running' && !allowRunning) throw Object.assign(new Error(CHAIN_BUSY), { code: 'chain_busy' });
       if (guard) await guard(client);
       const next = change(row);
       await client.query('UPDATE thought_chains SET status = $1, ponder_state = $2::jsonb, updated_at = NOW() WHERE id = $3', [next.status, JSON.stringify(next.state), id]);

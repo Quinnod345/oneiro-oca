@@ -40,7 +40,7 @@ const verdictWord = u => Object.entries(RATINGS).find(([, v]) => v === u)?.[0] |
 const withoutCard = (body, c) => (c.card ? String(body).replace(cardMarkdown(c.card), '').trim() : body);
 const cardFields = (c, now) => ({ deliverableKind: c.deliverableKind || 'brief', card: c.card || null, cardState: c.cardState || null, cardProblem: c.card ? cardProblem(c.card, now) : null });
 
-export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null, asks = null, agents = null }) {
+export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, log = console, drafts = null, asks = null, agents = null, passWaitMs = 60_000, passPollMs = 1_000 }) {
   const safeName = s => /^[A-Za-z0-9._-]{1,120}$/.test(String(s)) && !String(s).includes('..');
   // The finish watch (reasoning/finish-watch.js) hears about verdicts and owns "looks done" questions.
   let finish = null;
@@ -222,9 +222,21 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     const progress = u >= RATINGS.useful ? Math.max(base, Math.min(0.9, base + 0.25)) : base;
     const receiptId = prior ? `${ratedId(name)}~${verdictsOf(chain.want, name).length + 1}` : ratedId(name);
     const word = Object.entries(RATINGS).find(([, v]) => v === u)?.[0] || 'numeric';
-    return queue.outcome(chainId, { receiptId, progress, usefulness: u, criterionMet: false, ...(prior ? { supersedes: prior.receiptId } : {}),
+    return whenFree(() => queue.outcome(chainId, { receiptId, progress, usefulness: u, criterionMet: false, ...(prior ? { supersedes: prior.receiptId } : {}),
       evidence: [{ id: `artifact-rated-${name}${prior ? `-${verdictsOf(chain.want, name).length + 1}` : ''}`.slice(0, 100), source: `a person's rating of the delivered artifact`,
-        observation: `${by} ${prior ? 'changed their verdict on' : 'rated'} "${text(c.title || name, 120)}" ${u.toFixed(2)} (${word})${note ? `: ${text(note, 500)}` : ''}` }] });
+        observation: `${by} ${prior ? 'changed their verdict on' : 'rated'} "${text(c.title || name, 120)}" ${u.toFixed(2)} (${word})${note ? `: ${text(note, 500)}` : ''}` }] }));
+  }
+  // A verdict usually sets off a short pass, so the next verdict on the same pursuit often arrives while it runs. Rating
+  // two briefs in a row is the normal path, so it waits a little for the chain instead of failing the press.
+  async function whenFree(act) {
+    const deadline = Date.now() + passWaitMs;
+    for (;;) {
+      try { return await act(); }
+      catch (e) {
+        if (e.code !== 'chain_busy' || Date.now() >= deadline) throw e;
+        await new Promise(ok => setTimeout(ok, passPollMs));
+      }
+    }
   }
   // Take a verdict back with nothing in its place: the deliverable returns to Judge, and the want to where it stood before
   // that verdict. The old receipt stays on record, marked replaced.
@@ -238,8 +250,8 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
     if (!prior) throw new Error('There is no verdict on this to take back.');
     const n = verdictsOf(chain.want, name).length + 1;
     const c = (chain.commitments || []).find(c => c.kind === 'artifact' && basename(c.path || '') === name);
-    return queue.outcome(chainId, { receiptId: `${ratedId(name)}~${n}`, progress: Number(prior.effect?.progressBefore ?? chain.want.progress) || 0, criterionMet: false, supersedes: prior.receiptId, reopened: true,
-      evidence: [{ id: `artifact-reopened-${name}-${n}`.slice(0, 100), source: `a person's rating of the delivered artifact`, observation: `${by} took back their verdict on "${text(c?.title || name, 120)}"` }] }, { park: true });
+    return whenFree(() => queue.outcome(chainId, { receiptId: `${ratedId(name)}~${n}`, progress: Number(prior.effect?.progressBefore ?? chain.want.progress) || 0, criterionMet: false, supersedes: prior.receiptId, reopened: true,
+      evidence: [{ id: `artifact-reopened-${name}-${n}`.slice(0, 100), source: `a person's rating of the delivered artifact`, observation: `${by} took back their verdict on "${text(c?.title || name, 120)}"` }] }, { park: true }));
   }
   async function reopenNote({ id, by = 'quinn' }) {
     if (!safeName(id) || !id.endsWith('.md')) throw new Error('a note is named by its file name');
@@ -311,7 +323,8 @@ export function createInbox({ pool, queue, worth, workRoot, clock = Date.now, lo
       progress: criterionMet ? 1 : p, criterionMet: criterionMet === true,
       evidence: [{ id: `person-${Date.now().toString(36)}`, source: `observed by ${by}`, observation: text(observation, 1000) }] };
     if (usefulness !== null && usefulness !== undefined) receipt.usefulness = usefulnessOf(usefulness);
-    return queue.outcome(id, receipt);
+    // "Yes, it's finished" arrives here. It's often pressed right after the verdict that set a pass off.
+    return whenFree(() => queue.outcome(id, receipt));
   }
 
   // A want from a person: by hand, or by confirming a draft the engine wrote (then the drafter owns the
